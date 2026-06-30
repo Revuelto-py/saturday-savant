@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-wrapper" style="padding-top:32px">
+
+<div style="margin-bottom:32px">
+    <h1 style="color:white;font-weight:900;font-size:2rem;margin:0">&#x2694; Rivalries</h1>
+    <div style="color:rgba(255,255,255,0.35);font-size:0.82rem;margin-top:6px">
+        {{ rivalries|length }} named rivalries &middot; Click any card to see last meeting
+    </div>
+</div>
+
+<div class="row g-3">
+{% for r in rivalries %}
+{% set c1 = r.color_a or '#1e3a5f' %}
+{% set c2 = r.color_b or '#0f1e3a' %}
+{% set rid = loop.index %}
+
+<div class="col-md-6 col-lg-4">
+    <div style="border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.09);
+                transition:all 0.2s;cursor:pointer"
+         onclick="toggleRivalry({{ rid }})"
+         onmouseover="this.style.borderColor='rgba(245,158,11,0.3)';this.style.transform='translateY(-2px)'"
+         onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.transform='translateY(0)'">
+
+        <!-- Main card -->
+        <div style="background:linear-gradient(135deg,{{ c1 }}22 0%,#0d1628 60%,{{ c2 }}18 100%);
+                    padding:18px 20px">
+
+            <!-- Rivalry name + chevron -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <div style="color:rgba(255,255,255,0.5);font-size:0.62rem;font-weight:800;
+                            letter-spacing:0.12em;text-transform:uppercase">&#x2694; {{ r.name }}</div>
+                <div id="chevron-{{ rid }}" style="color:rgba(255,255,255,0.3);font-size:0.8rem;
+                            transition:transform 0.2s">&#x25BC;</div>
+            </div>
+
+            <!-- Teams -->
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                <a href="/team/{{ r.ta }}" onclick="event.stopPropagation()"
+                   style="display:flex;flex-direction:column;align-items:center;gap:8px;
+                          text-decoration:none;flex:1">
+                    {% if r.logo_a %}
+                    <img src="{{ r.logo_a }}" style="width:44px;height:44px;object-fit:contain">
+                    {% endif %}
+                    <span style="color:white;font-weight:700;font-size:0.74rem;text-align:center;line-height:1.3"
+                          onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='white'">{{ r.ta }}</span>
+                </a>
+
+                <div style="color:rgba(255,255,255,0.2);font-size:1rem;font-weight:900;flex-shrink:0">vs</div>
+
+                <a href="/team/{{ r.tb }}" onclick="event.stopPropagation()"
+                   style="display:flex;flex-direction:column;align-items:center;gap:8px;
+                          text-decoration:none;flex:1">
+                    {% if r.logo_b %}
+                    <img src="{{ r.logo_b }}" style="width:44px;height:44px;object-fit:contain">
+                    {% endif %}
+                    <span style="color:white;font-weight:700;font-size:0.74rem;text-align:center;line-height:1.3"
+                          onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='white'">{{ r.tb }}</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Dropdown -->
+        <div id="rivalry-{{ rid }}"
+             style="display:none;background:#0d1e35;border-top:1px solid rgba(255,255,255,0.07)">
+
+            {% if r.last_game %}
+            {% set g = r.last_game %}
+            {% set home_won = g.home_pts is not none and g.away_pts is not none and g.home_pts > g.away_pts %}
+            {% set away_won = g.home_pts is not none and g.away_pts is not none and g.away_pts > g.home_pts %}
+
+            <div style="padding:12px 18px 8px;color:rgba(255,255,255,0.35);
+                        font-size:0.6rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">
+                Most Recent Meeting{% if g.date %} &middot; {{ g.date[:4] }}{% endif %}
+            </div>
+
+            <!-- Score row -->
+            <a href="/game/{{ g.id }}" onclick="event.stopPropagation()"
+               style="display:flex;align-items:center;justify-content:space-between;
+                      padding:12px 18px;text-decoration:none;gap:12px;transition:background 0.1s"
+               onmouseover="this.style.background='rgba(255,255,255,0.04)'"
+               onmouseout="this.style.background='transparent'">
+
+                <!-- Away -->
+                <div style="display:flex;align-items:center;gap:10px;flex:1">
+                    {% if g.away_logo %}
+                    <img src="{{ g.away_logo }}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
+                    {% endif %}
+                    <div>
+                        <div style="color:{{ 'white' if away_won else 'rgba(255,255,255,0.55)' }};
+                                    font-weight:{{ '800' if away_won else '500' }};font-size:0.82rem">
+                            {{ g.away_team }}
+                        </div>
+                        {% if away_won %}<div style="color:#22c55e;font-size:0.6rem;font-weight:700">WIN</div>{% endif %}
+                    </div>
+                </div>
+
+                <!-- Score -->
+                <div style="text-align:center;flex-shrink:0">
+                    <div style="display:flex;align-items:center;gap:6px">
+                        <span style="color:{{ 'white' if away_won else 'rgba(255,255,255,0.45)' }};
+                                     font-weight:900;font-size:1.4rem">{{ g.away_pts if g.away_pts is not none else '—' }}</span>
+                        <span style="color:rgba(255,255,255,0.25);font-size:0.9rem;font-weight:400">–</span>
+                        <span style="color:{{ 'white' if home_won else 'rgba(255,255,255,0.45)' }};
+                                     font-weight:900;font-size:1.4rem">{{ g.home_pts if g.home_pts is not none else '—' }}</span>
+                    </div>
+                    {% if g.notes and g.notes not in ['None',''] %}
+                    <div style="color:rgba(255,255,255,0.25);font-size:0.6rem;margin-top:2px">{{ g.notes[:30] }}</div>
+                    {% elif g.season_type and 'REGULAR' in g.season_type %}
+                    <div style="color:rgba(255,255,255,0.25);font-size:0.6rem;margin-top:2px">Week {{ g.week }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Home -->
+                <div style="display:flex;align-items:center;gap:10px;flex:1;justify-content:flex-end;flex-direction:row-reverse">
+                    {% if g.home_logo %}
+                    <img src="{{ g.home_logo }}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
+                    {% endif %}
+                    <div style="text-align:right">
+                        <div style="color:{{ 'white' if home_won else 'rgba(255,255,255,0.55)' }};
+                                    font-weight:{{ '800' if home_won else '500' }};font-size:0.82rem">
+                            {{ g.home_team }}
+                        </div>
+                        {% if home_won %}<div style="color:#22c55e;font-size:0.6rem;font-weight:700;text-align:right">WIN</div>{% endif %}
+                    </div>
+                </div>
+            </a>
+
+            <div style="padding:8px 18px 4px;border-top:1px solid rgba(255,255,255,0.05)">
+                <a href="/game/{{ g.id }}" onclick="event.stopPropagation()"
+                   style="color:rgba(255,255,255,0.4);font-size:0.72rem;font-weight:600;
+                          text-decoration:none;transition:color 0.15s"
+                   onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+                    View full game recap &#x2192;
+                </a>
+            </div>
+
+            {% else %}
+            <div style="padding:16px 18px;color:rgba(255,255,255,0.25);font-size:0.78rem;text-align:center">
+                No recent game data available
+            </div>
+            {% endif %}
+
+            <!-- Historical series link -->
+            <div style="padding:10px 18px 14px;border-top:1px solid rgba(255,255,255,0.05);margin-top:4px">
+                <a href="/rivalry/{{ r.ta | urlencode }}/{{ r.tb | urlencode }}"
+                   onclick="event.stopPropagation()"
+                   style="display:flex;align-items:center;justify-content:space-between;
+                          text-decoration:none;padding:10px 14px;
+                          background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+                          border-radius:8px;transition:all 0.15s"
+                   onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='rgba(255,255,255,0.15)'"
+                   onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.08)'">
+                    <div>
+                        <div style="color:white;font-weight:700;font-size:0.8rem">All-Time Series</div>
+                        <div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:1px">
+                            Full historical record &middot; {{ r.ta }} vs {{ r.tb }}
+                        </div>
+                    </div>
+                    <div style="color:rgba(255,255,255,0.3);font-size:1rem">&#x2192;</div>
+                </a>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+</div>
+
+<script>
+function toggleRivalry(id) {
+    var panel = document.getElementById('rivalry-' + id);
+    var chevron = document.getElementById('chevron-' + id);
+    var isOpen = panel.style.display !== 'none';
+
+    document.querySelectorAll('[id^="rivalry-"]').forEach(function(el) {
+        el.style.display = 'none';
+    });
+    document.querySelectorAll('[id^="chevron-"]').forEach(function(el) {
+        el.style.transform = 'rotate(0deg)';
+        el.style.color = 'rgba(255,255,255,0.3)';
+    });
+
+    if (!isOpen) {
+        panel.style.display = 'block';
+        chevron.style.transform = 'rotate(180deg)';
+        chevron.style.color = 'rgba(255,255,255,0.7)';
+    }
+}
+</script>
+{% endblock %}

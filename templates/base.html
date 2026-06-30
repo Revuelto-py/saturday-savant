@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Saturday Savant · College Football Analytics</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
+    <link rel="apple-touch-icon" href="/static/logo-256.png">
+    <meta property="og:title" content="Saturday Savant">
+    <meta property="og:description" content="College football analytics — advanced stats, EPA, SP+ ratings, player profiles, and game breakdowns.">
+    <meta property="og:image" content="/static/logo-512.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            background: linear-gradient(160deg, #060d1f 0%, #0a1628 40%, #080f1e 100%);
+            min-height: 100vh; color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: rgba(6,13,31,0.97) !important;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            padding: 0 32px; height: 56px;
+            backdrop-filter: blur(10px);
+            position: sticky; top: 0; z-index: 1000;
+        }
+        .navbar-inner {
+            max-width: 1300px; margin: 0 auto; width: 100%;
+            height: 56px; display: flex; align-items: center;
+            justify-content: space-between;
+        }
+        .navbar-brand {
+            color: white !important; font-weight: 900; font-size: 1.05rem;
+            letter-spacing: 0.02em; text-decoration: none; white-space: nowrap; flex-shrink: 0;
+        }
+        .nav-right {
+            display: flex; align-items: center; gap: 4px; position: relative;
+        }
+        .nav-links { display: flex; gap: 4px; }
+        .nav-links a {
+            color: rgba(255,255,255,0.55); font-weight: 600; font-size: 0.82rem;
+            padding: 6px 14px; border-radius: 6px; text-decoration: none;
+            transition: all 0.15s; white-space: nowrap;
+        }
+        .nav-links a:hover { color: white; background: rgba(255,255,255,0.07); }
+
+        /* Search */
+        .search-wrapper {
+            position: relative;
+            width: 280px;
+            flex-shrink: 0;
+            isolation: isolate;
+        }
+        .search-icon {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            color: rgba(255,255,255,0.3); font-size: 0.75rem; pointer-events: none;
+        }
+        .nav-search-input {
+            width: 100%;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: white; border-radius: 8px;
+            padding: 7px 12px 7px 32px;
+            font-size: 0.8rem; outline: none; transition: all 0.2s;
+        }
+        .nav-search-input:focus {
+            background: rgba(255,255,255,0.09);
+            border-color: rgba(59,130,246,0.6);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .nav-search-input::placeholder { color: rgba(255,255,255,0.3); }
+        .search-dropdown {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            width: 100%;
+            max-height: 440px;
+            overflow-y: auto;
+            background: #0c1525;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+            display: none;
+            z-index: 9999;
+        }
+        .search-dropdown.active { display: block; }
+        .search-result-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 11px 14px; cursor: pointer; transition: background 0.1s;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            text-decoration: none;
+        }
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:hover { background: rgba(59,130,246,0.1); }
+        .search-result-avatar {
+            width: 42px; height: 42px; border-radius: 50%;
+            object-fit: cover; object-position: top;
+            border: 1px solid rgba(255,255,255,0.12); flex-shrink: 0;
+        }
+        .search-avatar-placeholder {
+            width: 42px; height: 42px; border-radius: 50%;
+            background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.4); flex-shrink: 0;
+        }
+        .search-result-name { color: white; font-weight: 700; font-size: 0.88rem; line-height: 1.2; }
+        .search-result-meta { color: rgba(255,255,255,0.4); font-size: 0.7rem; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+        .search-result-pos {
+            background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
+            color: #93c5fd; font-size: 0.62rem; font-weight: 800;
+            padding: 3px 8px; border-radius: 5px; letter-spacing: 0.06em;
+            margin-left: auto; flex-shrink: 0;
+        }
+        .search-empty { padding: 20px 16px; color: rgba(255,255,255,0.3); font-size: 0.8rem; text-align: center; }
+        .search-loading { padding: 16px; text-align: center; color: rgba(255,255,255,0.3); font-size: 0.78rem; }
+
+        /* Page */
+        .page-wrapper { max-width: 1300px; margin: 0 auto; padding: 32px 32px; }
+
+        /* Tables */
+        .table { color: rgba(255,255,255,0.85) !important; border-color: rgba(255,255,255,0.06) !important; }
+        .table-striped > tbody > tr:nth-of-type(odd) > * { background: rgba(255,255,255,0.03) !important; color: rgba(255,255,255,0.85) !important; }
+        .table-striped > tbody > tr:nth-of-type(even) > * { background: transparent !important; color: rgba(255,255,255,0.85) !important; }
+        .table > tbody > tr:hover > * { background: rgba(59,130,246,0.1) !important; color: white !important; }
+        .table-dark thead th {
+            background: rgba(255,255,255,0.05) !important;
+            border-color: rgba(255,255,255,0.08) !important;
+            color: rgba(255,255,255,0.4) !important;
+            font-size: 0.62rem; font-weight: 800;
+            letter-spacing: 0.12em; text-transform: uppercase; padding: 10px 14px;
+        }
+        .table td, .table th { border-color: rgba(255,255,255,0.05) !important; padding: 10px 14px; vertical-align: middle; }
+
+        /* DataTables */
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_info { color: rgba(255,255,255,0.45) !important; font-size: 0.78rem; }
+        .dataTables_wrapper .dataTables_length select,
+        .dataTables_wrapper .dataTables_filter input {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: white; border-radius: 6px; padding: 5px 10px;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            color: rgba(255,255,255,0.5) !important; border-radius: 6px !important;
+            border: none !important; padding: 4px 10px !important;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+            background: #3b82f6 !important; border: none !important; color: white !important;
+        }
+        .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+            background: rgba(59,130,246,0.15) !important; border: none !important; color: white !important;
+        }
+
+        /* Nav tabs */
+        .nav-tabs { border-bottom: 1px solid rgba(255,255,255,0.08) !important; padding: 0; }
+        .nav-tabs .nav-link {
+            color: rgba(255,255,255,0.45) !important; border: none !important;
+            border-bottom: 3px solid transparent !important; border-radius: 0 !important;
+            padding: 12px 20px !important; font-weight: 600; font-size: 0.82rem;
+            background: transparent !important;
+        }
+        .nav-tabs .nav-link.active { color: white !important; border-bottom: 3px solid #3b82f6 !important; }
+        .nav-tabs .nav-link:hover { color: rgba(255,255,255,0.8) !important; background: rgba(255,255,255,0.03) !important; }
+
+        /* Utilities */
+        .section-label {
+            color: rgba(255,255,255,0.3); font-size: 0.58rem; font-weight: 800;
+            letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 14px; display: block;
+        }
+        .dark-card { background: #0d1e35; border: 1px solid rgba(255,255,255,0.09); border-radius: 10px; }
+        select.form-select {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+            color: white; font-size: 0.8rem; font-weight: 600; border-radius: 8px; padding: 7px 12px;
+        }
+        select.form-select option { background: #0d1526; color: white; }
+        h2, h3, h4, h5 { color: white; }
+        .player-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; object-position: top; border: 1px solid rgba(255,255,255,0.15); }
+
+        /* Sitewide data table */
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .data-table thead tr { background: rgba(255,255,255,0.08); border-bottom: 2px solid rgba(255,255,255,0.12); }
+        .data-table thead th {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.6rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            padding: 11px 14px;
+            border-right: 1px solid rgba(255,255,255,0.07);
+            border-bottom: 2px solid rgba(255,255,255,0.12);
+            white-space: nowrap;
+        }
+        .data-table thead th:first-child { border-right: 1px solid rgba(255,255,255,0.1); }
+        .data-table thead th:last-child { border-right: none; }
+        .data-table tbody tr { transition: background 0.1s; }
+        .data-table tbody tr:hover { background: rgba(255,255,255,0.06); }
+        .data-table tbody tr:last-child td { border-bottom: none; }
+        .data-table tbody td {
+            padding: 10px 14px;
+            color: rgba(255,255,255,0.75);
+            font-size: 0.82rem;
+            border-right: 1px solid rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+        .data-table tbody td:first-child { border-right: 1px solid rgba(255,255,255,0.1); }
+        .data-table tbody td:last-child { border-right: none; }
+
+        /* Stat badge helpers */
+        .stat-box-gold {
+            display: inline-block; border: 1px solid rgba(245,158,11,0.5); border-radius: 4px;
+            padding: 1px 7px; color: #f59e0b; font-weight: 800; font-size: 0.8rem;
+            min-width: 28px; text-align: center;
+        }
+        .stat-box-red {
+            display: inline-block; border: 1px solid rgba(239,68,68,0.5); border-radius: 4px;
+            padding: 1px 7px; color: #ef4444; font-weight: 800; font-size: 0.8rem;
+            min-width: 28px; text-align: center;
+        }
+        .stat-box-outline {
+            display: inline-block; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;
+            padding: 1px 7px; color: white; font-weight: 700; font-size: 0.8rem;
+            min-width: 28px; text-align: center;
+        }
+        .player-avatar-sm { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; object-position: top; border: 1px solid rgba(255,255,255,0.15); }
+        .avatar-placeholder {
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 50%; color: rgba(255,255,255,0.5); font-weight: 700; font-size: 0.65rem;
+        }
+        .team-logo-bg {
+        background: white;
+        border-radius: 6px;
+        padding: 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+}
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-dark">
+        <div class="navbar-inner">
+            <a href="/" style="display:flex;align-items:center;gap:6px;text-decoration:none">
+                <img src="/static/logo-128.png" style="height:46px;width:auto">
+                <div style="line-height:1">
+                    <div style="color:rgba(255,255,255,0.5);font-size:0.58rem;font-weight:700;letter-spacing:0.18em;text-transform:uppercase">Saturday</div>
+                    <div style="color:white;font-size:1.05rem;font-weight:900;letter-spacing:-0.01em;margin-top:-1px">Savant</div>
+                </div>
+            </a>
+
+            <div class="nav-right">
+                <div class="nav-links">
+                    <a href="/teams">Teams</a>
+                    <a href="/rankings">Rankings</a>
+                    <a href="/leaderboards/passing">Leaderboards</a>
+                    <a href="/transfers">Transfers</a>
+                    <a href="/rivalries">Rivalries</a>
+                </div>
+
+                <div class="search-wrapper" id="searchWrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="nav-search-input" id="navSearch"
+                           placeholder="Search players or teams..." autocomplete="off">
+                    <div class="search-dropdown" id="searchDropdown"></div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+    (function() {
+        const input = document.getElementById('navSearch');
+        const dropdown = document.getElementById('searchDropdown');
+        let timer;
+
+        function renderDropdown(results) {
+            if (!results.length) {
+                dropdown.innerHTML = '<div class="search-empty">No results found</div>';
+                dropdown.classList.add('active');
+                return;
+            }
+            const teams   = results.filter(r => r.type === 'team');
+            const players = results.filter(r => r.type === 'player');
+            let html = '';
+
+            if (teams.length) {
+                html += `<div style="color:rgba(255,255,255,0.3);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;padding:8px 14px 4px;text-transform:uppercase">Teams</div>`;
+                for (const r of teams) {
+                    html += `<a href="${r.url}" style="display:flex;align-items:center;gap:10px;padding:8px 14px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.05)"
+                               onmouseover="this.style.background='rgba(255,255,255,0.06)'"
+                               onmouseout="this.style.background='transparent'">
+                        ${r.logo ? `<img src="${r.logo}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">` : '<div style="width:28px;height:28px;flex-shrink:0"></div>'}
+                        <div style="flex:1">
+                            <div style="color:white;font-weight:700;font-size:0.85rem">${r.name}</div>
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.7rem">${r.conference || ''}</div>
+                        </div>
+                        <span style="color:rgba(255,255,255,0.25);font-size:0.65rem">Team →</span>
+                    </a>`;
+                }
+            }
+
+            if (players.length) {
+                if (teams.length) {
+                    html += `<div style="color:rgba(255,255,255,0.3);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;padding:8px 14px 4px;text-transform:uppercase;border-top:1px solid rgba(255,255,255,0.06)">Players</div>`;
+                }
+                for (const r of players) {
+                    const avatar = r.headshot
+                        ? `<img src="${r.headshot}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border:1px solid rgba(255,255,255,0.1)">`
+                        : `<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:rgba(255,255,255,0.4)">${(r.first||'')[0]}${(r.last||'')[0]}</div>`;
+                    html += `<a href="${r.url}" style="display:flex;align-items:center;gap:10px;padding:8px 14px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.05)"
+                               onmouseover="this.style.background='rgba(255,255,255,0.06)'"
+                               onmouseout="this.style.background='transparent'">
+                        ${avatar}
+                        <div style="flex:1;min-width:0">
+                            <div style="color:white;font-weight:700;font-size:0.84rem">${r.first} ${r.last}</div>
+                            <div style="display:flex;align-items:center;gap:6px">
+                                ${r.logo ? `<img src="${r.logo}" style="width:14px;height:14px;object-fit:contain">` : ''}
+                                <span style="color:rgba(255,255,255,0.4);font-size:0.7rem">${r.team}</span>
+                            </div>
+                        </div>
+                        <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);color:#93c5fd;font-size:0.6rem;font-weight:800;padding:2px 6px;border-radius:4px;flex-shrink:0">${r.pos || ''}</span>
+                    </a>`;
+                }
+            }
+
+            dropdown.innerHTML = html;
+            dropdown.classList.add('active');
+        }
+
+        input.addEventListener('input', function() {
+            const q = this.value.trim();
+            clearTimeout(timer);
+            if (q.length < 2) {
+                dropdown.classList.remove('active');
+                dropdown.innerHTML = '';
+                return;
+            }
+            dropdown.innerHTML = '<div class="search-loading">Searching...</div>';
+            dropdown.classList.add('active');
+            timer = setTimeout(() =>
+                fetch('/api/players?q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(renderDropdown)
+                    .catch(() => { dropdown.innerHTML = '<div class="search-empty">Search unavailable</div>'; }),
+            220);
+        });
+
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { dropdown.classList.remove('active'); input.blur(); }
+            if (e.key === 'Enter' && input.value.trim()) {
+                window.location.href = '/search?q=' + encodeURIComponent(input.value.trim());
+            }
+        });
+
+        document.addEventListener('click', e => {
+            if (!document.getElementById('searchWrapper').contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+    })();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

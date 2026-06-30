@@ -1,0 +1,942 @@
+{% extends "base.html" %}
+
+{% set home_color = '#' + game[11].lstrip('#') if game[11] else '#1e3a5f' %}
+{% set away_color = '#' + game[12].lstrip('#') if game[12] else '#7f1d1d' %}
+{% set home_rank  = ap_rankings.get(home_team) %}
+{% set away_rank  = ap_rankings.get(away_team) %}
+{% set is_post    = game[6] and 'postseason' in game[6].lower() %}
+{% set home_won   = game[3] is not none and game[4] is not none and game[3] > game[4] %}
+{% set game_final = game[3] is not none and game[4] is not none %}
+
+{# quarters is now a dict: {'home': [...], 'away': [...]} #}
+{% set home_q = quarters.home %}
+{% set away_q = quarters.away %}
+
+{# stat_bar macro — used in right-column team stats (away | label | home) #}
+{% macro stat_bar(label, aval, hval, flip=false) %}
+{% set hf = hval | float(0) if hval and ':' not in hval and '/' not in hval and '-' not in hval else 0 %}
+{% set af = aval | float(0) if aval and ':' not in aval and '/' not in aval and '-' not in aval else 0 %}
+{% set total = hf + af %}
+{% set home_pct  = (hf / total * 100) | int if total > 0 else 50 %}
+{% set away_pct  = 100 - home_pct %}
+{% set away_better = (away_pct > home_pct and not flip) or (away_pct < home_pct and flip) %}
+<div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-weight:700;font-size:0.8rem;min-width:40px;color:{% if away_better %}white{% else %}rgba(255,255,255,0.32){% endif %}">{{ aval or '—' }}</span>
+        <span style="color:rgba(255,255,255,0.28);font-size:0.55rem;font-weight:800;letter-spacing:0.09em;text-transform:uppercase;text-align:center;flex:1;padding:0 4px">{{ label }}</span>
+        <span style="font-weight:700;font-size:0.8rem;min-width:40px;text-align:right;color:{% if not away_better %}white{% else %}rgba(255,255,255,0.32){% endif %}">{{ hval or '—' }}</span>
+    </div>
+    {% if total > 0 %}
+    <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.05);overflow:hidden;display:flex">
+        <div style="width:{{ away_pct }}%;background:{{ away_color }};transition:width 0.4s"></div>
+        <div style="width:{{ home_pct }}%;background:{{ home_color }};transition:width 0.4s"></div>
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+
+{# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
+<div style="background:linear-gradient(135deg,{{ away_color }}bb 0%,#060d1f 42%,#060d1f 58%,{{ home_color }}bb 100%);border-bottom:1px solid rgba(255,255,255,0.08);padding:40px 0 28px;position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.48);pointer-events:none"></div>
+    <div class="page-wrapper" style="position:relative;z-index:1">
+
+        <div style="text-align:center;margin-bottom:22px">
+            {% if notes %}
+                <div style="color:rgba(255,255,255,0.55);font-size:0.7rem;font-weight:900;letter-spacing:0.15em;text-transform:uppercase">{{ notes }}</div>
+            {% else %}
+                <div style="color:rgba(255,255,255,0.35);font-size:0.68rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase">
+                    {% if is_post %}Postseason{% else %}Week {{ week_num }} · 2025 Regular Season{% endif %}
+                </div>
+            {% endif %}
+            {% if game_date %}
+                <div style="color:rgba(255,255,255,0.22);font-size:0.6rem;margin-top:4px">{{ game_date }}</div>
+            {% endif %}
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center">
+            {# Away (left) #}
+            <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
+                {% if game[10] %}<a href="/team/{{ away_team }}"><img src="{{ game[10] }}" style="height:80px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% endif %}
+                <div style="text-align:right">
+                    {% if away_rank %}<div style="color:#f59e0b;font-size:0.6rem;font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
+                    <div style="font-size:1.25rem;line-height:1.1;opacity:{% if game_final and home_won %}0.45{% else %}1{% endif %}"><a href="/team/{{ away_team }}" style="color:white;text-decoration:none;font-weight:900" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color='white'">{{ away_team }}</a></div>
+                    {% if records.away %}<div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:3px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
+                </div>
+            </div>
+
+            {# Scores #}
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                <div style="min-width:80px;text-align:center">
+                    <div style="font-size:4rem;font-weight:900;line-height:1;color:{% if game_final and home_won %}rgba(255,255,255,0.3){% else %}white{% endif %}">{{ game[4] if game[4] is not none else '—' }}</div>
+                </div>
+                <div style="color:rgba(255,255,255,0.18);font-size:2.4rem;font-weight:200;padding:0 6px">–</div>
+                <div style="min-width:80px;text-align:center">
+                    <div style="font-size:4rem;font-weight:900;line-height:1;color:{% if game_final and not home_won %}rgba(255,255,255,0.3){% else %}white{% endif %}">{{ game[3] if game[3] is not none else '—' }}</div>
+                </div>
+            </div>
+
+            {# Home (right) #}
+            <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:36px">
+                {% if game[9] %}<a href="/team/{{ home_team }}"><img src="{{ game[9] }}" style="height:80px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% endif %}
+                <div style="text-align:left">
+                    {% if home_rank %}<div style="color:#f59e0b;font-size:0.6rem;font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
+                    <div style="font-size:1.25rem;line-height:1.1;opacity:{% if game_final and not home_won %}0.45{% else %}1{% endif %}"><a href="/team/{{ home_team }}" style="color:white;text-decoration:none;font-weight:900" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color='white'">{{ home_team }}</a></div>
+                    {% if records.home %}<div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:3px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align:center;margin-top:22px">
+            <span style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.45);font-size:0.58rem;font-weight:900;letter-spacing:0.18em;padding:4px 16px;border-radius:20px;text-transform:uppercase">Final</span>
+            {% if rivalry_name %}
+            <div style="margin-top:10px">
+                <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#f59e0b;font-size:0.65rem;font-weight:800;padding:3px 14px;border-radius:20px;letter-spacing:0.05em">&#x2694; {{ rivalry_name }}</span>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+{# ── MAIN PAGE CONTENT ─────────────────────────────────────────────────────── #}
+<div class="page-wrapper" style="padding-top:24px">
+
+{# ── QUARTER SCORE TABLE ───────────────────────────────────────────────────── #}
+{% if home_q or away_q %}
+{% set num_periods = [home_q|length, away_q|length]|max %}
+<div class="dark-card mb-4" style="overflow-x:auto;padding:18px 24px">
+    <table class="data-table" style="font-size:0.78rem;min-width:280px;width:100%">
+        <thead>
+            <tr>
+                <th style="padding:0 0 10px;text-align:left;min-width:160px"></th>
+                {% for i in range(num_periods) %}
+                <th style="color:rgba(255,255,255,0.3);font-weight:800;padding:0 18px 10px;text-align:center;letter-spacing:0.06em">
+                    {% if i < 4 %}Q{{ i+1 }}{% elif i == 4 %}OT{% else %}OT{{ i-3 }}{% endif %}
+                </th>
+                {% endfor %}
+                <th style="color:rgba(255,255,255,0.55);font-weight:900;padding:0 0 10px 18px;text-align:center;letter-spacing:0.06em;border-left:1px solid rgba(255,255,255,0.1)">T</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding:6px 0;vertical-align:middle">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        {% if game[10] %}<img src="{{ game[10] }}" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
+                        <span style="color:rgba(255,255,255,{% if game_final and home_won %}0.4{% else %}0.85{% endif %});font-weight:{% if not home_won %}700{% else %}500{% endif %};white-space:nowrap">{{ away_team }}</span>
+                    </div>
+                </td>
+                {% for i in range(num_periods) %}
+                <td style="color:rgba(255,255,255,0.6);font-weight:600;padding:6px 18px;text-align:center">{{ away_q[i]|int if i < away_q|length else 0 }}</td>
+                {% endfor %}
+                <td style="color:{% if game_final and home_won %}rgba(255,255,255,0.35){% else %}white{% endif %};font-weight:900;padding:6px 0 6px 18px;text-align:center;border-left:1px solid rgba(255,255,255,0.1);font-size:1rem">{{ game[4] }}</td>
+            </tr>
+            <tr>
+                <td style="padding:6px 0;vertical-align:middle">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        {% if game[9] %}<img src="{{ game[9] }}" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
+                        <span style="color:rgba(255,255,255,{% if game_final and not home_won %}0.4{% else %}0.85{% endif %});font-weight:{% if home_won %}700{% else %}500{% endif %};white-space:nowrap">{{ home_team }}</span>
+                    </div>
+                </td>
+                {% for i in range(num_periods) %}
+                <td style="color:rgba(255,255,255,0.6);font-weight:600;padding:6px 18px;text-align:center">{{ home_q[i]|int if i < home_q|length else 0 }}</td>
+                {% endfor %}
+                <td style="color:{% if game_final and not home_won %}rgba(255,255,255,0.35){% else %}white{% endif %};font-weight:900;padding:6px 0 6px 18px;text-align:center;border-left:1px solid rgba(255,255,255,0.1);font-size:1rem">{{ game[3] }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{# ── TAB NAV ──────────────────────────────────────────────────────────────── #}
+<div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:24px">
+    <button id="tab-btn-overview" onclick="switchTab('overview')"
+        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid white;color:white;font-weight:700;font-size:0.82rem;cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
+        Overview
+    </button>
+    <button id="tab-btn-boxscore" onclick="switchTab('boxscore')"
+        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4);font-weight:700;font-size:0.82rem;cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
+        Box Score
+    </button>
+    <button id="tab-btn-drives" onclick="switchTab('drives')"
+        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4);font-weight:700;font-size:0.82rem;cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
+        Drives
+    </button>
+</div>
+
+{# ── OVERVIEW TAB ─────────────────────────────────────────────────────────── #}
+<div id="tab-content-overview">
+
+{# ── TWO-COLUMN LAYOUT ─────────────────────────────────────────────────────── #}
+<div class="row g-4">
+
+{# ── LEFT COLUMN (col-lg-8) ───────────────────────────────────────────────── #}
+<div class="col-lg-8">
+
+{# ── GAME LEADERS ──────────────────────────────────────────────────────────── #}
+{% if structured_leaders %}
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px;margin-bottom:16px">
+    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Game Leaders</div>
+
+    <!-- Team header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:8px">
+            {% if game[10] %}<img src="{{ game[10] }}" style="width:28px;height:28px;object-fit:contain">{% endif %}
+            <span style="color:white;font-weight:800;font-size:0.82rem">{{ away_team }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-direction:row-reverse">
+            {% if game[9] %}<img src="{{ game[9] }}" style="width:28px;height:28px;object-fit:contain">{% endif %}
+            <span style="color:white;font-weight:800;font-size:0.82rem">{{ home_team }}</span>
+        </div>
+    </div>
+
+    {% for cat_key, label in [('passingYards','Passing Yards'),('rushingYards','Rushing Yards'),('receivingYards','Receiving Yards'),('sacks','Sacks'),('tackles','Tackles')] %}
+    {% set cat = structured_leaders.get(cat_key) %}
+    {% if cat and (cat.away or cat.home) %}
+    <div style="padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:start;gap:16px">
+
+            <!-- Away leader -->
+            <div style="display:flex;align-items:flex-start;gap:10px">
+                {% if cat.away %}
+                {% if cat.away.headshot %}
+                <img src="{{ cat.away.headshot }}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.1);flex-shrink:0">
+                {% else %}
+                <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.4);font-size:0.8rem">{{ cat.away.name[0] if cat.away.name else '?' }}</div>
+                {% endif %}
+                <div>
+                    <div style="color:white;font-weight:900;font-size:1.1rem;line-height:1">{{ cat.away.stat }}</div>
+                    {% if cat.away.player_id %}
+                    <a href="/player/{{ cat.away.player_id }}" style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.8)'">{{ cat.away.name }}</a>
+                    {% else %}
+                    <div style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px">{{ cat.away.name }}</div>
+                    {% endif %}
+                    {% if cat.away.position %}<div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-top:1px">{{ cat.away.position }}</div>{% endif %}
+                    {% if cat.away.stat_detail %}<div style="color:rgba(255,255,255,0.35);font-size:0.68rem;margin-top:2px">{{ cat.away.stat_detail }}</div>{% endif %}
+                </div>
+                {% else %}
+                <div style="color:rgba(255,255,255,0.2);font-size:0.8rem;padding-top:14px">—</div>
+                {% endif %}
+            </div>
+
+            <!-- Center label -->
+            <div style="text-align:center;padding-top:12px">
+                <div style="color:rgba(255,255,255,0.4);font-size:0.68rem;font-weight:700;line-height:1.4;max-width:80px">{{ label }}</div>
+            </div>
+
+            <!-- Home leader -->
+            <div style="display:flex;align-items:flex-start;gap:10px;justify-content:flex-end;flex-direction:row-reverse">
+                {% if cat.home %}
+                {% if cat.home.headshot %}
+                <img src="{{ cat.home.headshot }}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.1);flex-shrink:0">
+                {% else %}
+                <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.4);font-size:0.8rem">{{ cat.home.name[0] if cat.home.name else '?' }}</div>
+                {% endif %}
+                <div style="text-align:right">
+                    <div style="color:white;font-weight:900;font-size:1.1rem;line-height:1">{{ cat.home.stat }}</div>
+                    {% if cat.home.player_id %}
+                    <a href="/player/{{ cat.home.player_id }}" style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.8)'">{{ cat.home.name }}</a>
+                    {% else %}
+                    <div style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px">{{ cat.home.name }}</div>
+                    {% endif %}
+                    {% if cat.home.position %}<div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-top:1px">{{ cat.home.position }}</div>{% endif %}
+                    {% if cat.home.stat_detail %}<div style="color:rgba(255,255,255,0.35);font-size:0.68rem;margin-top:2px">{{ cat.home.stat_detail }}</div>{% endif %}
+                </div>
+                {% else %}
+                <div style="color:rgba(255,255,255,0.2);font-size:0.8rem;padding-top:14px">—</div>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ── PLAY BY PLAY ──────────────────────────────────────────────────────────── #}
+<div style="margin-top:{% if structured_leaders %}28px{% else %}0{% endif %}">
+
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="color:rgba(255,255,255,0.3);font-size:0.6rem;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;white-space:nowrap">Play by Play</span>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
+    </div>
+
+    {% if plays %}
+    {# Toggle buttons #}
+    <div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);margin-bottom:20px">
+        <button id="btn-scoring" onclick="showPlays('scoring')"
+            style="flex:1;padding:10px;background:rgba(255,255,255,0.08);color:white;border:none;font-weight:700;font-size:0.82rem;cursor:pointer">
+            Scoring Plays
+        </button>
+        <button id="btn-all" onclick="showPlays('all')"
+            style="flex:1;padding:10px;background:transparent;color:rgba(255,255,255,0.5);border:none;font-weight:700;font-size:0.82rem;cursor:pointer">
+            All Plays
+        </button>
+    </div>
+
+    {% set q_labels = ['','1st','2nd','3rd','4th'] %}
+    {% for q in [1, 2, 3, 4] %}
+    {% set q_plays = plays | selectattr('period', 'equalto', q) | list %}
+    {% if q_plays %}
+    <div class="quarter-section" style="margin-bottom:8px">
+        <div style="color:rgba(255,255,255,0.4);font-size:0.68rem;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;padding:12px 0 8px">
+            {{ q_labels[q] }} QUARTER
+        </div>
+
+        {% for play in q_plays %}
+        {% set play_border_color = home_color if play.side == 'home' else (away_color if play.side == 'away' else '#f59e0b') %}
+        <div class="play-row dark-card mb-2"
+             data-scoring="{{ 'true' if play.is_scoring else 'false' }}"
+             style="{% if play.is_scoring %}border-left:4px solid {{ play_border_color }};background:{{ play_border_color }}08;{% else %}border-left:3px solid {{ play_border_color }}55;{% endif %}padding:14px 16px;{% if not play.is_scoring %}display:none;{% endif %}">
+
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
+
+                    {# Team logo via play.side #}
+                    {% if play.side == 'home' and game[9] %}
+                        <img src="{{ game[9] }}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0;margin-top:2px">
+                    {% elif play.side == 'away' and game[10] %}
+                        <img src="{{ game[10] }}" style="width:32px;height:32px;object-fit:contain;flex-shrink:0;margin-top:2px">
+                    {% endif %}
+
+                    <div style="flex:1;min-width:0">
+                        {% if play.is_scoring and play.type %}
+                        <div style="color:white;font-weight:800;font-size:0.88rem;margin-bottom:2px">
+                            {% set pt = play.type | lower %}
+                            {% if 'touchdown' in pt %}Touchdown
+                            {% elif 'field goal' in pt %}Field Goal
+                            {% elif 'safety' in pt %}Safety
+                            {% elif 'two-point' in pt or '2pt' in pt %}Two-Point Conversion
+                            {% else %}{{ play.type }}{% endif %}
+                        </div>
+                        {% endif %}
+                        <div style="color:rgba(255,255,255,0.4);font-size:0.72rem;margin-bottom:6px">
+                            {{ play.clock }}{% if play.clock and play_quarters %} · {% endif %}{{ q_labels[q] if q <= 4 else 'OT' }}
+                        </div>
+                        <div style="color:{% if play.is_scoring %}rgba(255,255,255,0.85){% else %}rgba(255,255,255,0.6){% endif %};font-size:0.82rem;line-height:1.5">{{ play.text }}</div>
+                        {% if play.is_scoring and play.drive_summary %}
+                        <div style="color:rgba(255,255,255,0.3);font-size:0.7rem;margin-top:4px">{{ play.drive_summary }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Score after play #}
+                {% if play.is_scoring %}
+                <div style="text-align:right;flex-shrink:0;min-width:72px">
+                    <div style="color:rgba(255,255,255,0.3);font-size:0.58rem;font-weight:700;margin-bottom:2px;letter-spacing:0.06em">
+                        {{ away_team[:3] | upper }}&nbsp;&nbsp;{{ home_team[:3] | upper }}
+                    </div>
+                    <div style="color:white;font-weight:900;font-size:1.05rem">
+                        {{ play.away_score }} – {{ play.home_score }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    {% else %}
+    <div class="dark-card" style="padding:40px;text-align:center;color:rgba(255,255,255,0.22);font-size:0.82rem">No play-by-play data available.</div>
+    {% endif %}
+</div>
+
+
+</div>{# /col-lg-8 #}
+
+{# ── RIGHT COLUMN (col-lg-4) ──────────────────────────────────────────────── #}
+<div class="col-lg-4">
+
+{# ── TEAM STATS ────────────────────────────────────────────────────────────── #}
+{% if home_stats or away_stats %}
+{% macro team_stat_row(label, away_val, home_val) %}
+{% if away_val or home_val %}
+{% set away_num = away_val | replace(':','') | replace('/','') | replace('-','') | float(default=0) %}
+{% set home_num = home_val | replace(':','') | replace('/','') | replace('-','') | float(default=0) %}
+{% set total = away_num + home_num %}
+{% set away_pct = ((away_num / total) * 100) | round(1) if total > 0 else 50 %}
+{% set home_pct = 100 - away_pct %}
+<div style="margin-bottom:18px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+        <span style="color:white;font-weight:800;font-size:1.05rem;min-width:60px">{{ away_val or '—' }}</span>
+        <span style="color:rgba(255,255,255,0.45);font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:center;flex:1">{{ label }}</span>
+        <span style="color:white;font-weight:800;font-size:1.05rem;min-width:60px;text-align:right">{{ home_val or '—' }}</span>
+    </div>
+    <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px">
+        <div style="flex:{{ away_pct }};background:{{ away_color }};border-radius:4px 0 0 4px;min-width:4px"></div>
+        <div style="flex:{{ home_pct }};background:{{ home_color }};border-radius:0 4px 4px 0;min-width:4px"></div>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px;margin-top:16px">
+    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Team Stats</div>
+
+    <!-- Team header row with large logos -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+            {% if game[10] %}<img src="{{ game[10] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
+            <span style="color:white;font-weight:800;font-size:0.88rem">{{ away_team }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-direction:row-reverse">
+            {% if game[9] %}<img src="{{ game[9] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
+            <span style="color:white;font-weight:800;font-size:0.88rem">{{ home_team }}</span>
+        </div>
+    </div>
+
+    {{ team_stat_row('Total Yards',   away_stats.get('totalYards',''),          home_stats.get('totalYards','')) }}
+    {{ team_stat_row('Passing Yards', away_stats.get('netPassingYards',''),     home_stats.get('netPassingYards','')) }}
+    {{ team_stat_row('Rushing Yards', away_stats.get('rushingYards',''),        home_stats.get('rushingYards','')) }}
+    {{ team_stat_row('1st Downs',     away_stats.get('firstDowns',''),          home_stats.get('firstDowns','')) }}
+    {{ team_stat_row('3rd Down',      away_stats.get('thirdDownEff',''),        home_stats.get('thirdDownEff','')) }}
+    {{ team_stat_row('4th Down',      away_stats.get('fourthDownEff',''),       home_stats.get('fourthDownEff','')) }}
+    {{ team_stat_row('Turnovers',     away_stats.get('turnovers',''),           home_stats.get('turnovers','')) }}
+    {{ team_stat_row('Penalties',     away_stats.get('totalPenaltiesYards',''), home_stats.get('totalPenaltiesYards','')) }}
+    {{ team_stat_row('Possession',    away_stats.get('possessionTime',''),      home_stats.get('possessionTime','')) }}
+    {{ team_stat_row('Sacks',         away_stats.get('sacks',''),               home_stats.get('sacks','')) }}
+</div>
+{% endif %}
+
+{# ── WIN PROBABILITY ───────────────────────────────────────────────────────── #}
+{% if win_prob %}
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);
+            border-radius:12px;padding:20px;margin-top:16px">
+
+    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;
+                letter-spacing:0.12em;text-transform:uppercase;margin-bottom:14px">Win Probability</div>
+
+    <!-- Team probability header — compact for sidebar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px">
+            {% if game[10] %}<img src="{{ game[10] }}" style="width:32px;height:32px;object-fit:contain">{% endif %}
+            <div>
+                <div id="away-prob-pct" style="color:white;font-size:1.3rem;font-weight:900;line-height:1">—</div>
+                <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
+                    <div style="width:16px;height:2px;background:{{ away_color }};border-radius:2px"></div>
+                    <span style="color:rgba(255,255,255,0.4);font-size:0.65rem">{{ away_team }}</span>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-direction:row-reverse">
+            {% if game[9] %}<img src="{{ game[9] }}" style="width:32px;height:32px;object-fit:contain">{% endif %}
+            <div style="text-align:right">
+                <div id="home-prob-pct" style="color:white;font-size:1.3rem;font-weight:900;line-height:1">—</div>
+                <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-top:2px">
+                    <span style="color:rgba(255,255,255,0.4);font-size:0.65rem">{{ home_team }}</span>
+                    <div style="width:16px;height:2px;background:{{ home_color }};border-radius:2px"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart — shorter for sidebar -->
+    <div id="win-prob-chart" style="width:100%;height:180px"></div>
+
+    <!-- Play detail on hover -->
+    <div id="play-detail" style="display:none;margin-top:12px;padding:10px 12px;
+         background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+         border-radius:8px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
+            <div>
+                <div id="pd-down-dist" style="color:white;font-weight:800;font-size:0.82rem"></div>
+                <div id="pd-clock" style="color:rgba(255,255,255,0.4);font-size:0.68rem;margin-top:1px"></div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin-left:8px">
+                <div id="pd-score" style="color:white;font-weight:800;font-size:0.82rem"></div>
+                <div id="pd-teams" style="color:rgba(255,255,255,0.35);font-size:0.6rem;margin-top:1px"></div>
+            </div>
+        </div>
+        <div id="pd-text" style="color:rgba(255,255,255,0.65);font-size:0.74rem;line-height:1.5"></div>
+    </div>
+
+    <div style="color:rgba(255,255,255,0.2);font-size:0.62rem;text-align:center;margin-top:10px">According to ESPN Analytics</div>
+</div>
+
+<script>
+(function() {
+const WP_DATA = {{ win_prob | tojson }};
+const AWAY_TEAM = {{ away_team | tojson }};
+const HOME_TEAM = {{ home_team | tojson }};
+const AWAY_COLOR = '{{ away_color }}';
+const HOME_COLOR = '{{ home_color }}';
+
+function initWinProb() {
+    const chartDiv = document.getElementById('win-prob-chart');
+    if (!chartDiv) return;
+
+    if (!WP_DATA || WP_DATA.length < 2) {
+        chartDiv.innerHTML = '<div style="color:rgba(255,255,255,0.25);text-align:center;padding:40px 0;font-size:0.8rem">Win probability data unavailable</div>';
+        return;
+    }
+
+    const last = WP_DATA[WP_DATA.length - 1];
+    document.getElementById('away-prob-pct').textContent = Math.round(last.away * 100) + '%';
+    document.getElementById('home-prob-pct').textContent = Math.round(last.home * 100) + '%';
+
+    const xVals = WP_DATA.map(p => p.x);
+    const yAway = WP_DATA.map(p => p.away * 100);
+    const yHome = WP_DATA.map(p => p.home * 100);
+
+    const quarterShapes = [15, 30, 45].map(x => ({
+        type: 'line', x0: x, x1: x, y0: 0, y1: 100,
+        line: { color: 'rgba(255,255,255,0.08)', width: 1, dash: 'dot' }
+    }));
+    quarterShapes.push({
+        type: 'line', x0: 0, x1: 60, y0: 50, y1: 50,
+        line: { color: 'rgba(255,255,255,0.15)', width: 1, dash: 'dot' }
+    });
+
+    const traces = [
+        {
+            x: xVals, y: yAway,
+            type: 'scatter', mode: 'lines',
+            line: { color: AWAY_COLOR, width: 2, shape: 'spline', smoothing: 0.3 },
+            fill: 'tozeroy', fillcolor: AWAY_COLOR + '20',
+            name: AWAY_TEAM, hoverinfo: 'none',
+        },
+        {
+            x: xVals, y: yHome,
+            type: 'scatter', mode: 'lines',
+            line: { color: HOME_COLOR, width: 2, shape: 'spline', smoothing: 0.3 },
+            fill: 'tozeroy', fillcolor: HOME_COLOR + '20',
+            name: HOME_TEAM, hoverinfo: 'none',
+        },
+    ];
+
+    const layout = {
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        height: 180,
+        margin: { l: 36, r: 8, t: 4, b: 28 },
+        xaxis: {
+            range: [0, 60],
+            tickvals: [15, 30, 45, 60],
+            ticktext: ['1st', '2nd', '3rd', '4th'],
+            gridcolor: 'rgba(255,255,255,0.04)',
+            color: 'rgba(255,255,255,0.35)',
+            fixedrange: true, zeroline: false,
+            tickfont: { size: 10 },
+        },
+        yaxis: {
+            range: [0, 100],
+            tickvals: [0, 50, 100],
+            ticktext: ['0%', '50%', '100%'],
+            gridcolor: 'rgba(255,255,255,0.04)',
+            color: 'rgba(255,255,255,0.35)',
+            fixedrange: true, zeroline: false,
+            tickfont: { size: 10 },
+        },
+        shapes: quarterShapes,
+        showlegend: false,
+        hovermode: false,
+    };
+
+    Plotly.newPlot('win-prob-chart', traces, layout, { displayModeBar: false, responsive: true });
+
+    // Force resize after render to fix empty-box issue
+    setTimeout(() => { Plotly.Plots.resize(chartDiv); }, 100);
+    setTimeout(() => { Plotly.Plots.resize(chartDiv); }, 500);
+
+    // Hover interaction
+    chartDiv.addEventListener('mousemove', function(e) {
+        const rect = chartDiv.getBoundingClientRect();
+        const marginLeft = 36, marginRight = 8;
+        const plotWidth = rect.width - marginLeft - marginRight;
+        const plotX = e.clientX - rect.left - marginLeft;
+        const dataX = (plotX / plotWidth) * 60;
+
+        if (dataX < 0 || dataX > 60) return;
+
+        let closest = null, minDist = Infinity;
+        for (const pt of WP_DATA) {
+            const d = Math.abs(pt.x - dataX);
+            if (d < minDist) { minDist = d; closest = pt; }
+        }
+        if (!closest) return;
+
+        document.getElementById('away-prob-pct').textContent = Math.round(closest.away * 100) + '%';
+        document.getElementById('home-prob-pct').textContent = Math.round(closest.home * 100) + '%';
+
+        const detail = document.getElementById('play-detail');
+        if (closest.play_text) {
+            detail.style.display = 'block';
+            const quarter = ['','1st','2nd','3rd','4th'][closest.period] || '';
+            document.getElementById('pd-down-dist').textContent = closest.down_dist || closest.play_type || '';
+            document.getElementById('pd-clock').textContent = (closest.clock || '') + (quarter ? ' · ' + quarter : '');
+            document.getElementById('pd-score').textContent = closest.away_score + '  –  ' + closest.home_score;
+            document.getElementById('pd-teams').textContent = AWAY_TEAM + '   ' + HOME_TEAM;
+            document.getElementById('pd-text').textContent = closest.play_text;
+        } else {
+            detail.style.display = 'none';
+        }
+
+        Plotly.relayout('win-prob-chart', {
+            shapes: [...quarterShapes, {
+                type: 'line', x0: closest.x, x1: closest.x, y0: 0, y1: 100,
+                line: { color: 'rgba(255,255,255,0.4)', width: 1 }
+            }]
+        });
+    });
+
+    chartDiv.addEventListener('mouseleave', function() {
+        const last = WP_DATA[WP_DATA.length - 1];
+        document.getElementById('away-prob-pct').textContent = Math.round(last.away * 100) + '%';
+        document.getElementById('home-prob-pct').textContent = Math.round(last.home * 100) + '%';
+        document.getElementById('play-detail').style.display = 'none';
+        Plotly.relayout('win-prob-chart', { shapes: quarterShapes });
+    });
+}
+
+if (typeof Plotly !== 'undefined') {
+    initWinProb();
+} else {
+    document.addEventListener('DOMContentLoaded', initWinProb);
+}
+})();
+</script>
+{% endif %}
+
+{# ── GAME INFO ─────────────────────────────────────────────────────────────── #}
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px;margin-top:16px">
+    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Game Information</div>
+
+    {% if game_date %}
+    <div style="display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0;margin-top:1px">📅</span>
+        <div>
+            <div style="color:white;font-weight:700;font-size:0.88rem">{{ game_date }}</div>
+            {% if game_time %}<div style="color:rgba(255,255,255,0.4);font-size:0.78rem;margin-top:2px">{{ game_time }}</div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if venue_name %}
+    <div style="display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0;margin-top:1px">📍</span>
+        <div>
+            <div style="color:white;font-weight:700;font-size:0.88rem">{{ venue_name }}</div>
+            {% if venue_location %}<div style="color:rgba(255,255,255,0.4);font-size:0.78rem;margin-top:2px">{{ venue_location }}</div>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if attendance_fmt %}
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0">👥</span>
+        <div>
+            <div style="color:white;font-weight:700;font-size:0.88rem">Attendance: {{ attendance_fmt }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if tv_broadcast %}
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0">📺</span>
+        <div>
+            <div style="color:rgba(255,255,255,0.45);font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Where to Watch</div>
+            <span style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;font-weight:800;font-size:0.82rem;padding:3px 12px;border-radius:6px">{{ tv_broadcast }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 0">
+        <span style="font-size:1.1rem;flex-shrink:0">🏈</span>
+        <div style="color:rgba(255,255,255,0.55);font-size:0.82rem">
+            Week {{ week_num }} · {{ season_type_display }}{% if notes %} · {{ notes }}{% endif %}
+        </div>
+    </div>
+</div>
+
+</div>{# /col-lg-4 #}
+</div>{# /row #}
+</div>{# /tab-content-overview #}
+
+{# ── BOX SCORE TAB ─────────────────────────────────────────────────────────── #}
+<div id="tab-content-boxscore" style="display:none">
+
+{% macro team_box_section(side, cat_name, display_name) %}
+{% set cat = box_score.get(side, {}).get(cat_name) %}
+{% set t_name = home_team if side == 'home' else away_team %}
+{% set t_logo = game[9] if side == 'home' else game[10] %}
+{% set t_color = home_color if side == 'home' else away_color %}
+{% set athletes = cat.athletes | selectattr('name') | list if cat else [] %}
+{% if cat and athletes %}
+<div style="margin-bottom:28px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid {{ t_color }}">
+        {% if t_logo %}<img src="{{ t_logo }}" style="width:22px;height:22px;object-fit:contain">{% endif %}
+        <span style="color:white;font-weight:800;font-size:0.82rem">{{ t_name }} {{ display_name }}</span>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="data-table" style="width:100%">
+        <thead>
+            <tr>
+                <th style="text-align:left;padding:9px 14px;white-space:nowrap">PLAYER</th>
+                {% for lbl in cat.labels %}
+                <th style="text-align:center;padding:9px 10px;white-space:nowrap">{{ lbl }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for ath in athletes %}
+            {% set is_team = ath.name in ['Team','TEAM'] %}
+            <tr onmouseover="if(!{{ is_team|lower }})this.style.background='rgba(255,255,255,0.04)'"
+                onmouseout="if(!{{ is_team|lower }})this.style.background='transparent'"
+                style="background:{{ 'rgba(255,255,255,0.03)' if is_team else 'transparent' }}">
+                <td style="padding:9px 14px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        {% if not is_team %}
+                        {% if ath.headshot %}
+                        <img src="{{ ath.headshot }}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border:1px solid rgba(255,255,255,0.1)">
+                        {% else %}
+                        <div style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.62rem;font-weight:700;color:rgba(255,255,255,0.4)">{{ ath.name[0] if ath.name else '?' }}</div>
+                        {% endif %}
+                        {% endif %}
+                        <span style="color:{{ 'rgba(255,255,255,0.6)' if is_team else 'white' }};font-weight:{{ '800' if is_team else '600' }};font-size:0.82rem;white-space:nowrap">{{ ath.name }}</span>
+                    </div>
+                </td>
+                {% for lbl in cat.labels %}
+                <td style="text-align:center;color:{{ 'white' if is_team else 'rgba(255,255,255,0.8)' }};font-weight:{{ '700' if is_team else '400' }};font-size:0.82rem;padding:9px 10px">{{ ath.stats.get(lbl, '—') or '—' }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+<div class="row g-5">
+    <div class="col-lg-6">
+        {{ team_box_section('away','passing','Passing') }}
+        {{ team_box_section('away','rushing','Rushing') }}
+        {{ team_box_section('away','receiving','Receiving') }}
+        {{ team_box_section('away','defensive','Defense') }}
+        {{ team_box_section('away','interceptions','Interceptions') }}
+        {{ team_box_section('away','kickreturns','Kick Returns') }}
+        {{ team_box_section('away','puntreturns','Punt Returns') }}
+        {{ team_box_section('away','kicking','Kicking') }}
+        {{ team_box_section('away','punting','Punting') }}
+    </div>
+    <div class="col-lg-6">
+        {{ team_box_section('home','passing','Passing') }}
+        {{ team_box_section('home','rushing','Rushing') }}
+        {{ team_box_section('home','receiving','Receiving') }}
+        {{ team_box_section('home','defensive','Defense') }}
+        {{ team_box_section('home','interceptions','Interceptions') }}
+        {{ team_box_section('home','kickreturns','Kick Returns') }}
+        {{ team_box_section('home','puntreturns','Punt Returns') }}
+        {{ team_box_section('home','kicking','Kicking') }}
+        {{ team_box_section('home','punting','Punting') }}
+    </div>
+</div>
+
+</div>{# /tab-content-boxscore #}
+
+{# ── DRIVES TAB ────────────────────────────────────────────────────────────── #}
+<div id="tab-content-drives" style="display:none">
+
+{% if drives %}
+{% for drive in drives %}
+{% set d_color = home_color if drive.is_home else away_color %}
+{% set d_logo = game[9] if drive.is_home else game[10] %}
+{% set field_pct = 83.33 %}
+
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;margin-bottom:16px;overflow:hidden">
+
+    <!-- Drive header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:12px">
+            {% if d_logo %}<img src="{{ d_logo }}" style="width:32px;height:32px;object-fit:contain">{% endif %}
+            <div>
+                <span style="color:white;font-weight:800;font-size:0.9rem">{{ drive.team }}</span>
+                <span style="color:rgba(255,255,255,0.35);font-size:0.78rem;margin-left:10px">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px">
+            <span style="color:rgba(255,255,255,0.4);font-size:0.75rem">{{ drive.plays_count }} plays · {{ drive.yards }} yds{% if drive.time_elapsed %} · {{ drive.time_elapsed }}{% endif %}</span>
+            <span style="font-size:0.75rem;font-weight:800;padding:3px 12px;border-radius:5px;
+                background:{{ 'rgba(52,211,153,0.15)' if drive.is_scoring else 'rgba(255,255,255,0.07)' }};
+                color:{{ '#34d399' if drive.is_scoring else 'rgba(255,255,255,0.5)' }};
+                border:1px solid {{ 'rgba(52,211,153,0.3)' if drive.is_scoring else 'rgba(255,255,255,0.1)' }}">
+                {{ drive.result_icon }} {{ drive.result }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Field with stacked play bars -->
+    <div style="padding:16px 20px 20px">
+
+        {% if drive.plays %}
+        {% set n_plays = drive.plays | length %}
+        {% set field_h = [n_plays * 28 + 44, 80] | max %}
+
+        <div style="position:relative;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#0f2a0f 0%,#1a3d1a 50%,#0f2a0f 100%);border:1px solid rgba(255,255,255,0.1)">
+        <div style="height:{{ field_h }}px;position:relative">
+
+            <!-- End zones -->
+            <div style="position:absolute;left:0;top:0;bottom:0;width:8.33%;background:{{ away_color }}99;border-right:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center">
+                <span style="color:rgba(255,255,255,0.85);font-size:0.42rem;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:0.1em;text-transform:uppercase">{{ away_team[:8] }}</span>
+            </div>
+            <div style="position:absolute;right:0;top:0;bottom:0;width:8.33%;background:{{ home_color }}99;border-left:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center">
+                <span style="color:rgba(255,255,255,0.85);font-size:0.42rem;font-weight:900;writing-mode:vertical-rl;letter-spacing:0.1em;text-transform:uppercase">{{ home_team[:8] }}</span>
+            </div>
+
+            <!-- 10-yard grid lines -->
+            {% for i in range(1, 10) %}
+            <div style="position:absolute;left:{{ 8.33 + i * 8.33 }}%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.12)"></div>
+            {% endfor %}
+            {% for i in range(0, 10) %}
+            <div style="position:absolute;left:{{ 8.33 + i * 8.33 + 4.165 }}%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.04)"></div>
+            {% endfor %}
+
+            <!-- Stacked play bars -->
+            {% set ns = namespace(pos=drive.start_yardline | float) %}
+            {% for play in drive.plays %}
+            {% set row_top = loop.index0 * 28 + 10 %}
+            {% set yards = play.yards | int %}
+            {% set pt = play.type | lower %}
+
+            {% if yards < 0 %}{% set pc = '#ef4444' %}
+            {% elif 'penalty' in pt or 'foul' in pt %}{% set pc = '#fbbf24' %}
+            {% elif 'punt' in pt %}{% set pc = '#a78bfa' %}
+            {% elif 'field goal' in pt %}{% set pc = '#f59e0b' %}
+            {% else %}{% set pc = d_color %}{% endif %}
+
+            {% set bar_w = [(yards | abs) * (field_pct / 100), 0.5] | max %}
+
+            {% if drive.is_home %}
+            {% set ns.pos = ns.pos - yards %}
+            {% set bar_left = [ns.pos * (field_pct / 100) + 8.33, 8.5] | max %}
+            {% else %}
+            {% set bar_left = [ns.pos * (field_pct / 100) + 8.33, 8.5] | max %}
+            {% set ns.pos = ns.pos + yards %}
+            {% endif %}
+
+            {% set bar_left = [bar_left, 91.5 - bar_w] | min %}
+
+            <div title="{{ play.type }}: {{ play.text | truncate(80) }}"
+                 style="position:absolute;top:{{ row_top }}px;left:{{ bar_left }}%;width:{{ bar_w }}%;height:20px;
+                        background:{{ pc }};border-radius:3px;opacity:{{ '0.95' if yards >= 0 else '0.7' }};
+                        display:flex;align-items:center;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer"
+                 onmouseover="showDriveTooltip(event,'{{ play.type }}: {{ play.yards }}y — {{ play.text | replace("'","") | truncate(70) }}')"
+                 onmouseout="hideDriveTooltip()">
+                {% if bar_w > 2 %}
+                <span style="color:white;font-size:0.48rem;font-weight:900;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.04em;text-shadow:0 1px 2px rgba(0,0,0,0.6)">
+                    {% if 'pass' in pt or 'complete' in pt %}Pass
+                    {% elif 'rush' in pt or 'run' in pt or 'kneel' in pt %}Rush
+                    {% elif 'penalty' in pt %}Penalty
+                    {% elif 'punt' in pt %}Punt
+                    {% elif 'field goal' in pt %}FG
+                    {% else %}{{ play.type[:8] }}{% endif %}
+                </span>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+            <!-- Yard markers -->
+            <div style="position:absolute;bottom:4px;left:8.33%;right:8.33%;display:flex;justify-content:space-between">
+                {% for lbl in [away_team[:3]|upper,'10','20','30','40','50','40','30','20','10',home_team[:3]|upper] %}
+                <span style="color:rgba(255,255,255,0.35);font-size:0.44rem;font-weight:700;white-space:nowrap">{{ lbl }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        </div>
+
+        <!-- Legend -->
+        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px">
+            {% for lc, ll in [(d_color,'Pass/Rush'),('#fbbf24','Penalty'),('#ef4444','Loss'),('#a78bfa','Punt'),('#f59e0b','FG')] %}
+            <div style="display:flex;align-items:center;gap:5px">
+                <div style="width:16px;height:7px;background:{{ lc }};border-radius:2px"></div>
+                <span style="color:rgba(255,255,255,0.35);font-size:0.63rem">{{ ll }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% else %}
+        <!-- Fallback single bar when no play-level data -->
+        <div style="position:relative;height:22px;border-radius:4px;overflow:hidden;background:linear-gradient(90deg,#0f2010 0%,#122614 50%,#0f2010 100%);border:1px solid rgba(255,255,255,0.07)">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:8%;background:{{ away_color }}44"></div>
+            <div style="position:absolute;right:0;top:0;bottom:0;width:8%;background:{{ home_color }}44"></div>
+            <div style="position:absolute;left:{{ drive.field_start }}%;top:4px;bottom:4px;width:{{ drive.field_width }}%;min-width:6px;background:{{ d_color }};border-radius:3px;opacity:0.9"></div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="dark-card" style="padding:40px;text-align:center;color:rgba(255,255,255,0.22);font-size:0.82rem">No drive data available.</div>
+{% endif %}
+
+</div>{# /tab-content-drives #}
+
+</div>{# /page-wrapper #}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script>
+function showPlays(type) {
+    document.querySelectorAll('.play-row').forEach(function(el) {
+        if (type === 'scoring') {
+            el.style.display = el.dataset.scoring === 'true' ? 'block' : 'none';
+        } else {
+            el.style.display = 'block';
+        }
+    });
+    var bScoring = document.getElementById('btn-scoring');
+    var bAll     = document.getElementById('btn-all');
+    if (!bScoring || !bAll) return;
+    var ON  = 'flex:1;padding:10px;background:rgba(255,255,255,0.08);color:white;border:none;font-weight:700;font-size:0.82rem;cursor:pointer';
+    var OFF = 'flex:1;padding:10px;background:transparent;color:rgba(255,255,255,0.5);border:none;font-weight:700;font-size:0.82rem;cursor:pointer';
+    bScoring.style.cssText = type === 'scoring' ? ON : OFF;
+    bAll.style.cssText     = type === 'all'     ? ON : OFF;
+}
+showPlays('scoring');
+
+function switchTab(name) {
+    ['overview', 'boxscore', 'drives'].forEach(function(t) {
+        var el = document.getElementById('tab-content-' + t);
+        if (el) el.style.display = t === name ? 'block' : 'none';
+        var btn = document.getElementById('tab-btn-' + t);
+        if (btn) {
+            btn.style.color        = t === name ? 'white' : 'rgba(255,255,255,0.4)';
+            btn.style.borderBottom = t === name ? '2px solid white' : '2px solid transparent';
+        }
+    });
+}
+
+function showDriveTooltip(e, text) {
+    var tip = document.getElementById('drive-tip');
+    if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'drive-tip';
+        tip.style.cssText = 'position:fixed;background:rgba(5,12,30,0.95);color:white;padding:8px 12px;border-radius:8px;font-size:0.74rem;pointer-events:none;z-index:9999;max-width:320px;border:1px solid rgba(255,255,255,0.15);line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5)';
+        document.body.appendChild(tip);
+    }
+    tip.textContent = text;
+    tip.style.display = 'block';
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY - 36) + 'px';
+}
+function hideDriveTooltip() {
+    var tip = document.getElementById('drive-tip');
+    if (tip) tip.style.display = 'none';
+}
+document.addEventListener('mousemove', function(e) {
+    var tip = document.getElementById('drive-tip');
+    if (tip && tip.style.display !== 'none') {
+        tip.style.left = (e.clientX + 14) + 'px';
+        tip.style.top  = (e.clientY - 36) + 'px';
+    }
+});
+</script>
+{% endblock %}

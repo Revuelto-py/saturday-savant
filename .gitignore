@@ -1,0 +1,26 @@
+# Environment variables / secrets
+.env
+.flaskenv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.venv/
+
+# Database (optional - see note below)
+*.db
+*.sqlite
+static/headshots/
+
+# OS files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrapper">
+
+<div class="d-flex align-items-end justify-content-between mb-5 flex-wrap gap-3">
+    <div>
+        <h2 style="color:white;font-weight:900;font-size:1.6rem;margin:0;letter-spacing:-0.01em">AP Top 25</h2>
+        {% if meta %}
+        <div style="color:rgba(255,255,255,0.35);font-size:0.75rem;margin-top:5px">
+            Week {{ meta[0] }} · 2025 Season
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dark-card" style="overflow:hidden">
+    <!-- Table header -->
+    <div style="display:grid;grid-template-columns:72px 1fr 120px 120px 100px;border-bottom:2px solid rgba(255,255,255,0.08);padding:10px 20px">
+        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">RK</div>
+        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">TEAM</div>
+        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">REC</div>
+        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">PTS</div>
+        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">TREND</div>
+    </div>
+
+    {% for r in rankings %}
+    {% set trend = none %}
+    {% if r[12] is not none %}
+        {% set trend = r[12] - r[0] %}
+    {% endif %}
+
+    <a href="/team/{{ r[1] }}" style="text-decoration:none;display:grid;grid-template-columns:72px 1fr 120px 120px 100px;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.1s"
+       onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+       onmouseout="this.style.background='transparent'">
+
+        <!-- Rank -->
+        <div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center">
+            {% if r[0] == 1 %}
+                <div style="width:34px;height:34px;border-radius:50%;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:900;color:black">1</div>
+            {% elif r[0] == 2 %}
+                <div style="width:34px;height:34px;border-radius:50%;background:#9ca3af;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:900;color:white">2</div>
+            {% elif r[0] == 3 %}
+                <div style="width:34px;height:34px;border-radius:50%;background:#b45309;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:900;color:white">3</div>
+            {% else %}
+                <span style="color:rgba(255,255,255,0.5);font-size:1rem;font-weight:800">{{ r[0] }}</span>
+            {% endif %}
+        </div>
+
+        <!-- Team -->
+        <div style="display:flex;align-items:center;gap:14px">
+            {% if r[13] %}
+                <img src="{{ r[13] }}" style="width:48px;height:48px;object-fit:contain;flex-shrink:0">
+            {% endif %}
+            <div>
+                <span style="color:white;font-weight:700;font-size:0.95rem">{{ r[1] }}</span>
+                {% if r[3] %}
+                    <span style="color:rgba(255,255,255,0.35);font-size:0.78rem;margin-left:6px">({{ r[3] }})</span>
+                {% endif %}
+                <div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:1px">{{ r[6] or '' }}</div>
+            </div>
+        </div>
+
+        <!-- Record -->
+        <div style="text-align:center;color:rgba(255,255,255,0.6);font-size:0.88rem;font-weight:500">
+            {% if r[10] is not none %}{{ r[10] }}-{{ r[11] }}{% else %}—{% endif %}
+        </div>
+
+        <!-- Points -->
+        <div style="text-align:center;color:white;font-size:0.95rem;font-weight:700">
+            {{ r[2] or '—' }}
+        </div>
+
+        <!-- Trend -->
+        <div style="text-align:center">
+            {% if trend is none %}
+                <span style="color:rgba(255,255,255,0.25);font-size:0.82rem">NR</span>
+            {% elif trend == 0 %}
+                <span style="color:rgba(255,255,255,0.35);font-size:0.82rem">–</span>
+            {% elif trend > 0 %}
+                <span style="color:#22c55e;font-weight:800;font-size:0.88rem">↑{{ trend }}</span>
+            {% else %}
+                <span style="color:#ef4444;font-weight:800;font-size:0.88rem">↓{{ trend|abs }}</span>
+            {% endif %}
+        </div>
+
+    </a>
+    {% endfor %}
+</div>
+
+</div>
+{% endblock %}

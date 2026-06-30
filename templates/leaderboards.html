@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-wrapper" style="padding-top:32px">
+
+<!-- Page header -->
+<div style="margin-bottom:28px">
+    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">Leaderboards</div>
+    <h1 style="color:white;font-weight:900;font-size:2rem;margin:0;letter-spacing:-0.01em">
+        {% if category == 'passing' %}Passing
+        {% elif category == 'rushing' %}Rushing
+        {% elif category == 'receiving' %}Receiving
+        {% elif category == 'defense' %}Defense
+        {% elif category == 'epa' %}EPA / Play
+        {% elif category == 'usage' %}Usage Rate
+        {% endif %}
+        <span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:1.4rem"> · 2025 Season</span>
+    </h1>
+</div>
+
+<!-- Category tabs -->
+<div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.08)">
+    {% for cat, label in [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense'),('epa','EPA / Play'),('usage','Usage Rate')] %}
+    <a href="/leaderboards/{{ cat }}?conf={{ conf_filter }}&pos={{ pos_filter }}"
+       style="color:{{ 'white' if category == cat else 'rgba(255,255,255,0.4)' }};
+              font-weight:{{ '800' if category == cat else '500' }};
+              font-size:0.82rem;text-decoration:none;padding:10px 18px;
+              border-bottom:2px solid {{ '#f59e0b' if category == cat else 'transparent' }};
+              margin-bottom:-1px;display:inline-block"
+       onmouseover="if('{{ category }}' !== '{{ cat }}')this.style.color='rgba(255,255,255,0.7)'"
+       onmouseout="if('{{ category }}' !== '{{ cat }}')this.style.color='rgba(255,255,255,0.4)'">
+        {{ label }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Filters -->
+<form method="GET" action="/leaderboards/{{ category }}">
+<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:10px;align-items:flex-end">
+
+    <div>
+        <div style="color:rgba(255,255,255,0.4);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Conference</div>
+        <select name="conf" style="background:#152035;border:1px solid rgba(255,255,255,0.15);color:white;padding:7px 12px;border-radius:6px;font-size:0.8rem;min-width:160px" onchange="this.form.submit()">
+            <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
+            {% for conf in conferences %}
+            <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {% if category in ['rushing','receiving','defense','epa','usage'] %}
+    <div>
+        <div style="color:rgba(255,255,255,0.4);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Position</div>
+        <select name="pos" style="background:#152035;border:1px solid rgba(255,255,255,0.15);color:white;padding:7px 12px;border-radius:6px;font-size:0.8rem;min-width:140px" onchange="this.form.submit()">
+            <option value="">All Positions</option>
+            {% if category == 'rushing' %}
+                {% for pos in ['RB','QB','WR','FB'] %}
+                <option value="{{ pos }}" {{ 'selected' if pos_filter == pos }}>{{ pos }}</option>
+                {% endfor %}
+            {% elif category == 'receiving' %}
+                {% for pos in ['WR','TE','RB'] %}
+                <option value="{{ pos }}" {{ 'selected' if pos_filter == pos }}>{{ pos }}</option>
+                {% endfor %}
+            {% elif category == 'defense' %}
+                {% for pos in ['LB','CB','S','DE','DT','EDGE','DL','DB'] %}
+                <option value="{{ pos }}" {{ 'selected' if pos_filter == pos }}>{{ pos }}</option>
+                {% endfor %}
+            {% elif category == 'epa' %}
+                {% for pos in ['QB','WR','RB','TE','DE','LB','CB','S'] %}
+                <option value="{{ pos }}" {{ 'selected' if pos_filter == pos }}>{{ pos }}</option>
+                {% endfor %}
+            {% elif category == 'usage' %}
+                {% for pos in ['QB','WR','RB','TE','DE','LB','CB','S'] %}
+                <option value="{{ pos }}" {{ 'selected' if pos_filter == pos }}>{{ pos }}</option>
+                {% endfor %}
+            {% endif %}
+        </select>
+    </div>
+    {% endif %}
+
+    <div>
+        <div style="color:rgba(255,255,255,0.4);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">
+            Min {% if category in ['passing','rushing'] %}Attempts{% elif category == 'receiving' %}Receptions{% elif category == 'defense' %}Tackles{% else %}Total EPA{% endif %}
+        </div>
+        <select name="min" style="background:#152035;border:1px solid rgba(255,255,255,0.15);color:white;padding:7px 12px;border-radius:6px;font-size:0.8rem" onchange="this.form.submit()">
+            {% if category == 'passing' %}
+                {% for v,l in [('50','50+ ATT'),('100','100+ ATT'),('150','150+ ATT'),('200','200+ ATT'),('250','250+ ATT'),('300','300+ ATT')] %}
+                <option value="{{ v }}" {{ 'selected' if min_filter == v }}>{{ l }}</option>
+                {% endfor %}
+            {% elif category == 'rushing' %}
+                {% for v,l in [('20','20+ CAR'),('50','50+ CAR'),('75','75+ CAR'),('100','100+ CAR'),('150','150+ CAR')] %}
+                <option value="{{ v }}" {{ 'selected' if min_filter == v }}>{{ l }}</option>
+                {% endfor %}
+            {% elif category == 'receiving' %}
+                {% for v,l in [('10','10+ REC'),('20','20+ REC'),('30','30+ REC'),('40','40+ REC'),('50','50+ REC')] %}
+                <option value="{{ v }}" {{ 'selected' if min_filter == v }}>{{ l }}</option>
+                {% endfor %}
+            {% elif category == 'defense' %}
+                {% for v,l in [('5','5+ TKL'),('10','10+ TKL'),('15','15+ TKL'),('20','20+ TKL'),('30','30+ TKL')] %}
+                <option value="{{ v }}" {{ 'selected' if min_filter == v }}>{{ l }}</option>
+                {% endfor %}
+            {% elif category == 'epa' %}
+                {% for v,l in [('5','5+ EPA'),('10','10+ EPA'),('20','20+ EPA'),('50','50+ EPA')] %}
+                <option value="{{ v }}" {{ 'selected' if min_filter == v }}>{{ l }}</option>
+                {% endfor %}
+            {% endif %}
+        </select>
+    </div>
+
+    <div style="margin-left:auto;color:rgba(255,255,255,0.3);font-size:0.75rem;align-self:center">
+        {{ players|length }} players
+    </div>
+</div>
+</form>
+
+<!-- Table -->
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;overflow:hidden">
+<div style="overflow-x:auto">
+<table style="width:100%;border-collapse:collapse;min-width:860px">
+    <thead>
+        <tr style="background:rgba(255,255,255,0.05)">
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 12px;text-align:center;width:44px;border-bottom:2px solid rgba(255,255,255,0.1)">#</th>
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 16px;text-align:left;border-bottom:2px solid rgba(255,255,255,0.1)">Player</th>
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-bottom:2px solid rgba(255,255,255,0.1)">POS</th>
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 12px;text-align:left;border-bottom:2px solid rgba(255,255,255,0.1)">TEAM</th>
+
+            {% if category == 'passing' %}
+            {% for col, label in [('yds','YDS'),('td','TD'),('int','INT'),('att','ATT'),('cmp','CMP'),('pct','CMP%'),('ypa','Y/A'),('epa_play','EPA/Play'),('total_epa','Tot EPA')] %}
+            <th onclick="sortCol('{{ col }}')"
+                style="color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+
+            {% elif category == 'rushing' %}
+            {% for col, label in [('yds','YDS'),('td','TD'),('att','CAR'),('ypc','Y/C'),('long','LONG'),('epa_rush','EPA/Rush'),('total_epa','Tot EPA')] %}
+            <th onclick="sortCol('{{ col }}')"
+                style="color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+
+            {% elif category == 'receiving' %}
+            {% for col, label in [('yds','YDS'),('td','TD'),('rec','REC'),('ypr','Y/R'),('long','LONG'),('epa_play','EPA/Play'),('total_epa','Tot EPA')] %}
+            <th onclick="sortCol('{{ col }}')"
+                style="color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+
+            {% elif category == 'defense' %}
+            {% for col, label in [('tot','TOT'),('solo','SOLO'),('sacks','SACKS'),('tfl','TFL'),('pd','PD'),('qbh','QB HUR')] %}
+            <th onclick="sortCol('{{ col }}')"
+                style="color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+
+            {% elif category == 'epa' %}
+            {% for col, label in [('epa_play','EPA/Play'),('epa_pass','EPA/Pass'),('epa_rush','EPA/Rush'),('total_epa','Tot EPA')] %}
+            <th onclick="sortCol('{{ col }}')"
+                style="color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+
+            {% elif category == 'usage' %}
+            {% for col, label in [('overall','Overall%'),('pass_usage','Pass%'),('rush_usage','Rush%'),('first_down','1st Dn%'),('second_down','2nd Dn%'),('third_down','3rd Dn%'),('standard','Std Dn%'),('passing_downs','Pass Dn%')] %}
+            <th onclick="sortCol('{{ col }}')"
+                style="color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+            {% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in players %}
+
+        {# ── EPA badge helper ── #}
+        {% macro epa_badge(val, is_active=false) %}
+        {% if val is not none %}
+        <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05);background:{{ 'rgba(245,158,11,0.05)' if is_active else 'transparent' }}">
+            <span style="display:inline-block;background:{{ '#34d399' if val > 0 else '#f87171' }}22;border:1px solid {{ '#34d399' if val > 0 else '#f87171' }}44;color:{{ '#34d399' if val > 0 else '#f87171' }};font-weight:800;font-size:0.8rem;padding:2px 8px;border-radius:4px;min-width:54px;text-align:center">{{ '+' if val > 0 else '' }}{{ val }}</span>
+        </td>
+        {% else %}
+        <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05)"><span style="color:rgba(255,255,255,0.2)">—</span></td>
+        {% endif %}
+        {% endmacro %}
+
+        {# ── Standard stat cell ── #}
+        {% macro sc(val, active=false, highlight=false, hi_color='#34d399', lo=false) %}
+        <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05);background:{{ 'rgba(245,158,11,0.05)' if active else 'transparent' }}">
+            {% if val is not none %}
+            {% if highlight %}
+            <span style="display:inline-block;background:{{ hi_color }}22;border:1px solid {{ hi_color }}44;color:{{ hi_color }};font-weight:800;font-size:0.8rem;padding:2px 8px;border-radius:4px;min-width:36px;text-align:center">{{ val }}</span>
+            {% else %}
+            <span style="color:{{ 'white' if active else 'rgba(255,255,255,0.8)' }};font-weight:{{ '800' if active else '500' }};font-size:0.84rem">{{ val }}</span>
+            {% endif %}
+            {% else %}
+            <span style="color:rgba(255,255,255,0.2)">—</span>
+            {% endif %}
+        </td>
+        {% endmacro %}
+
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"
+            onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+            onmouseout="this.style.background='transparent'">
+
+            <!-- Rank -->
+            <td style="padding:11px 12px;text-align:center;color:rgba(255,255,255,0.3);font-size:0.8rem;font-weight:700">{{ p.rank }}</td>
+
+            <!-- Player -->
+            <td style="padding:11px 16px">
+                <a href="/player/{{ p.id }}" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+                    {% if p.headshot %}
+                    <img src="{{ p.headshot }}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border:1px solid rgba(255,255,255,0.1)">
+                    {% else %}
+                    <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.4)">{{ p.first[0] if p.first else '?' }}{{ p.last[0] if p.last else '' }}</div>
+                    {% endif %}
+                    <span style="color:white;font-weight:700;font-size:0.86rem;white-space:nowrap"
+                          onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='white'">{{ p.name }}</span>
+                </a>
+            </td>
+
+            <!-- Position -->
+            <td style="padding:11px 10px;text-align:center">
+                <span style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.2);color:#93c5fd;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:4px">{{ p.pos or '—' }}</span>
+            </td>
+
+            <!-- Team -->
+            <td style="padding:11px 12px">
+                <a href="/team/{{ p.team }}" style="display:flex;align-items:center;gap:7px;text-decoration:none">
+                    {% if p.logo %}<img src="{{ p.logo }}" style="width:22px;height:22px;object-fit:contain;flex-shrink:0">{% endif %}
+                    <span style="color:rgba(255,255,255,0.65);font-size:0.76rem;font-weight:600;white-space:nowrap"
+                          onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.65)'">{{ p.team }}</span>
+                </a>
+            </td>
+
+            <!-- Category stats -->
+            {% if category == 'passing' %}
+                {{ sc(p.yds, sort_col=='yds') }}
+                {{ sc(p.td,  false, p.td and p.td >= 20, '#34d399') }}
+                {{ sc(p.int, false, p.int and p.int >= 8, '#f87171') }}
+                {{ sc(p.att) }}
+                {{ sc(p.cmp) }}
+                {{ sc(p.pct|string ~ '%', sort_col=='pct') }}
+                {{ sc(p.ypa, sort_col=='ypa') }}
+                {{ epa_badge(p.epa_play, sort_col=='epa_play') }}
+                {{ sc(p.total_epa, sort_col=='total_epa') }}
+
+            {% elif category == 'rushing' %}
+                {{ sc(p.yds, sort_col=='yds') }}
+                {{ sc(p.td,  false, p.td and p.td >= 8, '#34d399') }}
+                {{ sc(p.att) }}
+                {{ sc(p.ypc, sort_col=='ypc') }}
+                {{ sc(p.long) }}
+                {{ epa_badge(p.epa_rush, sort_col=='epa_rush') }}
+                {{ sc(p.total_epa, sort_col=='total_epa') }}
+
+            {% elif category == 'receiving' %}
+                {{ sc(p.yds, sort_col=='yds') }}
+                {{ sc(p.td,  false, p.td and p.td >= 6, '#34d399') }}
+                {{ sc(p.rec) }}
+                {{ sc(p.ypr, sort_col=='ypr') }}
+                {{ sc(p.long) }}
+                {{ epa_badge(p.epa_play, sort_col=='epa_play') }}
+                {{ sc(p.total_epa, sort_col=='total_epa') }}
+
+            {% elif category == 'defense' %}
+                {{ sc(p.tot,   sort_col=='tot') }}
+                {{ sc(p.solo) }}
+                {{ sc(p.sacks, false, p.sacks and p.sacks >= 5, '#a78bfa') }}
+                {{ sc(p.tfl,   false, p.tfl   and p.tfl   >= 8, '#f59e0b') }}
+                {{ sc(p.pd) }}
+                {{ sc(p.qbh) }}
+
+            {% elif category == 'epa' %}
+                {% for key in ['epa_play','epa_pass','epa_rush','total_epa'] %}
+                {{ epa_badge(p.get(key), sort_col==key) }}
+                {% endfor %}
+
+            {% elif category == 'usage' %}
+                {% for key in ['overall','pass_usage','rush_usage','first_down','second_down','third_down','standard','passing_downs'] %}
+                {% set val = p.get(key) %}
+                <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05);background:{{ 'rgba(245,158,11,0.05)' if sort_col==key else 'transparent' }}">
+                    {% if val is not none %}
+                    {% set intensity = [val / 30, 1.0] | min %}
+                    <span style="display:inline-block;
+                        background:rgba({{ (59 + intensity*196)|int }},{{ (130 - intensity*30)|int }},{{ (246 - intensity*200)|int }},0.18);
+                        border:1px solid rgba({{ (59 + intensity*196)|int }},{{ (130 - intensity*30)|int }},{{ (246 - intensity*200)|int }},0.35);
+                        color:{{ '#f87171' if val >= 25 else ('#f59e0b' if val >= 15 else 'rgba(255,255,255,0.75)') }};
+                        font-weight:{{ '800' if sort_col==key else '600' }};font-size:0.82rem;
+                        padding:2px 8px;border-radius:4px;min-width:44px;text-align:center">{{ val }}%</span>
+                    {% else %}
+                    <span style="color:rgba(255,255,255,0.2)">—</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+            {% endif %}
+
+        </tr>
+        {% else %}
+        <tr><td colspan="20" style="padding:48px;text-align:center;color:rgba(255,255,255,0.25);font-size:0.84rem">No players found — try adjusting the filters.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function sortCol(col) {
+    const url = new URL(window.location);
+    const cur = url.searchParams.get('sort');
+    const dir = url.searchParams.get('dir') || 'desc';
+    url.searchParams.set('sort', col);
+    url.searchParams.set('dir', cur === col && dir === 'desc' ? 'asc' : 'desc');
+    window.location = url.toString();
+}
+</script>
+{% endblock %}

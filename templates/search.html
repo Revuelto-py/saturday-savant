@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrapper" style="padding-top:40px">
+
+<h2 style="color:white;font-weight:900;font-size:1.3rem;margin-bottom:6px">
+    {% if query %}Results for "{{ query }}"{% else %}Search{% endif %}
+</h2>
+{% if query %}
+<div style="color:rgba(255,255,255,0.4);font-size:0.82rem;margin-bottom:32px">
+    {{ team_results|length }} team{{ 's' if team_results|length != 1 else '' }}
+    &nbsp;·&nbsp;
+    {{ player_results|length }} player{{ 's' if player_results|length != 1 else '' }}
+</div>
+{% endif %}
+
+{% if not query %}
+<div class="dark-card p-5 text-center">
+    <div style="color:rgba(255,255,255,0.3);font-size:0.9rem">Enter a name to search players and teams</div>
+</div>
+
+{% elif not team_results and not player_results %}
+<div class="dark-card p-5 text-center">
+    <div style="color:rgba(255,255,255,0.3);font-size:0.9rem">No results for "{{ query }}"</div>
+    <div style="color:rgba(255,255,255,0.2);font-size:0.78rem;margin-top:8px">Try a different spelling or partial name</div>
+</div>
+
+{% else %}
+
+<!-- Teams section -->
+{% if team_results %}
+<div style="margin-bottom:36px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <h4 style="color:white;font-weight:900;font-size:0.9rem;margin:0;letter-spacing:0.04em;text-transform:uppercase">Teams</h4>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
+        <span style="color:rgba(255,255,255,0.25);font-size:0.72rem">{{ team_results|length }} found</span>
+    </div>
+    <div class="row g-3">
+        {% for t in team_results %}
+        {% set tc  = t[3] if t[3] else '#1e3a5f' %}
+        <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+        <a href="/team/{{ t[0] }}" style="text-decoration:none;display:block;height:100%">
+        <div style="
+            background:linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc }}11 100%);
+            border:1px solid {{ tc }}44;border-radius:12px;
+            padding:20px 12px 14px;text-align:center;position:relative;overflow:hidden;
+            cursor:pointer;transition:all 0.2s ease;height:100%"
+            onmouseover="this.style.background='linear-gradient(135deg, {{ tc }}66 0%, #0d1628 50%, {{ tc }}33 100%)';this.style.borderColor='{{ tc }}88';this.style.transform='translateY(-3px)'"
+            onmouseout="this.style.background='linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc }}11 100%)';this.style.borderColor='{{ tc }}44';this.style.transform='translateY(0)'">
+            <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:80%;height:60%;background:radial-gradient(ellipse at 50% 0%, {{ tc }}22 0%, transparent 70%);pointer-events:none"></div>
+            {% if t[2] %}
+            <div style="height:52px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;position:relative;z-index:1">
+                <img src="{{ t[2] }}" style="max-height:48px;max-width:100%;object-fit:contain">
+            </div>
+            {% endif %}
+            <div style="color:rgba(255,255,255,0.9);font-weight:700;font-size:0.75rem;line-height:1.3;position:relative;z-index:1">{{ t[0] }}</div>
+            <div style="color:rgba(255,255,255,0.35);font-size:0.65rem;margin-top:3px;position:relative;z-index:1">{{ t[1] }}</div>
+        </div>
+        </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Players section -->
+{% if player_results %}
+<div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <h4 style="color:white;font-weight:900;font-size:0.9rem;margin:0;letter-spacing:0.04em;text-transform:uppercase">Players</h4>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
+        <span style="color:rgba(255,255,255,0.25);font-size:0.72rem">{{ player_results|length }} found</span>
+    </div>
+    <div class="dark-card">
+        {% for p in player_results %}
+        <a href="/player/{{ p[0] }}" style="display:flex;align-items:center;gap:16px;padding:12px 20px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.05)"
+           onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+           onmouseout="this.style.background='transparent'">
+            {% if p[6] %}
+                <img src="{{ p[6] }}" class="player-avatar" style="width:44px;height:44px;flex-shrink:0">
+            {% else %}
+                <div class="player-avatar avatar-placeholder" style="width:44px;height:44px;font-size:0.8rem;flex-shrink:0">
+                    {{ p[1][0] if p[1] else '' }}{{ p[2][0] if p[2] else '' }}
+                </div>
+            {% endif %}
+            <div style="flex:1;min-width:0">
+                <div style="color:white;font-weight:700;font-size:0.95rem">{{ p[1] }} {{ p[2] }}</div>
+                <div style="color:rgba(255,255,255,0.45);font-size:0.75rem;margin-top:2px;display:flex;align-items:center;gap:6px">
+                    {% if p[8] %}<img src="{{ p[8] }}" style="width:16px;height:16px;object-fit:contain">{% endif %}
+                    <a href="/team/{{ p[3] }}" style="color:rgba(255,255,255,0.55);text-decoration:none"
+                       onclick="event.stopPropagation()">{{ p[3] }}</a>
+                    &nbsp;·&nbsp; {{ p[7] }}
+                </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-shrink:0">
+                {% if p[5] %}
+                    <span style="color:rgba(255,255,255,0.5);font-size:0.8rem">#{{ p[5] }}</span>
+                {% endif %}
+                <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;font-size:0.7rem;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:0.06em">
+                    {{ p[4] or '—' }}
+                </span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+</div>
+{% endblock %}
