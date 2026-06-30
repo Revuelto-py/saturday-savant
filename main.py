@@ -1,5 +1,5 @@
 import cfbd
-import sqlite3
+import psycopg2
 import os
 import re
 import datetime
@@ -17,8 +17,7 @@ configuration = cfbd.Configuration(
 )
 
 def get_db():
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    return sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+    return psycopg2.connect(os.getenv('DATABASE_URL'))
 
 def get_ap_rankings(cursor):
     cursor.execute('SELECT team, rank FROM ap_rankings ORDER BY rank')
@@ -28,7 +27,7 @@ _VALID_PPA_COLS = {'avg_ppa_all', 'avg_ppa_pass', 'avg_ppa_rush', 'total_ppa'}
 
 def compute_rank_and_percentile(cursor, player_id, stat_type, category, positions, higher_better=True):
     """Rank and percentile computed against the IDENTICAL player pool."""
-    placeholders = ','.join(['?' for _ in positions])
+    placeholders = ','.join(['%s' for _ in positions])
     pid_str = str(player_id)
 
     if category == 'ppa':
@@ -44,7 +43,7 @@ def compute_rank_and_percentile(cursor, player_id, stat_type, category, position
             SELECT ps.player_id, CAST(ps.stat AS REAL)
             FROM player_stats ps
             JOIN players pl ON CAST(ps.player_id AS INTEGER) = pl.id
-            WHERE ps.category=? AND ps.stat_type=? AND pl.position IN ({placeholders})
+            WHERE ps.category=%s AND ps.stat_type=%s AND pl.position IN ({placeholders})
             AND ps.stat IS NOT NULL
         ''', [category, stat_type] + list(positions))
 
@@ -79,7 +78,7 @@ def compute_rank_and_percentile(cursor, player_id, stat_type, category, position
 
 def get_rivalry(cursor, team1, team2):
     cursor.execute(
-        'SELECT rivalry_name FROM rivalries WHERE team1=? AND team2=? LIMIT 1',
+        'SELECT rivalry_name FROM rivalries WHERE team1=%s AND team2=%s LIMIT 1',
         (team1, team2)
     )
     row = cursor.fetchone()
@@ -225,13 +224,13 @@ def leaders_query(cursor, category, stat_type, limit=5):
     cursor.execute(f'''
         SELECT ps.player_name, ps.team,
             CAST(MAX(CASE WHEN ps.stat_type = '{stat_type}' THEN ps.stat END) AS INTEGER) as val,
-            p.headshot, t.logo_dark, p.id as player_id
+            MAX(p.headshot) as headshot, MAX(t.logo_dark) as logo_dark, MAX(p.id) as player_id
         FROM player_stats ps
         INNER JOIN teams t ON ps.team = t.name
-        LEFT JOIN players p ON (p.first_name || ' ' || p.last_name) = ps.player_name AND p.team = ps.team
+        LEFT JOIN players p ON ps.player_id = p.id::text
         WHERE ps.category = '{category}'
         AND ps.conference NOT IN {FCS_CONFS}
-        GROUP BY ps.player_id
+        GROUP BY ps.player_name, ps.team
         ORDER BY val DESC
         LIMIT {limit}
     ''')
@@ -245,13 +244,17 @@ def home(week=None, season_type='regular'):
     ap_rankings = get_ap_rankings(cursor)
 
     cursor.execute('''
-        SELECT DISTINCT week, season_type FROM games WHERE completed = 1
-        ORDER BY CASE WHEN season_type = 'SeasonType.POSTSEASON' THEN 0 ELSE 1 END, week DESC
+        SELECT week, season_type FROM (
+            SELECT DISTINCT week, season_type,
+                CASE WHEN season_type = 'SeasonType.POSTSEASON' THEN 0 ELSE 1 END as sort_order
+            FROM games WHERE completed = 1
+        ) sub
+        ORDER BY sort_order, week DESC
     ''')
     all_weeks = cursor.fetchall()
 
     if week is None:
-        cursor.execute('SELECT MAX(week) FROM games WHERE completed = 1 AND season_type = "SeasonType.REGULAR"')
+        cursor.execute("SELECT MAX(week) FROM games WHERE completed = 1 AND season_type = 'SeasonType.REGULAR'")
         week = cursor.fetchone()[0]
         season_type = 'regular'
 
@@ -264,12 +267,12 @@ def home(week=None, season_type='regular'):
         FROM games g
         LEFT JOIN teams t1 ON g.home_team = t1.name
         LEFT JOIN teams t2 ON g.away_team = t2.name
-        WHERE g.completed = 1 AND g.week = ? AND g.season_type = ?
-        ORDER BY CASE WHEN g.notes LIKE '%National Championship%' THEN 1
-                      WHEN g.notes LIKE '%Semifinal%' THEN 2
-                      WHEN g.notes LIKE '%Quarterfinal%' THEN 3
-                      WHEN g.notes LIKE '%First Round%' THEN 4
-                      WHEN g.notes LIKE '%Conference Championship%' THEN 5
+        WHERE g.completed = 1 AND g.week = %s AND g.season_type = %s
+        ORDER BY CASE WHEN g.notes LIKE '%%National Championship%%' THEN 1
+                      WHEN g.notes LIKE '%%Semifinal%%' THEN 2
+                      WHEN g.notes LIKE '%%Quarterfinal%%' THEN 3
+                      WHEN g.notes LIKE '%%First Round%%' THEN 4
+                      WHEN g.notes LIKE '%%Conference Championship%%' THEN 5
                       ELSE 6 END, g.notes, g.id
     ''', (week, db_season_type))
     raw_games = cursor.fetchall()
@@ -310,16 +313,16 @@ def search():
                    p.jersey, p.headshot, t.conference, t.logo_dark
             FROM players p
             INNER JOIN teams t ON p.team = t.name
-            WHERE (p.first_name || ' ' || p.last_name) LIKE ?
-               OR p.last_name LIKE ?
-               OR p.first_name LIKE ?
+            WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
+               OR p.last_name ILIKE %s
+               OR p.first_name ILIKE %s
             ORDER BY p.last_name, p.first_name
             LIMIT 50
         ''', (f'%{q}%', f'%{q}%', f'%{q}%'))
         player_results = cursor.fetchall()
         cursor.execute('''
             SELECT name, conference, logo_dark, color
-            FROM teams WHERE name LIKE ? OR abbreviation LIKE ?
+            FROM teams WHERE name ILIKE %s OR abbreviation ILIKE %s
             ORDER BY name LIMIT 10
         ''', (f'%{q}%', f'%{q}%'))
         team_results = cursor.fetchall()
@@ -372,13 +375,13 @@ def leaderboards(category='passing'):
                 pp.total_ppa    as total_epa
             FROM players p
             JOIN teams t ON p.team = t.name
-            JOIN player_stats ps ON ps.player_id = p.id AND ps.category = 'passing'
-            LEFT JOIN player_ppa pp ON pp.player_id = p.id
+            JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing'
+            LEFT JOIN player_ppa pp ON pp.player_id = p.id::text::text
             WHERE p.position = 'QB'
               AND t.conference NOT IN ('{fcs_in}')
               {conf_sql}
-            GROUP BY p.id
-            HAVING att >= {min_att}
+            GROUP BY p.id, t.logo_dark, t.conference, t.color, pp.avg_ppa_all, pp.avg_ppa_pass, pp.total_ppa
+            HAVING MAX(CASE WHEN ps.stat_type='ATT' THEN CAST(ps.stat AS REAL) END) >= {min_att}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT 200
         ''')
@@ -415,14 +418,14 @@ def leaderboards(category='passing'):
                 pp.total_ppa    as total_epa
             FROM players p
             JOIN teams t ON p.team = t.name
-            JOIN player_stats ps ON ps.player_id = p.id AND ps.category = 'rushing'
-            LEFT JOIN player_ppa pp ON pp.player_id = p.id
+            JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing'
+            LEFT JOIN player_ppa pp ON pp.player_id = p.id::text::text
             WHERE p.position IN ('RB','FB','QB','WR','ATH')
               AND t.conference NOT IN ('{fcs_in}')
               {conf_sql}
               {pos_sql}
-            GROUP BY p.id
-            HAVING att >= {min_att}
+            GROUP BY p.id, t.logo_dark, t.conference, t.color, pp.avg_ppa_rush, pp.total_ppa
+            HAVING MAX(CASE WHEN ps.stat_type='CAR' THEN CAST(ps.stat AS REAL) END) >= {min_att}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT 200
         ''')
@@ -455,14 +458,14 @@ def leaderboards(category='passing'):
                 pp.total_ppa   as total_epa
             FROM players p
             JOIN teams t ON p.team = t.name
-            JOIN player_stats ps ON ps.player_id = p.id AND ps.category = 'receiving'
-            LEFT JOIN player_ppa pp ON pp.player_id = p.id
+            JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving'
+            LEFT JOIN player_ppa pp ON pp.player_id = p.id::text::text
             WHERE p.position IN ('WR','TE','RB','ATH')
               AND t.conference NOT IN ('{fcs_in}')
               {conf_sql}
               {pos_sql}
-            GROUP BY p.id
-            HAVING rec >= {min_rec}
+            GROUP BY p.id, t.logo_dark, t.conference, t.color, pp.avg_ppa_all, pp.total_ppa
+            HAVING MAX(CASE WHEN ps.stat_type='REC' THEN CAST(ps.stat AS REAL) END) >= {min_rec}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT 200
         ''')
@@ -494,13 +497,13 @@ def leaderboards(category='passing'):
                 MAX(CASE WHEN ps.stat_type='QB HUR' THEN CAST(ps.stat AS REAL) END) as qbh
             FROM players p
             JOIN teams t ON p.team = t.name
-            JOIN player_stats ps ON ps.player_id = p.id AND ps.category = 'defensive'
+            JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive'
             WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
               AND t.conference NOT IN ('{fcs_in}')
               {conf_sql}
               {pos_sql}
-            GROUP BY p.id
-            HAVING tot >= {min_tot}
+            GROUP BY p.id, t.logo_dark, t.conference, t.color
+            HAVING MAX(CASE WHEN ps.stat_type='TOT' THEN CAST(ps.stat AS REAL) END) >= {min_tot}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT 200
         ''')
@@ -530,13 +533,12 @@ def leaderboards(category='passing'):
                 pp.total_ppa    as total_epa
             FROM players p
             JOIN teams t ON p.team = t.name
-            JOIN player_ppa pp ON pp.player_id = p.id
+            JOIN player_ppa pp ON pp.player_id = p.id::text
             WHERE t.conference NOT IN ('{fcs_in}')
               {conf_sql}
               {pos_sql}
               AND pp.avg_ppa_all IS NOT NULL
-            GROUP BY p.id
-            HAVING total_epa >= {min_epa}
+              AND pp.total_ppa >= {min_epa}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT 200
         ''')
@@ -631,7 +633,7 @@ def team(team_name):
     ap_rankings = get_ap_rankings(cursor)
     team_rank = ap_rankings.get(team_name)
 
-    cursor.execute('SELECT name, conference, abbreviation, logo, color, alt_color, logo_dark FROM teams WHERE name = ?', (team_name,))
+    cursor.execute('SELECT name, conference, abbreviation, logo, color, alt_color, logo_dark FROM teams WHERE name = %s', (team_name,))
     team_info = cursor.fetchone()
     if not team_info:
         conn.close()
@@ -639,26 +641,26 @@ def team(team_name):
 
     cursor.execute('''
         SELECT
-            SUM(CASE WHEN (home_team=? AND home_points>away_points) OR (away_team=? AND away_points>home_points) THEN 1 ELSE 0 END),
-            SUM(CASE WHEN (home_team=? AND home_points<away_points) OR (away_team=? AND away_points<home_points) THEN 1 ELSE 0 END)
-        FROM games WHERE (home_team=? OR away_team=?) AND completed=1 AND season_type='SeasonType.REGULAR'
+            SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
+            SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
+        FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season_type='SeasonType.REGULAR'
     ''', (team_name,)*6)
     record = cursor.fetchone()
 
     cursor.execute('''
         SELECT COUNT(*),
-            SUM(CASE WHEN home_team=? THEN home_points ELSE away_points END),
-            SUM(CASE WHEN home_team=? THEN away_points ELSE home_points END)
-        FROM games WHERE (home_team=? OR away_team=?) AND completed=1 AND season_type='SeasonType.REGULAR'
+            SUM(CASE WHEN home_team=%s THEN home_points ELSE away_points END),
+            SUM(CASE WHEN home_team=%s THEN away_points ELSE home_points END)
+        FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season_type='SeasonType.REGULAR'
     ''', (team_name, team_name, team_name, team_name))
     g = cursor.fetchone()
     games_played = g[0] or 1
     pts_for = g[1] or 0
     pts_against = g[2] or 0
 
-    cursor.execute('SELECT SUM(stat) FROM player_stats WHERE team=? AND category="passing" AND stat_type="YDS"', (team_name,))
+    cursor.execute("SELECT SUM(stat) FROM player_stats WHERE team=%s AND category='passing' AND stat_type='YDS'", (team_name,))
     pass_yds = cursor.fetchone()[0] or 0
-    cursor.execute('SELECT SUM(stat) FROM player_stats WHERE team=? AND category="rushing" AND stat_type="YDS"', (team_name,))
+    cursor.execute("SELECT SUM(stat) FROM player_stats WHERE team=%s AND category='rushing' AND stat_type='YDS'", (team_name,))
     rush_yds = cursor.fetchone()[0] or 0
 
     season_stats = {
@@ -681,24 +683,24 @@ def team(team_name):
             FROM teams t
             LEFT JOIN games g ON (g.home_team=t.name OR g.away_team=t.name)
                 AND g.completed=1 AND g.season_type='SeasonType.REGULAR'
-            WHERE t.conference=?
-            GROUP BY t.name ORDER BY wins DESC
+            WHERE t.conference=%s
+            GROUP BY t.name, t.logo, t.logo_dark ORDER BY wins DESC
         ''', (team_info[1],))
         standings = cursor.fetchall()
 
     cursor.execute('''
         SELECT g.id,
-            CASE WHEN g.home_team=? THEN 'home' ELSE 'away' END,
-            CASE WHEN g.home_team=? THEN g.away_team ELSE g.home_team END,
-            CASE WHEN g.home_team=? THEN t2.logo ELSE t1.logo END,
-            CASE WHEN g.home_team=? THEN g.home_points ELSE g.away_points END,
-            CASE WHEN g.home_team=? THEN g.away_points ELSE g.home_points END,
+            CASE WHEN g.home_team=%s THEN 'home' ELSE 'away' END,
+            CASE WHEN g.home_team=%s THEN g.away_team ELSE g.home_team END,
+            CASE WHEN g.home_team=%s THEN t2.logo ELSE t1.logo END,
+            CASE WHEN g.home_team=%s THEN g.home_points ELSE g.away_points END,
+            CASE WHEN g.home_team=%s THEN g.away_points ELSE g.home_points END,
             g.week, g.season_type, g.notes,
-            CASE WHEN g.home_team=? THEN t2.logo_dark ELSE t1.logo_dark END
+            CASE WHEN g.home_team=%s THEN t2.logo_dark ELSE t1.logo_dark END
         FROM games g
         LEFT JOIN teams t1 ON g.home_team=t1.name
         LEFT JOIN teams t2 ON g.away_team=t2.name
-        WHERE (g.home_team=? OR g.away_team=?) AND g.completed=1
+        WHERE (g.home_team=%s OR g.away_team=%s) AND g.completed=1
         ORDER BY CASE WHEN g.season_type='SeasonType.REGULAR' THEN 0 ELSE 1 END, g.week
     ''', (team_name,)*8)
     raw_schedule = cursor.fetchall()
@@ -706,7 +708,7 @@ def team(team_name):
 
     cursor.execute('''
         SELECT first_name, last_name, position, jersey, id, headshot, height, weight, year
-        FROM players WHERE team=? AND active_2026=1
+        FROM players WHERE team=%s AND active_2026=1
         ORDER BY
             CASE position
                 WHEN 'QB' THEN 1 WHEN 'RB' THEN 2 WHEN 'HB' THEN 2 WHEN 'FB' THEN 2
@@ -724,7 +726,7 @@ def team(team_name):
     ''', (team_name,))
     roster = cursor.fetchall()
 
-    cursor.execute('SELECT player_id, stat_type, MAX(stat) FROM player_stats WHERE team=? AND category IN ("passing","rushing","receiving") GROUP BY player_id, stat_type', (team_name,))
+    cursor.execute("SELECT player_id, stat_type, MAX(stat) FROM player_stats WHERE team=%s AND category IN ('passing','rushing','receiving') GROUP BY player_id, stat_type", (team_name,))
     player_stats_map = {}
     for pid, stat_type, val in cursor.fetchall():
         if pid not in player_stats_map: player_stats_map[pid] = {}
@@ -734,7 +736,7 @@ def team(team_name):
     lineup_roster = [r[:6] for r in roster]
     lineup = build_lineup(lineup_roster, player_stats_map)
 
-    cursor.execute('SELECT player_name, category, stat_type, stat FROM player_stats WHERE team=?', (team_name,))
+    cursor.execute('SELECT player_name, category, stat_type, stat FROM player_stats WHERE team=%s', (team_name,))
     all_stats = pivot_stats(cursor.fetchall())
 
     passing_stats     = sort_players(all_stats.get('passing', {}),    'YDS')
@@ -747,7 +749,7 @@ def team(team_name):
     punt_return_stats = sort_players(all_stats.get('puntReturns', {}), 'YDS')
 
     # Add headshots and player IDs to stat tables
-    cursor.execute('SELECT (first_name || " " || last_name), headshot, id FROM players WHERE team=?', (team_name,))
+    cursor.execute("SELECT (first_name || ' ' || last_name), headshot, id FROM players WHERE team=%s", (team_name,))
     _player_rows = cursor.fetchall()
     headshot_map   = {row[0]: row[1] for row in _player_rows}
     player_id_map  = {row[0]: row[2] for row in _player_rows}
@@ -784,7 +786,7 @@ def team(team_name):
     all_teams_stats = cursor.fetchall()
     percentiles = compute_percentiles(all_teams_stats, team_name)
 
-    cursor.execute('SELECT * FROM team_stats WHERE team=?', (team_name,))
+    cursor.execute('SELECT * FROM team_stats WHERE team=%s', (team_name,))
     ts = cursor.fetchone()
     team_adv = None
     if ts:
@@ -819,7 +821,7 @@ def team(team_name):
             'def_pass_exp':             round(ts[34], 3) if ts[34] else None,
         }
 
-        cursor.execute('SELECT rating, ranking, offense_rating, offense_ranking, defense_rating, defense_ranking, special_teams_rating FROM sp_ratings WHERE team=?', (team_name,))
+        cursor.execute('SELECT rating, ranking, offense_rating, offense_ranking, defense_rating, defense_ranking, special_teams_rating FROM sp_ratings WHERE team=%s', (team_name,))
         sp_row = cursor.fetchone()
         sp = None
         if sp_row:
@@ -836,7 +838,7 @@ def team(team_name):
         # Recruiting rankings trend
         cursor.execute('''
             SELECT year, rank, points FROM team_recruiting
-            WHERE team=? AND year >= 2022 ORDER BY year DESC
+            WHERE team=%s AND year >= 2022 ORDER BY year DESC
         ''', (team_name,))
         recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
                       for r in cursor.fetchall()]
@@ -846,7 +848,7 @@ def team(team_name):
             SELECT def_havoc_total, def_havoc_front7, def_havoc_db,
                    off_field_pos_avg_start, def_field_pos_avg_start,
                    off_scoring_opps, off_pts_per_opp
-            FROM team_advanced WHERE team=?
+            FROM team_advanced WHERE team=%s
         ''', (team_name,))
         adv_row = cursor.fetchone()
         havoc = None
@@ -864,7 +866,7 @@ def team(team_name):
         # SP+ historical trend (5 years)
         cursor.execute('''
             SELECT year, rating, ranking, offense_rating, defense_rating
-            FROM sp_historical WHERE team=? ORDER BY year
+            FROM sp_historical WHERE team=%s ORDER BY year
         ''', (team_name,))
         sp_trend = [{'year': r[0], 'rating': round(r[1], 1) if r[1] else None,
                      'ranking': r[2],
@@ -897,8 +899,8 @@ def api_players():
                p.jersey, p.headshot, t.logo_dark, 'player' as result_type
         FROM players p
         INNER JOIN teams t ON p.team = t.name
-        WHERE (p.first_name || ' ' || p.last_name) LIKE ?
-           OR p.last_name LIKE ?
+        WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
+           OR p.last_name ILIKE %s
         ORDER BY p.last_name, p.first_name
         LIMIT 6
     ''', (f'%{q}%', f'{q}%'))
@@ -906,7 +908,7 @@ def api_players():
     cursor.execute('''
         SELECT name, conference, logo_dark, color, 'team' as result_type
         FROM teams
-        WHERE name LIKE ? OR abbreviation LIKE ?
+        WHERE name ILIKE %s OR abbreviation ILIKE %s
         ORDER BY name
         LIMIT 4
     ''', (f'%{q}%', f'%{q}%'))
@@ -938,7 +940,9 @@ def rankings():
         LEFT JOIN sp_ratings sp ON a.team = sp.team
         LEFT JOIN games g ON (g.home_team=a.team OR g.away_team=a.team)
             AND g.completed=1 AND g.season_type='SeasonType.REGULAR'
-        GROUP BY a.team
+        GROUP BY a.rank, a.team, a.points, a.first_place_votes, a.week, a.prev_rank,
+                 t.logo, t.conference, t.color, t.logo_dark,
+                 sp.rating, sp.ranking
         ORDER BY a.rank
     ''')
     rows = cursor.fetchall()
@@ -960,7 +964,7 @@ def game_detail(game_id):
         FROM games g
         LEFT JOIN teams t1 ON g.home_team = t1.name
         LEFT JOIN teams t2 ON g.away_team = t2.name
-        WHERE g.id = ?
+        WHERE g.id = %s
     ''', (game_id,))
     game_info = cursor.fetchone()
     if not game_info:
@@ -975,11 +979,11 @@ def game_detail(game_id):
     def _record(team):
         cursor.execute('''
             SELECT
-                SUM(CASE WHEN (home_team=? AND home_points>away_points) OR (away_team=? AND away_points>home_points) THEN 1 ELSE 0 END),
-                SUM(CASE WHEN (home_team=? AND home_points<away_points) OR (away_team=? AND away_points<home_points) THEN 1 ELSE 0 END)
+                SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
+                SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
             FROM games
-            WHERE (home_team=? OR away_team=?) AND home_points IS NOT NULL AND away_points IS NOT NULL
-              AND id <= ?
+            WHERE (home_team=%s OR away_team=%s) AND home_points IS NOT NULL AND away_points IS NOT NULL
+              AND id <= %s
         ''', (team, team, team, team, team, team, game_id))
         row = cursor.fetchone()
         return (row[0] or 0, row[1] or 0) if row else (0, 0)
@@ -988,7 +992,7 @@ def game_detail(game_id):
 
     cursor.execute('''
         SELECT (first_name || ' ' || last_name), id
-        FROM players WHERE team IN (?, ?)
+        FROM players WHERE team IN (%s, %s)
     ''', (home_team, away_team))
     name_to_player_id = {row[0].lower(): row[1] for row in cursor.fetchall()}
     conn.close()
@@ -1498,14 +1502,14 @@ def player_detail(player_id):
                t.logo_dark, t.color, t.alt_color, t.conference
         FROM players p
         LEFT JOIN teams t ON p.team = t.name
-        WHERE p.id = ?
+        WHERE p.id = %s
     ''', (player_id,))
     row = cursor.fetchone()
     if not row:
         conn.close()
         return render_template('404.html', message='Player not found.'), 404
 
-    cursor.execute('SELECT active_2026, draft_status FROM players WHERE id=?', (player_id,))
+    cursor.execute('SELECT active_2026, draft_status FROM players WHERE id=%s', (player_id,))
     status_row = cursor.fetchone()
     is_active_2026 = status_row[0] if status_row else 1
     draft_status   = status_row[1] if status_row else None
@@ -1537,7 +1541,7 @@ def player_detail(player_id):
         'year_fmt':   year_map.get(year_raw, ''),
     }
 
-    cursor.execute('SELECT category, stat_type, stat FROM player_stats WHERE player_id = ?', (str(player_id),))
+    cursor.execute('SELECT category, stat_type, stat FROM player_stats WHERE player_id = %s', (str(player_id),))
     stats = {}
     for cat, st, val in cursor.fetchall():
         if cat not in stats: stats[cat] = {}
@@ -1591,7 +1595,7 @@ def player_detail(player_id):
 
     cursor.execute('''
         SELECT avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa
-        FROM player_ppa WHERE player_id = ?
+        FROM player_ppa WHERE player_id = %s
     ''', (str(player_id),))
     ppa_row = cursor.fetchone()
     ppa = None
@@ -1603,7 +1607,7 @@ def player_detail(player_id):
             'total':    round(ppa_row[3], 1)  if ppa_row[3] is not None else None,
         }
 
-    cursor.execute('SELECT rank FROM ap_rankings WHERE team=? ORDER BY week DESC LIMIT 1', (player['team'],))
+    cursor.execute('SELECT rank FROM ap_rankings WHERE team=%s ORDER BY week DESC LIMIT 1', (player['team'],))
     ap_row = cursor.fetchone()
     ap_rank = ap_row[0] if ap_row else None
 
@@ -1761,7 +1765,7 @@ def player_detail(player_id):
     cursor.execute('''
         SELECT overall, pass, rush, first_down, second_down, third_down,
                standard_downs, passing_downs
-        FROM player_usage WHERE player_id=?
+        FROM player_usage WHERE player_id=%s
     ''', (player_id,))
     usage_row = cursor.fetchone()
     usage = None
@@ -1788,15 +1792,15 @@ def player_detail(player_id):
         cur2 = conn2.cursor()
         cur2.execute('''
             SELECT g.id, g.week,
-                   CASE WHEN g.home_team=? THEN g.away_team ELSE g.home_team END,
-                   CASE WHEN g.home_team=? THEN g.home_points ELSE g.away_points END,
-                   CASE WHEN g.home_team=? THEN g.away_points ELSE g.home_points END,
-                   CASE WHEN g.home_team=? THEN 'home' ELSE 'away' END,
-                   CASE WHEN g.home_team=? THEN t2.logo_dark ELSE t1.logo_dark END
+                   CASE WHEN g.home_team=%s THEN g.away_team ELSE g.home_team END,
+                   CASE WHEN g.home_team=%s THEN g.home_points ELSE g.away_points END,
+                   CASE WHEN g.home_team=%s THEN g.away_points ELSE g.home_points END,
+                   CASE WHEN g.home_team=%s THEN 'home' ELSE 'away' END,
+                   CASE WHEN g.home_team=%s THEN t2.logo_dark ELSE t1.logo_dark END
             FROM games g
             LEFT JOIN teams t1 ON g.home_team = t1.name
             LEFT JOIN teams t2 ON g.away_team = t2.name
-            WHERE (g.home_team=? OR g.away_team=?) AND g.completed=1
+            WHERE (g.home_team=%s OR g.away_team=%s) AND g.completed=1
             ORDER BY g.week
         ''', (player['team'],) * 7)
         games_list = cur2.fetchall()
@@ -1905,7 +1909,7 @@ def transfers():
     pos_sql  = f"AND t.position='{pos_filter}'"        if pos_filter  else ""
     conf_sql = f"AND t_dest.conference='{conf_filter}'" if conf_filter else ""
 
-    where = f"WHERE t.year=? {pos_sql} {conf_sql}"
+    where = f"WHERE t.year=%s {pos_sql} {conf_sql}"
 
     cursor.execute(f'''
         SELECT COUNT(*) FROM transfers t
@@ -1930,14 +1934,14 @@ def transfers():
         LEFT JOIN teams t_orig ON t_orig.name=t.origin
         {where}
         ORDER BY t.rating DESC NULLS LAST, t.stars DESC NULLS LAST
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
     ''', (year, per_page, offset))
     portal = cursor.fetchall()
 
     cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
     conferences = [r[0] for r in cursor.fetchall()]
 
-    cursor.execute('SELECT DISTINCT position FROM transfers WHERE year=? AND position IS NOT NULL ORDER BY position', (year,))
+    cursor.execute('SELECT DISTINCT position FROM transfers WHERE year=%s AND position IS NOT NULL ORDER BY position', (year,))
     positions = [r[0] for r in cursor.fetchall()]
 
     conn.close()
@@ -1979,8 +1983,8 @@ def rivalries_page():
             FROM games g
             LEFT JOIN teams t1 ON t1.name = g.home_team
             LEFT JOIN teams t2 ON t2.name = g.away_team
-            WHERE ((g.home_team=? AND g.away_team=?)
-                OR (g.home_team=? AND g.away_team=?))
+            WHERE ((g.home_team=%s AND g.away_team=%s)
+                OR (g.home_team=%s AND g.away_team=%s))
             AND g.completed=1
             ORDER BY g.start_date DESC
             LIMIT 1
@@ -2020,7 +2024,7 @@ def rivalry_history(team_a, team_b):
     conn = get_db()
     cursor = conn.cursor()
 
-    cursor.execute('SELECT rivalry_name FROM rivalries WHERE team1=? AND team2=? LIMIT 1',
+    cursor.execute('SELECT rivalry_name FROM rivalries WHERE team1=%s AND team2=%s LIMIT 1',
                    (team_a, team_b))
     row = cursor.fetchone()
     rivalry_name = row[0] if row else f"{team_a} vs {team_b}"
@@ -2032,7 +2036,7 @@ def rivalry_history(team_a, team_b):
         FROM games g
         LEFT JOIN teams t1 ON t1.name = g.home_team
         LEFT JOIN teams t2 ON t2.name = g.away_team
-        WHERE ((g.home_team=? AND g.away_team=?) OR (g.home_team=? AND g.away_team=?))
+        WHERE ((g.home_team=%s AND g.away_team=%s) OR (g.home_team=%s AND g.away_team=%s))
         AND g.completed=1
         ORDER BY g.start_date DESC
     ''', (team_a, team_b, team_b, team_a))
@@ -2042,9 +2046,9 @@ def rivalry_history(team_a, team_b):
         (g[1] == team_a and g[3] > g[4]) or (g[2] == team_a and g[4] > g[3]))
     team_b_wins = len(games) - team_a_wins
 
-    cursor.execute('SELECT logo_dark, color FROM teams WHERE name=?', (team_a,))
+    cursor.execute('SELECT logo_dark, color FROM teams WHERE name=%s', (team_a,))
     ta_info = cursor.fetchone()
-    cursor.execute('SELECT logo_dark, color FROM teams WHERE name=?', (team_b,))
+    cursor.execute('SELECT logo_dark, color FROM teams WHERE name=%s', (team_b,))
     tb_info = cursor.fetchone()
 
     conn.close()
@@ -2065,4 +2069,4 @@ def rivalry_history(team_a, team_b):
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))
-    app.run(debug=True, port=port)
+    app.run(debug=True, host='0.0.0.0', port=port)

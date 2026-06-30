@@ -1,18 +1,12 @@
-import sqlite3
+import psycopg2
 import os
+from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+load_dotenv()
+
+conn = psycopg2.connect(os.getenv('DATABASE_URL'))
 cursor = conn.cursor()
 
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS rivalries (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        team1 TEXT,
-        team2 TEXT,
-        rivalry_name TEXT
-    )
-''')
 cursor.execute('DELETE FROM rivalries')
 
 rivalries = [
@@ -275,9 +269,12 @@ rivalries = [
     ("Wyoming","Colorado State","Battle for the Bronze Boot"),
 ]
 
+id_counter = 1
 for team1, team2, name in rivalries:
-    cursor.execute('INSERT INTO rivalries (team1, team2, rivalry_name) VALUES (?,?,?)', (team1, team2, name))
-    cursor.execute('INSERT INTO rivalries (team1, team2, rivalry_name) VALUES (?,?,?)', (team2, team1, name))
+    cursor.execute('INSERT INTO rivalries (id, team1, team2, rivalry_name) VALUES (%s, %s, %s, %s)', (id_counter, team1, team2, name))
+    id_counter += 1
+    cursor.execute('INSERT INTO rivalries (id, team1, team2, rivalry_name) VALUES (%s, %s, %s, %s)', (id_counter, team2, team1, name))
+    id_counter += 1
 
 conn.commit()
 print(f"Saved {len(rivalries)*2} rivalry entries ({len(rivalries)} unique rivalries)")
@@ -285,5 +282,6 @@ print(f"Saved {len(rivalries)*2} rivalry entries ({len(rivalries)} unique rivalr
 cursor.execute("SELECT * FROM rivalries WHERE team1='Penn State' ORDER BY rivalry_name")
 for r in cursor.fetchall():
     print(f"  Penn State vs {r[2]}: {r[3]}")
+
 
 conn.close()
