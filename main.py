@@ -1,3 +1,54 @@
+# === PERFORMANCE NOTES ===
+# Cached routes (Flask-Caching, SimpleCache, in-memory):
+#   /leaderboards, /leaderboards/<category>        @cache.cached(3600, query_string=True) — pre-existing
+#   /leaderboards/teams, /leaderboards/teams/<cat>  @cache.cached(3600, query_string=True) — pre-existing
+#   /teams                                          @cache.cached(86400) — pre-existing
+#   /team/<team_name>                               @cache.cached(3600) — pre-existing
+#   /rankings                                        @cache.cached(3600) — pre-existing
+#   /rivalries                                       @cache.cached(86400) — pre-existing
+#   /player/<player_id>                              @cache.memoize(3600) — added
+#   get_cached_season_leaders() (home page sidebar)  @cache.memoize(3600) — added, keyed
+#                                                     independently of week so it's computed
+#                                                     once instead of once per distinct week URL
+#   /admin/clear-cache clears the whole cache store, which covers both
+#   @cache.cached and @cache.memoize since they share the same backend — no
+#   changes needed there.
+# NOT cached (by design — no /live routes exist in this app; /game/<id> pulls
+# from ESPN and isn't cached here either, matching the rest of Pass 1's scope):
+#   /game/<game_id>, /
+#
+# Indexes (see ensure_indexes(), run once at startup, CREATE INDEX IF NOT
+# EXISTS so it's a no-op on repeat boots):
+#   idx_player_stats_player_id       — pre-existing
+#   idx_player_ppa_player_id         — pre-existing
+#   idx_players_team                 — pre-existing
+#   idx_player_stats_category_stattype (category, stat_type) — pre-existing
+#   idx_player_stats_team            — added
+#   idx_games_season_week (season, week) — added
+#   (player_usage.player_id and games.id are already primary keys, so no
+#   separate index was needed for either)
+#
+# N+1 fixes:
+#   get_rivalry_map() — home() and team() used to call get_rivalry() once per
+#   game/schedule row (one query each). Now one query loads the whole
+#   rivalries table (328 rows) into a dict per request instead.
+#
+# Already fine, no change needed:
+#   /leaderboards pagination already uses LIMIT/OFFSET at the SQL level.
+#   /player and /team routes already ran all their DB work through a single
+#   get_db()/release_db() block rather than one connection per query.
+#   /team's schedule query already selects only the columns it needs, no
+#   SELECT *.
+#   Player-page percentile ranks already batch-fetch one query per position
+#   group/category (see _fetch_stats_pool / _fetch_ppa_pool) and rank/percentile
+#   in Python — not one query per stat.
+#   /game/<game_id>'s two ESPN calls were already wrapped in try/except with
+#   pre-initialized empty defaults, so a slow/failed ESPN response already
+#   degraded gracefully instead of crashing the page — timeouts tightened to
+#   4s (previously 8s/10s) so a hung ESPN request fails fast instead of
+#   stalling page render.
+# === END PERFORMANCE NOTES ===
+
 import cfbd
 import psycopg2
 from psycopg2 import pool as pg_pool
@@ -44,6 +95,30 @@ def release_db(conn):
     connection_pool.putconn(conn)
 
 init_db_pool()
+
+def ensure_indexes():
+    """Idempotent — safe to run on every boot. CREATE INDEX IF NOT EXISTS is a
+    no-op for anything that already exists, so this just backfills whatever's
+    missing (and self-documents the full set this app relies on)."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_player_stats_player_id ON player_stats(player_id);
+            CREATE INDEX IF NOT EXISTS idx_player_stats_team ON player_stats(team);
+            CREATE INDEX IF NOT EXISTS idx_player_stats_category_stattype ON player_stats(category, stat_type);
+            CREATE INDEX IF NOT EXISTS idx_player_ppa_player_id ON player_ppa(player_id);
+            CREATE INDEX IF NOT EXISTS idx_players_team ON players(team);
+            CREATE INDEX IF NOT EXISTS idx_games_season_week ON games(season, week);
+        ''')
+        conn.commit()
+    except Exception as e:
+        print(f"Index setup skipped/failed (non-fatal): {e}")
+        conn.rollback()
+    finally:
+        release_db(conn)
+
+ensure_indexes()
 
 def get_ap_rankings(cursor):
     cursor.execute('SELECT team, rank FROM ap_rankings ORDER BY rank')
@@ -196,6 +271,13 @@ def get_rivalry(cursor, team1, team2):
     )
     row = cursor.fetchone()
     return row[0] if row else None
+
+def get_rivalry_map(cursor):
+    """One query for the whole rivalries table, looked up in Python afterward.
+    Avoids the N+1 pattern of calling get_rivalry() once per game in a loop
+    (used by the home page's game list and a team's full schedule)."""
+    cursor.execute('SELECT team1, team2, rivalry_name FROM rivalries')
+    return {(t1, t2): name for t1, t2, name in cursor.fetchall()}
 
 def get_game_label(notes):
     if not notes: return 'Bowl Games'
@@ -405,6 +487,22 @@ def leaders_query(cursor, category, stat_type, limit=5):
     ''')
     return cursor.fetchall()
 
+@cache.memoize(timeout=3600)
+def get_cached_season_leaders():
+    """Season-wide leaders are identical no matter which week the home page
+    is showing, so this is memoized independently of the /week/<n>/<type>
+    route — otherwise the same 3 queries would re-run for every distinct
+    week URL instead of being computed once per hour."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        top_receivers = leaders_query(cursor, 'receiving', 'YDS')
+        top_rushers   = leaders_query(cursor, 'rushing',   'YDS')
+        top_passers   = leaders_query(cursor, 'passing',   'YDS')
+        return top_receivers, top_rushers, top_passers
+    finally:
+        release_db(conn)
+
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
 def home(week=None, season_type='regular'):
@@ -417,14 +515,14 @@ def home(week=None, season_type='regular'):
             SELECT week, season_type FROM (
                 SELECT DISTINCT week, season_type,
                     CASE WHEN season_type = 'SeasonType.POSTSEASON' THEN 0 ELSE 1 END as sort_order
-                FROM games WHERE completed = 1
+                FROM games WHERE completed = 1 AND season = 2025
             ) sub
             ORDER BY sort_order, week DESC
         ''')
         all_weeks = cursor.fetchall()
 
         if week is None:
-            cursor.execute("SELECT MAX(week) FROM games WHERE completed = 1 AND season_type = 'SeasonType.REGULAR'")
+            cursor.execute("SELECT MAX(week) FROM games WHERE completed = 1 AND season = 2025 AND season_type = 'SeasonType.REGULAR'")
             week = cursor.fetchone()[0]
             season_type = 'regular'
 
@@ -433,11 +531,11 @@ def home(week=None, season_type='regular'):
         cursor.execute('''
             SELECT g.home_team, g.home_points, g.away_team, g.away_points,
                    g.week, g.season_type, g.notes, t1.logo, t2.logo,
-                   t1.logo_dark, t2.logo_dark
+                   t1.logo_dark, t2.logo_dark, g.id
             FROM games g
             LEFT JOIN teams t1 ON g.home_team = t1.name
             LEFT JOIN teams t2 ON g.away_team = t2.name
-            WHERE g.completed = 1 AND g.week = %s AND g.season_type = %s
+            WHERE g.completed = 1 AND g.season = 2025 AND g.week = %s AND g.season_type = %s
             ORDER BY CASE WHEN g.notes LIKE '%%National Championship%%' THEN 1
                           WHEN g.notes LIKE '%%Semifinal%%' THEN 2
                           WHEN g.notes LIKE '%%Quarterfinal%%' THEN 3
@@ -447,10 +545,12 @@ def home(week=None, season_type='regular'):
         ''', (week, db_season_type))
         raw_games = cursor.fetchall()
 
-        # Enrich each game tuple with rivalry name as last element
+        # Enrich each game tuple with rivalry name as last element — one query
+        # for the whole rivalries table instead of one per game (N+1 fix)
+        rivalry_map = get_rivalry_map(cursor)
         games = []
         for g in raw_games:
-            rivalry = get_rivalry(cursor, g[0], g[2]) or ''
+            rivalry = rivalry_map.get((g[0], g[2]), '')
             games.append(g + (rivalry,))
 
         label_order = ['National Championship','Semifinal','Quarterfinal','First Round','Conference Championships','Bowl Games']
@@ -459,9 +559,7 @@ def home(week=None, season_type='regular'):
             grouped_games[get_game_label(game[6])].append(game)
         grouped_games = {k: v for k, v in grouped_games.items() if v}
 
-        top_receivers = leaders_query(cursor, 'receiving', 'YDS')
-        top_rushers   = leaders_query(cursor, 'rushing',   'YDS')
-        top_passers   = leaders_query(cursor, 'passing',   'YDS')
+        top_receivers, top_rushers, top_passers = get_cached_season_leaders()
 
     finally:
         release_db(conn)
@@ -1141,7 +1239,10 @@ def team(team_name):
             ORDER BY CASE WHEN g.season_type='SeasonType.REGULAR' THEN 0 ELSE 1 END, g.week
         ''', (team_name,)*8)
         raw_schedule = cursor.fetchall()
-        schedule = [g + (get_rivalry(cursor, team_name, g[2]) or '',) for g in raw_schedule]
+        # One query for the whole rivalries table instead of one per
+        # schedule row (N+1 fix)
+        rivalry_map = get_rivalry_map(cursor)
+        schedule = [g + (rivalry_map.get((team_name, g[2]), ''),) for g in raw_schedule]
 
         cursor.execute('''
             SELECT first_name, last_name, position, jersey, id, headshot, height, weight, year
@@ -1453,7 +1554,7 @@ def game_detail(game_id):
             r = req.get(
                 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard',
                 params={'dates': date_str, 'limit': 200},
-                timeout=8
+                timeout=4
             )
             for ev in r.json().get('events', []):
                 comp = (ev.get('competitions') or [{}])[0]
@@ -1472,7 +1573,7 @@ def game_detail(game_id):
             s = req.get(
                 'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
                 params={'event': espn_game_id},
-                timeout=10
+                timeout=4
             )
             data = s.json()
 
@@ -1924,6 +2025,7 @@ def game_detail(game_id):
 
 
 @app.route('/player/<int:player_id>')
+@cache.memoize(timeout=3600)
 def player_detail(player_id):
     conn = get_db()
     try:

@@ -22,7 +22,7 @@
         </div>
 
         {% macro game_card(game) %}
-        <div class="dark-card mb-2 px-4 py-3">
+        <div class="dark-card game-card mb-2 px-4 py-3" onclick="window.location.href='/game/{{ game[11] }}'">
             <div class="d-flex align-items-center justify-content-between">
                 <div class="d-flex align-items-center gap-3" style="width:40%">
                     {% if game[9] %}<img src="{{ game[9] }}" style="height:28px;width:28px;object-fit:contain;flex-shrink:0">{% endif %}
@@ -44,9 +44,9 @@
                     {% if game[10] %}<img src="{{ game[10] }}" style="height:28px;width:28px;object-fit:contain;flex-shrink:0">{% endif %}
                 </div>
             </div>
-            {% if game[11] %}
+            {% if game[12] %}
                 <div style="text-align:center;margin-top:6px">
-                    <span style="background:rgba(245,158,11,0.13);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.58rem;font-weight:800;padding:1px 8px;border-radius:10px;letter-spacing:0.04em">&#x2694; {{ game[11] }}</span>
+                    <span style="background:rgba(245,158,11,0.13);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.58rem;font-weight:800;padding:1px 8px;border-radius:10px;letter-spacing:0.04em">&#x2694; {{ game[12] }}</span>
                 </div>
             {% elif game[6] %}
                 <div style="color:rgba(255,255,255,0.28);font-size:0.62rem;text-align:center;margin-top:6px">{{ game[6] }}</div>

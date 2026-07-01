@@ -149,7 +149,7 @@
                     {% elif label == 'TACKLES' %}{% set rank_key = 'tackles_rank' %}
                     {% elif label == 'SACKS' %}{% set rank_key = 'sacks_rank' %}
                     {% else %}{% set rank_key = '' %}{% endif %}
-                    <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.18);
+                    <div class="stat-card" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.18);
                                 border-radius:8px;padding:12px 20px;text-align:center;min-width:90px;backdrop-filter:blur(4px)">
                         <div style="color:rgba(255,255,255,0.5);font-size:0.6rem;font-weight:800;
                                     letter-spacing:0.12em;text-transform:uppercase;margin-bottom:5px">{{ label }}</div>
@@ -176,7 +176,7 @@
                     {% endfor %}
 
                     {% if ppa and ppa.avg_all is not none %}
-                    <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.18);
+                    <div class="stat-card" style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.18);
                                 border-radius:8px;padding:12px 20px;text-align:center;min-width:90px;backdrop-filter:blur(4px)">
                         <div style="color:rgba(255,255,255,0.5);font-size:0.6rem;font-weight:800;
                                     letter-spacing:0.12em;text-transform:uppercase;margin-bottom:5px">EPA/PLAY</div>
@@ -451,7 +451,7 @@
                 {% elif p >= 45 %}{% set bc = '#95a5a6' %}
                 {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
                 {% else %}{% set bc = '#2980b9' %}{% endif %}
-            <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div class="percentile-row" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
                 <div style="color:rgba(255,255,255,0.6);font-size:0.72rem;min-width:120px;text-align:right;flex-shrink:0">{{ label }}</div>
                 <div style="flex:1;height:18px;background:rgba(255,255,255,0.08);border-radius:4px;position:relative;overflow:visible">
                     <div style="position:absolute;left:0;top:0;height:100%;width:{{ p }}%;background:{{ bc }};border-radius:4px 0 0 4px"></div>
@@ -605,7 +605,7 @@
                 {% for g in game_log %}
                 {% set is_win  = g.result.startswith('W') %}
                 {% set is_loss = g.result.startswith('L') %}
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);{{ 'cursor:pointer' if g.game_id else '' }}"
+                <tr class="player-row" style="border-bottom:1px solid rgba(255,255,255,0.04);{{ 'cursor:pointer' if g.game_id else '' }}"
                     {% if g.game_id %}onclick="window.location.href='/game/{{ g.game_id }}'"{% endif %}
                     onmouseover="this.style.background='rgba(255,255,255,0.025)'"
                     onmouseout="this.style.background='transparent'">

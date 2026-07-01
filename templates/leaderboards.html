@@ -267,7 +267,8 @@
         </td>
         {% endmacro %}
 
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"
+        <tr class="player-row" style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer"
+            onclick="window.location.href='/player/{{ p.id }}'"
             onmouseover="this.style.background='rgba(255,255,255,0.03)'"
             onmouseout="this.style.background='transparent'">
 
@@ -294,7 +295,7 @@
 
             <!-- Team -->
             <td style="padding:11px 12px">
-                <a href="/team/{{ p.team }}" style="display:flex;align-items:center;gap:7px;text-decoration:none">
+                <a href="/team/{{ p.team }}" onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:7px;text-decoration:none">
                     {% if p.logo %}<img src="{{ p.logo }}" style="width:22px;height:22px;object-fit:contain;flex-shrink:0">{% endif %}
                     <span style="color:rgba(255,255,255,0.65);font-size:0.76rem;font-weight:600;white-space:nowrap"
                           onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.65)'">{{ p.team }}</span>
@@ -428,7 +429,8 @@
     </thead>
     <tbody>
         {% for t in teams %}
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"
+        <tr class="player-row" style="border-bottom:1px solid rgba(255,255,255,0.05);cursor:pointer"
+            onclick="window.location.href='/team/{{ t.name }}'"
             onmouseover="this.style.background='rgba(255,255,255,0.03)'"
             onmouseout="this.style.background='transparent'">
 

@@ -29,7 +29,7 @@
 
         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
         <a href="/team/{{ team[0] }}" style="text-decoration:none;display:block;height:100%">
-        <div style="
+        <div class="team-card" style="
             background: linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc2 }}22 100%);
             border: 1px solid {{ tc }}44;
             border-radius: 12px;
@@ -37,19 +37,7 @@
             text-align: center;
             position: relative;
             overflow: hidden;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            height: 100%;"
-            onmouseover="
-                this.style.background='linear-gradient(135deg, {{ tc }}66 0%, #0d1628 50%, {{ tc2 }}44 100%)';
-                this.style.borderColor='{{ tc }}88';
-                this.style.transform='translateY(-3px)';
-                this.style.boxShadow='0 8px 24px {{ tc }}33'"
-            onmouseout="
-                this.style.background='linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc2 }}22 100%)';
-                this.style.borderColor='{{ tc }}44';
-                this.style.transform='translateY(0)';
-                this.style.boxShadow='none'">
+            height: 100%;">
 
             <!-- Radial glow behind logo -->
             <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);

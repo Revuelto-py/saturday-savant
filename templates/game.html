@@ -170,15 +170,15 @@
 
 {# ── TAB NAV ──────────────────────────────────────────────────────────────── #}
 <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:24px">
-    <button id="tab-btn-overview" onclick="switchTab('overview')"
+    <button id="tab-btn-overview" class="tab-btn" onclick="switchTab('overview')"
         style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid white;color:white;font-weight:700;font-size:0.82rem;cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
         Overview
     </button>
-    <button id="tab-btn-boxscore" onclick="switchTab('boxscore')"
+    <button id="tab-btn-boxscore" class="tab-btn" onclick="switchTab('boxscore')"
         style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4);font-weight:700;font-size:0.82rem;cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
         Box Score
     </button>
-    <button id="tab-btn-drives" onclick="switchTab('drives')"
+    <button id="tab-btn-drives" class="tab-btn" onclick="switchTab('drives')"
         style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,0.4);font-weight:700;font-size:0.82rem;cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
         Drives
     </button>
@@ -283,11 +283,11 @@
     {% if plays %}
     {# Toggle buttons #}
     <div style="display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);margin-bottom:20px">
-        <button id="btn-scoring" onclick="showPlays('scoring')"
+        <button id="btn-scoring" class="tab-btn" onclick="showPlays('scoring')"
             style="flex:1;padding:10px;background:rgba(255,255,255,0.08);color:white;border:none;font-weight:700;font-size:0.82rem;cursor:pointer">
             Scoring Plays
         </button>
-        <button id="btn-all" onclick="showPlays('all')"
+        <button id="btn-all" class="tab-btn" onclick="showPlays('all')"
             style="flex:1;padding:10px;background:transparent;color:rgba(255,255,255,0.5);border:none;font-weight:700;font-size:0.82rem;cursor:pointer">
             All Plays
         </button>

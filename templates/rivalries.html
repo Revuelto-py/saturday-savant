@@ -16,11 +16,8 @@
 {% set rid = loop.index %}
 
 <div class="col-md-6 col-lg-4">
-    <div style="border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.09);
-                transition:all 0.2s;cursor:pointer"
-         onclick="toggleRivalry({{ rid }})"
-         onmouseover="this.style.borderColor='rgba(245,158,11,0.3)';this.style.transform='translateY(-2px)'"
-         onmouseout="this.style.borderColor='rgba(255,255,255,0.09)';this.style.transform='translateY(0)'">
+    <div class="rivalry-card" style="border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.09);cursor:pointer"
+         onclick="toggleRivalry({{ rid }})">
 
         <!-- Main card -->
         <div style="background:linear-gradient(135deg,{{ c1 }}22 0%,#0d1628 60%,{{ c2 }}18 100%);
