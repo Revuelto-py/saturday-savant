@@ -21,7 +21,7 @@
     }
 }
 
-/* AP Top 25 rankings table — extra columns (conf/1st place votes/prev rank)
+/* AP Top 25 rankings — extra columns (conf/1st place votes/prev rank)
    only show at desktop widths; mobile keeps the original 5-column layout. */
 .ap-rankings-grid {
     display: grid;
@@ -34,6 +34,115 @@
 }
 @media (max-width: 991.98px) {
     .ap-extra-col { display: none; }
+}
+
+.ap-head { padding: 0 20px 10px; }
+.ap-col-label {
+    color: rgba(255,255,255,0.35);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* Each ranked team is a box carrying its team-color gradient — the team page
+   hero formula (135deg c1 → dark → c2 plus radial washes at each end), mixed
+   down toward the dark-card base so white text stays readable on every
+   school's palette. --c1/--c2 are set inline per row from teams.color /
+   teams.alt_color. */
+.ap-rank-row {
+    --c1: #1e3a5f;
+    --c2: #0f1e3a;
+    align-items: center;
+    padding: 12px 20px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    background:
+        radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--c1) 22%, transparent) 0%, transparent 55%),
+        radial-gradient(ellipse at 100% 50%, color-mix(in srgb, var(--c2) 15%, transparent) 0%, transparent 55%),
+        linear-gradient(135deg, color-mix(in srgb, var(--c1) 30%, #0a1220) 0%, #0c1729 48%, color-mix(in srgb, var(--c2) 20%, #0a1220) 100%);
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.18s ease;
+}
+.ap-rank-row::before {
+    /* team-color spine on the left edge */
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--c1);
+}
+.ap-rank-row:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--c1) 55%, rgba(255,255,255,0.3));
+    box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+
+.ap-team-logo {
+    width: 44px; height: 44px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+.ap-team-name {
+    color: white;
+    font-weight: 800;
+    font-size: 0.95rem;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ap-medal {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 900;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+.ap-medal-1 { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #231a00; }
+.ap-medal-2 { background: linear-gradient(135deg, #e5e7eb, #94a3b8); color: #0f172a; }
+.ap-medal-3 { background: linear-gradient(135deg, #d97706, #7c3a10); color: white; }
+.ap-rank-num {
+    color: rgba(255,255,255,0.5);
+    font-size: 1rem; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.ap-cell        { color: rgba(255,255,255,0.75); font-size: 0.88rem; font-weight: 600; }
+.ap-cell-dim    { color: rgba(255,255,255,0.45); font-size: 0.8rem;  font-weight: 600; }
+.ap-cell-strong { color: white;                  font-size: 0.95rem; font-weight: 800; }
+.ap-fpv         { color: #f59e0b;                font-size: 0.88rem; font-weight: 800; }
+
+.ap-trend {
+    display: inline-block;
+    min-width: 44px;
+    text-align: center;
+    font-size: 0.76rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+.ap-trend-up   { color: #22c55e; background: rgba(34,197,94,0.12);  border: 1px solid rgba(34,197,94,0.3); }
+.ap-trend-down { color: #f87171; background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.3); }
+.ap-trend-flat { color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); }
+.ap-trend-new  { color: #93c5fd; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); }
+
+.ap-final-pill {
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.4);
+    color: #f59e0b;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 12px;
+    margin-left: 10px;
+    vertical-align: middle;
 }
 
 /* Player Page */

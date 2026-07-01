@@ -1611,19 +1611,19 @@ def rankings():
                    sp.rating, sp.ranking as sp_rank,
                    SUM(CASE WHEN (g.home_team=a.team AND g.home_points>g.away_points) OR (g.away_team=a.team AND g.away_points>g.home_points) THEN 1 ELSE 0 END) as wins,
                    SUM(CASE WHEN (g.home_team=a.team AND g.home_points<g.away_points) OR (g.away_team=a.team AND g.away_points<g.home_points) THEN 1 ELSE 0 END) as losses,
-                   a.prev_rank, t.logo_dark
+                   a.prev_rank, t.logo_dark, t.alt_color
             FROM ap_rankings a
             LEFT JOIN teams t ON a.team = t.name
             LEFT JOIN sp_ratings sp ON a.team = sp.team
             LEFT JOIN games g ON (g.home_team=a.team OR g.away_team=a.team)
                 AND g.completed=1 AND g.season_type='SeasonType.REGULAR'
             GROUP BY a.rank, a.team, a.points, a.first_place_votes, a.week, a.prev_rank,
-                     t.logo, t.conference, t.color, t.logo_dark,
+                     t.logo, t.conference, t.color, t.logo_dark, t.alt_color,
                      sp.rating, sp.ranking
             ORDER BY a.rank
         ''')
         rows = cursor.fetchall()
-        cursor.execute('SELECT week, season FROM ap_rankings LIMIT 1')
+        cursor.execute('SELECT week, season, season_type FROM ap_rankings LIMIT 1')
         meta = cursor.fetchone()
     finally:
         release_db(conn)

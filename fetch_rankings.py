@@ -15,6 +15,12 @@ try:
 except Exception:
     conn.rollback()
 
+try:
+    cursor.execute('ALTER TABLE ap_rankings ADD COLUMN season_type TEXT')
+    conn.commit()
+except Exception:
+    conn.rollback()
+
 with cfbd.ApiClient(configuration) as api_client:
     rankings_api = cfbd.RankingsApi(api_client)
     rankings = rankings_api.get_rankings(year=2025)
@@ -45,15 +51,17 @@ else:
         for r in prev_ranks:
             prev_rank_map[r.school] = r.rank
 
+    season_type = 'postseason' if 'post' in cur_type.lower() else 'regular'
+
     cursor.execute('DELETE FROM ap_rankings')
     for r in cur_ranks:
         prev = prev_rank_map.get(r.school)
         cursor.execute('''
             INSERT INTO ap_rankings
-            (team, rank, points, first_place_votes, week, season, prev_rank)
-            VALUES (%s, %s, %s, %s, %s, 2025, %s)
+            (team, rank, points, first_place_votes, week, season, prev_rank, season_type)
+            VALUES (%s, %s, %s, %s, %s, 2025, %s, %s)
         ''', (r.school, r.rank, getattr(r, 'points', None),
-              getattr(r, 'first_place_votes', None), cur_week, prev))
+              getattr(r, 'first_place_votes', None), cur_week, prev, season_type))
 
     conn.commit()
     print(f"Saved {len(cur_ranks)} teams")

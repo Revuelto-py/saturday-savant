@@ -3,101 +3,101 @@
 {% block content %}
 <div class="page-wrapper">
 
-<div class="d-flex align-items-end justify-content-between mb-5 flex-wrap gap-3">
+<div class="d-flex align-items-end justify-content-between mb-4 flex-wrap gap-3">
     <div>
-        <h2 style="color:white;font-weight:900;font-size:1.6rem;margin:0;letter-spacing:-0.01em">AP Top 25</h2>
+        <h2 style="color:white;font-weight:900;font-size:1.6rem;margin:0;letter-spacing:-0.01em">
+            AP Top 25
+            {% if meta and meta[2] == 'postseason' %}<span class="ap-final-pill">Final</span>{% endif %}
+        </h2>
         {% if meta %}
-        <div style="color:rgba(255,255,255,0.35);font-size:0.75rem;margin-top:5px">
-            Week {{ meta[0] }} · 2025 Season
+        <div style="color:rgba(255,255,255,0.35);font-size:0.75rem;margin-top:6px">
+            {% if meta[2] == 'postseason' %}
+                Final Poll · {{ meta[1] }} Season
+            {% else %}
+                Week {{ meta[0] }} · {{ meta[1] }} Season
+            {% endif %}
         </div>
         {% endif %}
     </div>
 </div>
 
-<div class="dark-card" style="overflow:hidden">
-    <!-- Table header -->
-    <div class="ap-rankings-grid" style="border-bottom:2px solid rgba(255,255,255,0.08);padding:10px 20px">
-        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">RK</div>
-        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">TEAM</div>
-        <div class="ap-extra-col" style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">CONF</div>
-        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">REC</div>
-        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">PTS</div>
-        <div class="ap-extra-col" style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">1ST PL VOTES</div>
-        <div class="ap-extra-col" style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">PREV</div>
-        <div style="color:rgba(255,255,255,0.35);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;text-align:center">TREND</div>
-    </div>
+<!-- Column headers -->
+<div class="ap-rankings-grid ap-head">
+    <div class="ap-col-label">Rk</div>
+    <div class="ap-col-label">Team</div>
+    <div class="ap-col-label ap-extra-col" style="text-align:center">Conf</div>
+    <div class="ap-col-label" style="text-align:center">Rec</div>
+    <div class="ap-col-label" style="text-align:center">Pts</div>
+    <div class="ap-col-label ap-extra-col" style="text-align:center">1st Pl Votes</div>
+    <div class="ap-col-label ap-extra-col" style="text-align:center">Prev</div>
+    <div class="ap-col-label" style="text-align:center">Trend</div>
+</div>
 
-    {% for r in rankings %}
-    {% set trend = none %}
-    {% if r[12] is not none %}
-        {% set trend = r[12] - r[0] %}
-    {% endif %}
+<div style="display:flex;flex-direction:column;gap:8px">
+{% for r in rankings %}
+    {% set trend = (r[12] - r[0]) if r[12] is not none else none %}
+    {% set logo = r[13] or r[5] %}
 
-    <a href="/team/{{ r[1] }}" class="ap-rankings-grid" style="text-decoration:none;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.1s"
-       onmouseover="this.style.background='rgba(255,255,255,0.03)'"
-       onmouseout="this.style.background='transparent'">
+    <a href="/team/{{ r[1] }}" class="ap-rankings-grid ap-rank-row"
+       style="--c1:{{ r[7] or '#1e3a5f' }};--c2:{{ r[14] or '#0f1e3a' }}">
 
         <!-- Rank -->
         <div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center">
-            {% if r[0] == 1 %}
-                <div style="width:34px;height:34px;border-radius:50%;background:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:900;color:black">1</div>
-            {% elif r[0] == 2 %}
-                <div style="width:34px;height:34px;border-radius:50%;background:#9ca3af;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:900;color:white">2</div>
-            {% elif r[0] == 3 %}
-                <div style="width:34px;height:34px;border-radius:50%;background:#b45309;display:flex;align-items:center;justify-content:center;font-size:0.9rem;font-weight:900;color:white">3</div>
+            {% if r[0] <= 3 %}
+                <div class="ap-medal ap-medal-{{ r[0] }}">{{ r[0] }}</div>
             {% else %}
-                <span style="color:rgba(255,255,255,0.5);font-size:1rem;font-weight:800">{{ r[0] }}</span>
+                <span class="ap-rank-num">{{ r[0] }}</span>
             {% endif %}
         </div>
 
         <!-- Team -->
-        <div style="display:flex;align-items:center;gap:14px">
-            {% if r[13] %}
-                <img src="{{ r[13] }}" style="width:48px;height:48px;object-fit:contain;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:14px;min-width:150px">
+            {% if logo %}
+                <img src="{{ logo }}" class="ap-team-logo">
             {% endif %}
-            <span style="color:white;font-weight:700;font-size:0.95rem">{{ r[1] }}</span>
+            <span class="ap-team-name">{{ r[1] }}</span>
         </div>
 
         <!-- Conference -->
-        <div class="ap-extra-col" style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.78rem;font-weight:600">
+        <div class="ap-extra-col ap-cell-dim" style="text-align:center">
             {{ r[6] or '—' }}
         </div>
 
         <!-- Record -->
-        <div style="text-align:center;color:rgba(255,255,255,0.6);font-size:0.88rem;font-weight:500">
+        <div class="ap-cell" style="text-align:center">
             {% if r[10] is not none %}{{ r[10] }}-{{ r[11] }}{% else %}—{% endif %}
         </div>
 
         <!-- Points -->
-        <div style="text-align:center;color:white;font-size:0.95rem;font-weight:700">
+        <div class="ap-cell-strong" style="text-align:center">
             {{ r[2] or '—' }}
         </div>
 
         <!-- 1st Place Votes -->
-        <div class="ap-extra-col" style="text-align:center;color:rgba(255,255,255,0.6);font-size:0.88rem;font-weight:600">
-            {{ r[3] or '—' }}
+        <div class="ap-extra-col" style="text-align:center">
+            {% if r[3] %}<span class="ap-fpv">{{ r[3] }}</span>{% else %}<span class="ap-cell-dim">—</span>{% endif %}
         </div>
 
         <!-- Prev Rank -->
-        <div class="ap-extra-col" style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.85rem;font-weight:600">
+        <div class="ap-extra-col ap-cell-dim" style="text-align:center">
             {% if r[12] is not none %}{{ r[12] }}{% else %}NR{% endif %}
         </div>
 
         <!-- Trend -->
         <div style="text-align:center">
             {% if trend is none %}
-                <span style="color:rgba(255,255,255,0.25);font-size:0.82rem">NR</span>
+                <span class="ap-trend ap-trend-new">NEW</span>
             {% elif trend == 0 %}
-                <span style="color:rgba(255,255,255,0.35);font-size:0.82rem">–</span>
+                <span class="ap-trend ap-trend-flat">–</span>
             {% elif trend > 0 %}
-                <span style="color:#22c55e;font-weight:800;font-size:0.88rem">↑{{ trend }}</span>
+                <span class="ap-trend ap-trend-up">▲{{ trend }}</span>
             {% else %}
-                <span style="color:#ef4444;font-weight:800;font-size:0.88rem">↓{{ trend|abs }}</span>
+                <span class="ap-trend ap-trend-down">▼{{ trend|abs }}</span>
             {% endif %}
         </div>
 
     </a>
-    {% endfor %}
+{% endfor %}
 </div>
 
 </div>
