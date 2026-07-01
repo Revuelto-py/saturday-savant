@@ -7,6 +7,17 @@
 {% set is_post    = game[6] and 'postseason' in game[6].lower() %}
 {% set home_won   = game[3] is not none and game[4] is not none and game[3] > game[4] %}
 {% set game_final = game[3] is not none and game[4] is not none %}
+{% set away_won_final = game_final and not home_won %}
+{% set home_won_final = game_final and home_won %}
+{% set away_name_class = 'team-name-winner' if away_won_final else ('team-name-loser' if game_final else 'team-name-default') %}
+{% set home_name_class = 'team-name-winner' if home_won_final else ('team-name-loser' if game_final else 'team-name-default') %}
+
+{% macro hex_to_rgb(hex_color) -%}
+{%- set h = hex_color.lstrip('#') -%}
+{{ h[0:2]|int(0,16) }},{{ h[2:4]|int(0,16) }},{{ h[4:6]|int(0,16) }}
+{%- endmacro %}
+{% set away_rgb = hex_to_rgb(away_color) %}
+{% set home_rgb = hex_to_rgb(home_color) %}
 
 {# quarters is now a dict: {'home': [...], 'away': [...]} #}
 {% set home_q = quarters.home %}
@@ -36,32 +47,37 @@
 {% endmacro %}
 
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
 {# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
 <div style="background:linear-gradient(135deg,{{ away_color }}bb 0%,#060d1f 42%,#060d1f 58%,{{ home_color }}bb 100%);border-bottom:1px solid rgba(255,255,255,0.08);padding:40px 0 28px;position:relative;overflow:hidden">
     <div style="position:absolute;inset:0;background:rgba(0,0,0,0.48);pointer-events:none"></div>
     <div class="page-wrapper" style="position:relative;z-index:1">
 
-        <div style="text-align:center;margin-bottom:22px">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-wrap:wrap;text-align:center;margin-bottom:22px">
             {% if notes %}
-                <div style="color:rgba(255,255,255,0.55);font-size:0.7rem;font-weight:900;letter-spacing:0.15em;text-transform:uppercase">{{ notes }}</div>
+                <div style="color:rgba(255,255,255,0.65);font-size:0.8rem;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ notes }}</div>
             {% else %}
-                <div style="color:rgba(255,255,255,0.35);font-size:0.68rem;font-weight:700;letter-spacing:0.15em;text-transform:uppercase">
+                <div style="color:rgba(255,255,255,0.65);font-size:0.8rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">
                     {% if is_post %}Postseason{% else %}Week {{ week_num }} · 2025 Regular Season{% endif %}
                 </div>
             {% endif %}
             {% if game_date %}
-                <div style="color:rgba(255,255,255,0.22);font-size:0.6rem;margin-top:4px">{{ game_date }}</div>
+                <div style="color:rgba(255,255,255,0.75);font-size:1rem;margin-top:4px;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ game_date }}</div>
             {% endif %}
         </div>
 
         <div style="display:flex;align-items:center;justify-content:center">
             {# Away (left) #}
             <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
-                {% if game[10] %}<a href="/team/{{ away_team }}"><img src="{{ game[10] }}" style="height:80px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% endif %}
+                {% if game[10] %}
+                <div class="team-logo-glow" style="--glow-rgb:{{ away_rgb }}">
+                    <a href="/team/{{ away_team }}"><img src="{{ game[10] }}" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
+                </div>
+                {% endif %}
                 <div style="text-align:right">
                     {% if away_rank %}<div style="color:#f59e0b;font-size:0.6rem;font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
-                    <div style="font-size:1.25rem;line-height:1.1;opacity:{% if game_final and home_won %}0.45{% else %}1{% endif %}"><a href="/team/{{ away_team }}" style="color:white;text-decoration:none;font-weight:900" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color='white'">{{ away_team }}</a></div>
+                    <div style="font-size:1.25rem;line-height:1.1"><a href="/team/{{ away_team }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color=''">{{ away_team }}</a></div>
                     {% if records.away %}<div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:3px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
                 </div>
             </div>
@@ -69,20 +85,24 @@
             {# Scores #}
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
                 <div style="min-width:80px;text-align:center">
-                    <div style="font-size:4rem;font-weight:900;line-height:1;color:{% if game_final and home_won %}rgba(255,255,255,0.3){% else %}white{% endif %}">{{ game[4] if game[4] is not none else '—' }}</div>
+                    <div class="{{ 'hero-score-loser' if home_won_final else 'hero-score-winner' }}" style="font-size:4rem;font-weight:900;line-height:1">{{ game[4] if game[4] is not none else '—' }}</div>
                 </div>
                 <div style="color:rgba(255,255,255,0.18);font-size:2.4rem;font-weight:200;padding:0 6px">–</div>
                 <div style="min-width:80px;text-align:center">
-                    <div style="font-size:4rem;font-weight:900;line-height:1;color:{% if game_final and not home_won %}rgba(255,255,255,0.3){% else %}white{% endif %}">{{ game[3] if game[3] is not none else '—' }}</div>
+                    <div class="{{ 'hero-score-loser' if away_won_final else 'hero-score-winner' }}" style="font-size:4rem;font-weight:900;line-height:1">{{ game[3] if game[3] is not none else '—' }}</div>
                 </div>
             </div>
 
             {# Home (right) #}
             <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:36px">
-                {% if game[9] %}<a href="/team/{{ home_team }}"><img src="{{ game[9] }}" style="height:80px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% endif %}
+                {% if game[9] %}
+                <div class="team-logo-glow" style="--glow-rgb:{{ home_rgb }}">
+                    <a href="/team/{{ home_team }}"><img src="{{ game[9] }}" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
+                </div>
+                {% endif %}
                 <div style="text-align:left">
                     {% if home_rank %}<div style="color:#f59e0b;font-size:0.6rem;font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
-                    <div style="font-size:1.25rem;line-height:1.1;opacity:{% if game_final and not home_won %}0.45{% else %}1{% endif %}"><a href="/team/{{ home_team }}" style="color:white;text-decoration:none;font-weight:900" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color='white'">{{ home_team }}</a></div>
+                    <div style="font-size:1.25rem;line-height:1.1"><a href="/team/{{ home_team }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color=''">{{ home_team }}</a></div>
                     {% if records.home %}<div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:3px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
                 </div>
             </div>
@@ -91,8 +111,8 @@
         <div style="text-align:center;margin-top:22px">
             <span style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.45);font-size:0.58rem;font-weight:900;letter-spacing:0.18em;padding:4px 16px;border-radius:20px;text-transform:uppercase">Final</span>
             {% if rivalry_name %}
-            <div style="margin-top:10px">
-                <span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#f59e0b;font-size:0.65rem;font-weight:800;padding:3px 14px;border-radius:20px;letter-spacing:0.05em">&#x2694; {{ rivalry_name }}</span>
+            <div>
+                <span class="rivalry-badge">&#x2694;&nbsp;&nbsp;{{ rivalry_name }}</span>
             </div>
             {% endif %}
         </div>
@@ -109,40 +129,40 @@
 <div class="dark-card mb-4" style="overflow-x:auto;padding:18px 24px">
     <table class="data-table" style="font-size:0.78rem;min-width:280px;width:100%">
         <thead>
-            <tr>
-                <th style="padding:0 0 10px;text-align:left;min-width:160px"></th>
+            <tr style="background:rgba(255,255,255,0.04)">
+                <th style="padding:8px 12px;text-align:left;min-width:160px"></th>
                 {% for i in range(num_periods) %}
-                <th style="color:rgba(255,255,255,0.3);font-weight:800;padding:0 18px 10px;text-align:center;letter-spacing:0.06em">
+                <th style="color:rgba(255,255,255,0.3);font-weight:800;padding:8px 12px;text-align:center;letter-spacing:0.06em">
                     {% if i < 4 %}Q{{ i+1 }}{% elif i == 4 %}OT{% else %}OT{{ i-3 }}{% endif %}
                 </th>
                 {% endfor %}
-                <th style="color:rgba(255,255,255,0.55);font-weight:900;padding:0 0 10px 18px;text-align:center;letter-spacing:0.06em;border-left:1px solid rgba(255,255,255,0.1)">T</th>
+                <th style="color:rgba(255,255,255,0.55);font-weight:900;padding:8px 12px;text-align:center;letter-spacing:0.06em;border-left:1px solid rgba(255,255,255,0.1)">T</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td style="padding:6px 0;vertical-align:middle">
+                <td style="padding:8px 12px;vertical-align:middle">
                     <div style="display:flex;align-items:center;gap:10px">
                         {% if game[10] %}<img src="{{ game[10] }}" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
                         <span style="color:rgba(255,255,255,{% if game_final and home_won %}0.4{% else %}0.85{% endif %});font-weight:{% if not home_won %}700{% else %}500{% endif %};white-space:nowrap">{{ away_team }}</span>
                     </div>
                 </td>
                 {% for i in range(num_periods) %}
-                <td style="color:rgba(255,255,255,0.6);font-weight:600;padding:6px 18px;text-align:center">{{ away_q[i]|int if i < away_q|length else 0 }}</td>
+                <td style="color:rgba(255,255,255,0.6);font-weight:600;padding:8px 12px;text-align:center">{{ away_q[i]|int if i < away_q|length else 0 }}</td>
                 {% endfor %}
-                <td style="color:{% if game_final and home_won %}rgba(255,255,255,0.35){% else %}white{% endif %};font-weight:900;padding:6px 0 6px 18px;text-align:center;border-left:1px solid rgba(255,255,255,0.1);font-size:1rem">{{ game[4] }}</td>
+                <td style="color:{% if game_final and home_won %}rgba(255,255,255,0.35){% else %}#f59e0b{% endif %};font-weight:900;padding:8px 12px;text-align:center;border-left:1px solid rgba(255,255,255,0.1);font-size:1rem">{{ game[4] }}</td>
             </tr>
             <tr>
-                <td style="padding:6px 0;vertical-align:middle">
+                <td style="padding:8px 12px;vertical-align:middle">
                     <div style="display:flex;align-items:center;gap:10px">
                         {% if game[9] %}<img src="{{ game[9] }}" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
                         <span style="color:rgba(255,255,255,{% if game_final and not home_won %}0.4{% else %}0.85{% endif %});font-weight:{% if home_won %}700{% else %}500{% endif %};white-space:nowrap">{{ home_team }}</span>
                     </div>
                 </td>
                 {% for i in range(num_periods) %}
-                <td style="color:rgba(255,255,255,0.6);font-weight:600;padding:6px 18px;text-align:center">{{ home_q[i]|int if i < home_q|length else 0 }}</td>
+                <td style="color:rgba(255,255,255,0.6);font-weight:600;padding:8px 12px;text-align:center">{{ home_q[i]|int if i < home_q|length else 0 }}</td>
                 {% endfor %}
-                <td style="color:{% if game_final and not home_won %}rgba(255,255,255,0.35){% else %}white{% endif %};font-weight:900;padding:6px 0 6px 18px;text-align:center;border-left:1px solid rgba(255,255,255,0.1);font-size:1rem">{{ game[3] }}</td>
+                <td style="color:{% if game_final and not home_won %}rgba(255,255,255,0.35){% else %}#f59e0b{% endif %};font-weight:900;padding:8px 12px;text-align:center;border-left:1px solid rgba(255,255,255,0.1);font-size:1rem">{{ game[3] }}</td>
             </tr>
         </tbody>
     </table>
@@ -169,7 +189,7 @@
 <div id="tab-content-overview">
 
 {# ── TWO-COLUMN LAYOUT ─────────────────────────────────────────────────────── #}
-<div class="row g-4">
+<div class="row g-4 align-items-start">
 
 {# ── LEFT COLUMN (col-lg-8) ───────────────────────────────────────────────── #}
 <div class="col-lg-8">
@@ -177,7 +197,7 @@
 {# ── GAME LEADERS ──────────────────────────────────────────────────────────── #}
 {% if structured_leaders %}
 <div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px;margin-bottom:16px">
-    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Game Leaders</div>
+    <div class="section-header">Game Leaders</div>
 
     <!-- Team header -->
     <div class="d-flex justify-content-between align-items-center w-100" style="padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
@@ -372,8 +392,8 @@
 {% endif %}
 {% endmacro %}
 
-<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px;margin-top:16px">
-    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Team Stats</div>
+<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px">
+    <div class="section-header">Team Stats</div>
 
     <!-- Team header row with large logos -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:16px">
@@ -405,8 +425,7 @@
 <div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);
             border-radius:12px;padding:20px;margin-top:16px">
 
-    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;
-                letter-spacing:0.12em;text-transform:uppercase;margin-bottom:14px">Win Probability</div>
+    <div class="section-header">Win Probability</div>
 
     <!-- Team probability header — compact for sidebar -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -601,11 +620,11 @@ if (typeof Plotly !== 'undefined') {
 
 {# ── GAME INFO ─────────────────────────────────────────────────────────────── #}
 <div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;padding:20px;margin-top:16px">
-    <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Game Information</div>
+    <div class="section-header">Game Information</div>
 
     {% if game_date %}
-    <div style="display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <span style="font-size:1.1rem;flex-shrink:0;margin-top:1px">📅</span>
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0;display:flex;align-items:center">📅</span>
         <div>
             <div style="color:white;font-weight:700;font-size:0.88rem">{{ game_date }}</div>
             {% if game_time %}<div style="color:rgba(255,255,255,0.4);font-size:0.78rem;margin-top:2px">{{ game_time }}</div>{% endif %}
@@ -614,8 +633,8 @@ if (typeof Plotly !== 'undefined') {
     {% endif %}
 
     {% if venue_name %}
-    <div style="display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <span style="font-size:1.1rem;flex-shrink:0;margin-top:1px">📍</span>
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0;display:flex;align-items:center">📍</span>
         <div>
             <div style="color:white;font-weight:700;font-size:0.88rem">{{ venue_name }}</div>
             {% if venue_location %}<div style="color:rgba(255,255,255,0.4);font-size:0.78rem;margin-top:2px">{{ venue_location }}</div>{% endif %}
@@ -624,8 +643,8 @@ if (typeof Plotly !== 'undefined') {
     {% endif %}
 
     {% if attendance_fmt %}
-    <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <span style="font-size:1.1rem;flex-shrink:0">👥</span>
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0;display:flex;align-items:center">👥</span>
         <div>
             <div style="color:white;font-weight:700;font-size:0.88rem">Attendance: {{ attendance_fmt }}</div>
         </div>
@@ -633,8 +652,8 @@ if (typeof Plotly !== 'undefined') {
     {% endif %}
 
     {% if tv_broadcast %}
-    <div style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <span style="font-size:1.1rem;flex-shrink:0">📺</span>
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="font-size:1.1rem;flex-shrink:0;display:flex;align-items:center">📺</span>
         <div>
             <div style="color:rgba(255,255,255,0.45);font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Where to Watch</div>
             <span style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;font-weight:800;font-size:0.82rem;padding:3px 12px;border-radius:6px">{{ tv_broadcast }}</span>
@@ -642,8 +661,8 @@ if (typeof Plotly !== 'undefined') {
     </div>
     {% endif %}
 
-    <div style="display:flex;align-items:center;gap:14px;padding:12px 0">
-        <span style="font-size:1.1rem;flex-shrink:0">🏈</span>
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 0">
+        <span style="font-size:1.1rem;flex-shrink:0;display:flex;align-items:center">🏈</span>
         <div style="color:rgba(255,255,255,0.55);font-size:0.82rem">
             Week {{ week_num }} · {{ season_type_display }}{% if notes %} · {{ notes }}{% endif %}
         </div>

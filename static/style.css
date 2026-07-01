@@ -354,6 +354,51 @@
     opacity: 0.35;
     pointer-events: none;
 }
+/* ── Game page: rivalry badge ─────────────────────────────────────────── */
+.rivalry-badge {
+    display: inline-block;
+    margin-top: 12px;
+    background: linear-gradient(135deg, #7a5c00, #b8860b);
+    border: 1px solid #f59e0b;
+    box-shadow: 0 0 10px rgba(245,158,11,0.35);
+    color: #f59e0b;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    border-radius: 6px;
+    padding: 6px 14px;
+}
+
+/* ── Game page: section headers (Game Leaders, Team Stats, etc.) ─────── */
+.section-header {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ── Game page: score hero winner/loser styling ───────────────────────── */
+.hero-score-winner { color: #fff; }
+.hero-score-loser { color: rgba(255,255,255,0.35); }
+.team-name-default { font-weight: 900; color: #fff; }
+.team-name-winner { font-weight: 800; color: #fff; }
+.team-name-loser { font-weight: 400; color: rgba(255,255,255,0.5); }
+
+/* ── Game page: subtle team-color glow behind hero logos ──────────────── */
+.team-logo-glow {
+    width: 180px;
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, rgba(var(--glow-rgb), 0.15) 0%, transparent 70%);
+}
+
 .lb-page-ellipsis {
     color: rgba(255,255,255,0.3);
     font-size: 0.8rem;
