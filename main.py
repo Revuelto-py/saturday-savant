@@ -1839,33 +1839,58 @@ def game_detail(game_id):
     away_stats = {}
 
     try:
-        date_str = game_info[8][:10].replace('-', '') if game_info[8] else None
-        if date_str:
-            r = req.get(
-                'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard',
-                params={'dates': date_str, 'limit': 200},
-                timeout=4
-            )
-            for ev in r.json().get('events', []):
-                comp = (ev.get('competitions') or [{}])[0]
-                all_names = set()
-                for c in comp.get('competitors', []):
-                    t = c.get('team', {})
-                    all_names.update(n.lower() for n in [
-                        t.get('displayName', ''), t.get('shortDisplayName', ''),
-                        t.get('name', ''), t.get('abbreviation', '')
-                    ])
-                if home_team.lower() in all_names or away_team.lower() in all_names:
-                    espn_game_id = ev.get('id')
-                    break
+        # CFBD game ids are ESPN event ids, so ask the summary endpoint for
+        # this game directly. The old approach — scanning the scoreboard for
+        # the game's UTC calendar date and matching team names — silently
+        # returned nothing for every prime-time game: kickoffs after 00:00
+        # UTC land on the next day's slate, so the scan searched the wrong
+        # date and the page rendered with no ESPN data at all.
+        data = {}
+        s = req.get(
+            'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
+            params={'event': game_id},
+            timeout=4
+        )
+        if s.ok:
+            data = s.json()
+        if data.get('header', {}).get('competitions'):
+            espn_game_id = str(game_id)
+        else:
+            # Fallback for ids ESPN doesn't recognize: scan the scoreboard
+            # across the game's UTC date and the day before (to cover the
+            # UTC-midnight boundary), matching by team name.
+            data = {}
+            date_str = str(game_info[8])[:10].replace('-', '') if game_info[8] else None
+            if date_str:
+                day = datetime.datetime.strptime(date_str, '%Y%m%d')
+                prev_day = (day - datetime.timedelta(days=1)).strftime('%Y%m%d')
+                r = req.get(
+                    'https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard',
+                    params={'dates': f'{prev_day}-{date_str}', 'limit': 400},
+                    timeout=4
+                )
+                for ev in r.json().get('events', []):
+                    comp = (ev.get('competitions') or [{}])[0]
+                    all_names = set()
+                    for c in comp.get('competitors', []):
+                        t = c.get('team', {})
+                        all_names.update(n.lower() for n in [
+                            t.get('displayName', ''), t.get('shortDisplayName', ''),
+                            t.get('name', ''), t.get('abbreviation', '')
+                        ])
+                    if home_team.lower() in all_names or away_team.lower() in all_names:
+                        espn_game_id = ev.get('id')
+                        break
+            if espn_game_id:
+                s = req.get(
+                    'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
+                    params={'event': espn_game_id},
+                    timeout=4
+                )
+                if s.ok:
+                    data = s.json()
 
         if espn_game_id:
-            s = req.get(
-                'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
-                params={'event': espn_game_id},
-                timeout=4
-            )
-            data = s.json()
 
             # ── Quarters (use displayValue — value field is always 0 in ESPN) ──
             def _score(ls):
