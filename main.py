@@ -2086,6 +2086,51 @@ def player_detail(player_id):
             'draft_pick':    row[21],
         }
 
+        # ── Transfer history + stats/current-team mismatch detection ──────────
+        # Matched by name since transfers has no player_id foreign key.
+        cursor.execute('''
+            SELECT origin, destination, transfer_date, year, stars, rating
+            FROM transfers
+            WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)
+            ORDER BY year ASC, transfer_date ASC
+        ''', (player['first_name'], player['last_name']))
+        transfers_history = []
+        for origin, destination, transfer_date, t_year, stars, rating in cursor.fetchall():
+            if not origin or not destination:
+                continue  # still in the portal / no completed move to show
+            transfers_history.append({
+                'origin': origin,
+                'destination': destination,
+                'year': t_year,
+                'stars': stars or 0,
+            })
+
+        # Every team this player has recorded player_stats under — may differ
+        # from players.team (their current/latest team) if they transferred.
+        cursor.execute('''
+            SELECT DISTINCT team FROM player_stats
+            WHERE (player_id = %s OR player_name = %s) AND team IS NOT NULL
+        ''', (str(player_id), player['name']))
+        all_stat_teams = [r[0] for r in cursor.fetchall()]
+        previous_stat_teams = [t for t in all_stat_teams if t != player['team']]
+
+        # One batched lookup (not one query per team) covering every team name
+        # that could show up in the transfer badge or the game log Team column.
+        teams_needed = set(all_stat_teams)
+        for t in transfers_history:
+            teams_needed.add(t['origin'])
+            teams_needed.add(t['destination'])
+        transfer_team_logos = {}
+        team_abbrevs = {}
+        if teams_needed:
+            cursor.execute(
+                'SELECT name, logo_dark, abbreviation FROM teams WHERE name = ANY(%s)',
+                (list(teams_needed),)
+            )
+            for t_name, logo_dark, abbr in cursor.fetchall():
+                transfer_team_logos[t_name] = logo_dark
+                team_abbrevs[t_name] = abbr
+
         cursor.execute('SELECT category, stat_type, stat FROM player_stats WHERE player_id = %s', (str(player_id),))
         stats = {}
         for cat, st, val in cursor.fetchall():
@@ -2501,6 +2546,7 @@ def player_detail(player_id):
                         'opp_logo':  opp_logo or '',
                         'home_away': ha,
                         'result':    result,
+                        'team':      my_team,
                         'stats':     gstats,
                     })
                 except Exception:
@@ -2519,6 +2565,10 @@ def player_detail(player_id):
         usage=usage,
         is_active_2026=is_active_2026,
         draft_status=draft_status,
+        transfers_history=transfers_history,
+        previous_stat_teams=previous_stat_teams,
+        transfer_team_logos=transfer_team_logos,
+        team_abbrevs=team_abbrevs,
     )
 
 

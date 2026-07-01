@@ -66,6 +66,31 @@
                     {% endif %}
                 </div>
 
+                {% if transfers_history %}
+                <div style="margin-top:10px">
+                    <div style="color:rgba(255,255,255,0.5);font-size:0.68rem;font-weight:800;
+                                letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px">
+                        Transfer History
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:6px">
+                        {% for t in transfers_history %}
+                        <div class="transfer-badge">
+                            {% set origin_logo = transfer_team_logos.get(t.origin) %}
+                            {% if origin_logo %}<img src="{{ origin_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0">{% endif %}
+                            <span>{{ t.origin }}</span>
+                            <span style="color:rgba(255,255,255,0.4)">&#x2192;</span>
+                            {% set dest_logo = transfer_team_logos.get(t.destination) %}
+                            {% if dest_logo %}<img src="{{ dest_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0">{% endif %}
+                            <span>{{ t.destination }}</span>
+                            <span style="color:rgba(255,255,255,0.4)">&middot;</span>
+                            <span>{{ t.year }}</span>
+                            {% if t.stars > 0 %}<span style="color:#f59e0b">{{ '★' * t.stars }}</span>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
                     {% if player.year_fmt %}<span style="color:rgba(255,255,255,0.45);font-size:0.82rem">{{ player.year_fmt }}</span>{% endif %}
                     {% if player.height_fmt %}<span style="color:rgba(255,255,255,0.25);font-size:0.75rem">·</span><span style="color:rgba(255,255,255,0.45);font-size:0.82rem">{{ player.height_fmt }}</span>{% endif %}
@@ -73,8 +98,16 @@
                 </div>
 
                 <div style="color:rgba(255,255,255,0.5);font-size:0.68rem;font-weight:800;
-                             letter-spacing:0.14em;text-transform:uppercase;margin-top:20px;margin-bottom:10px">
+                             letter-spacing:0.14em;text-transform:uppercase;margin-top:20px;margin-bottom:10px;
+                             display:flex;align-items:center;gap:6px">
                     2025 Season Stats
+                    {% if previous_stat_teams %}
+                    {% set prev_team = previous_stat_teams[0] %}
+                    {% set prev_logo = transfer_team_logos.get(prev_team) %}
+                    <span style="color:rgba(255,255,255,0.3)">&middot;</span>
+                    {% if prev_logo %}<img src="{{ prev_logo }}" style="width:20px;height:20px;object-fit:contain">{% endif %}
+                    <span>{{ team_abbrevs.get(prev_team, prev_team) }}</span>
+                    {% endif %}
                 </div>
 
                 <!-- Hero stat cards -->
@@ -260,6 +293,15 @@
 
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
                 <h4 style="color:white;font-weight:900;font-size:1rem;margin:0">2025 Season Stats</h4>
+                {% if previous_stat_teams %}
+                {% set prev_team = previous_stat_teams[0] %}
+                {% set prev_logo = transfer_team_logos.get(prev_team) %}
+                <div style="display:flex;align-items:center;gap:6px;color:rgba(255,255,255,0.5);font-size:0.85rem;font-weight:700">
+                    <span>&middot;</span>
+                    {% if prev_logo %}<img src="{{ prev_logo }}" style="width:20px;height:20px;object-fit:contain">{% endif %}
+                    <span>{{ team_abbrevs.get(prev_team, prev_team) }}</span>
+                </div>
+                {% endif %}
                 <div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>
                 {% if player.position %}
                 <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);
@@ -567,6 +609,21 @@
     </div>
     {% endif %}
 
+    {% if previous_stat_teams %}
+    {% set prev_team = previous_stat_teams[0] %}
+    {% set prev_logo = transfer_team_logos.get(prev_team) %}
+    {% set cur_logo  = transfer_team_logos.get(player.team) or player.logo_dark %}
+    <div class="transfer-mismatch-banner">
+        <span>&#128203;</span>
+        <span>2025 stats are from</span>
+        {% if prev_logo %}<img src="{{ prev_logo }}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle">{% endif %}
+        <strong style="color:white">{{ prev_team }}</strong>.
+        {{ player.first_name }} transferred to
+        {% if cur_logo %}<img src="{{ cur_logo }}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle">{% endif %}
+        <strong style="color:white">{{ player.team }}</strong> for 2026.
+    </div>
+    {% endif %}
+
     <!-- ROW 2: Game Log (full width) -->
     {% if game_log %}
     {% if pos == 'QB' %}
@@ -594,6 +651,7 @@
             <thead>
                 <tr style="background:rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.1)">
                     <th style="color:rgba(255,255,255,0.5);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;padding:10px 12px;text-align:left;white-space:nowrap">WK</th>
+                    <th style="color:rgba(255,255,255,0.5);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;padding:10px 12px;text-align:left;white-space:nowrap">TEAM</th>
                     <th style="color:rgba(255,255,255,0.5);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;padding:10px 16px;text-align:left;white-space:nowrap">OPP</th>
                     <th style="color:rgba(255,255,255,0.5);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;padding:10px 12px;text-align:center;white-space:nowrap">RESULT</th>
                     {% for label, key in cols %}
@@ -611,6 +669,9 @@
                     onmouseout="this.style.background='transparent'">
                     <td style="padding:11px 12px;color:rgba(255,255,255,0.4);font-size:0.8rem;font-weight:700;white-space:nowrap">
                         {{ g.week }}{% if g.game_id %}<span style="color:rgba(255,255,255,0.2);font-size:0.6rem;margin-left:3px">↗</span>{% endif %}
+                    </td>
+                    <td style="padding:11px 12px;white-space:nowrap">
+                        <span style="color:{{ 'rgba(255,255,255,0.5)' if g.team != player.team else 'rgba(255,255,255,0.85)' }};font-weight:600;font-size:0.78rem">{{ team_abbrevs.get(g.team, g.team) }}</span>
                     </td>
                     <td style="padding:11px 16px;white-space:nowrap">
                         <div style="display:flex;align-items:center;gap:8px">
