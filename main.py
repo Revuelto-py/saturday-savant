@@ -52,6 +52,8 @@
 import cfbd
 import psycopg2
 from psycopg2 import pool as pg_pool
+import gzip
+import json
 import os
 import re
 import datetime
@@ -1817,6 +1819,15 @@ def game_detail(game_id):
             FROM players WHERE team IN (%s, %s)
         ''', (home_team, away_team))
         name_to_player_id = {row[0].lower(): row[1] for row in cursor.fetchall()}
+
+        # Stored ESPN summary (fetch_game_summaries.py) — completed games are
+        # immutable, so pages render from Postgres with no ESPN call
+        summary_row = None
+        try:
+            cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
+            summary_row = cursor.fetchone()
+        except Exception:
+            conn.rollback()  # table not created yet — fall back to live fetch
     finally:
         release_db(conn)
 
@@ -1839,20 +1850,22 @@ def game_detail(game_id):
     away_stats = {}
 
     try:
-        # CFBD game ids are ESPN event ids, so ask the summary endpoint for
-        # this game directly. The old approach — scanning the scoreboard for
-        # the game's UTC calendar date and matching team names — silently
-        # returned nothing for every prime-time game: kickoffs after 00:00
-        # UTC land on the next day's slate, so the scan searched the wrong
-        # date and the page rendered with no ESPN data at all.
         data = {}
-        s = req.get(
-            'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
-            params={'event': game_id},
-            timeout=4
-        )
-        if s.ok:
-            data = s.json()
+        if summary_row:
+            data = json.loads(gzip.decompress(bytes(summary_row[0])))
+        else:
+            # Not stored yet (e.g. game just completed) — fetch live. CFBD
+            # game ids are ESPN event ids, so ask the summary endpoint
+            # directly rather than scanning the scoreboard by date, which
+            # silently missed every prime-time game (kickoffs after 00:00
+            # UTC land on the next day's slate).
+            s = req.get(
+                'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
+                params={'event': game_id},
+                timeout=4
+            )
+            if s.ok:
+                data = s.json()
         if data.get('header', {}).get('competitions'):
             espn_game_id = str(game_id)
         else:
