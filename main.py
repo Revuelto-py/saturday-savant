@@ -699,17 +699,92 @@ def leaders_query(cursor, category, stat_type, limit=5):
 def get_cached_season_leaders():
     """Season-wide leaders are identical no matter which week the home page
     is showing, so this is memoized independently of the /week/<n>/<type>
-    route — otherwise the same 3 queries would re-run for every distinct
-    week URL instead of being computed once per hour."""
+    route — otherwise the same queries would re-run for every distinct
+    week URL instead of being computed once per hour.
+
+    Returns (label, leaderboard href, accent color, rows) per category, in
+    the display order used by the home page sidebar."""
     conn = get_db()
     try:
         cursor = conn.cursor()
-        top_receivers = leaders_query(cursor, 'receiving', 'YDS')
-        top_rushers   = leaders_query(cursor, 'rushing',   'YDS')
-        top_passers   = leaders_query(cursor, 'passing',   'YDS')
-        return top_receivers, top_rushers, top_passers
+        return [
+            ('Passing Yards',   '/leaderboards/passing',   '#fbbf24', leaders_query(cursor, 'passing',       'YDS')),
+            ('Rushing Yards',   '/leaderboards/rushing',   '#60a5fa', leaders_query(cursor, 'rushing',       'YDS')),
+            ('Receiving Yards', '/leaderboards/receiving', '#34d399', leaders_query(cursor, 'receiving',     'YDS')),
+            ('Tackles',         '/leaderboards/defense',   '#a78bfa', leaders_query(cursor, 'defensive',     'TOT')),
+            ('Interceptions',   '/leaderboards/defense',   '#f87171', leaders_query(cursor, 'interceptions', 'INT')),
+        ]
     finally:
         release_db(conn)
+
+def _ticker_game_label(notes):
+    """Short status line for a ticker item — CFP rounds get named, everything
+    else (bowls with sponsor-heavy names, regular season) just reads Final."""
+    if notes:
+        if 'National Championship' in notes: return 'CFP Championship'
+        if 'Semifinal' in notes: return 'CFP Semifinal'
+        if 'Quarterfinal' in notes: return 'CFP Quarterfinal'
+        if 'First Round' in notes: return 'CFP First Round'
+        if 'Conference Championship' in notes: return 'Conf Championship'
+    return 'Final'
+
+@cache.memoize(timeout=3600)
+def get_ticker_data():
+    """Sitewide scores ticker under the navbar: the most recent completed
+    week, with postseason outranking regular season so the offseason shows
+    playoff/bowl results instead of the last regular-season week."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT week, season_type FROM games
+            WHERE completed = 1 AND season = 2025
+            ORDER BY CASE WHEN season_type = 'SeasonType.POSTSEASON' THEN 0 ELSE 1 END,
+                     week DESC
+            LIMIT 1
+        ''')
+        row = cursor.fetchone()
+        if not row:
+            return None
+        week, stype = row
+        ranks = get_ap_rankings(cursor)
+        cursor.execute('''
+            SELECT g.away_team, g.away_points, g.home_team, g.home_points,
+                   ta.abbreviation, th.abbreviation, ta.logo_dark, th.logo_dark,
+                   g.id, g.notes
+            FROM games g
+            LEFT JOIN teams th ON g.home_team = th.name
+            LEFT JOIN teams ta ON g.away_team = ta.name
+            WHERE g.completed = 1 AND g.season = 2025 AND g.week = %s AND g.season_type = %s
+            ORDER BY CASE WHEN g.notes LIKE '%%National Championship%%' THEN 1
+                          WHEN g.notes LIKE '%%Semifinal%%' THEN 2
+                          WHEN g.notes LIKE '%%Quarterfinal%%' THEN 3
+                          WHEN g.notes LIKE '%%First Round%%' THEN 4
+                          WHEN g.notes LIKE '%%Conference Championship%%' THEN 5
+                          ELSE 6 END, g.notes, g.id
+        ''', (week, stype))
+        games = []
+        for away, apts, home, hpts, a_abbr, h_abbr, a_logo, h_logo, gid, notes in cursor.fetchall():
+            games.append({
+                'id': gid,
+                'label': _ticker_game_label(notes),
+                'away': {'abbr': a_abbr or away, 'pts': apts, 'logo': a_logo,
+                         'rank': ranks.get(away), 'won': (apts or 0) > (hpts or 0)},
+                'home': {'abbr': h_abbr or home, 'pts': hpts, 'logo': h_logo,
+                         'rank': ranks.get(home), 'won': (hpts or 0) > (apts or 0)},
+            })
+        label = 'Postseason' if 'POSTSEASON' in stype else f'Week {week}'
+        return {'label': label, 'games': games}
+    finally:
+        release_db(conn)
+
+@app.context_processor
+def inject_ticker():
+    # A ticker failure should never take down page rendering
+    try:
+        return dict(ticker=get_ticker_data())
+    except Exception:
+        return dict(ticker=None)
 
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
@@ -730,9 +805,14 @@ def home(week=None, season_type='regular'):
         all_weeks = cursor.fetchall()
 
         if week is None:
-            cursor.execute("SELECT MAX(week) FROM games WHERE completed = 1 AND season = 2025 AND season_type = 'SeasonType.REGULAR'")
-            week = cursor.fetchone()[0]
-            season_type = 'regular'
+            # Default to the current week: all_weeks sorts postseason first,
+            # so once bowls/playoffs complete the home page shows those
+            # instead of the last regular-season week.
+            if all_weeks:
+                week = all_weeks[0][0]
+                season_type = 'postseason' if 'POSTSEASON' in all_weeks[0][1] else 'regular'
+            else:
+                week, season_type = 1, 'regular'
 
         db_season_type = 'SeasonType.POSTSEASON' if season_type == 'postseason' else 'SeasonType.REGULAR'
 
@@ -767,15 +847,14 @@ def home(week=None, season_type='regular'):
             grouped_games[get_game_label(game[6])].append(game)
         grouped_games = {k: v for k, v in grouped_games.items() if v}
 
-        top_receivers, top_rushers, top_passers = get_cached_season_leaders()
+        leaders = get_cached_season_leaders()
 
     finally:
         release_db(conn)
     return render_template('home.html',
         games=games, grouped_games=grouped_games, all_weeks=all_weeks,
         selected_week=week, season_type=season_type,
-        top_receivers=top_receivers, top_rushers=top_rushers, top_passers=top_passers,
-        ap_rankings=ap_rankings)
+        leaders=leaders, ap_rankings=ap_rankings)
 
 @app.route('/search')
 def search():

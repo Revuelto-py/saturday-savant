@@ -21,6 +21,254 @@
     }
 }
 
+/* ── Sitewide score ticker (under the navbar) ─────────────────────────── */
+.score-ticker {
+    display: flex;
+    align-items: stretch;
+    background: #060d1c;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.ticker-week {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 0 18px;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+}
+.ticker-week-label {
+    color: #f59e0b;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.ticker-week-season {
+    color: rgba(255,255,255,0.3);
+    font-size: 0.56rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.ticker-scroll {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.ticker-scroll::-webkit-scrollbar { display: none; }
+.ticker-item {
+    flex-shrink: 0;
+    min-width: 148px;
+    padding: 7px 14px 8px;
+    border-right: 1px solid rgba(255,255,255,0.05);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.ticker-item:hover { background: rgba(255,255,255,0.04); }
+.ticker-status {
+    color: rgba(255,255,255,0.3);
+    font-size: 0.54rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    white-space: nowrap;
+}
+.ticker-team {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 0;
+}
+.ticker-team img { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
+.ticker-rank {
+    color: #f59e0b;
+    font-size: 0.58rem;
+    font-weight: 800;
+    margin-right: 3px;
+    vertical-align: 1px;
+}
+.ticker-name {
+    color: rgba(255,255,255,0.45);
+    font-size: 0.74rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.ticker-name.won { color: white; font-weight: 800; }
+.ticker-score {
+    margin-left: auto;
+    color: rgba(255,255,255,0.4);
+    font-size: 0.74rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.ticker-score.won { color: white; font-weight: 800; }
+
+/* ── Home page: game result cards ─────────────────────────────────────── */
+.home-games-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+@media (max-width: 767.98px) {
+    .home-games-grid { grid-template-columns: 1fr; }
+}
+.game-card-v2 {
+    display: block;
+    background: #0d1e35;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 12px;
+    padding: 12px 16px 13px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.game-card-v2:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255,255,255,0.18);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+}
+.gc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 9px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.gc-note {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.64rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gc-final {
+    color: rgba(255,255,255,0.35);
+    font-size: 0.56rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.gc-team {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+}
+.gc-team img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.gc-rank { color: #f59e0b; font-size: 0.62rem; font-weight: 800; margin-right: 4px; }
+.gc-name {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.86rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.gc-team.winner .gc-name { color: white; font-weight: 800; }
+.gc-score {
+    margin-left: auto;
+    color: rgba(255,255,255,0.4);
+    font-size: 1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+.gc-team.winner .gc-score { color: white; font-weight: 900; }
+.gc-rivalry {
+    margin-top: 8px;
+    display: inline-block;
+    background: rgba(245,158,11,0.13);
+    border: 1px solid rgba(245,158,11,0.3);
+    color: #f59e0b;
+    font-size: 0.58rem;
+    font-weight: 800;
+    padding: 1px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.04em;
+}
+
+/* ── Home page: season leaders sidebar ─────────────────────────────────── */
+.leader-card {
+    background: #0d1e35;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 14px;
+}
+.leader-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.leader-head .section-label { margin-bottom: 0; }
+.leader-viewall {
+    color: rgba(255,255,255,0.3);
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.leader-viewall:hover { color: #60a5fa; }
+.leader-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    text-decoration: none;
+    transition: background 0.15s;
+}
+.leader-row:last-child { border-bottom: none; padding-bottom: 0; }
+.leader-rank {
+    width: 14px;
+    flex-shrink: 0;
+    color: rgba(255,255,255,0.25);
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.leader-name {
+    color: white;
+    font-weight: 700;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+a.leader-row:hover .leader-name { color: #60a5fa; }
+.leader-team {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: rgba(255,255,255,0.4);
+    font-size: 0.66rem;
+    margin-top: 1px;
+}
+.leader-team img { width: 12px; height: 12px; object-fit: contain; }
+.leader-val {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-weight: 900;
+    font-size: 0.92rem;
+    font-variant-numeric: tabular-nums;
+}
+.leader-row.featured { padding: 4px 0 10px; }
+.leader-row.featured .player-avatar-sm { width: 44px; height: 44px; }
+.leader-row.featured .leader-name { font-size: 0.92rem; }
+.leader-row.featured .leader-val { font-size: 1.25rem; }
+
 /* AP Top 25 rankings — extra columns (conf/1st place votes/prev rank)
    only show at desktop widths; mobile keeps the original 5-column layout. */
 .ap-rankings-grid {

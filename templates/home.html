@@ -10,7 +10,7 @@
             <h5 style="color:white;font-weight:800;margin:0;letter-spacing:0.06em;text-transform:uppercase;font-size:0.82rem">
                 {% if season_type == 'postseason' %}Postseason Results{% else %}Week {{ selected_week }} Results{% endif %}
             </h5>
-            <select class="form-select w-auto" onchange="window.location='/week/'+this.value">
+            <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
                 {% for w, stype in all_weeks %}
                     {% set stype_short = 'postseason' if 'POSTSEASON' in stype else 'regular' %}
                     <option value="{{ w }}/{{ stype_short }}"
@@ -22,45 +22,49 @@
         </div>
 
         {% macro game_card(game) %}
-        <div class="dark-card game-card mb-2 px-4 py-3" onclick="window.location.href='/game/{{ game[11] }}'">
-            <div class="d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center gap-3" style="width:40%">
-                    {% if game[9] %}<img src="{{ game[9] }}" style="height:28px;width:28px;object-fit:contain;flex-shrink:0">{% endif %}
-                    <div>
-                        {% set rank = ap_rankings.get(game[0]) %}
-                        {% if rank %}<span style="color:#f59e0b;font-size:0.65rem;font-weight:800">{{ rank }} </span>{% endif %}
-                        <span style="font-weight:700;font-size:0.85rem;color:white">{{ game[0] }}</span>
-                    </div>
-                </div>
-                <div style="text-align:center;font-weight:900;font-size:1rem;color:white;width:18%">
-                    {{ game[1] }} - {{ game[3] }}
-                </div>
-                <div class="d-flex align-items-center justify-content-end gap-3" style="width:40%">
-                    <div style="text-align:right">
-                        {% set rank2 = ap_rankings.get(game[2]) %}
-                        {% if rank2 %}<span style="color:#f59e0b;font-size:0.65rem;font-weight:800">{{ rank2 }} </span>{% endif %}
-                        <span style="font-weight:700;font-size:0.85rem;color:rgba(255,255,255,0.75)">{{ game[2] }}</span>
-                    </div>
-                    {% if game[10] %}<img src="{{ game[10] }}" style="height:28px;width:28px;object-fit:contain;flex-shrink:0">{% endif %}
-                </div>
+        {% set home_won = (game[1] or 0) > (game[3] or 0) %}
+        {% set away_won = (game[3] or 0) > (game[1] or 0) %}
+        <a class="game-card-v2" href="/game/{{ game[11] }}">
+            <div class="gc-head">
+                <span class="gc-note">{{ game[6] or 'Week ' ~ game[4] }}</span>
+                <span class="gc-final">Final</span>
             </div>
+
+            <div class="gc-team{{ ' winner' if away_won else '' }}">
+                {% if game[10] %}<img src="{{ game[10] }}" alt="" loading="lazy">{% endif %}
+                <span class="gc-name">
+                    {% set rank2 = ap_rankings.get(game[2]) %}
+                    {% if rank2 %}<span class="gc-rank">{{ rank2 }}</span>{% endif %}{{ game[2] }}
+                </span>
+                <span class="gc-score">{{ game[3] }}</span>
+            </div>
+
+            <div class="gc-team{{ ' winner' if home_won else '' }}">
+                {% if game[9] %}<img src="{{ game[9] }}" alt="" loading="lazy">{% endif %}
+                <span class="gc-name">
+                    {% set rank = ap_rankings.get(game[0]) %}
+                    {% if rank %}<span class="gc-rank">{{ rank }}</span>{% endif %}{{ game[0] }}
+                </span>
+                <span class="gc-score">{{ game[1] }}</span>
+            </div>
+
             {% if game[12] %}
-                <div style="text-align:center;margin-top:6px">
-                    <span style="background:rgba(245,158,11,0.13);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.58rem;font-weight:800;padding:1px 8px;border-radius:10px;letter-spacing:0.04em">&#x2694; {{ game[12] }}</span>
-                </div>
-            {% elif game[6] %}
-                <div style="color:rgba(255,255,255,0.28);font-size:0.62rem;text-align:center;margin-top:6px">{{ game[6] }}</div>
+                <span class="gc-rivalry">{{ game[12] }}</span>
             {% endif %}
-        </div>
+        </a>
         {% endmacro %}
 
         {% if season_type == 'postseason' %}
             {% for label, games in grouped_games.items() %}
                 <div class="section-label mt-4">{{ label }}</div>
-                {% for game in games %}{{ game_card(game) }}{% endfor %}
+                <div class="home-games-grid">
+                    {% for game in games %}{{ game_card(game) }}{% endfor %}
+                </div>
             {% endfor %}
         {% else %}
-            {% for game in games %}{{ game_card(game) }}{% endfor %}
+            <div class="home-games-grid">
+                {% for game in games %}{{ game_card(game) }}{% endfor %}
+            </div>
         {% endif %}
     </div>
 
@@ -68,34 +72,49 @@
     <div class="col-lg-4">
         <h5 style="color:white;font-weight:800;margin-bottom:24px;letter-spacing:0.06em;text-transform:uppercase;font-size:0.82rem">Season Leaders</h5>
 
-        {% macro leader_card(players, label, color) %}
-        <div class="dark-card p-4 mb-3">
-            <span class="section-label">{{ label }}</span>
+        {% for label, href, accent, players in leaders %}
+        <div class="leader-card">
+            <div class="leader-head">
+                <span class="section-label">{{ label }}</span>
+                <a class="leader-viewall" href="{{ href }}">View all →</a>
+            </div>
             {% for p in players %}
-            <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+            {% set inner %}
                 {% if p[3] %}
-                    <img src="{{ p[3] }}" class="player-avatar-sm" style="object-position:top">
+                    <img src="{{ p[3] }}" class="player-avatar-sm" style="object-position:top" alt="" loading="lazy">
                 {% else %}
                     <div class="player-avatar-sm avatar-placeholder">{{ p[0][0] if p[0] else '?' }}</div>
                 {% endif %}
                 <div style="flex:1;min-width:0">
-                    {% if p[5] %}
-                    <a href="/player/{{ p[5] }}" style="color:white;font-weight:700;font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;text-decoration:none"
-                       onmouseover="this.style.color='rgba(255,255,255,0.75)'" onmouseout="this.style.color='white'">{{ p[0] }}</a>
-                    {% else %}
-                    <div style="color:white;font-weight:700;font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p[0] }}</div>
-                    {% endif %}
-                    <div style="color:rgba(255,255,255,0.4);font-size:0.68rem">{{ p[1] }}</div>
+                    <span class="leader-name">{{ p[0] }}</span>
+                    <div class="leader-team">
+                        {% if p[4] %}<img src="{{ p[4] }}" alt="" loading="lazy">{% endif %}
+                        {{ p[1] }}
+                    </div>
                 </div>
-                <div style="color:{{ color }};font-weight:900;font-size:1rem;flex-shrink:0">{{ p[2] }}</div>
-            </div>
+                <span class="leader-val" style="color:{{ accent }}">{{ p[2] }}</span>
+            {% endset %}
+
+            {% if loop.first %}
+                {% if p[5] %}
+                <a class="leader-row featured" href="/player/{{ p[5] }}">{{ inner }}</a>
+                {% else %}
+                <div class="leader-row featured">{{ inner }}</div>
+                {% endif %}
+            {% else %}
+                {% if p[5] %}
+                <a class="leader-row" href="/player/{{ p[5] }}">
+                    <span class="leader-rank">{{ loop.index }}</span>{{ inner }}
+                </a>
+                {% else %}
+                <div class="leader-row">
+                    <span class="leader-rank">{{ loop.index }}</span>{{ inner }}
+                </div>
+                {% endif %}
+            {% endif %}
             {% endfor %}
         </div>
-        {% endmacro %}
-
-        {{ leader_card(top_receivers, 'Receiving Yards', '#34d399') }}
-        {{ leader_card(top_rushers,   'Rushing Yards',   '#60a5fa') }}
-        {{ leader_card(top_passers,   'Passing Yards',   '#fbbf24') }}
+        {% endfor %}
     </div>
 
 </div>

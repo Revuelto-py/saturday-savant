@@ -18,17 +18,18 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0;
         }
 
-        /* Navbar */
+        /* Navbar — distinct band: gradient surface, amber keyline, drop shadow */
         .navbar {
-            background: rgba(6,13,31,0.97) !important;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
-            padding: 0 32px; height: 56px;
+            background: linear-gradient(180deg, rgba(15,30,56,0.98) 0%, rgba(7,14,30,0.98) 100%) !important;
+            border-bottom: 2px solid rgba(245,158,11,0.55);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+            padding: 0 32px; height: 64px;
             backdrop-filter: blur(10px);
             position: sticky; top: 0; z-index: 1000;
         }
         .navbar-inner {
             max-width: 1300px; margin: 0 auto; width: 100%;
-            height: 56px; display: flex; align-items: center;
+            height: 64px; display: flex; align-items: center;
             justify-content: space-between;
         }
         .navbar-brand {
@@ -41,10 +42,15 @@
         .nav-links { display: flex; gap: 4px; }
         .nav-links a {
             color: rgba(255,255,255,0.55); font-weight: 600; font-size: 0.82rem;
-            padding: 6px 14px; border-radius: 6px; text-decoration: none;
+            padding: 7px 14px; border-radius: 6px; text-decoration: none;
             transition: all 0.15s; white-space: nowrap;
         }
         .nav-links a:hover { color: white; background: rgba(255,255,255,0.07); }
+        .nav-links a.active {
+            color: white;
+            background: rgba(245,158,11,0.12);
+            box-shadow: inset 0 -2px 0 #f59e0b;
+        }
 
         /* Search */
         .search-wrapper {
@@ -253,26 +259,26 @@
 
     <nav class="navbar navbar-dark">
         <div class="navbar-inner">
-            <a href="/" style="display:flex;align-items:center;gap:6px;text-decoration:none">
-                <img src="/static/logo-128.png" style="height:46px;width:auto">
-                <div style="line-height:1">
-                    <div style="color:rgba(255,255,255,0.5);font-size:0.58rem;font-weight:700;letter-spacing:0.18em;text-transform:uppercase">Saturday</div>
-                    <div style="color:white;font-size:1.05rem;font-weight:900;letter-spacing:-0.01em;margin-top:-1px">Savant</div>
-                </div>
+            <a href="/" aria-label="Saturday Savant home" style="display:flex;align-items:center;flex-shrink:0">
+                <img src="/static/logo-128.png" alt="Saturday Savant" style="height:56px;width:auto">
             </a>
 
             <div class="nav-right">
+                {% set path = request.path %}
                 <div class="nav-links">
-                    <a href="/teams">Teams</a>
-                    <a href="/rankings">Rankings</a>
-                    <a href="/leaderboards/passing">Leaderboards</a>
-                    <a href="/transfers">Transfers</a>
-                    <a href="/rivalries">Rivalries</a>
-                    <a href="/compare">Compare</a>
+                    <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active"{% endif %}>Teams</a>
+                    <a href="/rankings" {% if path.startswith('/rankings') %}class="active"{% endif %}>Rankings</a>
+                    <a href="/leaderboards/passing" {% if path.startswith('/leaderboards') %}class="active"{% endif %}>Leaderboards</a>
+                    <a href="/transfers" {% if path.startswith('/transfers') %}class="active"{% endif %}>Transfers</a>
+                    <a href="/rivalries" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
+                    <a href="/compare" {% if path.startswith('/compare') %}class="active"{% endif %}>Compare</a>
                 </div>
 
                 <div class="search-wrapper" id="searchWrapper">
-                    <span class="search-icon">🔍</span>
+                    <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <line x1="21" y1="21" x2="16.5" y2="16.5"></line>
+                    </svg>
                     <input type="text" class="nav-search-input" id="navSearch"
                            placeholder="Search players or teams..." autocomplete="off">
                     <div class="search-dropdown" id="searchDropdown"></div>
@@ -280,6 +286,31 @@
             </div>
         </div>
     </nav>
+
+    {% if ticker and ticker.games %}
+    <div class="score-ticker">
+        <div class="ticker-week">
+            <span class="ticker-week-label">{{ ticker.label }}</span>
+            <span class="ticker-week-season">2025 Season</span>
+        </div>
+        <div class="ticker-scroll">
+            {% for g in ticker.games %}
+            <a class="ticker-item" href="/game/{{ g.id }}">
+                <div class="ticker-status">{{ g.label }}</div>
+                {% for side in [g.away, g.home] %}
+                <div class="ticker-team">
+                    {% if side.logo %}<img src="{{ side.logo }}" alt="" loading="lazy" width="16" height="16">{% endif %}
+                    <span class="ticker-name{{ ' won' if side.won else '' }}">
+                        {% if side.rank %}<span class="ticker-rank">{{ side.rank }}</span>{% endif %}{{ side.abbr }}
+                    </span>
+                    <span class="ticker-score{{ ' won' if side.won else '' }}">{{ side.pts }}</span>
+                </div>
+                {% endfor %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     {% block content %}{% endblock %}
 
