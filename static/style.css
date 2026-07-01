@@ -461,6 +461,190 @@ tr.postseason-row:hover {
     opacity: 0.35;
     pointer-events: none;
 }
+
+/* ── Leaderboards: filter bar ──────────────────────────────────────────── */
+.lb-filter-section {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+}
+.lb-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+}
+.lb-filter-row + .lb-filter-row { margin-top: 16px; }
+.lb-filter-group { display: flex; flex-direction: column; }
+.lb-filter-label {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.lb-select {
+    background: #0d1e35;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: white;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    min-width: 160px;
+}
+.lb-select:disabled { opacity: 0.45; cursor: not-allowed; }
+.lb-filter-count {
+    margin-left: auto;
+    color: rgba(255,255,255,0.3);
+    font-size: 0.75rem;
+    align-self: center;
+}
+
+/* ── Leaderboards: Stat View tabs + Qualified toggle row ──────────────── */
+.lb-view-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.lb-view-tabs { display: flex; gap: 4px; }
+.lb-view-tab {
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-decoration: none;
+    padding: 7px 16px;
+    border-radius: 7px;
+    transition: all 0.15s;
+}
+.lb-view-tab:hover { color: white; background: rgba(255,255,255,0.08); }
+.lb-view-tab.active {
+    color: #1a1200;
+    background: #f59e0b;
+    border-color: #f59e0b;
+}
+.lb-qualified-toggle { margin-bottom: 0; }
+
+/* ── Leaderboards: column-header tooltips (pure CSS, no JS) ───────────── */
+.stat-header { position: relative; }
+.stat-header::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    background: #1a2e4a;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.85);
+    font-size: 0.68rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+    width: max-content;
+    max-width: 220px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 100;
+}
+.stat-header:hover::after { opacity: 1; }
+
+/* ── Leaderboards: stat table ──────────────────────────────────────────── */
+.lb-table-scroll { overflow-x: auto; }
+.lb-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.lb-th {
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.35);
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 12px 10px;
+    text-align: center;
+    white-space: nowrap;
+    border-bottom: 2px solid rgba(255,255,255,0.1);
+}
+.lb-th-rank { width: 40px; }
+.lb-th-player { width: 160px; text-align: left; padding-left: 16px; }
+.lb-th-team { width: 130px; text-align: left; padding-left: 16px; }
+.lb-th-pos { width: 50px; }
+.lb-th-stat {
+    min-width: 65px;
+    cursor: pointer;
+    border-left: 1px solid rgba(255,255,255,0.06);
+}
+.lb-th-stat:hover { color: white; }
+.lb-th-sorted { color: #f59e0b; border-bottom-color: rgba(245,158,11,0.5); }
+.lb-th-na { cursor: default; color: rgba(255,255,255,0.15); }
+.lb-th-na:hover { color: rgba(255,255,255,0.15); }
+.lb-sort-arrow { margin-left: 2px; }
+
+.lb-row { border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.12s; }
+.lb-row:nth-child(even) { background: rgba(255,255,255,0.015); }
+.lb-row:hover { background: rgba(255,255,255,0.04); }
+
+.lb-td-rank { padding: 11px 12px; text-align: center; color: rgba(255,255,255,0.3); font-size: 0.8rem; font-weight: 700; width: 40px; }
+.lb-td-player { padding: 11px 16px; width: 160px; }
+.lb-td-team { padding: 11px 16px; width: 130px; }
+.lb-td-pos { padding: 11px 10px; text-align: center; width: 50px; }
+.lb-td-stat {
+    padding: 11px 10px;
+    text-align: right;
+    min-width: 65px;
+    color: rgba(255,255,255,0.8);
+    font-weight: 500;
+    font-size: 0.84rem;
+    border-left: 1px solid rgba(255,255,255,0.05);
+}
+.lb-td-sorted { color: white; font-weight: 800; background: rgba(245,158,11,0.05); }
+.lb-td-gold { color: #f59e0b !important; font-weight: 800 !important; }
+.lb-td-na { color: rgba(255,255,255,0.15); text-align: center; }
+
+.lb-player-link, .lb-team-link { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.lb-team-link { gap: 7px; }
+.lb-player-name { color: white; font-weight: 700; font-size: 0.86rem; white-space: nowrap; }
+.lb-player-link:hover .lb-player-name, .lb-team-link:hover .lb-team-name { color: #60a5fa; }
+.lb-team-name { color: rgba(255,255,255,0.65); font-size: 0.76rem; font-weight: 600; white-space: nowrap; transition: color 0.12s; }
+.lb-headshot { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; object-position: top; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+.lb-headshot-fallback {
+    width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.07);
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 0.68rem; font-weight: 700; color: rgba(255,255,255,0.4);
+}
+.lb-team-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.lb-pos-pill {
+    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd;
+    font-size: 0.6rem; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+}
+.lb-ap-pill {
+    background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: #f59e0b;
+    font-size: 0.68rem; font-weight: 800; padding: 2px 7px; border-radius: 5px;
+}
+.lb-pill {
+    display: inline-block; font-weight: 800; font-size: 0.8rem; padding: 2px 8px;
+    border-radius: 4px; min-width: 54px; text-align: center;
+}
+.lb-pill-pos { background: rgba(34,197,94,0.13); border: 1px solid rgba(34,197,94,0.35); color: #22c55e; }
+.lb-pill-neg { background: rgba(239,68,68,0.13); border: 1px solid rgba(239,68,68,0.35); color: #ef4444; }
+.lb-pill-neutral { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.6); }
+.lb-empty { padding: 48px; text-align: center; color: rgba(255,255,255,0.25); font-size: 0.84rem; }
+
+@media (max-width: 640px) {
+    .lb-filter-row { gap: 10px; }
+    .lb-select { min-width: 130px; }
+}
+
 /* ── Game page: rivalry badge ─────────────────────────────────────────── */
 .rivalry-badge {
     display: inline-block;

@@ -452,6 +452,214 @@ FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC',
 
 LEADERBOARD_PER_PAGE = 25
 
+# ── Leaderboard column definitions ──────────────────────────────────────────
+# Each entry: (key, label, tooltip, sortable, format).
+# format drives both cell rendering and value coercion in the template:
+#   int, float1, float2, pct1  — plain numeric formatting
+#   epa                        — color-coded pill, positive green / negative red
+#   epa_inv                    — same pill, colors flipped (negative is good — defense)
+#   na                         — column isn't backed by real data; header renders
+#                                 greyed out with a "not available" tooltip and every
+#                                 cell renders "—". Not sortable, never selected in SQL.
+#
+# A handful of stats the spec asks for genuinely don't exist in this dataset
+# (targets, air yards, YAC/ADOT, snap counts, forced fumbles, defensive
+# pass/rush splits, games-played) — those are marked 'na' rather than faked.
+PLAYER_COLUMNS = {
+    'passing': {
+        'standard': [
+            ('gp',  'GP',   'Games Played — not available in current dataset', False, 'na'),
+            ('cmp', 'CMP',  'Completions', True, 'int'),
+            ('att', 'ATT',  'Attempts', True, 'int'),
+            ('pct', 'CMP%', 'Completion Percentage', True, 'pct1'),
+            ('yds', 'YDS',  'Passing Yards', True, 'int'),
+            ('td',  'TD',   'Passing Touchdowns', True, 'int'),
+            ('int', 'INT',  'Interceptions', True, 'int'),
+            ('ypa', 'YPA',  'Yards Per Attempt', True, 'float1'),
+            ('rtg', 'RTG',  'Passer Rating — standard NCAA formula', True, 'float1'),
+        ],
+        'advanced': [
+            ('epa_pass',  'EPA/P',  'EPA Per Play (passing)', True, 'epa'),
+            ('total_epa', 'PPA',    'Total Predicted Points Added', True, 'float1'),
+            ('adj_ypa',   'ADJ YPA','Adjusted Yards Per Attempt — (YDS + 20×TD − 45×INT) / ATT', True, 'float1'),
+            ('sack_pct',  'SACK%',  'Sack Percentage — not available in current dataset', False, 'na'),
+        ],
+    },
+    'rushing': {
+        'standard': [
+            ('gp',   'GP',   'Games Played — not available in current dataset', False, 'na'),
+            ('att',  'CAR',  'Carries', True, 'int'),
+            ('yds',  'YDS',  'Rushing Yards', True, 'int'),
+            ('ypc',  'YPC',  'Yards Per Carry', True, 'float1'),
+            ('td',   'TD',   'Rushing Touchdowns', True, 'int'),
+            ('fum',  'FUM',  'Fumbles', True, 'int'),
+            ('long', 'LONG', 'Longest Run', True, 'int'),
+            ('ypg',  'Y/G',  'Rushing Yards Per Game — not available (requires games played)', False, 'na'),
+        ],
+        'advanced': [
+            ('epa_rush',  'EPA/R', 'EPA Per Rush', True, 'epa'),
+            ('total_epa', 'PPA',   'Total Predicted Points Added', True, 'float1'),
+            ('usage',     'USG%',  'Rush Usage Rate — share of team rush plays', True, 'pct1'),
+            ('exp_pct',   'EXP%',  'Explosive Run Rate (≥10 yds) — not available in current dataset', False, 'na'),
+        ],
+    },
+    'receiving': {
+        'standard': [
+            ('gp',      'GP',   'Games Played — not available in current dataset', False, 'na'),
+            ('rec',     'REC',  'Receptions', True, 'int'),
+            ('tgt',     'TGT',  'Targets — not available in current dataset', False, 'na'),
+            ('yds',     'YDS',  'Receiving Yards', True, 'int'),
+            ('td',      'TD',   'Receiving Touchdowns', True, 'int'),
+            ('ypr',     'YPR',  'Yards Per Reception', True, 'float1'),
+            ('cth_pct', 'CTH%', 'Catch Rate (REC/TGT) — not available (requires targets)', False, 'na'),
+            ('ypg',     'Y/G',  'Receiving Yards Per Game — not available (requires games played)', False, 'na'),
+        ],
+        'advanced': [
+            ('epa_play',  'EPA/T', 'EPA Per Target/Play', True, 'epa'),
+            ('total_epa', 'PPA',   'Total Predicted Points Added', True, 'float1'),
+            ('tgt_pct',   'TGT%',  'Target Share — not available in current dataset', False, 'na'),
+        ],
+    },
+    'defense': {
+        'standard': [
+            ('gp',    'GP',   'Games Played — not available in current dataset', False, 'na'),
+            ('tot',   'TOT',  'Total Tackles', True, 'int'),
+            ('solo',  'SOLO', 'Solo Tackles', True, 'int'),
+            ('ast',   'AST',  'Assisted Tackles (TOT − SOLO)', True, 'int'),
+            ('tfl',   'TFL',  'Tackles For Loss', True, 'float1'),
+            ('sacks', 'SCK',  'Sacks', True, 'float1'),
+            ('pd',    'PBU',  'Pass Breakups', True, 'int'),
+            ('ff',    'FF',   'Forced Fumbles — not available in current dataset', False, 'na'),
+            ('int',   'INT',  'Interceptions', True, 'int'),
+            ('td',    'TD',   'Defensive Touchdowns', True, 'int'),
+        ],
+        'advanced': [
+            ('tkl_pct',  'TKL%',  'Share of team total tackles', True, 'pct1'),
+            ('epa_play', 'EPA/P', 'Defensive EPA Per Play — not available in current dataset (PPA data only tracks offensive skill positions)', False, 'na'),
+            ('prsh',     'PRSH',  'Pass Rush Win Rate — not available in current dataset', False, 'na'),
+        ],
+    },
+}
+
+# Position-group buckets for the filter-bar dropdown (maps a group label to
+# the underlying `players.position` values it covers).
+POSITION_GROUPS = {
+    'QB': ('QB',),
+    'RB': ('RB', 'FB'),
+    'WR': ('WR',),
+    'TE': ('TE',),
+    'DL': ('DE', 'DT', 'NT', 'DL', 'EDGE'),
+    'LB': ('LB',),
+    'DB': ('CB', 'S', 'DB'),
+}
+
+TEAM_COLUMNS = {
+    'offense': {
+        'standard': [
+            ('off_ppa', 'PPA', 'Avg Predicted Points Added Per Play', True, 'epa'),
+            ('off_success_rate', 'SCR%', 'Offensive Success Rate', True, 'pct1'),
+            ('off_explosiveness', 'EXP', 'Explosiveness', True, 'float2'),
+            ('off_power_success', 'PWR', 'Power Success Rate', True, 'pct1'),
+            ('off_line_yards', 'LINE', 'Line Yards Per Rush', True, 'float2'),
+            ('off_second_level_yards', '2ND', 'Second Level Yards', True, 'float2'),
+            ('off_open_field_yards', 'OPN', 'Open Field Yards', True, 'float2'),
+        ],
+        'advanced': [
+            ('off_passing_plays_ppa', 'PPAP', 'Pass PPA Per Play', True, 'epa'),
+            ('off_passing_success_rate', 'PSCR', 'Pass Success Rate', True, 'pct1'),
+            ('off_passing_explosiveness', 'PEXP', 'Pass Explosiveness', True, 'float2'),
+            ('off_rushing_plays_ppa', 'RPPA', 'Rush PPA Per Play', True, 'epa'),
+            ('off_rushing_success_rate', 'RSCR', 'Rush Success Rate', True, 'pct1'),
+            ('off_rushing_explosiveness', 'REXP', 'Rush Explosiveness', True, 'float2'),
+            ('off_scoring_opps', 'SCR.OPP', 'Scoring Opportunities', True, 'int'),
+            ('off_pts_per_opp', 'PTS/OPP', 'Points Per Scoring Opportunity', True, 'float2'),
+            ('off_field_pos_avg_start', 'AVG.ST', 'Avg Starting Field Position (yard line)', True, 'float1'),
+        ],
+    },
+    'defense': {
+        'standard': [
+            ('def_ppa', 'PPA', 'Avg Predicted Points Added Per Play Allowed — lower is better', True, 'epa_inv'),
+            ('def_success_rate', 'SCR%', 'Success Rate Allowed — lower is better', True, 'pct1'),
+            ('def_explosiveness', 'EXP', 'Explosiveness Allowed — lower is better', True, 'float2'),
+            ('def_stuff_rate', 'STF', 'Stuff Rate — higher is better', True, 'pct1'),
+            ('def_line_yards', 'LINE', 'Line Yards Allowed Per Rush — lower is better', True, 'float2'),
+            ('def_second_level_yards', '2ND', 'Second Level Yards Allowed — lower is better', True, 'float2'),
+            ('def_open_field_yards', 'OPN', 'Open Field Yards Allowed — lower is better', True, 'float2'),
+        ],
+        'advanced': [
+            ('def_passing_plays_ppa', 'PPAP', 'Pass PPA Allowed — not available in current dataset', False, 'na'),
+            ('def_passing_success_rate', 'PSCR', 'Pass Success Rate Allowed — not available in current dataset', False, 'na'),
+            ('def_passing_explosiveness', 'PEXP', 'Pass Explosiveness Allowed — not available in current dataset', False, 'na'),
+            ('def_rushing_plays_ppa', 'RPPA', 'Rush PPA Allowed — not available in current dataset', False, 'na'),
+            ('def_rushing_success_rate', 'RSCR', 'Rush Success Rate Allowed — not available in current dataset', False, 'na'),
+            ('def_rushing_explosiveness', 'REXP', 'Rush Explosiveness Allowed — not available in current dataset', False, 'na'),
+            ('def_havoc_total', 'HVC', 'Total Havoc Rate', True, 'pct1'),
+            ('def_havoc_front7', 'HVF7', 'Front 7 Havoc Rate', True, 'pct1'),
+            ('def_havoc_db', 'HVDB', 'Defensive Back Havoc Rate', True, 'pct1'),
+        ],
+    },
+    'sp': {
+        'standard': [
+            ('rating', 'SP+', 'Overall SP+ Rating', True, 'float1'),
+            ('offense_rating', 'O.SP+', 'Offensive SP+ Rating', True, 'float1'),
+            ('defense_rating', 'D.SP+', 'Defensive SP+ Rating', True, 'float1'),
+            ('special_teams_rating', 'ST.SP+', 'Special Teams SP+ Rating', True, 'float1'),
+            ('ranking', 'SP.RNK', 'SP+ National Ranking', True, 'int'),
+        ],
+        'advanced': [],  # no additional split for SP+ — Standard is the full picture
+    },
+}
+
+# Preferred default sort per (category, view) — falls back to the first
+# sortable column if not listed here. Column order is chosen for readability
+# (e.g. CMP before YDS, matching a real box score), which doesn't always
+# match the stat a leaderboard should default-sort by (e.g. YDS, not CMP).
+PLAYER_PREFERRED_SORT = {
+    ('passing', 'standard'): 'yds', ('passing', 'advanced'): 'total_epa',
+    ('rushing', 'standard'): 'yds', ('rushing', 'advanced'): 'total_epa',
+    ('receiving', 'standard'): 'yds', ('receiving', 'advanced'): 'total_epa',
+    ('defense', 'standard'): 'tot', ('defense', 'advanced'): 'tkl_pct',
+}
+
+def _default_sort_col(columns, category, view):
+    """Fallback sort when the requested `sort` param isn't valid for the
+    current view (e.g. switching Standard -> Advanced changes what's sortable)."""
+    preferred = PLAYER_PREFERRED_SORT.get((category, view))
+    if preferred:
+        return preferred
+    for key, _, _, sortable, _ in columns[category][view]:
+        if sortable:
+            return key
+    return None
+
+def _sortable_keys(columns, category, view):
+    return {key for key, _, _, sortable, _ in columns[category][view] if sortable}
+
+def _sort_and_paginate(rows, sort_col, sort_dir, page_raw):
+    """Sort a list of dicts by `sort_col`, always pushing None values to the
+    end regardless of direction (mirrors SQL's NULLS LAST) — needed because
+    several leaderboard columns (RTG, TKL%, ADJ YPA, ...) are computed in
+    Python from multiple joined sources and can't be ORDER BY'd in SQL."""
+    reverse = sort_dir != 'asc'
+    with_val = [r for r in rows if r.get(sort_col) is not None]
+    without_val = [r for r in rows if r.get(sort_col) is None]
+    with_val.sort(key=lambda r: r[sort_col], reverse=reverse)
+    ordered = with_val + without_val
+    page, offset, pagination = _pagination_ctx(page_raw, len(ordered))
+    page_rows = ordered[offset:offset + LEADERBOARD_PER_PAGE]
+    for i, r in enumerate(page_rows):
+        r['rank'] = offset + i + 1
+    return page_rows, pagination
+
+def get_teams_by_conference(cursor):
+    cursor.execute("SELECT name, conference FROM teams WHERE conference IS NOT NULL ORDER BY conference, name")
+    out = OrderedDict()
+    for name, conf in cursor.fetchall():
+        if conf in FCS_CONFS:
+            continue
+        out.setdefault(conf, []).append(name)
+    return out
+
 def _pagination_ctx(page_raw, total_count):
     """Clamp the requested page against the real total and compute offset +
     display context. Returns (page, offset, ctx) — use `page`/`offset` for the
@@ -602,53 +810,62 @@ def search():
 
 @app.route('/leaderboards')
 @app.route('/leaderboards/<category>')
-@cache.cached(timeout=3600, query_string=True)  # 1 hour, each filter combo cached separately
+@cache.cached(timeout=3600, query_string=True)  # 1 hour — view/team/qualified are part of the query string, so each combo caches separately
 def leaderboards(category='passing'):
+    if category not in PLAYER_COLUMNS:
+        category = 'passing'
+
     conn = get_db()
     try:
         cursor = conn.cursor()
 
         conf_filter = request.args.get('conf', '')
+        team_filter = request.args.get('team', '')
         pos_filter  = request.args.get('pos', '')
         min_filter  = request.args.get('min', '')
         sort_col    = request.args.get('sort', '')
         sort_dir    = request.args.get('dir', 'desc')
+        sort_dir    = sort_dir if sort_dir in ('asc', 'desc') else 'desc'
+        view        = request.args.get('view', 'standard')
+        view        = view if view in ('standard', 'advanced') else 'standard'
+        qualified   = request.args.get('qualified', '1') != '0'
         page_raw    = request.args.get('page', '1')
 
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall() if r[0] not in FCS_CONFS]
+        all_teams = get_teams_by_conference(cursor)
 
         ap_rankings = get_ap_rankings(cursor)
         players = []
-        pagination = None
 
-        fcs_in     = "','".join(FCS_CONFS)
-        conf_sql   = f"AND t.conference = '{conf_filter}'" if conf_filter else ""
-        pos_sql    = f"AND p.position = '{pos_filter}'"   if pos_filter  else ""
-        dir_sql    = "ASC" if sort_dir == "asc" else "DESC"
-        # Map URL sort param to SQL alias (handles reserved words)
-        _sort_remap = {'int': 'int_', 'long': 'long_'}
+        fcs_in = "','".join(FCS_CONFS)
+        params = []
+        conf_sql = ''
+        if conf_filter:
+            conf_sql = 'AND t.conference = %s'
+            params.append(conf_filter)
+        team_sql = ''
+        if team_filter:
+            team_sql = 'AND p.team = %s'
+            params.append(team_filter)
+        pos_sql = ''
+        if pos_filter in POSITION_GROUPS:
+            pos_in = "','".join(POSITION_GROUPS[pos_filter])
+            pos_sql = f"AND p.position IN ('{pos_in}')"
+
+        column_defs = PLAYER_COLUMNS[category][view]
+        ALLOWED = _sortable_keys(PLAYER_COLUMNS, category, view)
+        if sort_col not in ALLOWED:
+            sort_col = _default_sort_col(PLAYER_COLUMNS, category, view)
 
         if category == 'passing':
-            ALLOWED  = {'yds','td','int','att','cmp','pct','ypa','epa_play','epa_pass','total_epa'}
-            sort_col = sort_col if sort_col in ALLOWED else 'yds'
-            sort_sql = _sort_remap.get(sort_col, sort_col)
-            min_att  = min_filter if min_filter.isdigit() else '100'
+            min_att = min_filter if min_filter.isdigit() else '100'
+            if not qualified:
+                min_att = '0'
 
-            cursor.execute(f'''
-                SELECT COUNT(*) FROM (
-                    SELECT p.id
-                    FROM players p
-                    JOIN teams t ON p.team = t.name
-                    JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing'
-                    WHERE p.position = 'QB'
-                      AND t.conference NOT IN ('{fcs_in}')
-                      {conf_sql}
-                    GROUP BY p.id
-                    HAVING MAX(CASE WHEN ps.stat_type='ATT' THEN CAST(ps.stat AS REAL) END) >= {min_att}
-                ) sub
-            ''')
-            page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
+            ppa_join   = 'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text' if view == 'advanced' else ''
+            ppa_select = ", pp.avg_ppa_pass as epa_pass, pp.total_ppa as total_epa" if view == 'advanced' else ''
+            ppa_group  = ', pp.avg_ppa_pass, pp.total_ppa' if view == 'advanced' else ''
 
             cursor.execute(f'''
                 SELECT
@@ -660,58 +877,51 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='ATT'         THEN CAST(ps.stat AS REAL) END) as att,
                     MAX(CASE WHEN ps.stat_type='COMPLETIONS' THEN CAST(ps.stat AS REAL) END) as cmp,
                     MAX(CASE WHEN ps.stat_type='PCT'         THEN CAST(ps.stat AS REAL) END) as pct,
-                    MAX(CASE WHEN ps.stat_type='YPA'         THEN CAST(ps.stat AS REAL) END) as ypa,
-                    pp.avg_ppa_all  as epa_play,
-                    pp.avg_ppa_pass as epa_pass,
-                    pp.total_ppa    as total_epa
+                    MAX(CASE WHEN ps.stat_type='YPA'         THEN CAST(ps.stat AS REAL) END) as ypa
+                    {ppa_select}
                 FROM players p
                 JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing'
-                LEFT JOIN player_ppa pp ON pp.player_id = p.id::text::text
+                {ppa_join}
                 WHERE p.position = 'QB'
                   AND t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color, pp.avg_ppa_all, pp.avg_ppa_pass, pp.total_ppa
+                  {conf_sql} {team_sql} {pos_sql}
+                GROUP BY p.id, t.logo_dark, t.conference, t.color{ppa_group}
                 HAVING MAX(CASE WHEN ps.stat_type='ATT' THEN CAST(ps.stat AS REAL) END) >= {min_att}
-                ORDER BY {sort_sql} {dir_sql} NULLS LAST
-                LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
-            ''')
-            for i, r in enumerate(cursor.fetchall()):
+            ''', params)
+            for r in cursor.fetchall():
+                yds, td, int_, att, cmp_ = r[10] or 0, r[11] or 0, r[12] or 0, r[13] or 0, r[14] or 0
                 pct = float(r[15] or 0)
                 if pct <= 1.0: pct *= 100
-                players.append({
-                    'rank': offset+i+1, 'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
+                rtg     = ((8.4 * yds) + (330 * td) + (100 * cmp_) - (200 * int_)) / att if att else None
+                adj_ypa = (yds + 20 * td - 45 * int_) / att if att else None
+                row = {
+                    'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
                     'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
                     'logo': r[7], 'conf': r[8], 'color': r[9],
-                    'yds': int(r[10] or 0), 'td': int(r[11] or 0), 'int': int(r[12] or 0),
-                    'att': int(r[13] or 0), 'cmp': int(r[14] or 0), 'pct': round(pct, 1),
-                    'ypa':      round(float(r[16] or 0), 1),
-                    'epa_play': round(float(r[17]), 3) if r[17] is not None else None,
-                    'epa_pass': round(float(r[18]), 3) if r[18] is not None else None,
-                    'total_epa':round(float(r[19]), 1) if r[19] is not None else None,
-                })
+                    'yds': int(yds), 'td': int(td), 'int': int(int_),
+                    'att': int(att), 'cmp': int(cmp_), 'pct': round(pct, 1),
+                    'ypa': round(float(r[16] or 0), 1),
+                    'rtg': round(rtg, 1) if rtg is not None else None,
+                    'adj_ypa': round(adj_ypa, 1) if adj_ypa is not None else None,
+                    'gp': None, 'sack_pct': None,
+                }
+                if view == 'advanced':
+                    row['epa_pass']  = round(float(r[17]), 3) if r[17] is not None else None
+                    row['total_epa'] = round(float(r[18]), 1) if r[18] is not None else None
+                players.append(row)
 
         elif category == 'rushing':
-            ALLOWED  = {'yds','td','att','ypc','long','epa_rush','total_epa'}
-            sort_col = sort_col if sort_col in ALLOWED else 'yds'
-            sort_sql = _sort_remap.get(sort_col, sort_col)
-            min_att  = min_filter if min_filter.isdigit() else '50'
+            min_att = min_filter if min_filter.isdigit() else '50'
+            if not qualified:
+                min_att = '0'
 
-            cursor.execute(f'''
-                SELECT COUNT(*) FROM (
-                    SELECT p.id
-                    FROM players p
-                    JOIN teams t ON p.team = t.name
-                    JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing'
-                    WHERE p.position IN ('RB','FB','QB','WR','ATH')
-                      AND t.conference NOT IN ('{fcs_in}')
-                      {conf_sql}
-                      {pos_sql}
-                    GROUP BY p.id
-                    HAVING MAX(CASE WHEN ps.stat_type='CAR' THEN CAST(ps.stat AS REAL) END) >= {min_att}
-                ) sub
-            ''')
-            page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
+            ppa_join     = 'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text' if view == 'advanced' else ''
+            ppa_select   = ', pp.avg_ppa_rush as epa_rush, pp.total_ppa as total_epa' if view == 'advanced' else ''
+            ppa_group    = ', pp.avg_ppa_rush, pp.total_ppa' if view == 'advanced' else ''
+            usage_join   = 'LEFT JOIN player_usage pu ON pu.player_id = p.id' if view == 'advanced' else ''
+            usage_select = ', pu.rush as usage_rush' if view == 'advanced' else ''
+            usage_group  = ', pu.rush' if view == 'advanced' else ''
 
             cursor.execute(f'''
                 SELECT
@@ -722,53 +932,51 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='CAR'  THEN CAST(ps.stat AS REAL) END) as att,
                     MAX(CASE WHEN ps.stat_type='YPC'  THEN CAST(ps.stat AS REAL) END) as ypc,
                     MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_,
-                    pp.avg_ppa_rush as epa_rush,
-                    pp.total_ppa    as total_epa
+                    MAX(CASE WHEN pf.stat_type='FUM'  THEN CAST(pf.stat AS REAL) END) as fum
+                    {ppa_select}{usage_select}
                 FROM players p
                 JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing'
-                LEFT JOIN player_ppa pp ON pp.player_id = p.id::text::text
+                LEFT JOIN player_stats pf ON pf.player_id = p.id::text AND pf.category = 'fumbles'
+                {ppa_join}
+                {usage_join}
                 WHERE p.position IN ('RB','FB','QB','WR','ATH')
                   AND t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color, pp.avg_ppa_rush, pp.total_ppa
+                  {conf_sql} {team_sql} {pos_sql}
+                GROUP BY p.id, t.logo_dark, t.conference, t.color{ppa_group}{usage_group}
                 HAVING MAX(CASE WHEN ps.stat_type='CAR' THEN CAST(ps.stat AS REAL) END) >= {min_att}
-                ORDER BY {sort_sql} {dir_sql} NULLS LAST
-                LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
-            ''')
-            for i, r in enumerate(cursor.fetchall()):
-                players.append({
-                    'rank': offset+i+1, 'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
+            ''', params)
+            for r in cursor.fetchall():
+                row = {
+                    'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
                     'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
                     'logo': r[7], 'conf': r[8], 'color': r[9],
                     'yds': int(r[10] or 0), 'td': int(r[11] or 0), 'att': int(r[12] or 0),
                     'ypc': round(float(r[13] or 0), 1), 'long': int(r[14] or 0),
-                    'epa_rush': round(float(r[15]), 3) if r[15] is not None else None,
-                    'total_epa':round(float(r[16]), 1) if r[16] is not None else None,
-                })
+                    'fum': int(r[15] or 0),
+                    'gp': None, 'ypg': None,
+                }
+                idx = 16
+                if view == 'advanced':
+                    row['epa_rush']  = round(float(r[idx]), 3) if r[idx] is not None else None; idx += 1
+                    row['total_epa'] = round(float(r[idx]), 1) if r[idx] is not None else None; idx += 1
+                    usage_val = r[idx]
+                    if usage_val is not None:
+                        usage_val = float(usage_val)
+                        if usage_val <= 1.0: usage_val *= 100
+                        usage_val = round(usage_val, 1)
+                    row['usage'] = usage_val
+                    row['exp_pct'] = None
+                players.append(row)
 
         elif category == 'receiving':
-            ALLOWED  = {'yds','td','rec','ypr','long','epa_play','total_epa'}
-            sort_col = sort_col if sort_col in ALLOWED else 'yds'
-            sort_sql = _sort_remap.get(sort_col, sort_col)
-            min_rec  = min_filter if min_filter.isdigit() else '20'
+            min_rec = min_filter if min_filter.isdigit() else '20'
+            if not qualified:
+                min_rec = '0'
 
-            cursor.execute(f'''
-                SELECT COUNT(*) FROM (
-                    SELECT p.id
-                    FROM players p
-                    JOIN teams t ON p.team = t.name
-                    JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving'
-                    WHERE p.position IN ('WR','TE','RB','ATH')
-                      AND t.conference NOT IN ('{fcs_in}')
-                      {conf_sql}
-                      {pos_sql}
-                    GROUP BY p.id
-                    HAVING MAX(CASE WHEN ps.stat_type='REC' THEN CAST(ps.stat AS REAL) END) >= {min_rec}
-                ) sub
-            ''')
-            page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
+            ppa_join   = 'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text' if view == 'advanced' else ''
+            ppa_select = ', pp.avg_ppa_all as epa_play, pp.total_ppa as total_epa' if view == 'advanced' else ''
+            ppa_group  = ', pp.avg_ppa_all, pp.total_ppa' if view == 'advanced' else ''
 
             cursor.execute(f'''
                 SELECT
@@ -778,209 +986,118 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='TD'   THEN CAST(ps.stat AS REAL) END) as td,
                     MAX(CASE WHEN ps.stat_type='REC'  THEN CAST(ps.stat AS REAL) END) as rec,
                     MAX(CASE WHEN ps.stat_type='YPR'  THEN CAST(ps.stat AS REAL) END) as ypr,
-                    MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_,
-                    pp.avg_ppa_all as epa_play,
-                    pp.total_ppa   as total_epa
+                    MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_
+                    {ppa_select}
                 FROM players p
                 JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving'
-                LEFT JOIN player_ppa pp ON pp.player_id = p.id::text::text
+                {ppa_join}
                 WHERE p.position IN ('WR','TE','RB','ATH')
                   AND t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color, pp.avg_ppa_all, pp.total_ppa
+                  {conf_sql} {team_sql} {pos_sql}
+                GROUP BY p.id, t.logo_dark, t.conference, t.color{ppa_group}
                 HAVING MAX(CASE WHEN ps.stat_type='REC' THEN CAST(ps.stat AS REAL) END) >= {min_rec}
-                ORDER BY {sort_sql} {dir_sql} NULLS LAST
-                LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
-            ''')
-            for i, r in enumerate(cursor.fetchall()):
-                players.append({
-                    'rank': offset+i+1, 'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
+            ''', params)
+            for r in cursor.fetchall():
+                row = {
+                    'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
                     'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
                     'logo': r[7], 'conf': r[8], 'color': r[9],
                     'yds': int(r[10] or 0), 'td': int(r[11] or 0), 'rec': int(r[12] or 0),
                     'ypr': round(float(r[13] or 0), 1), 'long': int(r[14] or 0),
-                    'epa_play': round(float(r[15]), 3) if r[15] is not None else None,
-                    'total_epa':round(float(r[16]), 1) if r[16] is not None else None,
-                })
+                    'gp': None, 'tgt': None, 'cth_pct': None, 'ypg': None,
+                }
+                if view == 'advanced':
+                    row['epa_play']  = round(float(r[15]), 3) if r[15] is not None else None
+                    row['total_epa'] = round(float(r[16]), 1) if r[16] is not None else None
+                    row['tgt_pct']   = None
+                players.append(row)
 
         elif category == 'defense':
-            ALLOWED  = {'tot','solo','sacks','tfl','pd','qbh'}
-            sort_col = sort_col if sort_col in ALLOWED else 'tot'
-            sort_sql = sort_col
-            min_tot  = min_filter if min_filter.isdigit() else '15'
-
-            cursor.execute(f'''
-                SELECT COUNT(*) FROM (
-                    SELECT p.id
-                    FROM players p
-                    JOIN teams t ON p.team = t.name
-                    JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive'
-                    WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
-                      AND t.conference NOT IN ('{fcs_in}')
-                      {conf_sql}
-                      {pos_sql}
-                    GROUP BY p.id
-                    HAVING MAX(CASE WHEN ps.stat_type='TOT' THEN CAST(ps.stat AS REAL) END) >= {min_tot}
-                ) sub
-            ''')
-            page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
+            min_tot = min_filter if min_filter.isdigit() else '15'
+            if not qualified:
+                min_tot = '0'
 
             cursor.execute(f'''
                 SELECT
                     p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
                     t.logo_dark, t.conference, t.color,
-                    MAX(CASE WHEN ps.stat_type='TOT'    THEN CAST(ps.stat AS REAL) END) as tot,
-                    MAX(CASE WHEN ps.stat_type='SOLO'   THEN CAST(ps.stat AS REAL) END) as solo,
-                    MAX(CASE WHEN ps.stat_type='SACKS'  THEN CAST(ps.stat AS REAL) END) as sacks,
-                    MAX(CASE WHEN ps.stat_type='TFL'    THEN CAST(ps.stat AS REAL) END) as tfl,
-                    MAX(CASE WHEN ps.stat_type='PD'     THEN CAST(ps.stat AS REAL) END) as pd,
-                    MAX(CASE WHEN ps.stat_type='QB HUR' THEN CAST(ps.stat AS REAL) END) as qbh
+                    MAX(CASE WHEN ps.stat_type='TOT'   THEN CAST(ps.stat AS REAL) END) as tot,
+                    MAX(CASE WHEN ps.stat_type='SOLO'  THEN CAST(ps.stat AS REAL) END) as solo,
+                    MAX(CASE WHEN ps.stat_type='SACKS' THEN CAST(ps.stat AS REAL) END) as sacks,
+                    MAX(CASE WHEN ps.stat_type='TFL'   THEN CAST(ps.stat AS REAL) END) as tfl,
+                    MAX(CASE WHEN ps.stat_type='PD'    THEN CAST(ps.stat AS REAL) END) as pd,
+                    MAX(CASE WHEN ps.stat_type='TD'    THEN CAST(ps.stat AS REAL) END) as td,
+                    MAX(CASE WHEN pi.stat_type='INT'   THEN CAST(pi.stat AS REAL) END) as int_
                 FROM players p
                 JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive'
+                LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions'
                 WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
                   AND t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
+                  {conf_sql} {team_sql} {pos_sql}
                 GROUP BY p.id, t.logo_dark, t.conference, t.color
                 HAVING MAX(CASE WHEN ps.stat_type='TOT' THEN CAST(ps.stat AS REAL) END) >= {min_tot}
-                ORDER BY {sort_sql} {dir_sql} NULLS LAST
-                LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
-            ''')
-            for i, r in enumerate(cursor.fetchall()):
-                players.append({
-                    'rank': offset+i+1, 'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
+            ''', params)
+            defense_rows = cursor.fetchall()
+
+            team_tot_map = {}
+            if view == 'advanced':
+                cursor.execute('''
+                    SELECT team, SUM(CAST(stat AS REAL))
+                    FROM player_stats WHERE category='defensive' AND stat_type='TOT'
+                    GROUP BY team
+                ''')
+                team_tot_map = {r[0]: r[1] for r in cursor.fetchall()}
+
+            for r in defense_rows:
+                tot, solo = int(r[10] or 0), int(r[11] or 0)
+                row = {
+                    'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
                     'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
                     'logo': r[7], 'conf': r[8], 'color': r[9],
-                    'tot':  int(r[10] or 0),  'solo': int(r[11] or 0),
-                    'sacks':round(float(r[12] or 0), 1),
-                    'tfl':  round(float(r[13] or 0), 1),
-                    'pd':   int(r[14] or 0),  'qbh': int(r[15] or 0),
-                })
+                    'tot': tot, 'solo': solo, 'ast': tot - solo,
+                    'sacks': round(float(r[12] or 0), 1),
+                    'tfl':   round(float(r[13] or 0), 1),
+                    'pd':    int(r[14] or 0),
+                    'td':    int(r[15] or 0),
+                    'int':   int(r[16] or 0),
+                    'gp': None, 'ff': None,
+                }
+                if view == 'advanced':
+                    team_tot = team_tot_map.get(r[3])
+                    row['tkl_pct']  = round(tot / team_tot * 100, 1) if team_tot else None
+                    row['epa_play'] = None
+                    row['prsh']     = None
+                players.append(row)
 
-        elif category == 'epa':
-            ALLOWED  = {'epa_play','epa_pass','epa_rush','total_epa'}
-            sort_col = sort_col if sort_col in ALLOWED else 'epa_play'
-            sort_sql = sort_col
-            min_epa  = min_filter if min_filter.lstrip('-').replace('.','',1).isdigit() else '10'
-
-            cursor.execute(f'''
-                SELECT COUNT(*)
-                FROM players p
-                JOIN teams t ON p.team = t.name
-                JOIN player_ppa pp ON pp.player_id = p.id::text
-                WHERE t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
-                  AND pp.avg_ppa_all IS NOT NULL
-                  AND pp.total_ppa >= {min_epa}
-            ''')
-            page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
-
-            cursor.execute(f'''
-                SELECT
-                    p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
-                    t.logo_dark, t.conference, t.color,
-                    pp.avg_ppa_all  as epa_play,
-                    pp.avg_ppa_pass as epa_pass,
-                    pp.avg_ppa_rush as epa_rush,
-                    pp.total_ppa    as total_epa
-                FROM players p
-                JOIN teams t ON p.team = t.name
-                JOIN player_ppa pp ON pp.player_id = p.id::text
-                WHERE t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
-                  AND pp.avg_ppa_all IS NOT NULL
-                  AND pp.total_ppa >= {min_epa}
-                ORDER BY {sort_sql} {dir_sql} NULLS LAST
-                LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
-            ''')
-            for i, r in enumerate(cursor.fetchall()):
-                players.append({
-                    'rank': offset+i+1, 'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
-                    'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
-                    'logo': r[7], 'conf': r[8], 'color': r[9],
-                    'epa_play': round(float(r[10]), 3) if r[10] is not None else None,
-                    'epa_pass': round(float(r[11]), 3) if r[11] is not None else None,
-                    'epa_rush': round(float(r[12]), 3) if r[12] is not None else None,
-                    'total_epa':round(float(r[13]), 1) if r[13] is not None else None,
-                })
-
-        elif category == 'usage':
-            ALLOWED  = {'overall','pass_usage','rush_usage','first_down','second_down','third_down','standard','passing_downs'}
-            sort_col = sort_col if sort_col in ALLOWED else 'overall'
-            sort_sql = sort_col
-            min_use  = '0'
-
-            cursor.execute(f'''
-                SELECT COUNT(*)
-                FROM players p
-                JOIN teams t ON p.team = t.name
-                JOIN player_usage pu ON pu.player_id = p.id
-                WHERE t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
-                  AND pu.overall IS NOT NULL
-            ''')
-            page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
-
-            cursor.execute(f'''
-                SELECT
-                    p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
-                    t.logo_dark, t.conference, t.color,
-                    pu.overall      as overall,
-                    pu.pass         as pass_usage,
-                    pu.rush         as rush_usage,
-                    pu.first_down   as first_down,
-                    pu.second_down  as second_down,
-                    pu.third_down   as third_down,
-                    pu.standard_downs  as standard,
-                    pu.passing_downs   as passing_downs
-                FROM players p
-                JOIN teams t ON p.team = t.name
-                JOIN player_usage pu ON pu.player_id = p.id
-                WHERE t.conference NOT IN ('{fcs_in}')
-                  {conf_sql}
-                  {pos_sql}
-                  AND pu.overall IS NOT NULL
-                ORDER BY {sort_sql} {dir_sql} NULLS LAST
-                LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
-            ''')
-            def _pct(v): return round(v * 100, 1) if v is not None else None
-            for i, r in enumerate(cursor.fetchall()):
-                players.append({
-                    'rank': offset+i+1, 'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
-                    'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
-                    'logo': r[7], 'conf': r[8], 'color': r[9],
-                    'overall':       _pct(r[10]),
-                    'pass_usage':    _pct(r[11]),
-                    'rush_usage':    _pct(r[12]),
-                    'first_down':    _pct(r[13]),
-                    'second_down':   _pct(r[14]),
-                    'third_down':    _pct(r[15]),
-                    'standard':      _pct(r[16]),
-                    'passing_downs': _pct(r[17]),
-                })
+        players, pagination = _sort_and_paginate(players, sort_col, sort_dir, page_raw)
 
     finally:
         release_db(conn)
+
+    current_filters = {
+        'mode': 'player', 'category': category, 'view': view,
+        'conf': conf_filter, 'team': team_filter, 'pos': pos_filter,
+        'qualified': '1' if qualified else '0', 'sort': sort_col, 'dir': sort_dir,
+    }
+    has_advanced = len(PLAYER_COLUMNS[category]['advanced']) > 0
     return render_template('leaderboards.html',
-        mode='player', players=players, category=category,
-        conferences=conferences,
-        conf_filter=conf_filter, pos_filter=pos_filter,
+        mode='player', players=players, category=category, view=view,
+        conferences=conferences, all_teams=all_teams,
+        conf_filter=conf_filter, team_filter=team_filter, pos_filter=pos_filter,
         min_filter=min_filter, sort_col=sort_col, sort_dir=sort_dir,
+        qualified=qualified, column_defs=column_defs, current_filters=current_filters,
+        has_advanced=has_advanced, position_groups=list(POSITION_GROUPS.keys()),
         ap_rankings=ap_rankings, pagination=pagination,
     )
 
 # ── Team leaderboards ───────────────────────────────────────────────────────
+# Categories reconciled to Offense/Defense/SP+ — Havoc and Scoring (formerly
+# standalone categories) are now folded into the Defense/Offense Advanced views.
 TEAM_CATEGORY_DEFAULTS = {
     'offense': ('off_ppa', 'desc'),
     'defense': ('def_ppa', 'asc'),   # lower is better, so ascending = best first
-    'havoc':   ('def_havoc_total', 'desc'),
-    'scoring': ('off_pts_per_opp', 'desc'),
     'sp':      ('rating', 'desc'),
 }
 
@@ -1008,10 +1125,12 @@ TEAM_SORTABLE_COLS = {
     'off_field_pos_avg_start': 'adv.off_field_pos_avg_start',
     'rating': 'sp.rating', 'offense_rating': 'sp.offense_rating',
     'defense_rating': 'sp.defense_rating', 'special_teams_rating': 'sp.special_teams_rating',
+    'ranking': 'sp.ranking',
 }
 TEAM_LOWER_BETTER = {
     'def_ppa','def_success_rate','def_explosiveness',
     'def_line_yards','def_open_field_yards','def_second_level_yards',
+    'ranking',  # SP+ national rank — #1 is best
 }
 
 def _hex_to_rgba(hex_color, alpha):
@@ -1028,15 +1147,20 @@ def _hex_to_rgba(hex_color, alpha):
 
 @app.route('/leaderboards/teams')
 @app.route('/leaderboards/teams/<category>')
-@cache.cached(timeout=3600, query_string=True)
+@cache.cached(timeout=3600, query_string=True)  # view/team are part of the query string, so each combo caches separately
 def leaderboards_teams(category='offense'):
     if category not in TEAM_CATEGORY_DEFAULTS:
         category = 'offense'
 
     conf_filter = request.args.get('conf', '')
+    team_filter = request.args.get('team', '')
     sort_col    = request.args.get('sort', '')
     sort_dir    = request.args.get('dir', '')
     page_raw    = request.args.get('page', '1')
+    view        = request.args.get('view', 'standard')
+    view        = view if view in ('standard', 'advanced') else 'standard'
+
+    column_defs = TEAM_COLUMNS[category][view] or TEAM_COLUMNS[category]['standard']
 
     default_sort, default_dir = TEAM_CATEGORY_DEFAULTS[category]
     if sort_col not in TEAM_SORTABLE_COLS:
@@ -1055,15 +1179,19 @@ def leaderboards_teams(category='offense'):
         cursor = conn.cursor()
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall() if r[0] not in FCS_CONFS]
+        all_teams = get_teams_by_conference(cursor)
 
         fcs_in   = "','".join(FCS_CONFS)
         conf_sql = "AND t.conference = %s" if conf_filter else ""
-        params   = [conf_filter] if conf_filter else []
+        team_sql = "AND t.name = %s" if team_filter else ""
+        params   = []
+        if conf_filter: params.append(conf_filter)
+        if team_filter: params.append(team_filter)
 
         cursor.execute(f'''
             SELECT COUNT(*) FROM teams t
             WHERE t.conference NOT IN ('{fcs_in}')
-            {conf_sql}
+            {conf_sql} {team_sql}
         ''', params)
         page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
 
@@ -1079,7 +1207,7 @@ def leaderboards_teams(category='offense'):
                 ts.def_stuff_rate, ts.def_line_yards, ts.def_second_level_yards, ts.def_open_field_yards,
                 adv.def_havoc_total, adv.def_havoc_front7, adv.def_havoc_db,
                 adv.off_scoring_opps, adv.off_pts_per_opp, adv.off_field_pos_avg_start,
-                sp.rating, sp.offense_rating, sp.defense_rating, sp.special_teams_rating,
+                sp.rating, sp.offense_rating, sp.defense_rating, sp.special_teams_rating, sp.ranking,
                 RANK() OVER (ORDER BY {sort_sql} {goodness_dir} NULLS LAST) as goodness_rank
             FROM teams t
             LEFT JOIN team_stats ts ON ts.team = t.name
@@ -1087,7 +1215,7 @@ def leaderboards_teams(category='offense'):
             LEFT JOIN sp_ratings sp ON sp.team = t.name
             LEFT JOIN ap_rankings ar ON ar.team = t.name
             WHERE t.conference NOT IN ('{fcs_in}')
-            {conf_sql}
+            {conf_sql} {team_sql}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
         ''', params)
@@ -1125,14 +1253,27 @@ def leaderboards_teams(category='offense'):
                 'off_field_pos_avg_start': _r(d['off_field_pos_avg_start'], 1),
                 'rating': _r(d['rating'], 1), 'offense_rating': _r(d['offense_rating'], 1),
                 'defense_rating': _r(d['defense_rating'], 1), 'special_teams_rating': _r(d['special_teams_rating'], 1),
+                'ranking': d['ranking'],
+                # unavailable-in-dataset columns, kept as None so column_defs 'na' entries render consistently
+                'def_passing_plays_ppa': None, 'def_passing_success_rate': None, 'def_passing_explosiveness': None,
+                'def_rushing_plays_ppa': None, 'def_rushing_success_rate': None, 'def_rushing_explosiveness': None,
             })
     finally:
         release_db(conn)
 
+    current_filters = {
+        'mode': 'team', 'category': category, 'view': view,
+        'conf': conf_filter, 'team': team_filter,
+        'sort': sort_col, 'dir': sort_dir,
+    }
+    has_advanced = len(TEAM_COLUMNS[category]['advanced']) > 0
     return render_template('leaderboards.html',
-        mode='team', teams=teams_out, category=category,
-        conferences=conferences, conf_filter=conf_filter,
+        mode='team', teams=teams_out, category=category, view=view,
+        conferences=conferences, all_teams=all_teams,
+        conf_filter=conf_filter, team_filter=team_filter,
         sort_col=sort_col, sort_dir=sort_dir,
+        column_defs=column_defs, current_filters=current_filters,
+        has_advanced=has_advanced,
         pagination=pagination,
     )
 
