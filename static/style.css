@@ -36,6 +36,26 @@
     .ap-extra-col { display: none; }
 }
 
+/* Player Page */
+.nfl-status-badge {
+    position: absolute;
+    bottom: 16px;
+    right: 24px;
+    z-index: 2;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 8px 12px;
+    width: fit-content;
+}
+@media (max-width: 767.98px) {
+    .nfl-status-badge {
+        position: static;
+        margin: 12px 0 0 32px;
+    }
+}
+
 /* Compare Page */
 
 .compare-controls-row {

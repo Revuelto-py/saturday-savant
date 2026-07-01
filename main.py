@@ -2287,30 +2287,50 @@ def player_detail(player_id):
         conn2 = get_db()
         try:
             cur2 = conn2.cursor()
+            # A player may have transferred — player_stats.team reflects whatever
+            # team they actually recorded stats for, which can differ from
+            # players.team (their current/latest team). Pull every team on
+            # record so the game log isn't filtered down to just the current
+            # school and missing games played elsewhere.
+            cur2.execute(
+                "SELECT DISTINCT team FROM player_stats WHERE player_id = %s AND team IS NOT NULL",
+                (str(player_id),)
+            )
+            player_teams = [row[0] for row in cur2.fetchall() if row[0]]
+            if not player_teams:
+                player_teams = [player['team']]
+
             cur2.execute('''
                 SELECT g.id, g.week,
-                       CASE WHEN g.home_team=%s THEN g.away_team ELSE g.home_team END,
-                       CASE WHEN g.home_team=%s THEN g.home_points ELSE g.away_points END,
-                       CASE WHEN g.home_team=%s THEN g.away_points ELSE g.home_points END,
-                       CASE WHEN g.home_team=%s THEN 'home' ELSE 'away' END,
-                       CASE WHEN g.home_team=%s THEN t2.logo_dark ELSE t1.logo_dark END
+                       CASE WHEN g.home_team = ANY(%s) THEN g.away_team ELSE g.home_team END,
+                       CASE WHEN g.home_team = ANY(%s) THEN g.home_points ELSE g.away_points END,
+                       CASE WHEN g.home_team = ANY(%s) THEN g.away_points ELSE g.home_points END,
+                       CASE WHEN g.home_team = ANY(%s) THEN 'home' ELSE 'away' END,
+                       CASE WHEN g.home_team = ANY(%s) THEN t2.logo_dark ELSE t1.logo_dark END,
+                       CASE WHEN g.home_team = ANY(%s) THEN g.home_team ELSE g.away_team END
                 FROM games g
                 LEFT JOIN teams t1 ON g.home_team = t1.name
                 LEFT JOIN teams t2 ON g.away_team = t2.name
-                WHERE (g.home_team=%s OR g.away_team=%s) AND g.completed=1
+                WHERE (g.home_team = ANY(%s) OR g.away_team = ANY(%s)) AND g.completed=1
                 ORDER BY g.week
-            ''', (player['team'],) * 7)
+            ''', (player_teams,) * 8)
             games_list = cur2.fetchall()
         finally:
             release_db(conn2)
 
-        # Find ESPN team ID + athlete ID by scanning one game's boxscore
+        # Find ESPN team ID (one per school — a transfer means two different
+        # ESPN team IDs across the season) + athlete ID by scanning boxscores
         search_name = f"{player['first_name']} {player['last_name']}"
-        espn_team_id = None
+        remaining_teams = set(player_teams)
+        espn_team_id_by_team = {}
         espn_athlete_id = None
 
-        for game_row in games_list[:3]:
-            game_id = game_row[0]
+        for game_row in games_list:
+            if not remaining_teams and espn_athlete_id:
+                break
+            game_id, _, _, _, _, _, _, my_team = game_row
+            if my_team not in remaining_teams and espn_athlete_id:
+                continue
             try:
                 r = req.get(
                     'https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
@@ -2320,34 +2340,36 @@ def player_detail(player_id):
                 for bp in (data.get('boxscore') or {}).get('players', []):
                     t_obj = bp.get('team', {}) or {}
                     t_name = t_obj.get('displayName', '')
-                    tn_l, at_l = t_name.lower(), player['team'].lower()
+                    tn_l, at_l = t_name.lower(), my_team.lower()
                     if not (tn_l == at_l or at_l in tn_l or tn_l in at_l
                             or any(w in tn_l for w in at_l.split() if len(w) >= 4)):
                         continue
-                    espn_team_id = str(t_obj.get('id', ''))
-                    for stat_cat in (bp.get('statistics') or []):
-                        for ae in (stat_cat.get('athletes') or []):
-                            ath = ae.get('athlete', {}) or {}
-                            if ath.get('displayName', '').lower() == search_name.lower():
-                                espn_athlete_id = str(ath.get('id', ''))
+                    espn_team_id_by_team[my_team] = str(t_obj.get('id', ''))
+                    remaining_teams.discard(my_team)
+                    if not espn_athlete_id:
+                        for stat_cat in (bp.get('statistics') or []):
+                            for ae in (stat_cat.get('athletes') or []):
+                                ath = ae.get('athlete', {}) or {}
+                                if ath.get('displayName', '').lower() == search_name.lower():
+                                    espn_athlete_id = str(ath.get('id', ''))
+                                    break
+                            if espn_athlete_id:
                                 break
-                        if espn_athlete_id:
-                            break
-                    if espn_athlete_id:
-                        break
+                    break
             except Exception:
                 pass
-            if espn_athlete_id:
-                break
 
-        if espn_team_id and espn_athlete_id:
+        if espn_athlete_id and espn_team_id_by_team:
             for game_row in games_list:
-                game_id, week, opp, my_pts, opp_pts, ha, opp_logo = game_row
+                game_id, week, opp, my_pts, opp_pts, ha, opp_logo, my_team = game_row
+                team_id = espn_team_id_by_team.get(my_team)
+                if not team_id:
+                    continue
                 try:
                     r = req.get(
                         f'https://sports.core.api.espn.com/v2/sports/football/leagues/'
                         f'college-football/events/{game_id}/competitions/{game_id}'
-                        f'/competitors/{espn_team_id}/roster/{espn_athlete_id}/statistics/0',
+                        f'/competitors/{team_id}/roster/{espn_athlete_id}/statistics/0',
                         timeout=5
                     )
                     if r.status_code != 200:
