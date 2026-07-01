@@ -1,25 +1,84 @@
 {% extends "base.html" %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <div class="page-wrapper" style="padding-top:32px">
 
+{% set PLAYER_CATS = [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense'),('epa','EPA / Play'),('usage','Usage Rate')] %}
+{% set TEAM_CATS = [('offense','Offense'),('defense','Defense'),('havoc','Havoc'),('scoring','Scoring'),('sp','SP+')] %}
+
+{% set TEAM_COLS = {
+    'offense': [
+        ('off_ppa', 'Avg PPA', '', false),
+        ('off_success_rate', 'Success Rate', '%', false),
+        ('off_explosiveness', 'Explosiveness', '', false),
+        ('off_power_success', 'Power Success', '%', false),
+        ('off_line_yards', 'Line Yards', '', false),
+        ('off_second_level_yards', '2nd Level Yds', '', false),
+        ('off_open_field_yards', 'Open Field Yds', '', false),
+        ('off_rushing_plays_ppa', 'Rush PPA', '', false),
+        ('off_passing_plays_ppa', 'Pass PPA', '', false),
+        ('off_rushing_success_rate', 'Rush Success', '%', false),
+        ('off_passing_success_rate', 'Pass Success', '%', false),
+        ('off_rushing_explosiveness', 'Rush Explosive', '', false),
+        ('off_passing_explosiveness', 'Pass Explosive', '', false),
+    ],
+    'defense': [
+        ('def_ppa', 'Avg PPA', '', true),
+        ('def_success_rate', 'Success Rate', '%', true),
+        ('def_explosiveness', 'Explosiveness', '', true),
+        ('def_power_success', 'Power Success', '%', false),
+        ('def_stuff_rate', 'Stuff Rate', '%', false),
+        ('def_line_yards', 'Line Yards', '', true),
+        ('def_second_level_yards', '2nd Level Yds', '', true),
+        ('def_open_field_yards', 'Open Field Yds', '', true),
+    ],
+    'havoc': [
+        ('def_havoc_total', 'Havoc Rate', '%', false),
+        ('def_havoc_front7', 'Front 7 Havoc', '%', false),
+        ('def_havoc_db', 'DB Havoc', '%', false),
+    ],
+    'scoring': [
+        ('off_scoring_opps', 'Scoring Opps', '', false),
+        ('off_pts_per_opp', 'Pts / Opp', '', false),
+        ('off_field_pos_avg_start', 'Avg Start (Field Pos)', ' yd', false),
+    ],
+    'sp': [
+        ('rating', 'Overall SP+', '', false),
+        ('offense_rating', 'Off SP+', '', false),
+        ('defense_rating', 'Def SP+', '', false),
+        ('special_teams_rating', 'ST SP+', '', false),
+    ],
+} %}
+
 <!-- Page header -->
-<div style="margin-bottom:28px">
+<div style="margin-bottom:20px">
     <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">Leaderboards</div>
     <h1 style="color:white;font-weight:900;font-size:2rem;margin:0;letter-spacing:-0.01em">
-        {% if category == 'passing' %}Passing
-        {% elif category == 'rushing' %}Rushing
-        {% elif category == 'receiving' %}Receiving
-        {% elif category == 'defense' %}Defense
-        {% elif category == 'epa' %}EPA / Play
-        {% elif category == 'usage' %}Usage Rate
+        {% if mode == 'team' %}
+            {% for c, l in TEAM_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
+        {% else %}
+            {% if category == 'passing' %}Passing
+            {% elif category == 'rushing' %}Rushing
+            {% elif category == 'receiving' %}Receiving
+            {% elif category == 'defense' %}Defense
+            {% elif category == 'epa' %}EPA / Play
+            {% elif category == 'usage' %}Usage Rate
+            {% endif %}
         {% endif %}
         <span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:1.4rem"> · 2025 Season</span>
     </h1>
 </div>
 
-<!-- Category tabs -->
+<!-- Player | Team mode toggle -->
+<div class="lb-mode-toggle">
+    <a href="/leaderboards/passing" class="lb-mode-btn {{ 'active' if mode == 'player' else '' }}">Player</a>
+    <a href="/leaderboards/teams/offense" class="lb-mode-btn {{ 'active' if mode == 'team' else '' }}">Team</a>
+</div>
+
+{% if mode == 'player' %}
+<!-- Category tabs (player) -->
 <div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.08)">
-    {% for cat, label in [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense'),('epa','EPA / Play'),('usage','Usage Rate')] %}
+    {% for cat, label in PLAYER_CATS %}
     <a href="/leaderboards/{{ cat }}?conf={{ conf_filter }}&pos={{ pos_filter }}"
        style="color:{{ 'white' if category == cat else 'rgba(255,255,255,0.4)' }};
               font-weight:{{ '800' if category == cat else '500' }};
@@ -107,7 +166,7 @@
     </div>
 
     <div style="margin-left:auto;color:rgba(255,255,255,0.3);font-size:0.75rem;align-self:center">
-        {{ players|length }} players
+        {% if pagination %}Showing {{ pagination.start }}-{{ pagination.end }} of {{ pagination.total_count }} players{% else %}{{ players|length }} players{% endif %}
     </div>
 </div>
 </form>
@@ -313,18 +372,166 @@
 </div>
 </div>
 
+{% else %}
+{# ══════════════════════════════ TEAM MODE ══════════════════════════════ #}
+
+<!-- Category tabs (team) -->
+<div class="lb-team-tabs">
+    {% for cat, label in TEAM_CATS %}
+    <a href="/leaderboards/teams/{{ cat }}?conf={{ conf_filter }}" data-cat="{{ cat }}"
+       class="lb-team-tab {{ 'active' if category == cat else '' }}"
+       onclick="return switchTeamCategory(event, '{{ cat }}')">{{ label }}</a>
+    {% endfor %}
+</div>
+
+<!-- Filters -->
+<form method="GET" action="/leaderboards/teams/{{ category }}">
+<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:10px;align-items:flex-end">
+    <div>
+        <div style="color:rgba(255,255,255,0.4);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Conference</div>
+        <select name="conf" style="background:#152035;border:1px solid rgba(255,255,255,0.15);color:white;padding:7px 12px;border-radius:6px;font-size:0.8rem;min-width:160px" onchange="this.form.submit()">
+            <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
+            {% for conf in conferences %}
+            <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div style="margin-left:auto;color:rgba(255,255,255,0.3);font-size:0.75rem;align-self:center">
+        {% if pagination %}Showing {{ pagination.start }}-{{ pagination.end }} of {{ pagination.total_count }} teams{% endif %}
+    </div>
+</div>
+</form>
+
+<!-- Team table -->
+<div class="lb-team-table-wrap">
+<div style="overflow-x:auto">
+<table class="lb-team-table" style="width:100%;border-collapse:collapse;min-width:900px">
+    <thead>
+        <tr style="background:rgba(255,255,255,0.05)">
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 12px;text-align:center;width:44px;border-bottom:2px solid rgba(255,255,255,0.1)">#</th>
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 16px;text-align:left;border-bottom:2px solid rgba(255,255,255,0.1)">Team</th>
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-bottom:2px solid rgba(255,255,255,0.1)">AP</th>
+
+            {% for grp, cols in TEAM_COLS.items() %}
+            {% for col, label, suffix, lower_better in cols %}
+            <th data-group="{{ grp }}" onclick="sortCol('{{ col }}')"
+                style="display:{{ '' if grp == category else 'none' }};color:{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }};font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;cursor:pointer;white-space:nowrap;border-left:1px solid rgba(255,255,255,0.06);border-bottom:2px solid {{ 'rgba(245,158,11,0.5)' if sort_col == col else 'rgba(255,255,255,0.1)' }}"
+                onmouseover="this.style.color='white'" onmouseout="this.style.color='{{ '#f59e0b' if sort_col == col else 'rgba(255,255,255,0.35)' }}'">
+                {{ label }}{% if lower_better %}<br><span style="font-size:0.52rem;font-weight:600;text-transform:none;letter-spacing:0;color:rgba(255,255,255,0.3)">(lower is better)</span>{% endif %}
+                {% if sort_col == col %} {{ '↑' if sort_dir == 'asc' else '↓' }}{% endif %}
+            </th>
+            {% endfor %}
+            {% endfor %}
+
+            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 12px;text-align:left;border-bottom:2px solid rgba(255,255,255,0.1);border-left:1px solid rgba(255,255,255,0.06)">Conference</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in teams %}
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"
+            onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+            onmouseout="this.style.background='transparent'">
+
+            <td style="padding:11px 12px;text-align:center;color:rgba(255,255,255,0.3);font-size:0.8rem;font-weight:700">{{ t.rank }}</td>
+
+            <td style="padding:11px 16px">
+                <a href="/team/{{ t.name }}" style="display:flex;align-items:center;gap:10px;text-decoration:none">
+                    {% if t.logo %}<img src="{{ t.logo }}" style="width:26px;height:26px;object-fit:contain;flex-shrink:0">{% endif %}
+                    <span style="color:white;font-weight:700;font-size:0.86rem;white-space:nowrap"
+                          onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='white'">{{ t.name }}</span>
+                </a>
+            </td>
+
+            <td style="padding:11px 10px;text-align:center">
+                {% if t.ap_rank %}<span style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;font-size:0.68rem;font-weight:800;padding:2px 7px;border-radius:5px">#{{ t.ap_rank }}</span>{% endif %}
+            </td>
+
+            {% for grp, cols in TEAM_COLS.items() %}
+            {% for col, label, suffix, lower_better in cols %}
+            {% set val = t.get(col) %}
+            <td data-group="{{ grp }}" style="display:{{ '' if grp == category else 'none' }};padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05);{{ 'background:' ~ t.sort_bg ~ ';' if sort_col == col else '' }}">
+                {% if val is not none %}
+                <span style="color:{{ 'white' if sort_col == col else 'rgba(255,255,255,0.8)' }};font-weight:{{ '800' if sort_col == col else '500' }};font-size:0.84rem">{{ val }}{{ suffix }}</span>
+                {% else %}
+                <span style="color:rgba(255,255,255,0.2)">—</span>
+                {% endif %}
+            </td>
+            {% endfor %}
+            {% endfor %}
+
+            <td style="padding:11px 12px;border-left:1px solid rgba(255,255,255,0.05)">
+                <span style="color:rgba(255,255,255,0.55);font-size:0.76rem;font-weight:600;white-space:nowrap">{{ t.conf }}</span>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="40" style="padding:48px;text-align:center;color:rgba(255,255,255,0.25);font-size:0.84rem">No teams found — try adjusting the filters.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+</div>
+{% endif %}
+
+<!-- Pagination -->
+{% if pagination and pagination.total_pages > 1 %}
+<div class="lb-pagination">
+    <a href="#" class="lb-page-btn {{ 'disabled' if pagination.page <= 1 }}"
+       onclick="goToPage({{ pagination.page - 1 }}); return false;">← Prev</a>
+
+    {% set p = pagination.page %}
+    {% set tp = pagination.total_pages %}
+    {% for n in range(1, tp + 1) %}
+        {% if n == 1 or n == tp or (n >= p - 1 and n <= p + 1) %}
+        <a href="#" class="lb-page-btn {{ 'active' if n == p }}" onclick="goToPage({{ n }}); return false;">{{ n }}</a>
+        {% elif n == p - 2 or n == p + 2 %}
+        <span class="lb-page-ellipsis">…</span>
+        {% endif %}
+    {% endfor %}
+
+    <a href="#" class="lb-page-btn {{ 'disabled' if pagination.page >= pagination.total_pages }}"
+       onclick="goToPage({{ pagination.page + 1 }}); return false;">Next →</a>
+</div>
+{% endif %}
+
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+const LB_MODE = {{ mode|tojson }};
+let lbCategory = {{ category|tojson }};
+
+function lbBasePath() {
+    return LB_MODE === 'team' ? '/leaderboards/teams/' + lbCategory : '/leaderboards/' + lbCategory;
+}
+
 function sortCol(col) {
-    const url = new URL(window.location);
+    const url = new URL(window.location.origin + lbBasePath() + window.location.search);
     const cur = url.searchParams.get('sort');
     const dir = url.searchParams.get('dir') || 'desc';
     url.searchParams.set('sort', col);
     url.searchParams.set('dir', cur === col && dir === 'desc' ? 'asc' : 'desc');
+    url.searchParams.delete('page');
     window.location = url.toString();
+}
+
+function goToPage(n) {
+    if (n < 1) return;
+    const url = new URL(window.location.origin + lbBasePath() + window.location.search);
+    url.searchParams.set('page', n);
+    window.location = url.toString();
+}
+
+function switchTeamCategory(evt, cat) {
+    evt.preventDefault();
+    lbCategory = cat;
+    document.querySelectorAll('[data-group]').forEach(function(el) {
+        el.style.display = (el.getAttribute('data-group') === cat) ? '' : 'none';
+    });
+    document.querySelectorAll('.lb-team-tab').forEach(function(el) {
+        el.classList.toggle('active', el.getAttribute('data-cat') === cat);
+    });
+    return false;
 }
 </script>
 {% endblock %}
