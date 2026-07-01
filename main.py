@@ -1488,6 +1488,71 @@ def rankings():
         release_db(conn)
     return render_template('rankings.html', rankings=rows, meta=meta)
 
+
+# ── Drives tab classification helpers ──────────────────────────────────────
+# ESPN's play type.text values surveyed across several games (regular season
+# and bowls): Kickoff, Kickoff Return (Offense), Timeout, End Period, End of
+# Half, End of Game, Rush, Rushing Touchdown, Pass Reception, Passing
+# Touchdown, Pass Incompletion, Pass Interception Return, Interception, Sack,
+# Fumble, Fumble Recovery (Own/Opponent), Fumble Return Touchdown, Penalty,
+# Punt, Punt Return, Blocked Punt Touchdown, Field Goal Good, Field Goal
+# Missed, Blocked Field Goal, Safety.
+_NON_SCRIMMAGE_TYPES = ('kickoff', 'timeout', 'end period', 'end of half', 'end of game', 'end of quarter')
+
+def _classify_play(play_type_text):
+    """(label, color, is_turnover) for one play, or None to skip the play
+    entirely (kickoffs/timeouts/period markers aren't scrimmage snaps)."""
+    t = (play_type_text or '').lower()
+    if any(s in t for s in _NON_SCRIMMAGE_TYPES):
+        return None
+    if 'interception' in t:
+        return ('INT', '#dc2626', True)
+    if 'fumble' in t:
+        if 'recovery (own)' in t:
+            return ('Fumble', '#6b7280', False)
+        return ('FUM', '#dc2626', True)
+    if 'sack' in t:
+        return ('Sack', '#ef4444', False)
+    if 'safety' in t:
+        return ('Safety', '#dc2626', False)
+    if 'penalty' in t:
+        return ('Penalty', '#eab308', False)
+    if 'field goal' in t:
+        if 'missed' in t or 'blocked' in t:
+            return ('FG Miss', '#6b7280', False)
+        return ('FG', '#f97316', False)
+    if 'punt' in t:
+        return ('Punt', '#a855f7', False)
+    if 'incompletion' in t:
+        return ('Inc', '#6b7280', False)
+    if 'reception' in t or 'pass' in t:
+        return ('Pass', '#3b82f6', False)
+    if 'rush' in t or 'run' in t or 'kneel' in t:
+        return ('Rush', '#22c55e', False)
+    return ('Play', '#6b7280', False)
+
+def _classify_drive_result(display_result):
+    """(badge_label, bg_color, text_color) for a drive's header badge."""
+    r = (display_result or '').lower()
+    if 'fumble' in r or 'interception' in r or 'pick' in r:
+        return ('TURNOVER', '#dc2626', '#fff')
+    if 'safety' in r:
+        return ('SAFETY', '#dc2626', '#fff')
+    if 'touchdown' in r:
+        return ('TOUCHDOWN', '#16a34a', '#fff')
+    if 'missed' in r and 'field goal' in r or r == 'missed fg':
+        return ('MISSED FG', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
+    if 'field goal' in r:
+        return ('FIELD GOAL', '#f97316', '#fff')
+    if 'punt' in r:
+        return ('PUNT', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.6)')
+    if 'downs' in r:
+        return ('DOWNS', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
+    if display_result:
+        return (display_result.upper(), 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
+    return ('—', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
+
+
 @app.route('/game/<int:game_id>')
 def game_detail(game_id):
     conn = get_db()
@@ -1710,21 +1775,7 @@ def game_detail(game_id):
                 time_el = time_el_raw.get('displayValue', '') if isinstance(time_el_raw, dict) else ''
 
                 is_scoring_drive = drive_result in ['TD', 'FG']
-                if drive_result == 'TD':     result_icon = '🏈'
-                elif drive_result == 'FG':   result_icon = '🎯'
-                elif drive_result == 'PUNT': result_icon = '↩'
-                elif drive_result in ['INT', 'FUMBLE', 'FUMBLE RETURN TD']: result_icon = '❌'
-                else:                        result_icon = '🔄'
-
-                # Field position bar — 8% margins = end zones, 84% = 100 yards
                 yl = min(max(start_yl, 1), 99)
-                if play_side == 'away':
-                    field_start = round(8 + yl / 99 * 84, 1)
-                    field_width = round(min(abs(drive_yards) / 99 * 84, max(0, 92 - field_start)), 1)
-                else:
-                    raw_end = 8 + (99 - yl) / 99 * 84
-                    field_width = round(min(abs(drive_yards) / 99 * 84, max(0, raw_end - 8)), 1)
-                    field_start = round(max(8, raw_end - field_width), 1)
 
                 for play in (drive.get('plays') or []):
                     play_type = (play.get('type') or {}).get('text', '')
@@ -1744,16 +1795,86 @@ def game_detail(game_id):
                         'drive_summary': drive_summary,
                     })
 
+                # ── Drives tab: per-play stacked-bar data ───────────────────────
+                # start_yl_abs / pos use a single 0-100 scale across the WHOLE
+                # field where 0 = the away team's own goal line (left endzone)
+                # and 100 = the home team's own goal line (right endzone) —
+                # matching the away=left/home=right convention already used in
+                # the score hero and quarter table elsewhere on this page.
+                # Whichever team is on offense drives toward the OPPONENT's
+                # side: away moves toward 100, home moves toward 0.
+                start_yl_abs = yl if play_side == 'away' else (100 - yl)
+                direction = 1 if play_side == 'away' else -1
+                pos = float(start_yl_abs)
+
                 drive_play_list = []
                 for p in (drive.get('plays') or []):
                     ptype = (p.get('type') or {}).get('text', '')
-                    pyards = int(p.get('statYards', 0) or 0)
+                    classified = _classify_play(ptype)
+                    if classified is None:
+                        continue  # kickoff/timeout/period marker — not a scrimmage snap
+                    label, color, is_turnover = classified
+
+                    # Bug fix: the field that actually holds yards gained on
+                    # THIS play is statYardage. statYards (what this route
+                    # used to read) is always null in the live ESPN response,
+                    # which is why every play used to collapse to a 0-yard
+                    # bar stacked at the same starting position instead of
+                    # progressing across the field.
+                    yards = int(p.get('statYardage', 0) or 0)
+
+                    new_pos = pos + direction * yards
+                    start_pct = max(0.0, min(100.0, min(pos, new_pos)))
+                    end_pct   = max(0.0, min(100.0, max(pos, new_pos)))
+                    # Clamp the running tracker itself (not just the display
+                    # values) — ESPN occasionally attributes extra yardage to
+                    # a play right at the goal line (e.g. a two-point try
+                    # folded into the same drive's play list), which would
+                    # otherwise push every later play in this drive out of
+                    # [0, 100] too.
+                    pos = max(0.0, min(100.0, new_pos))
+
+                    p_start = p.get('start') or {}
+                    down, distance = p_start.get('down'), p_start.get('distance')
+                    down_map = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th'}
+                    down_dist = f"{down_map.get(down, '')} & {distance}" if down and distance is not None else ''
+                    play_clock = (p.get('clock') or {}).get('displayValue', '')
+                    play_period = (p.get('period') or {}).get('number') or quarter
+                    tooltip_bits = [b for b in [
+                        down_dist,
+                        f"{label} — {yards:+d} yds" if yards else f"{label} — 0 yds",
+                        f"Q{play_period} · {play_clock}" if play_clock else f"Q{play_period}",
+                    ] if b]
+
                     drive_play_list.append({
-                        'type':  ptype,
-                        'yards': pyards,
-                        'text':  p.get('text', ''),
+                        'label':       label,
+                        'color':       color,
+                        'start_pct':   round(start_pct, 2),
+                        'width_pct':   round(end_pct - start_pct, 2),
+                        'yards':       yards,
+                        'is_turnover': is_turnover,
+                        'is_scoring':  bool(p.get('scoringPlay', False)),
+                        'tooltip':     ' | '.join(tooltip_bits),
                     })
-                start_yl_abs = yl if play_side == 'away' else (100 - yl)
+
+                # Fallback for the rare drive where ESPN gives no usable
+                # per-play data at all: one summary bar spanning the drive's
+                # net distance, labeled with the drive result, instead of an
+                # empty field.
+                if not drive_play_list and drive_yards:
+                    fallback_end = max(0.0, min(100.0, start_yl_abs + direction * drive_yards))
+                    drive_play_list.append({
+                        'label':       (drive_result or 'Drive')[:10],
+                        'color':       '#6b7280',
+                        'start_pct':   round(min(start_yl_abs, fallback_end), 2),
+                        'width_pct':   round(abs(fallback_end - start_yl_abs), 2),
+                        'yards':       drive_yards,
+                        'is_turnover': False,
+                        'is_scoring':  is_scoring_drive,
+                        'tooltip':     f"{drive_result} · {drive_yards} yds",
+                    })
+
+                badge_label, badge_bg, badge_color = _classify_drive_result(drive_result)
 
                 drives.append({
                     'team': team_name,
@@ -1765,9 +1886,9 @@ def game_detail(game_id):
                     'quarter': quarter,
                     'start_clock': start_clock,
                     'is_scoring': is_scoring_drive,
-                    'result_icon': result_icon,
-                    'field_start': field_start,
-                    'field_width': max(field_width, 1.0),
+                    'badge_label': badge_label,
+                    'badge_bg': badge_bg,
+                    'badge_color': badge_color,
                     'plays': drive_play_list,
                     'start_yardline': start_yl_abs,
                 })

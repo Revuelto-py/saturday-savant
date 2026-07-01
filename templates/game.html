@@ -759,132 +759,179 @@ if (typeof Plotly !== 'undefined') {
 
 {% if drives %}
 {% for drive in drives %}
-{% set d_color = home_color if drive.is_home else away_color %}
 {% set d_logo = game[9] if drive.is_home else game[10] %}
-{% set field_pct = 83.33 %}
 
-<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;margin-bottom:16px;overflow:hidden">
+<div class="drive-card">
 
     <!-- Drive header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:wrap;gap:8px">
+    <div class="drive-header">
+        <div style="display:flex;align-items:center;gap:10px">
+            {% if d_logo %}<img src="{{ d_logo }}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">{% endif %}
+            <span style="color:white;font-weight:800">{{ drive.team }}</span>
+            <span style="color:rgba(255,255,255,0.35)">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
+        </div>
         <div style="display:flex;align-items:center;gap:12px">
-            {% if d_logo %}<img src="{{ d_logo }}" style="width:32px;height:32px;object-fit:contain">{% endif %}
-            <div>
-                <span style="color:white;font-weight:800;font-size:0.9rem">{{ drive.team }}</span>
-                <span style="color:rgba(255,255,255,0.35);font-size:0.78rem;margin-left:10px">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
-            </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:16px">
             <span style="color:rgba(255,255,255,0.4);font-size:0.75rem">{{ drive.plays_count }} plays · {{ drive.yards }} yds{% if drive.time_elapsed %} · {{ drive.time_elapsed }}{% endif %}</span>
-            <span style="font-size:0.75rem;font-weight:800;padding:3px 12px;border-radius:5px;
-                background:{{ 'rgba(52,211,153,0.15)' if drive.is_scoring else 'rgba(255,255,255,0.07)' }};
-                color:{{ '#34d399' if drive.is_scoring else 'rgba(255,255,255,0.5)' }};
-                border:1px solid {{ 'rgba(52,211,153,0.3)' if drive.is_scoring else 'rgba(255,255,255,0.1)' }}">
-                {{ drive.result_icon }} {{ drive.result }}
-            </span>
+            <span class="drive-badge" style="background:{{ drive.badge_bg }};color:{{ drive.badge_color }}">{{ drive.badge_label }}</span>
         </div>
     </div>
 
-    <!-- Field with stacked play bars -->
-    <div style="padding:16px 20px 20px">
-
-        {% if drive.plays %}
-        {% set n_plays = drive.plays | length %}
-        {% set field_h = [n_plays * 28 + 44, 80] | max %}
-
-        <div style="position:relative;border-radius:6px;overflow:hidden;background:linear-gradient(180deg,#0f2a0f 0%,#1a3d1a 50%,#0f2a0f 100%);border:1px solid rgba(255,255,255,0.1)">
-        <div style="height:{{ field_h }}px;position:relative">
-
-            <!-- End zones -->
-            <div style="position:absolute;left:0;top:0;bottom:0;width:8.33%;background:{{ away_color }}99;border-right:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center">
-                <span style="color:rgba(255,255,255,0.85);font-size:0.42rem;font-weight:900;writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:0.1em;text-transform:uppercase">{{ away_team[:8] }}</span>
-            </div>
-            <div style="position:absolute;right:0;top:0;bottom:0;width:8.33%;background:{{ home_color }}99;border-left:2px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center">
-                <span style="color:rgba(255,255,255,0.85);font-size:0.42rem;font-weight:900;writing-mode:vertical-rl;letter-spacing:0.1em;text-transform:uppercase">{{ home_team[:8] }}</span>
-            </div>
-
-            <!-- 10-yard grid lines -->
-            {% for i in range(1, 10) %}
-            <div style="position:absolute;left:{{ 8.33 + i * 8.33 }}%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.12)"></div>
-            {% endfor %}
-            {% for i in range(0, 10) %}
-            <div style="position:absolute;left:{{ 8.33 + i * 8.33 + 4.165 }}%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.04)"></div>
-            {% endfor %}
-
-            <!-- Stacked play bars -->
-            {% set ns = namespace(pos=drive.start_yardline | float) %}
-            {% for play in drive.plays %}
-            {% set row_top = loop.index0 * 28 + 10 %}
-            {% set yards = play.yards | int %}
-            {% set pt = play.type | lower %}
-
-            {% if yards < 0 %}{% set pc = '#ef4444' %}
-            {% elif 'penalty' in pt or 'foul' in pt %}{% set pc = '#fbbf24' %}
-            {% elif 'punt' in pt %}{% set pc = '#a78bfa' %}
-            {% elif 'field goal' in pt %}{% set pc = '#f59e0b' %}
-            {% else %}{% set pc = d_color %}{% endif %}
-
-            {% set bar_w = [(yards | abs) * (field_pct / 100), 0.5] | max %}
-
-            {% if drive.is_home %}
-            {% set ns.pos = ns.pos - yards %}
-            {% set bar_left = [ns.pos * (field_pct / 100) + 8.33, 8.5] | max %}
-            {% else %}
-            {% set bar_left = [ns.pos * (field_pct / 100) + 8.33, 8.5] | max %}
-            {% set ns.pos = ns.pos + yards %}
-            {% endif %}
-
-            {% set bar_left = [bar_left, 91.5 - bar_w] | min %}
-
-            <div title="{{ play.type }}: {{ play.text | truncate(80) }}"
-                 style="position:absolute;top:{{ row_top }}px;left:{{ bar_left }}%;width:{{ bar_w }}%;height:20px;
-                        background:{{ pc }};border-radius:3px;opacity:{{ '0.95' if yards >= 0 else '0.7' }};
-                        display:flex;align-items:center;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.5);cursor:pointer"
-                 onmouseover="showDriveTooltip(event,'{{ play.type }}: {{ play.yards }}y — {{ play.text | replace("'","") | truncate(70) }}')"
-                 onmouseout="hideDriveTooltip()">
-                {% if bar_w > 2 %}
-                <span style="color:white;font-size:0.48rem;font-weight:900;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.04em;text-shadow:0 1px 2px rgba(0,0,0,0.6)">
-                    {% if 'pass' in pt or 'complete' in pt %}Pass
-                    {% elif 'rush' in pt or 'run' in pt or 'kneel' in pt %}Rush
-                    {% elif 'penalty' in pt %}Penalty
-                    {% elif 'punt' in pt %}Punt
-                    {% elif 'field goal' in pt %}FG
-                    {% else %}{{ play.type[:8] }}{% endif %}
-                </span>
-                {% endif %}
-            </div>
-            {% endfor %}
-
-            <!-- Yard markers -->
-            <div style="position:absolute;bottom:4px;left:8.33%;right:8.33%;display:flex;justify-content:space-between">
-                {% for lbl in [away_team[:3]|upper,'10','20','30','40','50','40','30','20','10',home_team[:3]|upper] %}
-                <span style="color:rgba(255,255,255,0.35);font-size:0.44rem;font-weight:700;white-space:nowrap">{{ lbl }}</span>
-                {% endfor %}
-            </div>
-        </div>
-        </div>
-
-        <!-- Legend -->
-        <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px">
-            {% for lc, ll in [(d_color,'Pass/Rush'),('#fbbf24','Penalty'),('#ef4444','Loss'),('#a78bfa','Punt'),('#f59e0b','FG')] %}
-            <div style="display:flex;align-items:center;gap:5px">
-                <div style="width:16px;height:7px;background:{{ lc }};border-radius:2px"></div>
-                <span style="color:rgba(255,255,255,0.35);font-size:0.63rem">{{ ll }}</span>
-            </div>
-            {% endfor %}
-        </div>
-
-        {% else %}
-        <!-- Fallback single bar when no play-level data -->
-        <div style="position:relative;height:22px;border-radius:4px;overflow:hidden;background:linear-gradient(90deg,#0f2010 0%,#122614 50%,#0f2010 100%);border:1px solid rgba(255,255,255,0.07)">
-            <div style="position:absolute;left:0;top:0;bottom:0;width:8%;background:{{ away_color }}44"></div>
-            <div style="position:absolute;right:0;top:0;bottom:0;width:8%;background:{{ home_color }}44"></div>
-            <div style="position:absolute;left:{{ drive.field_start }}%;top:4px;bottom:4px;width:{{ drive.field_width }}%;min-width:6px;background:{{ d_color }};border-radius:3px;opacity:0.9"></div>
-        </div>
-        {% endif %}
+    <!-- Field — empty SVG shell populated by the render script below -->
+    <div class="drive-field-wrap">
+        <svg class="drive-field"
+             data-drive-id="{{ loop.index0 }}"
+             data-home-logo="{{ game[9] or '' }}"
+             data-away-logo="{{ game[10] or '' }}"
+             data-home-color="{{ home_color }}"
+             data-away-color="{{ away_color }}"
+             data-home-abbr="{{ home_team[:12] | upper }}"
+             data-away-abbr="{{ away_team[:12] | upper }}"
+             viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
+    <script type="application/json" id="drive-data-{{ loop.index0 }}">{{ drive.plays | tojson }}</script>
+
+    <!-- Legend — filled in by the render script with only the play types this drive actually has -->
+    <div class="drive-legend" data-drive-id="{{ loop.index0 }}"></div>
 </div>
 {% endfor %}
+
+<script>
+(function() {
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+    var SVG_W = 1100, SVG_H = 320;
+    var EZ_W = 80, FIELD_X = 80, FIELD_W = 940;
+    var FIELD_H = 286; // field + endzones; the remaining ~34px is the yard-number strip
+
+    function svgEl(tag, attrs) {
+        var e = document.createElementNS(SVG_NS, tag);
+        for (var k in attrs) e.setAttribute(k, attrs[k]);
+        return e;
+    }
+    function yardX(pct) { return FIELD_X + (pct / 100) * FIELD_W; }
+    function hexToRgbTriplet(hex) {
+        hex = (hex || '1e3a5f').replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+        var n = parseInt(hex, 16);
+        if (isNaN(n)) return '30,58,95';
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
+    }
+
+    function buildField(svg) {
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+        var homeColor = hexToRgbTriplet(svg.dataset.homeColor);
+        var awayColor = hexToRgbTriplet(svg.dataset.awayColor);
+
+        svg.appendChild(svgEl('rect', { x: FIELD_X, y: 0, width: FIELD_W, height: FIELD_H, fill: '#1b4332' }));
+        svg.appendChild(svgEl('rect', { x: 0, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(' + awayColor + ',0.55)' }));
+        svg.appendChild(svgEl('rect', { x: SVG_W - EZ_W, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(' + homeColor + ',0.55)' }));
+
+        var labels = ['10', '20', '30', '40', '50', '40', '30', '20', '10'];
+        for (var i = 1; i <= 9; i++) {
+            var x = FIELD_X + (i * 10 / 100) * FIELD_W;
+            svg.appendChild(svgEl('line', { x1: x, y1: 0, x2: x, y2: FIELD_H, stroke: 'white', 'stroke-width': 1, opacity: 0.35 }));
+            var t = svgEl('text', { x: x, y: FIELD_H + 20, 'font-size': 11, fill: 'rgba(255,255,255,0.5)', 'text-anchor': 'middle' });
+            t.textContent = labels[i - 1];
+            svg.appendChild(t);
+        }
+        for (var j = 1; j < 19; j++) {
+            if (j % 2 === 0) continue; // every 10 yards already drawn above
+            var hx = FIELD_X + (j * 5 / 100) * FIELD_W;
+            svg.appendChild(svgEl('line', { x1: hx, y1: 0, x2: hx, y2: FIELD_H, stroke: 'white', 'stroke-width': 1, opacity: 0.15 }));
+        }
+
+        var awayLogo = svg.dataset.awayLogo;
+        if (awayLogo) {
+            svg.appendChild(svgEl('image', { href: awayLogo, x: EZ_W / 2 - 24, y: FIELD_H / 2 - 30, width: 48, height: 48, preserveAspectRatio: 'xMidYMid meet' }));
+        }
+        var at = svgEl('text', { x: EZ_W / 2, y: FIELD_H / 2 + 36, 'font-size': 9, fill: 'rgba(255,255,255,0.6)', 'text-anchor': 'middle', 'letter-spacing': '0.1em' });
+        at.textContent = svg.dataset.awayAbbr || '';
+        svg.appendChild(at);
+
+        var homeLogo = svg.dataset.homeLogo;
+        if (homeLogo) {
+            svg.appendChild(svgEl('image', { href: homeLogo, x: SVG_W - EZ_W / 2 - 24, y: FIELD_H / 2 - 30, width: 48, height: 48, preserveAspectRatio: 'xMidYMid meet' }));
+        }
+        var ht = svgEl('text', { x: SVG_W - EZ_W / 2, y: FIELD_H / 2 + 36, 'font-size': 9, fill: 'rgba(255,255,255,0.6)', 'text-anchor': 'middle', 'letter-spacing': '0.1em' });
+        ht.textContent = svg.dataset.homeAbbr || '';
+        svg.appendChild(ht);
+    }
+
+    function renderPlays(svg, plays) {
+        if (!plays.length) return;
+        var available = FIELD_H - 16;
+        var step = Math.min(30, Math.max(available / plays.length, 16));
+        var barH = Math.max(step - 2, 14);
+
+        plays.forEach(function(p, i) {
+            var y = FIELD_H - 6 - (i + 1) * step + (step - barH) / 2;
+            var x = yardX(p.start_pct);
+            var w = Math.max((p.width_pct / 100) * FIELD_W, 8);
+
+            var rect = svgEl('rect', { x: x, y: y, width: w, height: barH, rx: 3, fill: p.color, opacity: 0.9 });
+            if (p.is_scoring) {
+                rect.setAttribute('stroke', '#fff');
+                rect.setAttribute('stroke-width', 2);
+            }
+            rect.style.cursor = 'pointer';
+            rect.addEventListener('mouseover', function(e) {
+                rect.setAttribute('opacity', 1);
+                rect.setAttribute('stroke', '#fff');
+                rect.setAttribute('stroke-width', 2);
+                if (window.showDriveTooltip) window.showDriveTooltip(e, p.tooltip);
+            });
+            rect.addEventListener('mouseout', function() {
+                rect.setAttribute('opacity', 0.9);
+                if (!p.is_scoring) {
+                    rect.removeAttribute('stroke');
+                    rect.removeAttribute('stroke-width');
+                }
+                if (window.hideDriveTooltip) window.hideDriveTooltip();
+            });
+            svg.appendChild(rect);
+
+            if (w >= 24) {
+                var label = w < 45 ? (p.label || '').charAt(0) : p.label;
+                var txt = svgEl('text', { x: x + 4, y: y + barH / 2 + 4, 'font-size': 10, fill: 'white', 'font-weight': 600 });
+                txt.style.pointerEvents = 'none';
+                txt.textContent = label;
+                svg.appendChild(txt);
+            }
+        });
+    }
+
+    function renderLegend(container, plays) {
+        var colorByLabel = {};
+        var order = [];
+        plays.forEach(function(p) {
+            if (!(p.label in colorByLabel)) { colorByLabel[p.label] = p.color; order.push(p.label); }
+        });
+        container.innerHTML = '';
+        order.forEach(function(label) {
+            var item = document.createElement('div');
+            item.className = 'drive-legend-item';
+            var sw = document.createElement('span');
+            sw.className = 'drive-legend-swatch';
+            sw.style.background = colorByLabel[label];
+            var lbl = document.createElement('span');
+            lbl.textContent = label;
+            item.appendChild(sw);
+            item.appendChild(lbl);
+            container.appendChild(item);
+        });
+    }
+
+    document.querySelectorAll('.drive-field').forEach(function(svg) {
+        buildField(svg);
+        var dataEl = document.getElementById('drive-data-' + svg.dataset.driveId);
+        var plays = [];
+        try { plays = dataEl ? JSON.parse(dataEl.textContent) : []; } catch (e) { plays = []; }
+        renderPlays(svg, plays);
+        var legend = document.querySelector('.drive-legend[data-drive-id="' + svg.dataset.driveId + '"]');
+        if (legend) renderLegend(legend, plays);
+    });
+})();
+</script>
 
 {% else %}
 <div class="dark-card" style="padding:40px;text-align:center;color:rgba(255,255,255,0.22);font-size:0.82rem">No drive data available.</div>
