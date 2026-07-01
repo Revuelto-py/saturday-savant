@@ -14,10 +14,10 @@
     <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);pointer-events:none"></div>
 
     <div class="page-wrapper" style="position:relative;z-index:1;padding-top:0;padding-bottom:0">
-        <div style="display:flex;align-items:flex-end;gap:0;min-height:200px">
+        <div class="ph-hero-row" style="display:flex;align-items:flex-end;gap:0;min-height:200px">
 
             <!-- Headshot -->
-            <div style="flex-shrink:0;align-self:flex-end;margin-right:32px;margin-left:-8px;position:relative">
+            <div class="ph-headshot" style="flex-shrink:0;align-self:flex-end;margin-right:32px;margin-left:-8px;position:relative">
                 <div style="position:absolute;bottom:0;left:-10px;right:-10px;height:3px;
                             background:linear-gradient(90deg, transparent, {{ c1 }}cc, transparent);border-radius:2px"></div>
                 <div style="position:absolute;bottom:0;left:10px;right:10px;height:12px;
@@ -27,7 +27,7 @@
                          style="height:210px;width:auto;object-fit:cover;object-position:top center;
                                 display:block;position:relative;z-index:1;filter:drop-shadow(0 -2px 12px rgba(0,0,0,0.4))">
                 {% else %}
-                    <div style="width:155px;height:210px;background:rgba(255,255,255,0.08);display:flex;align-items:center;
+                    <div class="ph-fallback" style="width:155px;height:210px;background:rgba(255,255,255,0.08);display:flex;align-items:center;
                                 justify-content:center;font-size:3rem;font-weight:900;color:rgba(255,255,255,0.3);position:relative;z-index:1">
                         {{ player.first_name[0] if player.first_name else '?' }}{{ player.last_name[0] if player.last_name else '' }}
                     </div>
@@ -35,7 +35,7 @@
             </div>
 
             <!-- Player info -->
-            <div style="flex:1;padding:32px 0 0">
+            <div class="ph-info" style="flex:1;min-width:0;padding:32px 0 0">
                 {% if player.logo_dark %}
                 <div style="margin-bottom:12px">
                     <a href="/team/{{ player.team }}" style="display:inline-block;transition:opacity 0.15s"
@@ -45,7 +45,7 @@
                 </div>
                 {% endif %}
 
-                <h1 style="color:white;font-weight:900;font-size:2.6rem;margin:0;line-height:1;
+                <h1 class="ph-name" style="color:white;font-weight:900;font-size:2.6rem;margin:0;line-height:1;
                             text-shadow:0 2px 12px rgba(0,0,0,0.4);letter-spacing:-0.01em">
                     {{ player.first_name }} {{ player.last_name }}
                 </h1>

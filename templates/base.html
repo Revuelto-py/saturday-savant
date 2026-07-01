@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>Saturday Savant · College Football Analytics</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#060d1f">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
     <link rel="apple-touch-icon" href="/static/logo-256.png">
@@ -12,11 +14,15 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <style>
         * { box-sizing: border-box; }
+        /* html background + theme-color keep Safari's toolbars and overscroll
+           areas dark — without them the phone shows white bars above/below */
+        html { background: #060d1f; color-scheme: dark; }
         body {
             background: linear-gradient(160deg, #060d1f 0%, #0a1628 40%, #080f1e 100%);
-            min-height: 100vh; color: white;
+            min-height: 100vh; min-height: 100dvh; color: white;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0;
         }
+        a, button { touch-action: manipulation; }
 
         /* Navbar — distinct band: gradient surface, amber keyline, drop shadow */
         .navbar {
@@ -30,16 +36,14 @@
         .navbar-inner {
             max-width: 1300px; margin: 0 auto; width: 100%;
             height: 64px; display: flex; align-items: center;
-            justify-content: space-between;
+            gap: 12px;
         }
+        .brand-logo { height: 56px; width: auto; }
         .navbar-brand {
             color: white !important; font-weight: 900; font-size: 1.05rem;
             letter-spacing: 0.02em; text-decoration: none; white-space: nowrap; flex-shrink: 0;
         }
-        .nav-right {
-            display: flex; align-items: center; gap: 4px; position: relative;
-        }
-        .nav-links { display: flex; gap: 4px; }
+        .nav-links { display: flex; gap: 4px; margin-left: auto; }
         .nav-links a {
             color: rgba(255,255,255,0.55); font-weight: 600; font-size: 0.82rem;
             padding: 7px 14px; border-radius: 6px; text-decoration: none;
@@ -123,8 +127,30 @@
         .search-empty { padding: 20px 16px; color: rgba(255,255,255,0.3); font-size: 0.8rem; text-align: center; }
         .search-loading { padding: 16px; text-align: center; color: rgba(255,255,255,0.3); font-size: 0.78rem; }
 
+        /* Mobile navbar: logo + search on the first row, nav links become a
+           horizontally scrollable strip below them */
+        @media (max-width: 767.98px) {
+            .navbar { height: auto; padding: 0 12px; }
+            .navbar-inner { height: auto; flex-wrap: wrap; padding-top: 8px; column-gap: 10px; }
+            .brand-logo { height: 42px; }
+            .search-wrapper { flex: 1 1 auto; margin-left: auto; width: auto; max-width: 260px; }
+            .nav-links {
+                order: 3; width: 100%; margin-left: 0;
+                overflow-x: auto; scrollbar-width: none;
+                padding: 6px 0 8px; margin-top: 2px;
+            }
+            .nav-links::-webkit-scrollbar { display: none; }
+            .nav-links a { padding: 6px 11px; font-size: 0.8rem; flex-shrink: 0; }
+            .search-dropdown { max-height: 60vh; }
+            /* 16px inputs stop iOS Safari from auto-zooming on focus */
+            input, select, textarea { font-size: 16px !important; }
+        }
+
         /* Page */
         .page-wrapper { max-width: 1300px; margin: 0 auto; padding: 32px 32px; }
+        @media (max-width: 767.98px) {
+            .page-wrapper { padding: 20px 14px; }
+        }
 
         /* Tables */
         .table { color: rgba(255,255,255,0.85) !important; border-color: rgba(255,255,255,0.06) !important; }
@@ -260,29 +286,27 @@
     <nav class="navbar navbar-dark">
         <div class="navbar-inner">
             <a href="/" aria-label="Saturday Savant home" style="display:flex;align-items:center;flex-shrink:0">
-                <img src="/static/logo-128.png" alt="Saturday Savant" style="height:56px;width:auto">
+                <img src="/static/logo-128.png" alt="Saturday Savant" class="brand-logo">
             </a>
 
-            <div class="nav-right">
-                {% set path = request.path %}
-                <div class="nav-links">
-                    <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active"{% endif %}>Teams</a>
-                    <a href="/rankings" {% if path.startswith('/rankings') %}class="active"{% endif %}>Rankings</a>
-                    <a href="/leaderboards/passing" {% if path.startswith('/leaderboards') %}class="active"{% endif %}>Leaderboards</a>
-                    <a href="/transfers" {% if path.startswith('/transfers') %}class="active"{% endif %}>Transfers</a>
-                    <a href="/rivalries" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
-                    <a href="/compare" {% if path.startswith('/compare') %}class="active"{% endif %}>Compare</a>
-                </div>
+            {% set path = request.path %}
+            <div class="nav-links">
+                <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active"{% endif %}>Teams</a>
+                <a href="/rankings" {% if path.startswith('/rankings') %}class="active"{% endif %}>Rankings</a>
+                <a href="/leaderboards/passing" {% if path.startswith('/leaderboards') %}class="active"{% endif %}>Leaderboards</a>
+                <a href="/transfers" {% if path.startswith('/transfers') %}class="active"{% endif %}>Transfers</a>
+                <a href="/rivalries" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
+                <a href="/compare" {% if path.startswith('/compare') %}class="active"{% endif %}>Compare</a>
+            </div>
 
-                <div class="search-wrapper" id="searchWrapper">
-                    <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-                        <circle cx="11" cy="11" r="7"></circle>
-                        <line x1="21" y1="21" x2="16.5" y2="16.5"></line>
-                    </svg>
-                    <input type="text" class="nav-search-input" id="navSearch"
-                           placeholder="Search players or teams..." autocomplete="off">
-                    <div class="search-dropdown" id="searchDropdown"></div>
-                </div>
+            <div class="search-wrapper" id="searchWrapper">
+                <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <line x1="21" y1="21" x2="16.5" y2="16.5"></line>
+                </svg>
+                <input type="text" class="nav-search-input" id="navSearch"
+                       placeholder="Search players or teams..." autocomplete="off">
+                <div class="search-dropdown" id="searchDropdown"></div>
             </div>
         </div>
     </nav>

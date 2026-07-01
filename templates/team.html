@@ -586,7 +586,7 @@
     {% if kicking_stats %}
     <div class="col-lg-6">
         {{ stat_table_header('Kicking','#34d399') }}
-        <div class="dark-card" style="overflow:hidden">
+        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
             <thead><tr style="background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08)">
                 <th style="color:rgba(255,255,255,0.3);font-size:0.56rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:10px 14px;text-align:left">Player</th>
@@ -607,13 +607,13 @@
                 {% endfor %}
             </tbody>
         </table>
-        </div>
+        </div></div>
     </div>
     {% endif %}
     {% if punting_stats %}
     <div class="col-lg-6">
         {{ stat_table_header('Punting','#60a5fa') }}
-        <div class="dark-card" style="overflow:hidden">
+        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
             <thead><tr style="background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08)">
                 <th style="color:rgba(255,255,255,0.3);font-size:0.56rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:10px 14px;text-align:left">Player</th>
@@ -634,7 +634,7 @@
                 {% endfor %}
             </tbody>
         </table>
-        </div>
+        </div></div>
     </div>
     {% endif %}
 </div>
@@ -660,7 +660,7 @@
         <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
         <span style="color:rgba(255,255,255,0.3);font-size:0.72rem">{{ section_players|length }} players</span>
     </div>
-    <div class="dark-card" style="overflow:hidden">
+    <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
             <thead>
                 <tr style="background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08)">
@@ -702,7 +702,7 @@
                 {% endfor %}
             </tbody>
         </table>
-    </div>
+    </div></div>
 </div>
 {% endif %}
 {% endmacro %}

@@ -114,7 +114,12 @@
     gap: 10px;
 }
 @media (max-width: 767.98px) {
-    .home-games-grid { grid-template-columns: 1fr; }
+    /* minmax(0,1fr) not 1fr: plain 1fr has a content-based minimum, so the
+       nowrap bowl names would force cards wider than the phone viewport */
+    .home-games-grid { grid-template-columns: minmax(0, 1fr); }
+    /* Bootstrap g-5 gutters (-24px row margins) overhang the tighter mobile
+       page padding; shrink them so rows stay inside the viewport */
+    .row.g-5 { --bs-gutter-x: 1rem; }
 }
 .game-card-v2 {
     display: block;
@@ -393,7 +398,34 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
     vertical-align: middle;
 }
 
+/* Phone: tighter columns so RK/TEAM/REC/PTS/TREND fit a ~390px viewport.
+   Must come after the base .ap-* rules — same specificity, so source order
+   decides which wins. */
+@media (max-width: 575.98px) {
+    .ap-rankings-grid { grid-template-columns: 36px minmax(0, 1fr) 48px 46px 56px; }
+    .ap-head { padding: 0 12px 8px; }
+    .ap-rank-row { padding: 10px 12px; }
+    .ap-rank-row .ap-team-cell { min-width: 120px !important; gap: 10px !important; }
+    .ap-team-logo { width: 30px; height: 30px; }
+    .ap-team-name { font-size: 0.82rem; }
+    .ap-cell, .ap-cell-strong { font-size: 0.82rem; }
+    .ap-medal { width: 28px; height: 28px; font-size: 0.8rem; }
+    .ap-trend { min-width: 40px; padding: 3px 5px; font-size: 0.68rem; }
+}
+
 /* Player Page */
+
+/* Hero — phone layout: info stacks on top, headshot centers underneath
+   anchored to the hero's bottom edge; !important overrides inline styles */
+@media (max-width: 767.98px) {
+    .ph-hero-row { flex-direction: column; align-items: stretch !important; min-height: 0 !important; }
+    .ph-info { padding-top: 24px !important; }
+    .ph-headshot { order: 2; align-self: center !important; margin: 8px 0 0 !important; }
+    .ph-headshot img { height: 160px !important; }
+    .ph-fallback { width: 120px !important; height: 160px !important; font-size: 2rem !important; }
+    .ph-name { font-size: 1.6rem !important; }
+}
+
 .nfl-status-badge {
     position: absolute;
     bottom: 16px;
@@ -1045,6 +1077,17 @@ tr.postseason-row:hover {
     align-items: center;
     justify-content: center;
     background: radial-gradient(circle at center, rgba(var(--glow-rgb), 0.15) 0%, transparent 70%);
+}
+
+/* Game hero — phone scaling; !important overrides the inline desktop sizes */
+@media (max-width: 767.98px) {
+    .team-logo-glow { width: 96px; height: 96px; }
+    .gh-logo-img { height: 84px !important; }
+    .gh-side { padding-left: 10px !important; padding-right: 10px !important; }
+    .gh-score { min-width: 44px !important; }
+    .gh-dash { font-size: 1.4rem !important; padding: 0 2px !important; }
+    .hero-score-winner, .hero-score-loser { font-size: 2.2rem !important; }
+    .gh-team-name { font-size: 0.95rem !important; }
 }
 
 .lb-page-ellipsis {

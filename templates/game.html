@@ -68,40 +68,40 @@
 
         <div style="display:flex;align-items:center;justify-content:center">
             {# Away (left) #}
-            <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
+            <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
                 {% if game[10] %}
                 <div class="team-logo-glow" style="--glow-rgb:{{ away_rgb }}">
-                    <a href="/team/{{ away_team }}"><img src="{{ game[10] }}" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
+                    <a href="/team/{{ away_team }}"><img src="{{ game[10] }}" class="gh-logo-img" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
                 </div>
                 {% endif %}
                 <div style="text-align:right">
                     {% if away_rank %}<div style="color:#f59e0b;font-size:0.6rem;font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
-                    <div style="font-size:1.25rem;line-height:1.1"><a href="/team/{{ away_team }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color=''">{{ away_team }}</a></div>
+                    <div class="gh-team-name" style="font-size:1.25rem;line-height:1.1"><a href="/team/{{ away_team }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color=''">{{ away_team }}</a></div>
                     {% if records.away %}<div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:3px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
                 </div>
             </div>
 
             {# Scores #}
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-                <div style="min-width:80px;text-align:center">
+                <div class="gh-score" style="min-width:80px;text-align:center">
                     <div class="{{ 'hero-score-loser' if home_won_final else 'hero-score-winner' }}" style="font-size:4rem;font-weight:900;line-height:1">{{ game[4] if game[4] is not none else '—' }}</div>
                 </div>
-                <div style="color:rgba(255,255,255,0.18);font-size:2.4rem;font-weight:200;padding:0 6px">–</div>
-                <div style="min-width:80px;text-align:center">
+                <div class="gh-dash" style="color:rgba(255,255,255,0.18);font-size:2.4rem;font-weight:200;padding:0 6px">–</div>
+                <div class="gh-score" style="min-width:80px;text-align:center">
                     <div class="{{ 'hero-score-loser' if away_won_final else 'hero-score-winner' }}" style="font-size:4rem;font-weight:900;line-height:1">{{ game[3] if game[3] is not none else '—' }}</div>
                 </div>
             </div>
 
             {# Home (right) #}
-            <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:36px">
+            <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:36px">
                 {% if game[9] %}
                 <div class="team-logo-glow" style="--glow-rgb:{{ home_rgb }}">
-                    <a href="/team/{{ home_team }}"><img src="{{ game[9] }}" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
+                    <a href="/team/{{ home_team }}"><img src="{{ game[9] }}" class="gh-logo-img" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
                 </div>
                 {% endif %}
                 <div style="text-align:left">
                     {% if home_rank %}<div style="color:#f59e0b;font-size:0.6rem;font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
-                    <div style="font-size:1.25rem;line-height:1.1"><a href="/team/{{ home_team }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color=''">{{ home_team }}</a></div>
+                    <div class="gh-team-name" style="font-size:1.25rem;line-height:1.1"><a href="/team/{{ home_team }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='rgba(255,255,255,0.7)'" onmouseout="this.style.color=''">{{ home_team }}</a></div>
                     {% if records.home %}<div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:3px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
                 </div>
             </div>
