@@ -1359,58 +1359,63 @@ def team(team_name):
                 'def_pass_exp':             round(ts[34], 3) if ts[34] else None,
             }
 
-            cursor.execute('SELECT rating, ranking, offense_rating, offense_ranking, defense_rating, defense_ranking, special_teams_rating FROM sp_ratings WHERE team=%s', (team_name,))
-            sp_row = cursor.fetchone()
-            sp = None
-            if sp_row:
-                sp = {
-                    'rating':           round(sp_row[0], 1) if sp_row[0] else None,
-                    'ranking':          sp_row[1],
-                    'off_rating':       round(sp_row[2], 1) if sp_row[2] else None,
-                    'off_ranking':      sp_row[3],
-                    'def_rating':       round(sp_row[4], 1) if sp_row[4] else None,
-                    'def_ranking':      sp_row[5],
-                    'st_rating':        round(sp_row[6], 1) if sp_row[6] else None,
-                }
+        # NOTE: the block below used to be nested inside `if ts:`, which meant
+        # brand-new FBS programs with no team_stats row yet (e.g. teams just
+        # joining from FCS) fell through with no return statement at all —
+        # a 500 error. sp/recruiting/havoc are independent lookups that each
+        # already null-check their own row, so they run unconditionally now.
+        cursor.execute('SELECT rating, ranking, offense_rating, offense_ranking, defense_rating, defense_ranking, special_teams_rating FROM sp_ratings WHERE team=%s', (team_name,))
+        sp_row = cursor.fetchone()
+        sp = None
+        if sp_row:
+            sp = {
+                'rating':           round(sp_row[0], 1) if sp_row[0] else None,
+                'ranking':          sp_row[1],
+                'off_rating':       round(sp_row[2], 1) if sp_row[2] else None,
+                'off_ranking':      sp_row[3],
+                'def_rating':       round(sp_row[4], 1) if sp_row[4] else None,
+                'def_ranking':      sp_row[5],
+                'st_rating':        round(sp_row[6], 1) if sp_row[6] else None,
+            }
 
-            # Recruiting rankings trend
-            cursor.execute('''
-                SELECT year, rank, points FROM team_recruiting
-                WHERE team=%s AND year >= 2022 ORDER BY year DESC
-            ''', (team_name,))
-            recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
-                          for r in cursor.fetchall()]
+        # Recruiting rankings trend
+        cursor.execute('''
+            SELECT year, rank, points FROM team_recruiting
+            WHERE team=%s AND year >= 2022 ORDER BY year DESC
+        ''', (team_name,))
+        recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
+                      for r in cursor.fetchall()]
 
-            # Havoc + field position (from team_advanced) — fetch every team so we
-            # can rank this team's havoc/field-position numbers into percentiles,
-            # same as the team_stats-based metrics above.
-            cursor.execute('SELECT * FROM team_advanced')
-            adv_cols = [d[0] for d in cursor.description]
-            all_teams_advanced = {row[0]: dict(zip(adv_cols, row)) for row in cursor.fetchall()}
-            adv_row = all_teams_advanced.get(team_name)
-            havoc = None
-            if adv_row and adv_row.get('def_havoc_total') is not None:
-                havoc = {
-                    'total':   round(adv_row['def_havoc_total'] * 100, 1),
-                    'front7':  round(adv_row['def_havoc_front7'] * 100, 1) if adv_row['def_havoc_front7'] else None,
-                    'db':      round(adv_row['def_havoc_db'] * 100, 1) if adv_row['def_havoc_db'] else None,
-                    'off_fp':  round(adv_row['off_field_pos_avg_start'], 1) if adv_row['off_field_pos_avg_start'] else None,
-                    'def_fp':  round(adv_row['def_field_pos_avg_start'], 1) if adv_row['def_field_pos_avg_start'] else None,
-                    'scoring_opps': adv_row['off_scoring_opps'],
-                    'pts_per_opp': round(adv_row['off_pts_per_opp'], 2) if adv_row['off_pts_per_opp'] else None,
-                }
-            percentiles.update(compute_havoc_field_pos_percentiles(all_teams_advanced, team_name))
+        # Havoc + field position (from team_advanced) — fetch every team so we
+        # can rank this team's havoc/field-position numbers into percentiles,
+        # same as the team_stats-based metrics above.
+        cursor.execute('SELECT * FROM team_advanced')
+        adv_cols = [d[0] for d in cursor.description]
+        all_teams_advanced = {row[0]: dict(zip(adv_cols, row)) for row in cursor.fetchall()}
+        adv_row = all_teams_advanced.get(team_name)
+        havoc = None
+        if adv_row and adv_row.get('def_havoc_total') is not None:
+            havoc = {
+                'total':   round(adv_row['def_havoc_total'] * 100, 1),
+                'front7':  round(adv_row['def_havoc_front7'] * 100, 1) if adv_row['def_havoc_front7'] else None,
+                'db':      round(adv_row['def_havoc_db'] * 100, 1) if adv_row['def_havoc_db'] else None,
+                'off_fp':  round(adv_row['off_field_pos_avg_start'], 1) if adv_row['off_field_pos_avg_start'] else None,
+                'def_fp':  round(adv_row['def_field_pos_avg_start'], 1) if adv_row['def_field_pos_avg_start'] else None,
+                'scoring_opps': adv_row['off_scoring_opps'],
+                'pts_per_opp': round(adv_row['off_pts_per_opp'], 2) if adv_row['off_pts_per_opp'] else None,
+            }
+        percentiles.update(compute_havoc_field_pos_percentiles(all_teams_advanced, team_name))
 
-            return render_template('team.html',
-                    team=team_info, record=record, season_stats=season_stats,
-                    standings=standings, schedule=schedule, roster=roster, lineup=lineup,
-                    passing_stats=passing_stats, rushing_stats=rushing_stats,
-                    receiving_stats=receiving_stats, defensive_stats=defensive_stats,
-                    kicking_stats=kicking_stats, punting_stats=punting_stats,
-                    kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
-                    team_adv=team_adv, percentiles=percentiles, sp=sp,
-                    ap_rankings=ap_rankings, team_rank=team_rank,
-                    recruiting=recruiting, havoc=havoc)
+        return render_template('team.html',
+                team=team_info, record=record, season_stats=season_stats,
+                standings=standings, schedule=schedule, roster=roster, lineup=lineup,
+                passing_stats=passing_stats, rushing_stats=rushing_stats,
+                receiving_stats=receiving_stats, defensive_stats=defensive_stats,
+                kicking_stats=kicking_stats, punting_stats=punting_stats,
+                kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
+                team_adv=team_adv, percentiles=percentiles, sp=sp,
+                ap_rankings=ap_rankings, team_rank=team_rank,
+                recruiting=recruiting, havoc=havoc)
     finally:
         release_db(conn)
 
