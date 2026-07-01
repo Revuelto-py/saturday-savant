@@ -180,76 +180,73 @@
     <div style="color:rgba(255,255,255,0.4);font-size:0.62rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:16px">Game Leaders</div>
 
     <!-- Team header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
-        <div style="display:flex;align-items:center;gap:8px">
-            {% if game[10] %}<img src="{{ game[10] }}" style="width:28px;height:28px;object-fit:contain">{% endif %}
+    <div class="d-flex justify-content-between align-items-center w-100" style="padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.08);margin-bottom:4px">
+        <div class="d-flex align-items-center gap-2">
+            {% if game[10] %}<img src="{{ game[10] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
             <span style="color:white;font-weight:800;font-size:0.82rem">{{ away_team }}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-direction:row-reverse">
-            {% if game[9] %}<img src="{{ game[9] }}" style="width:28px;height:28px;object-fit:contain">{% endif %}
+        <div class="d-flex align-items-center gap-2">
             <span style="color:white;font-weight:800;font-size:0.82rem">{{ home_team }}</span>
+            {% if game[9] %}<img src="{{ game[9] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
         </div>
     </div>
 
     {% for cat_key, label in [('passingYards','Passing Yards'),('rushingYards','Rushing Yards'),('receivingYards','Receiving Yards'),('sacks','Sacks'),('tackles','Tackles')] %}
     {% set cat = structured_leaders.get(cat_key) %}
     {% if cat and (cat.away or cat.home) %}
-    <div style="padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+    <div class="row align-items-center" style="padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
 
-        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:start;gap:16px">
-
-            <!-- Away leader -->
-            <div style="display:flex;align-items:flex-start;gap:10px">
-                {% if cat.away %}
-                {% if cat.away.headshot %}
-                <img src="{{ cat.away.headshot }}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.1);flex-shrink:0">
+        <!-- Away leader (left, left-aligned) -->
+        <div class="col-5 d-flex align-items-center gap-3 text-start">
+            {% if cat.away %}
+            {% if cat.away.headshot %}
+            <img src="{{ cat.away.headshot }}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.1);flex-shrink:0">
+            {% else %}
+            <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.4);font-size:0.8rem">{{ cat.away.name[0] if cat.away.name else '?' }}</div>
+            {% endif %}
+            <div>
+                <div style="color:white;font-weight:900;font-size:1.1rem;line-height:1">{{ cat.away.stat }}</div>
+                {% if cat.away.player_id %}
+                <a href="/player/{{ cat.away.player_id }}" style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.8)'">{{ cat.away.name }}</a>
                 {% else %}
-                <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.4);font-size:0.8rem">{{ cat.away.name[0] if cat.away.name else '?' }}</div>
+                <div style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px">{{ cat.away.name }}</div>
                 {% endif %}
-                <div>
-                    <div style="color:white;font-weight:900;font-size:1.1rem;line-height:1">{{ cat.away.stat }}</div>
-                    {% if cat.away.player_id %}
-                    <a href="/player/{{ cat.away.player_id }}" style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.8)'">{{ cat.away.name }}</a>
-                    {% else %}
-                    <div style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px">{{ cat.away.name }}</div>
-                    {% endif %}
-                    {% if cat.away.position %}<div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-top:1px">{{ cat.away.position }}</div>{% endif %}
-                    {% if cat.away.stat_detail %}<div style="color:rgba(255,255,255,0.35);font-size:0.68rem;margin-top:2px">{{ cat.away.stat_detail }}</div>{% endif %}
-                </div>
-                {% else %}
-                <div style="color:rgba(255,255,255,0.2);font-size:0.8rem;padding-top:14px">—</div>
-                {% endif %}
+                {% if cat.away.position %}<div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-top:1px">{{ cat.away.position }}</div>{% endif %}
+                {% if cat.away.stat_detail %}<div style="color:rgba(255,255,255,0.35);font-size:0.68rem;margin-top:2px">{{ cat.away.stat_detail }}</div>{% endif %}
             </div>
-
-            <!-- Center label -->
-            <div style="text-align:center;padding-top:12px">
-                <div style="color:rgba(255,255,255,0.4);font-size:0.68rem;font-weight:700;line-height:1.4;max-width:80px">{{ label }}</div>
-            </div>
-
-            <!-- Home leader -->
-            <div style="display:flex;align-items:flex-start;gap:10px;justify-content:flex-end;flex-direction:row-reverse">
-                {% if cat.home %}
-                {% if cat.home.headshot %}
-                <img src="{{ cat.home.headshot }}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.1);flex-shrink:0">
-                {% else %}
-                <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.4);font-size:0.8rem">{{ cat.home.name[0] if cat.home.name else '?' }}</div>
-                {% endif %}
-                <div style="text-align:right">
-                    <div style="color:white;font-weight:900;font-size:1.1rem;line-height:1">{{ cat.home.stat }}</div>
-                    {% if cat.home.player_id %}
-                    <a href="/player/{{ cat.home.player_id }}" style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.8)'">{{ cat.home.name }}</a>
-                    {% else %}
-                    <div style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px">{{ cat.home.name }}</div>
-                    {% endif %}
-                    {% if cat.home.position %}<div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-top:1px">{{ cat.home.position }}</div>{% endif %}
-                    {% if cat.home.stat_detail %}<div style="color:rgba(255,255,255,0.35);font-size:0.68rem;margin-top:2px">{{ cat.home.stat_detail }}</div>{% endif %}
-                </div>
-                {% else %}
-                <div style="color:rgba(255,255,255,0.2);font-size:0.8rem;padding-top:14px">—</div>
-                {% endif %}
-            </div>
-
+            {% else %}
+            <div style="color:rgba(255,255,255,0.2);font-size:0.8rem">—</div>
+            {% endif %}
         </div>
+
+        <!-- Center label -->
+        <div class="col-2 text-center d-flex align-items-center justify-content-center">
+            <div style="color:rgba(255,255,255,0.4);font-size:0.68rem;font-weight:700;line-height:1.4">{{ label }}</div>
+        </div>
+
+        <!-- Home leader (right, mirrored) -->
+        <div class="col-5 d-flex align-items-center flex-row-reverse gap-3 text-end">
+            {% if cat.home %}
+            {% if cat.home.headshot %}
+            <img src="{{ cat.home.headshot }}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.1);flex-shrink:0">
+            {% else %}
+            <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:rgba(255,255,255,0.4);font-size:0.8rem">{{ cat.home.name[0] if cat.home.name else '?' }}</div>
+            {% endif %}
+            <div>
+                <div style="color:white;font-weight:900;font-size:1.1rem;line-height:1">{{ cat.home.stat }}</div>
+                {% if cat.home.player_id %}
+                <a href="/player/{{ cat.home.player_id }}" style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.8)'">{{ cat.home.name }}</a>
+                {% else %}
+                <div style="color:rgba(255,255,255,0.8);font-weight:600;font-size:0.78rem;margin-top:3px">{{ cat.home.name }}</div>
+                {% endif %}
+                {% if cat.home.position %}<div style="color:rgba(255,255,255,0.4);font-size:0.7rem;margin-top:1px">{{ cat.home.position }}</div>{% endif %}
+                {% if cat.home.stat_detail %}<div style="color:rgba(255,255,255,0.35);font-size:0.68rem;margin-top:2px">{{ cat.home.stat_detail }}</div>{% endif %}
+            </div>
+            {% else %}
+            <div style="color:rgba(255,255,255,0.2);font-size:0.8rem">—</div>
+            {% endif %}
+        </div>
+
     </div>
     {% endif %}
     {% endfor %}
