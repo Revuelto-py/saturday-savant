@@ -323,6 +323,41 @@ def compute_percentiles(all_teams_stats, team_name):
 
     return percentiles
 
+def compute_havoc_field_pos_percentiles(all_teams_advanced, team_name):
+    """Percentiles for havoc rate and starting field position, from team_advanced.
+    Keyed by dict (column name -> value) rather than positional index, unlike
+    compute_percentiles() above, since these rows come from a plain SELECT *.
+
+    field_pos_avg_start is stored as yards-to-go (100 - yard line), not the yard
+    line itself — values cluster ~64-75. So for the offense, LOWER is better
+    (fewer yards to travel); for the defense (opponent's yards-to-go against
+    this team), HIGHER is better (pinning opponents back further)."""
+    higher_better = ['def_havoc_total', 'def_havoc_front7', 'def_havoc_db', 'def_field_pos_avg_start']
+    lower_better = ['off_field_pos_avg_start']
+
+    team_row = all_teams_advanced.get(team_name)
+    if not team_row:
+        return {}
+
+    percentiles = {}
+    for metric in higher_better + lower_better:
+        team_val = team_row.get(metric)
+        if team_val is None:
+            percentiles[metric] = None
+            continue
+        all_vals = [row[metric] for row in all_teams_advanced.values() if row.get(metric) is not None]
+        if not all_vals:
+            percentiles[metric] = None
+            continue
+        if metric in higher_better:
+            rank = sum(1 for v in all_vals if v < team_val)
+        else:
+            rank = sum(1 for v in all_vals if v > team_val)
+        pct = round((rank / len(all_vals)) * 100)
+        percentiles[metric] = max(1, min(99, pct))
+
+    return percentiles
+
 def sort_players(cat_dict, sort_key, min_val=0):
     players = []
     for name, stats in cat_dict.items():
@@ -967,37 +1002,25 @@ def team(team_name):
             recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
                           for r in cursor.fetchall()]
 
-            # Havoc + field position (from team_advanced)
-            cursor.execute('''
-                SELECT def_havoc_total, def_havoc_front7, def_havoc_db,
-                       off_field_pos_avg_start, def_field_pos_avg_start,
-                       off_scoring_opps, off_pts_per_opp
-                FROM team_advanced WHERE team=%s
-            ''', (team_name,))
-            adv_row = cursor.fetchone()
+            # Havoc + field position (from team_advanced) — fetch every team so we
+            # can rank this team's havoc/field-position numbers into percentiles,
+            # same as the team_stats-based metrics above.
+            cursor.execute('SELECT * FROM team_advanced')
+            adv_cols = [d[0] for d in cursor.description]
+            all_teams_advanced = {row[0]: dict(zip(adv_cols, row)) for row in cursor.fetchall()}
+            adv_row = all_teams_advanced.get(team_name)
             havoc = None
-            if adv_row and adv_row[0] is not None:
+            if adv_row and adv_row.get('def_havoc_total') is not None:
                 havoc = {
-                    'total':   round(adv_row[0] * 100, 1),
-                    'front7':  round(adv_row[1] * 100, 1) if adv_row[1] else None,
-                    'db':      round(adv_row[2] * 100, 1) if adv_row[2] else None,
-                    'off_fp':  round(adv_row[3], 1)       if adv_row[3] else None,
-                    'def_fp':  round(adv_row[4], 1)       if adv_row[4] else None,
-                    'scoring_opps': adv_row[5],
-                    'pts_per_opp': round(adv_row[6], 2)   if adv_row[6] else None,
+                    'total':   round(adv_row['def_havoc_total'] * 100, 1),
+                    'front7':  round(adv_row['def_havoc_front7'] * 100, 1) if adv_row['def_havoc_front7'] else None,
+                    'db':      round(adv_row['def_havoc_db'] * 100, 1) if adv_row['def_havoc_db'] else None,
+                    'off_fp':  round(adv_row['off_field_pos_avg_start'], 1) if adv_row['off_field_pos_avg_start'] else None,
+                    'def_fp':  round(adv_row['def_field_pos_avg_start'], 1) if adv_row['def_field_pos_avg_start'] else None,
+                    'scoring_opps': adv_row['off_scoring_opps'],
+                    'pts_per_opp': round(adv_row['off_pts_per_opp'], 2) if adv_row['off_pts_per_opp'] else None,
                 }
-
-            # SP+ historical trend (5 years)
-            cursor.execute('''
-                SELECT year, rating, ranking, offense_rating, defense_rating
-                FROM sp_historical WHERE team=%s ORDER BY year
-            ''', (team_name,))
-            sp_trend = [{'year': r[0], 'rating': round(r[1], 1) if r[1] else None,
-                         'ranking': r[2],
-                         'off': round(r[3], 1) if r[3] else None,
-                         'def': round(r[4], 1) if r[4] else None}
-                        for r in cursor.fetchall()]
-
+            percentiles.update(compute_havoc_field_pos_percentiles(all_teams_advanced, team_name))
 
             return render_template('team.html',
                     team=team_info, record=record, season_stats=season_stats,
@@ -1008,7 +1031,7 @@ def team(team_name):
                     kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
                     team_adv=team_adv, percentiles=percentiles, sp=sp,
                     ap_rankings=ap_rankings, team_rank=team_rank,
-                    recruiting=recruiting, havoc=havoc, sp_trend=sp_trend)
+                    recruiting=recruiting, havoc=havoc)
     finally:
         release_db(conn)
 

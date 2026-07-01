@@ -167,36 +167,6 @@
     </div>
     {% endif %}
 
-    <!-- SP+ Historical Trend -->
-    {% if sp_trend and sp_trend|length > 1 %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 style="color:white;font-weight:800;font-size:0.82rem;letter-spacing:0.08em;text-transform:uppercase;margin:0">SP+ Trend</h5>
-            <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
-            <span style="color:rgba(255,255,255,0.25);font-size:0.65rem">5-Year Rating History</span>
-        </div>
-        <div class="dark-card" style="padding:20px">
-            <div style="display:flex;align-items:flex-end;justify-content:space-around;height:80px;gap:8px">
-                {% set ns_sp = namespace(max_r=0,min_r=999) %}
-                {% for s in sp_trend %}
-                    {% if s.rating and s.rating > ns_sp.max_r %}{% set ns_sp.max_r = s.rating %}{% endif %}
-                    {% if s.rating and s.rating < ns_sp.min_r %}{% set ns_sp.min_r = s.rating %}{% endif %}
-                {% endfor %}
-                {% set sp_range = ns_sp.max_r - ns_sp.min_r %}
-                {% for s in sp_trend %}
-                {% set bar_h = (((s.rating - ns_sp.min_r) / (sp_range if sp_range > 0 else 1)) * 60 + 10) | round | int if s.rating else 10 %}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
-                    <div style="font-size:0.62rem;color:{{ '#f59e0b' if s.year == 2025 else 'rgba(255,255,255,0.5)' }};font-weight:800">{{ s.rating or '—' }}</div>
-                    <div style="width:100%;background:{{ c1 if s.year == 2025 else 'rgba(255,255,255,0.1)' }};border-radius:3px 3px 0 0;height:{{ bar_h }}px;transition:height 0.3s"></div>
-                    <div style="font-size:0.6rem;color:rgba(255,255,255,0.35);font-weight:600">{{ s.year }}</div>
-                    {% if s.ranking %}<div style="font-size:0.55rem;color:rgba(255,255,255,0.25)">#{{ s.ranking }}</div>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Recruiting Rankings -->
     {% if recruiting %}
     <div class="mt-4">
@@ -215,32 +185,6 @@
                     {% else %}
                     <div style="color:rgba(255,255,255,0.25);font-size:1.2rem">—</div>
                     {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Havoc & Field Position -->
-    {% if havoc %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 style="color:white;font-weight:800;font-size:0.82rem;letter-spacing:0.08em;text-transform:uppercase;margin:0">Havoc & Field Position</h5>
-            <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
-            <span style="color:rgba(255,255,255,0.25);font-size:0.65rem">2025 FBS</span>
-        </div>
-        <div class="row g-3">
-            {% for label, val, color in [
-                ('Def Havoc Rate', havoc.total|string ~ '%', '#a78bfa'),
-                ('Front 7 Havoc',  (havoc.front7|string ~ '%') if havoc.front7 else '—', '#818cf8'),
-                ('DB Havoc',       (havoc.db|string ~ '%') if havoc.db else '—', '#6ee7b7'),
-                ('Off Field Pos',  (havoc.off_fp|string ~ ' yd line') if havoc.off_fp else '—', '#34d399'),
-            ] %}
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-3 text-center">
-                    <div style="color:rgba(255,255,255,0.35);font-size:0.58rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px">{{ label }}</div>
-                    <div style="color:{{ color }};font-size:1.8rem;font-weight:900;line-height:1">{{ val }}</div>
                 </div>
             </div>
             {% endfor %}
@@ -325,6 +269,7 @@
                     {{ pct_bar('Pass Success Rate',    team_adv.off_pass_sr,            'off_pass_sr',        '%') }}
                     {{ pct_bar('Rush Explosiveness',   team_adv.off_rush_exp,           'off_rush_exp') }}
                     {{ pct_bar('Pass Explosiveness',   team_adv.off_pass_exp,           'off_pass_exp') }}
+                    {{ pct_bar('Avg Starting Field Position', havoc.off_fp if havoc else none, 'off_field_pos_avg_start', ' yd') }}
                 </div>
             </div>
             <div class="col-lg-6">
@@ -345,6 +290,10 @@
                     {{ pct_bar('Pass Success Allowed',       team_adv.def_pass_sr,            'def_pass_sr',        '%') }}
                     {{ pct_bar('Rush Explosiveness Allowed', team_adv.def_rush_exp,           'def_rush_exp') }}
                     {{ pct_bar('Pass Explosiveness Allowed', team_adv.def_pass_exp,           'def_pass_exp') }}
+                    {{ pct_bar('Havoc Rate',                 havoc.total if havoc else none,  'def_havoc_total',        '%') }}
+                    {{ pct_bar('Front 7 Havoc',              havoc.front7 if havoc else none, 'def_havoc_front7',       '%') }}
+                    {{ pct_bar('DB Havoc',                   havoc.db if havoc else none,     'def_havoc_db',           '%') }}
+                    {{ pct_bar('Opponent Starting Field Position', havoc.def_fp if havoc else none, 'def_field_pos_avg_start', ' yd') }}
                 </div>
             </div>
         </div>
@@ -370,6 +319,8 @@
             ('Rush / Pass EPA', 'EPA per play broken down by run vs pass. Helps identify whether a team\'s success comes from the ground or through the air.'),
             ('Rush / Pass Success Rate', 'Success rate broken down by run vs pass. Shows whether a team is consistently effective in each phase.'),
             ('Rush / Pass Explosiveness', 'Average EPA on successful rush or pass plays only. Identifies big-play threats in each phase of the offense.'),
+            ('Havoc Rate', 'The percentage of opponent plays this defense disrupts — tackles for loss, forced fumbles, pass breakups, and interceptions. Broken down into Front 7 (line/linebacker) and DB (secondary) contributions. Higher is better.'),
+            ('Field Position', 'Average yards a drive needs to travel to reach the end zone, based on where it starts. For "Avg Starting Field Position," lower is better — the offense starts closer to the opponent\'s end zone. For "Opponent Starting Field Position," higher is better — the defense (and special teams) is pinning opponents back, forcing them to go further.'),
         ] %}
         <div class="row g-3">
             {% for term, definition in glossary %}
