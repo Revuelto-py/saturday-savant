@@ -2029,6 +2029,55 @@ def game_detail(game_id):
     )
 
 
+# Conference championship games are tagged 'SeasonType.REGULAR' in this
+# dataset (they land on the last "week" of the regular season, not
+# 'SeasonType.POSTSEASON'), so they're matched on notes text regardless of
+# season_type rather than being folded into the postseason-only branch.
+_CCG_RE = re.compile(
+    r'^(SEC|Big Ten|Big 12|ACC|Pac-12|Mountain West|American|Sun Belt|MAC|Conference USA)'
+    r'\s+Championship(?:\s+Game)?$'
+)
+_CCG_ABBR = {'Conference USA': 'CUSA', 'Mountain West': 'MW', 'American': 'AAC'}
+
+
+def shorten_game_label(season_type, week, notes):
+    """Compact game-log label. Regular-season games keep the bare week
+    number (matching the pre-existing display) so this only changes rows
+    that were actually showing a wrong/misleading week number before."""
+    notes = (notes or '').strip()
+
+    m = _CCG_RE.match(notes)
+    if m:
+        conf = m.group(1)
+        return f"{_CCG_ABBR.get(conf, conf)} CCG"
+
+    if season_type != 'SeasonType.POSTSEASON':
+        return str(week)
+
+    if not notes:
+        return 'Postseason'
+
+    label = notes
+    # This dataset phrases CFP rounds as "... at the <Bowl Name>" rather
+    # than with a " - " separator, so match on the round name itself and
+    # drop the specific bowl/sponsor name — the round is what matters here.
+    if 'College Football Playoff Semifinal' in label:
+        label = 'CFP Semifinal'
+    elif 'College Football Playoff Quarterfinal' in label:
+        label = 'CFP Quarterfinal'
+    elif 'College Football Playoff First Round' in label:
+        label = 'CFP R1'
+    elif 'College Football Playoff National Championship' in label:
+        label = 'CFP Championship'
+    elif 'College Football Playoff' in label:
+        label = 'CFP'
+
+    if len(label) > 28:
+        label = label[:26] + '…'
+
+    return label
+
+
 @app.route('/player/<int:player_id>')
 @cache.memoize(timeout=3600)
 def player_detail(player_id):
@@ -2459,12 +2508,13 @@ def player_detail(player_id):
                        CASE WHEN g.home_team = ANY(%s) THEN g.away_points ELSE g.home_points END,
                        CASE WHEN g.home_team = ANY(%s) THEN 'home' ELSE 'away' END,
                        CASE WHEN g.home_team = ANY(%s) THEN t2.logo_dark ELSE t1.logo_dark END,
-                       CASE WHEN g.home_team = ANY(%s) THEN g.home_team ELSE g.away_team END
+                       CASE WHEN g.home_team = ANY(%s) THEN g.home_team ELSE g.away_team END,
+                       g.season_type, g.notes
                 FROM games g
                 LEFT JOIN teams t1 ON g.home_team = t1.name
                 LEFT JOIN teams t2 ON g.away_team = t2.name
                 WHERE (g.home_team = ANY(%s) OR g.away_team = ANY(%s)) AND g.completed=1
-                ORDER BY g.week
+                ORDER BY g.start_date ASC
             ''', (player_teams,) * 8)
             games_list = cur2.fetchall()
         finally:
@@ -2480,7 +2530,7 @@ def player_detail(player_id):
         for game_row in games_list:
             if not remaining_teams and espn_athlete_id:
                 break
-            game_id, _, _, _, _, _, _, my_team = game_row
+            game_id, _, _, _, _, _, _, my_team, _, _ = game_row
             if my_team not in remaining_teams and espn_athlete_id:
                 continue
             try:
@@ -2513,7 +2563,7 @@ def player_detail(player_id):
 
         if espn_athlete_id and espn_team_id_by_team:
             for game_row in games_list:
-                game_id, week, opp, my_pts, opp_pts, ha, opp_logo, my_team = game_row
+                game_id, week, opp, my_pts, opp_pts, ha, opp_logo, my_team, season_type, notes = game_row
                 team_id = espn_team_id_by_team.get(my_team)
                 if not team_id:
                     continue
@@ -2540,14 +2590,16 @@ def player_detail(player_id):
                         result = ''
 
                     game_log.append({
-                        'week':      week,
-                        'game_id':   game_id,
-                        'opponent':  opp or '',
-                        'opp_logo':  opp_logo or '',
-                        'home_away': ha,
-                        'result':    result,
-                        'team':      my_team,
-                        'stats':     gstats,
+                        'week':         week,
+                        'game_id':      game_id,
+                        'opponent':     opp or '',
+                        'opp_logo':     opp_logo or '',
+                        'home_away':    ha,
+                        'result':       result,
+                        'team':         my_team,
+                        'season_type':  season_type,
+                        'game_label':   shorten_game_label(season_type, week, notes),
+                        'stats':        gstats,
                     })
                 except Exception:
                     pass

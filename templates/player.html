@@ -663,12 +663,15 @@
                 {% for g in game_log %}
                 {% set is_win  = g.result.startswith('W') %}
                 {% set is_loss = g.result.startswith('L') %}
-                <tr class="player-row" style="border-bottom:1px solid rgba(255,255,255,0.04);{{ 'cursor:pointer' if g.game_id else '' }}"
+                {# Conference championship rows also get the gold treatment even though
+                   this dataset tags them SeasonType.REGULAR — g.game_label already differs
+                   from the plain week number for both CCG and true postseason rows. #}
+                <tr class="player-row{% if g.season_type == 'SeasonType.POSTSEASON' or g.game_label != g.week|string %} postseason-row{% endif %}" style="border-bottom:1px solid rgba(255,255,255,0.04);{{ 'cursor:pointer' if g.game_id else '' }}"
                     {% if g.game_id %}onclick="window.location.href='/game/{{ g.game_id }}'"{% endif %}
                     onmouseover="this.style.background='rgba(255,255,255,0.025)'"
                     onmouseout="this.style.background='transparent'">
                     <td style="padding:11px 12px;color:rgba(255,255,255,0.4);font-size:0.8rem;font-weight:700;white-space:nowrap">
-                        {{ g.week }}{% if g.game_id %}<span style="color:rgba(255,255,255,0.2);font-size:0.6rem;margin-left:3px">↗</span>{% endif %}
+                        {{ g.game_label }}{% if g.game_id %}<span style="color:rgba(255,255,255,0.2);font-size:0.6rem;margin-left:3px">↗</span>{% endif %}
                     </td>
                     <td style="padding:11px 12px;white-space:nowrap">
                         <span style="color:{{ 'rgba(255,255,255,0.5)' if g.team != player.team else 'rgba(255,255,255,0.85)' }};font-weight:600;font-size:0.78rem">{{ team_abbrevs.get(g.team, g.team) }}</span>

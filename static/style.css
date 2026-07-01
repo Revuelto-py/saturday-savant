@@ -83,6 +83,28 @@
     flex-wrap: wrap;
 }
 
+.postseason-row {
+    background: rgba(245, 158, 11, 0.04);
+    border-left: 2px solid rgba(245, 158, 11, 0.3);
+}
+/* tr.postseason-row (not just .postseason-row): postseason rows also carry
+   .player-row, and tr.player-row:hover (element + class + pseudo) already
+   outweighs a plain .postseason-row:hover (class + pseudo) on specificity
+   alone — matching the element selector here keeps this rule in the tie,
+   which source order then resolves in its favor. */
+tr.postseason-row:hover {
+    background: rgba(245, 158, 11, 0.08);
+}
+/* !important needed here: the first <td> already carries an inline
+   color/font-weight/font-size from the base (non-postseason) row style,
+   which would otherwise win over this rule. */
+.postseason-row td:first-child {
+    color: rgba(245, 158, 11, 0.85) !important;
+    font-weight: 600 !important;
+    font-size: 0.75rem !important;
+    white-space: nowrap;
+}
+
 /* Compare Page */
 
 .compare-controls-row {
