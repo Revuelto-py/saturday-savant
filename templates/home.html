@@ -5,7 +5,7 @@
 <div class="row g-5">
 
     <!-- Games Section -->
-    <div class="col-lg-7">
+    <div class="col-lg-8">
         <div class="d-flex align-items-center justify-content-between mb-4">
             <h5 style="color:white;font-weight:800;margin:0;letter-spacing:0.06em;text-transform:uppercase;font-size:0.82rem">
                 {% if season_type == 'postseason' %}Postseason Results{% else %}Week {{ selected_week }} Results{% endif %}
@@ -65,7 +65,7 @@
     </div>
 
     <!-- Leaders Section -->
-    <div class="col-lg-5">
+    <div class="col-lg-4">
         <h5 style="color:white;font-weight:800;margin-bottom:24px;letter-spacing:0.06em;text-transform:uppercase;font-size:0.82rem">Season Leaders</h5>
 
         {% macro leader_card(players, label, color) %}

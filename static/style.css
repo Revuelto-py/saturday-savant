@@ -1,3 +1,41 @@
+/* ── Sitewide content width — desktop/large screens only, mobile (<992px) untouched ── */
+@media (min-width: 992px) {
+    .page-wrapper {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+    .search-wrapper {
+        flex: 1 1 auto;
+        width: auto;
+        max-width: 360px;
+    }
+}
+@media (min-width: 1200px) {
+    .page-wrapper {
+        max-width: 1400px;
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+    .navbar-inner {
+        max-width: 1400px;
+    }
+}
+
+/* AP Top 25 rankings table — extra columns (conf/1st place votes/prev rank)
+   only show at desktop widths; mobile keeps the original 5-column layout. */
+.ap-rankings-grid {
+    display: grid;
+    grid-template-columns: 72px 1fr 120px 120px 100px;
+}
+@media (min-width: 992px) {
+    .ap-rankings-grid {
+        grid-template-columns: 72px 1fr 100px 100px 100px 130px 90px 100px;
+    }
+}
+@media (max-width: 991.98px) {
+    .ap-extra-col { display: none; }
+}
+
 /* Compare Page */
 
 .compare-controls-row {
