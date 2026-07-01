@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+{% set slots = players if mode == 'player' else teams %}
+
+<div class="page-wrapper">
+
+    <div style="margin-bottom:18px">
+        <h2 style="font-weight:900;margin:0 0 4px">Compare</h2>
+        <div style="color:rgba(255,255,255,0.4);font-size:0.82rem">
+            Pick up to 3 {{ 'players' if mode == 'player' else 'teams' }} to compare side-by-side.
+        </div>
+    </div>
+
+    <!-- Toolbar: download (left) + position tabs (right) -->
+    <div class="compare-controls-row" data-compare-hide>
+        <button type="button" class="compare-download-btn" id="compareDownloadBtn">
+            <span>⬇</span> Download Image
+        </button>
+
+        <div class="compare-tabs">
+            {% for tab in ['QB','RB','WR','TE','DL','LB','DB'] %}
+            <a href="{{ tab_urls[tab] }}" class="compare-tab{% if mode == 'player' and group_name == tab %} active{% endif %}">{{ tab }}</a>
+            {% endfor %}
+            <a href="{{ tab_urls['TEAMS'] }}" class="compare-tab{% if mode == 'team' %} active{% endif %}">TEAMS</a>
+        </div>
+    </div>
+
+    <!-- Search / selection slots -->
+    <div class="compare-slots" data-compare-hide>
+        {% for i in [0, 1, 2] %}
+        {% set slot_num = i + 1 %}
+        {% set entity = slots[i] %}
+        {% set param_key = ('p' if mode == 'player' else 't') ~ slot_num %}
+        <div>
+            <div class="compare-slot-toolbar">
+                {% if entity %}
+                    {% if i < 2 %}
+                    <button type="button" class="compare-slot-btn" title="Swap with next slot"
+                            onclick="compareSwap('{{ param_key }}', '{{ ('p' if mode == 'player' else 't') ~ (slot_num + 1) }}')">⇄</button>
+                    {% endif %}
+                    <button type="button" class="compare-slot-btn remove" title="Remove"
+                            onclick="compareRemove('{{ param_key }}')">×</button>
+                {% endif %}
+            </div>
+
+            {% if entity %}
+                {% if mode == 'player' %}
+                <div class="dark-card" style="padding:14px;display:flex;align-items:center;gap:12px">
+                    {% if entity.headshot %}
+                    <img src="{{ entity.headshot }}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:top;border:1px solid rgba(255,255,255,0.15)">
+                    {% else %}
+                    <div class="avatar-placeholder" style="width:44px;height:44px;flex-shrink:0">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
+                    {% endif %}
+                    <div style="flex:1;min-width:0">
+                        <div style="color:white;font-weight:800;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ entity.first_name }} {{ entity.last_name }}</div>
+                        <div style="color:rgba(255,255,255,0.45);font-size:0.72rem">{{ entity.position or '—' }} · {{ entity.team }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="dark-card" style="padding:14px;display:flex;align-items:center;gap:12px">
+                    {% if entity.logo_dark %}
+                    <img src="{{ entity.logo_dark }}" style="width:36px;height:36px;object-fit:contain">
+                    {% endif %}
+                    <div style="flex:1;min-width:0">
+                        <div style="color:white;font-weight:800;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ entity.name }}</div>
+                        <div style="color:rgba(255,255,255,0.45);font-size:0.72rem">{{ entity.conference or '' }}</div>
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+            <div class="compare-empty-slot">
+                <div class="compare-search-wrapper" style="width:100%;padding:0 14px">
+                    <input type="text" class="compare-search-input" placeholder="Search {{ 'players' if mode == 'player' else 'teams' }}..."
+                           autocomplete="off" data-slot-input="{{ param_key }}">
+                    <div class="compare-search-dropdown" data-slot-dropdown="{{ param_key }}"></div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Captured comparison card -->
+    {% if active_entities|length >= 1 %}
+    <div class="compare-card-capture" id="compareCard">
+        <div class="compare-player-header" style="--compare-cols: {{ active_entities|length }}">
+            {% for entity in active_entities %}
+            <div class="compare-player-block">
+                {% if mode == 'player' %}
+                    <div class="compare-jersey-wrap">
+                        {% if entity.headshot %}
+                        <img src="{{ entity.headshot }}" class="compare-headshot">
+                        {% else %}
+                        <div class="compare-avatar-placeholder">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
+                        {% endif %}
+                        {% if entity.jersey %}<div class="compare-jersey-num">#{{ entity.jersey }}</div>{% endif %}
+                    </div>
+                    <div class="compare-player-name">{{ entity.first_name }} {{ entity.last_name }}</div>
+                    <div class="compare-player-meta">
+                        <span class="compare-pos-badge">{{ entity.position or '—' }}</span>
+                        {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="compare-team-logo">{% endif %}
+                        <span>{{ entity.team }}</span>
+                        {% if entity.ap_rank %}<span class="compare-ap-badge">AP #{{ entity.ap_rank }}</span>{% endif %}
+                    </div>
+                {% else %}
+                    {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" style="width:84px;height:84px;object-fit:contain">{% endif %}
+                    <div class="compare-player-name">{{ entity.name }}</div>
+                    <div class="compare-player-meta">
+                        <span>{{ entity.conference or '' }}</span>
+                        {% if entity.ap_rank %}<span class="compare-ap-badge">AP #{{ entity.ap_rank }}</span>{% endif %}
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% macro bar_width(v) %}{% if v.raw is none %}0{% elif v.percentile is not none %}{{ v.percentile }}{% else %}100{% endif %}{% endmacro %}
+
+        {% if rows %}
+            {% if active_entities|length == 2 %}
+                {% for row in rows %}
+                {% set left = row['values'][0] %}
+                {% set right = row['values'][1] %}
+                <div class="compare-row">
+                    <div class="compare-value {{ left.color }}">{{ left.display }}</div>
+                    <div class="compare-bar-cell compare-bar-left">
+                        <div class="compare-bar-track"><div class="compare-bar-fill {{ left.color }}" style="width:{{ bar_width(left) }}%"></div></div>
+                        {% if left.percentile is not none %}<div class="compare-pct-label">{{ left.percentile }}%</div>{% endif %}
+                    </div>
+                    <div class="compare-label">{{ row.label }}</div>
+                    <div class="compare-bar-cell compare-bar-right">
+                        <div class="compare-bar-track"><div class="compare-bar-fill {{ right.color }}" style="width:{{ bar_width(right) }}%"></div></div>
+                        {% if right.percentile is not none %}<div class="compare-pct-label">{{ right.percentile }}%</div>{% endif %}
+                    </div>
+                    <div class="compare-value {{ right.color }}">{{ right.display }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                {% for row in rows %}
+                <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                    <div class="compare-label" style="margin-bottom:8px">{{ row.label }}</div>
+                    <div style="display:grid;grid-template-columns:repeat({{ active_entities|length }}, minmax(0,1fr));gap:14px">
+                        {% for v in row['values'] %}
+                        <div style="text-align:center">
+                            <div class="compare-value {{ v.color }}" style="margin-bottom:4px">{{ v.display }}</div>
+                            <div class="compare-bar-track"><div class="compare-bar-fill {{ v.color }}" style="width:{{ bar_width(v) }}%"></div></div>
+                            {% if v.percentile is not none %}<div class="compare-pct-label">{{ v.percentile }}%</div>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% else %}
+        <div class="compare-waiting-note">Pick {{ 'another player' if mode == 'player' else 'another team' }} to see the comparison.</div>
+        {% endif %}
+
+        <div class="compare-watermark">saturdaysavant.com</div>
+
+        <a href="/compare?{{ request.query_string.decode() }}" class="compare-open-full" data-compare-hide>OPEN FULL COMPARE →</a>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+(function() {
+    const MODE = {{ mode|tojson }};
+
+    function currentParams() {
+        return new URLSearchParams(window.location.search);
+    }
+    function navigate(params) {
+        window.location.href = '/compare?' + params.toString();
+    }
+    window.compareRemove = function(key) {
+        const params = currentParams();
+        params.delete(key);
+        navigate(params);
+    };
+    window.compareSwap = function(keyA, keyB) {
+        const params = currentParams();
+        const a = params.get(keyA);
+        const b = params.get(keyB);
+        if (a !== null) params.set(keyB, a); else params.delete(keyB);
+        if (b !== null) params.set(keyA, b); else params.delete(keyA);
+        navigate(params);
+    };
+    function selectEntity(paramKey, value) {
+        const params = currentParams();
+        params.set(paramKey, value);
+        navigate(params);
+    }
+
+    // Per-slot live search
+    document.querySelectorAll('[data-slot-input]').forEach(function(input) {
+        const paramKey = input.getAttribute('data-slot-input');
+        const dropdown = document.querySelector('[data-slot-dropdown="' + paramKey + '"]');
+        let timer;
+
+        function render(results) {
+            const wanted = MODE === 'player' ? 'player' : 'team';
+            const filtered = results.filter(r => r.type === wanted);
+            if (!filtered.length) {
+                dropdown.innerHTML = '<div class="compare-search-empty">No results found</div>';
+                dropdown.classList.add('active');
+                return;
+            }
+            let html = '';
+            for (const r of filtered) {
+                if (wanted === 'player') {
+                    const avatar = r.headshot
+                        ? `<img src="${r.headshot}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0">`
+                        : `<div class="avatar-placeholder" style="width:32px;height:32px;flex-shrink:0;font-size:0.65rem">${(r.first||'')[0]||''}${(r.last||'')[0]||''}</div>`;
+                    html += `<div class="compare-search-item" data-id="${r.id}">
+                        ${avatar}
+                        <div style="flex:1;min-width:0">
+                            <div style="color:white;font-weight:700;font-size:0.82rem">${r.first} ${r.last}</div>
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.68rem">${r.pos || ''} · ${r.team || ''}</div>
+                        </div>
+                    </div>`;
+                } else {
+                    html += `<div class="compare-search-item" data-name="${r.name}">
+                        ${r.logo ? `<img src="${r.logo}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">` : ''}
+                        <div style="flex:1;min-width:0">
+                            <div style="color:white;font-weight:700;font-size:0.82rem">${r.name}</div>
+                            <div style="color:rgba(255,255,255,0.4);font-size:0.68rem">${r.conference || ''}</div>
+                        </div>
+                    </div>`;
+                }
+            }
+            dropdown.innerHTML = html;
+            dropdown.classList.add('active');
+            dropdown.querySelectorAll('[data-id]').forEach(el => {
+                el.addEventListener('click', () => selectEntity(paramKey, el.getAttribute('data-id')));
+            });
+            dropdown.querySelectorAll('[data-name]').forEach(el => {
+                el.addEventListener('click', () => selectEntity(paramKey, el.getAttribute('data-name')));
+            });
+        }
+
+        input.addEventListener('input', function() {
+            const q = this.value.trim();
+            clearTimeout(timer);
+            if (q.length < 2) {
+                dropdown.classList.remove('active');
+                dropdown.innerHTML = '';
+                return;
+            }
+            dropdown.innerHTML = '<div class="compare-search-loading">Searching...</div>';
+            dropdown.classList.add('active');
+            timer = setTimeout(() =>
+                fetch('/api/players?q=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(render)
+                    .catch(() => { dropdown.innerHTML = '<div class="compare-search-empty">Search unavailable</div>'; }),
+            220);
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('active');
+            }
+        });
+    });
+
+    // Download image
+    const downloadBtn = document.getElementById('compareDownloadBtn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            const card = document.getElementById('compareCard');
+            if (!card || typeof html2canvas === 'undefined') return;
+            const hidden = document.querySelectorAll('[data-compare-hide]');
+            const nav = document.querySelector('nav.navbar');
+            hidden.forEach(el => el.style.display = 'none');
+            if (nav) nav.style.display = 'none';
+            downloadBtn.disabled = true;
+
+            // useCORS: true — headshots are served from R2 and logos from ESPN's
+            // CDN, both cross-origin. Without this, any image load taints the
+            // canvas and toDataURL() throws for the whole image, not just that stat.
+            html2canvas(card, { backgroundColor: '#0d1e35', scale: 2, useCORS: true }).then(function(canvas) {
+                const link = document.createElement('a');
+                link.download = 'saturday-savant-compare.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }).catch(function(err) {
+                console.error('Compare image export failed:', err);
+                alert('Could not generate the image — please try again.');
+            }).finally(function() {
+                hidden.forEach(el => el.style.display = '');
+                if (nav) nav.style.display = '';
+                downloadBtn.disabled = false;
+            });
+        });
+    }
+})();
+</script>
+{% endblock %}
