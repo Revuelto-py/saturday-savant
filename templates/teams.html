@@ -29,8 +29,8 @@
         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
         <a href="/team/{{ team[0] }}" style="text-decoration:none;display:block;height:100%">
         <div class="team-card" style="
-            background: var(--bg-card);
-            border: 1px solid var(--border);
+            background: linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc2 }}22 100%);
+            border: 1px solid {{ tc }}44;
             border-radius: var(--r-lg);
             padding: 20px 12px 14px;
             text-align: center;
@@ -41,7 +41,7 @@
             <!-- Radial glow behind logo -->
             <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);
                         width:80%;height:60%;
-                        background:radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05) 0%, transparent 70%);
+                        background:radial-gradient(ellipse at 50% 0%, {{ tc }}22 0%, transparent 70%);
                         pointer-events:none"></div>
 
             <!-- AP Rank badge -->
@@ -57,7 +57,7 @@
                 <img src="{{ team[2] }}" style="max-height:52px;max-width:100%;object-fit:contain">
                 {% else %}
                 <div style="width:52px;height:52px;border-radius:50%;
-                            background:rgba(255,255,255,0.08);border:1px solid var(--border-strong);
+                            background:{{ tc }}44;border:1px solid {{ tc }}66;
                             display:flex;align-items:center;justify-content:center;
                             font-size: var(--text-lg);font-weight:900;color: var(--text-primary)">
                     {{ team[0][0] }}

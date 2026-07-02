@@ -3,13 +3,13 @@
 {% block content %}
 <!-- HERO -->
 <div style="
-    background: radial-gradient(ellipse at center, #141414 0%, #000000 70%);
+    background: linear-gradient(135deg, {{ c1 }} 0%, #0a1220 50%, {{ c2 }}88 100%);
     position: relative; overflow: hidden; min-height: 200px;
     border-bottom: 1px solid var(--border);">
 
     <div style="position:absolute;inset:0;
-        background: radial-gradient(ellipse at 0% 50%, rgba(255,255,255,0.04) 0%, transparent 55%),
-                    radial-gradient(ellipse at 100% 50%, rgba(255,255,255,0.03) 0%, transparent 55%);
+        background: radial-gradient(ellipse at 0% 50%, {{ c1 }}66 0%, transparent 55%),
+                    radial-gradient(ellipse at 100% 50%, {{ c2 }}44 0%, transparent 55%);
         pointer-events:none"></div>
     <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);pointer-events:none"></div>
 
@@ -19,7 +19,7 @@
             <!-- Headshot -->
             <div class="ph-headshot" style="flex-shrink:0;align-self:flex-end;margin-right:32px;margin-left:-8px;position:relative">
                 <div style="position:absolute;bottom:0;left:-10px;right:-10px;height:3px;
-                            background:linear-gradient(90deg, transparent, rgba(245,184,0,0.5), transparent);border-radius: 2px"></div>
+                            background:linear-gradient(90deg, transparent, {{ c1 }}cc, transparent);border-radius: 2px"></div>
                 <div style="position:absolute;bottom:0;left:10px;right:10px;height:12px;
                             background:radial-gradient(ellipse at 50% 100%, rgba(0,0,0,0.5) 0%, transparent 70%);border-radius:50%"></div>
                 {% if player.headshot %}
@@ -59,8 +59,8 @@
                     <span style="color: var(--text-secondary)">·</span>
                     <span style="color: var(--text-primary);font-size: var(--text-md);font-weight:600">#{{ player.jersey or '—' }}</span>
                     {% if not is_active_2026 and not player.nfl_status %}
-                    <span style="background:rgba(224,90,90,0.15);border:1px solid rgba(224,90,90,0.35);
-                                 color:var(--stat-negative);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-md)">
+                    <span style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);
+                                 color:#f87171;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-md)">
                         {% if draft_status %}{{ draft_status }}{% else %}No longer with team{% endif %}
                     </span>
                     {% endif %}
@@ -213,7 +213,7 @@
                                 border-radius: var(--r-md);padding:12px 20px;text-align:center;min-width:90px;backdrop-filter:blur(4px)">
                         <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;
                                     letter-spacing:0.12em;text-transform:uppercase;margin-bottom:5px">EPA/PLAY</div>
-                        <div style="color:{{ 'var(--stat-positive)' if ppa.avg_all > 0 else 'var(--stat-negative)' }};font-size: var(--text-xl);font-weight:900;line-height:1">{{ ppa.avg_all }}</div>
+                        <div style="color:{{ '#34d399' if ppa.avg_all > 0 else '#f87171' }};font-size: var(--text-xl);font-weight:900;line-height:1">{{ ppa.avg_all }}</div>
                         {% if national_ranks.get('epa_rank') %}
                         {% set rk = national_ranks['epa_rank'] %}
                         <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;margin-top:4px">
@@ -271,7 +271,7 @@
 </div>
 
 <!-- MAIN CONTENT -->
-<div style="background:var(--bg-surface);min-height:100vh;padding:32px 0">
+<div style="background:linear-gradient(180deg, #060d1f 0%, #080f1e 100%);min-height:100vh;padding:32px 0">
 <div class="page-wrapper">
 
 {% set pos = player.position | upper if player.position else '' %}
@@ -304,8 +304,8 @@
                 {% endif %}
                 <div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>
                 {% if player.position %}
-                <span style="background:rgba(245,184,0,0.15);border:1px solid rgba(245,184,0,0.25);
-                             color:var(--gold);font-size: var(--text-xs);font-weight:800;padding:2px 8px;border-radius: var(--r-sm)">{{ player.position }}</span>
+                <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);
+                             color:#93c5fd;font-size: var(--text-xs);font-weight:800;padding:2px 8px;border-radius: var(--r-sm)">{{ player.position }}</span>
                 {% endif %}
             </div>
 
@@ -319,7 +319,7 @@
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
                         <th style="text-align:center">CMP</th>
                         <th style="text-align:center">ATT</th>
-                        <th style="color:var(--gold);text-align:center">YDS ↓</th>
+                        <th style="color:#fbbf24;text-align:center">YDS ↓</th>
                         <th style="text-align:center">PCT</th>
                         <th style="text-align:center">TD</th>
                         <th style="text-align:center">INT</th>
@@ -329,10 +329,10 @@
                         {% set p = stats.get('passing', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('COMPLETIONS') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('ATT') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center;background:rgba(245,184,0,0.05)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
+                        <td style="padding:12px 10px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('PCT') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,184,0,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('INT') %}<span style="display:inline-block;border:1px solid rgba(224,90,90,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--red);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('INT') }}</span>{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('INT') %}<span style="display:inline-block;border:1px solid rgba(239,68,68,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--red);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('INT') }}</span>{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPA') or '—' }}</td>
                     </tr></tbody>
                 </table>
@@ -349,7 +349,7 @@
                 <table class="data-table" style="width:100%">
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
                         <th style="text-align:center">ATT</th>
-                        <th style="color:var(--gold);text-align:center">YDS ↓</th>
+                        <th style="color:#60a5fa;text-align:center">YDS ↓</th>
                         <th style="text-align:center">AVG</th>
                         <th style="text-align:center">TD</th>
                         <th style="text-align:center">LONG</th>
@@ -357,9 +357,9 @@
                     <tbody><tr>
                         {% set p = stats.get('rushing', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('ATT') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center;background:rgba(245,184,0,0.05)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
+                        <td style="padding:12px 10px;text-align:center;background:rgba(96,165,250,0.05)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPC') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,184,0,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
                     </tr></tbody>
                 </table>
@@ -376,7 +376,7 @@
                 <table class="data-table" style="width:100%">
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
                         <th style="text-align:center">REC</th>
-                        <th style="color:var(--gold);text-align:center">YDS ↓</th>
+                        <th style="color:#34d399;text-align:center">YDS ↓</th>
                         <th style="text-align:center">AVG</th>
                         <th style="text-align:center">TD</th>
                         <th style="text-align:center">LONG</th>
@@ -384,9 +384,9 @@
                     <tbody><tr>
                         {% set p = stats.get('receiving', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('REC') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center;background:rgba(245,184,0,0.05)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
+                        <td style="padding:12px 10px;text-align:center;background:rgba(52,211,153,0.05)"><span style="color:#34d399;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('AVG') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,184,0,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
                     </tr></tbody>
                 </table>
@@ -402,7 +402,7 @@
                 <div style="overflow-x:auto;margin-bottom:4px">
                 <table class="data-table" style="width:100%">
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
-                        <th style="color:var(--gold);text-align:center">TOT ↓</th>
+                        <th style="color:#60a5fa;text-align:center">TOT ↓</th>
                         <th style="text-align:center">SOLO</th>
                         <th style="text-align:center">TFL</th>
                         <th style="text-align:center">SACKS</th>
@@ -410,7 +410,7 @@
                     </tr></thead>
                     <tbody><tr>
                         {% set p = stats.get('defensive', {}) %}
-                        <td style="padding:12px 14px;text-align:center;background:rgba(245,184,0,0.05)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-md)">{{ p.get('TOT') or '—' }}</span></td>
+                        <td style="padding:12px 14px;text-align:center;background:rgba(96,165,250,0.05)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-md)">{{ p.get('TOT') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('SOLO') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('TFL') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('SACKS') or '—' }}</td>
@@ -429,14 +429,14 @@
                 <div style="overflow-x:auto;margin-bottom:4px">
                 <table class="data-table" style="width:100%">
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
-                        <th style="color:var(--gold);text-align:center">FGM ↓</th>
+                        <th style="color:#fbbf24;text-align:center">FGM ↓</th>
                         <th style="text-align:center">FGA</th>
                         <th style="text-align:center">PCT</th>
                         <th style="text-align:center">LONG</th>
                     </tr></thead>
                     <tbody><tr>
                         {% set p = stats.get('kicking', {}) %}
-                        <td style="padding:12px 14px;text-align:center;background:rgba(245,184,0,0.05)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-md)">{{ p.get('FGM') or '—' }}</span></td>
+                        <td style="padding:12px 14px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-md)">{{ p.get('FGM') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('FGA') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('PCT') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
@@ -455,14 +455,14 @@
                 <table class="data-table" style="width:100%">
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
                         <th style="text-align:center">NO</th>
-                        <th style="color:var(--gold);text-align:center">AVG ↓</th>
+                        <th style="color:#60a5fa;text-align:center">AVG ↓</th>
                         <th style="text-align:center">YDS</th>
                         <th style="text-align:center">LONG</th>
                     </tr></thead>
                     <tbody><tr>
                         {% set p = stats.get('punting', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('NO') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center;background:rgba(245,184,0,0.05)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-md)">{{ p.get('AVG') or '—' }}</span></td>
+                        <td style="padding:12px 10px;text-align:center;background:rgba(96,165,250,0.05)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-md)">{{ p.get('AVG') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YDS') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
                     </tr></tbody>
@@ -488,11 +488,11 @@
 
             {% macro pct_bar(label, p) %}
             {% if p is not none %}
-                {% if p >= 80 %}{% set bc = 'var(--gold)' %}
-                {% elif p >= 60 %}{% set bc = 'var(--gold-dim)' %}
-                {% elif p >= 45 %}{% set bc = 'var(--grey-300)' %}
-                {% elif p >= 25 %}{% set bc = 'var(--grey-500)' %}
-                {% else %}{% set bc = 'var(--grey-700)' %}{% endif %}
+                {% if p >= 80 %}{% set bc = '#c0392b' %}
+                {% elif p >= 60 %}{% set bc = '#e74c3c' %}
+                {% elif p >= 45 %}{% set bc = '#95a5a6' %}
+                {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
+                {% else %}{% set bc = '#2980b9' %}{% endif %}
             <div class="percentile-row" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
                 <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:120px;text-align:right;flex-shrink:0">{{ label }}</div>
                 <div style="flex:1;height:18px;background:rgba(255,255,255,0.08);border-radius: var(--r-sm);position:relative;overflow:visible">
@@ -514,7 +514,7 @@
 
             <!-- Legend -->
             <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-                {% for color, lbl in [('var(--gold)','80–99'),('var(--gold-dim)','60–79'),('var(--grey-300)','45–59'),('var(--grey-500)','25–44'),('var(--grey-700)','1–24')] %}
+                {% for color, lbl in [('#c0392b','80–99'),('#e74c3c','60–79'),('#95a5a6','45–59'),('#5d8aa8','25–44'),('#2980b9','1–24')] %}
                 <div style="display:flex;align-items:center;gap:4px">
                     <div style="width:12px;height:5px;background:{{ color }};border-radius: 2px"></div>
                     <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ lbl }}</span>
@@ -526,9 +526,9 @@
             <div style="display:flex;margin-bottom:8px">
                 <div style="min-width:120px;flex-shrink:0"></div>
                 <div style="flex:1;display:flex;justify-content:space-between">
-                    <span style="color:var(--grey-700);font-size: var(--text-xs);font-weight:700">POOR</span>
+                    <span style="color:#2980b9;font-size: var(--text-xs);font-weight:700">POOR</span>
                     <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700">AVG</span>
-                    <span style="color:var(--gold);font-size: var(--text-xs);font-weight:700">GREAT</span>
+                    <span style="color:#c0392b;font-size: var(--text-xs);font-weight:700">GREAT</span>
                 </div>
             </div>
 
@@ -582,14 +582,14 @@
         <div class="dark-card" style="padding:20px">
             <div class="row g-3">
                 {% for label, key, color in [
-                    ('Overall',         'overall',       'var(--gold)'),
-                    ('Pass Plays',      'pass',          'var(--grey-100)'),
-                    ('Rush Plays',      'rush',          'var(--grey-300)'),
+                    ('Overall',         'overall',       c1),
+                    ('Pass Plays',      'pass',          '#60a5fa'),
+                    ('Rush Plays',      'rush',          '#34d399'),
                     ('1st Down',        'first_down',    'var(--gold)'),
-                    ('2nd Down',        'second_down',   'var(--grey-500)'),
-                    ('3rd Down',        'third_down',    'var(--gold-dim)'),
-                    ('Standard Downs',  'standard',      'var(--grey-300)'),
-                    ('Passing Downs',   'passing_downs', 'var(--gold-bright)'),
+                    ('2nd Down',        'second_down',   '#a78bfa'),
+                    ('3rd Down',        'third_down',    '#f87171'),
+                    ('Standard Downs',  'standard',      '#6ee7b7'),
+                    ('Passing Downs',   'passing_downs', '#fbbf24'),
                 ] %}
                 {% set val = usage.get(key) %}
                 {% if val is not none %}
@@ -693,11 +693,11 @@
                     <td style="padding:11px 10px;text-align:center;white-space:nowrap">
                     {% if show %}
                         {% if 'TD' in label and 'INT' not in label and num > 0 %}
-                            <span style="display:inline-block;border:1px solid rgba(245,184,0,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--gold);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
+                            <span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--gold);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
                         {% elif label == 'INT' and num > 0 %}
-                            <span style="display:inline-block;border:1px solid rgba(224,90,90,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--red);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
+                            <span style="display:inline-block;border:1px solid rgba(239,68,68,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--red);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
                         {% elif label == 'RTG' %}
-                            <span style="color:{{ 'var(--stat-positive)' if num >= 100 else ('var(--gold)' if num >= 75 else 'var(--stat-negative)') }};font-weight:700;font-size: var(--text-base)">{{ "%.1f"|format(num) }}</span>
+                            <span style="color:{{ '#34d399' if num >= 100 else ('#fbbf24' if num >= 75 else '#f87171') }};font-weight:700;font-size: var(--text-base)">{{ "%.1f"|format(num) }}</span>
                         {% elif label == 'CMP%' %}
                             <span style="color: var(--text-primary);font-size: var(--text-sm)">{{ "%.1f"|format(num * 100 if num <= 1 else num) }}%</span>
                         {% elif label in ('YDS','REC YDS','RUSH YDS') %}
@@ -705,7 +705,7 @@
                         {% elif label in ('YPA','AVG','NET') %}
                             <span style="color: var(--text-primary);font-size: var(--text-sm)">{{ "%.1f"|format(num) }}</span>
                         {% elif label == 'SACK' and num > 0 %}
-                            <span style="display:inline-block;border:1px solid rgba(245,184,0,0.4);border-radius: var(--r-sm);padding:1px 7px;color:var(--gold);font-weight:700;font-size: var(--text-sm);min-width:28px;text-align:center">{{ "%.1f"|format(num) }}</span>
+                            <span style="display:inline-block;border:1px solid rgba(167,139,250,0.4);border-radius: var(--r-sm);padding:1px 7px;color:#a78bfa;font-weight:700;font-size: var(--text-sm);min-width:28px;text-align:center">{{ "%.1f"|format(num) }}</span>
                         {% else %}
                             <span style="color: var(--text-secondary);font-size: var(--text-base)">{{ num|int if num == num|int else "%.1f"|format(num) }}</span>
                         {% endif %}
@@ -747,7 +747,7 @@
                 <div style="display:flex;align-items:center;gap:8px">
                     {% if player.logo_dark %}<img src="{{ player.logo_dark }}" style="width:20px;height:20px;object-fit:contain">{% endif %}
                     <a href="/team/{{ player.team }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);text-decoration:none"
-                       onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ player.team }}</a>
+                       onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-primary)'">{{ player.team }}</a>
                 </div>
             </div>
         </div>

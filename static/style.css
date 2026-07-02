@@ -3,46 +3,22 @@
    derives from this block. Do not hardcode values below; use the tokens.
    ══════════════════════════════════════════════════════════════════════ */
 :root {
-  /* Palette — black / gold / grey / white only. The functional exceptions
-     (--stat-positive/--stat-negative) exist solely for data meaning
-     (win/loss, positive/negative deltas) — never decoration. */
-
-  /* ── BLACK (backgrounds) ── */
-  --bg-base:        #000000;
-  --bg-surface:     #0a0a0a;
-  --bg-card:        #141414;
-  --bg-card-hover:  #1c1c1c;
-  --bg-subtle:      #181818;
-
-  /* ── GREY (borders, secondary text, dividers) ── */
-  --border:         rgba(255,255,255,0.08);
-  --border-strong:  rgba(255,255,255,0.16);
-  --grey-100:       #f5f5f5;
-  --grey-300:       #c9c9c9;
-  --grey-500:       #8a8a8a;
-  --grey-700:       #4d4d4d;
-  --grey-900:       #232323;
-
-  --text-primary:   #ffffff;
-  --text-secondary: var(--grey-300);
-  --text-dim:       var(--grey-500);
-
-  /* ── GOLD (the single accent — replaces all blue) ── */
-  --gold:           #f5b800;
-  --gold-dim:       #b8890a;
-  --gold-bright:    #ffd23f;
-  --border-gold:    rgba(245,184,0,0.35);
-
-  /* ── WHITE ── */
-  --white:          #ffffff;
-
-  /* ── FUNCTIONAL EXCEPTIONS ONLY (data meaning, not decoration) ── */
-  --stat-positive:  #6fcf6f;
-  --stat-negative:  #e05a5a;
-  /* legacy aliases — anything still referencing these resolves in-palette */
-  --green:          var(--stat-positive);
-  --red:            var(--stat-negative);
-  --blue:           var(--gold);
+  /* Palette */
+  --bg-base:        #050e1a;
+  --bg-surface:     #0a1628;
+  --bg-card:        #0d1e35;
+  --bg-card-hover:  #112240;
+  --bg-subtle:      #0f2035;
+  --border:         rgba(255,255,255,0.07);
+  --border-strong:  rgba(255,255,255,0.13);
+  --border-gold:    rgba(245,158,11,0.35);
+  --text-primary:   #f0f4f8;
+  --text-secondary: #8da4be;
+  --text-dim:       #4a6278;
+  --gold:           #f59e0b;
+  --green:          #22c55e;
+  --red:            #ef4444;
+  --blue:           #3b82f6;
 
   /* Type — fluid: sizes grow smoothly with viewport width instead of
      staying fixed past a breakpoint and leaving dead margins */
@@ -104,7 +80,7 @@
     align-items: stretch;
     width: 100%;
     box-sizing: border-box;
-    background: var(--bg-base);
+    background: #060d1c;
     border-bottom: 1px solid var(--border);
 }
 .ticker-week {
@@ -279,8 +255,8 @@
 .gc-rivalry {
     margin-top: 8px;
     display: inline-block;
-    background: rgba(245,184,0,0.13);
-    border: 1px solid rgba(245,184,0,0.3);
+    background: rgba(245,158,11,0.13);
+    border: 1px solid rgba(245,158,11,0.3);
     color: var(--gold);
     font-size: 0.58rem;
     font-weight: 800;
@@ -311,7 +287,7 @@
     text-decoration: none;
     transition: color 0.15s;
 }
-.leader-viewall:hover { color: var(--gold); }
+.leader-viewall:hover { color: #60a5fa; }
 .leader-row {
     display: flex;
     align-items: center;
@@ -340,7 +316,7 @@
     text-overflow: ellipsis;
     display: block;
 }
-a.leader-row:hover .leader-name { color: var(--gold); }
+a.leader-row:hover .leader-name { color: #60a5fa; }
 .leader-team {
     display: flex;
     align-items: center;
@@ -386,31 +362,38 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     text-transform: uppercase;
 }
 
-/* Each ranked team is a flat dark card — palette rule: no team-color fills
-   outside the game-hero logo glow. --c1/--c2 may still arrive inline from
-   the template; they are intentionally unused here. */
+/* Each ranked team is a box carrying its team-color gradient — the team page
+   hero formula (135deg c1 → dark → c2 plus radial washes at each end), mixed
+   down toward the dark-card base so white text stays readable on every
+   school's palette. --c1/--c2 are set inline per row from teams.color /
+   teams.alt_color. */
 .ap-rank-row {
+    --c1: #1e3a5f;
+    --c2: #0f1e3a;
     align-items: center;
     padding: 12px 20px;
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
-    background: var(--bg-card);
+    background:
+        radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--c1) 22%, transparent) 0%, transparent 55%),
+        radial-gradient(ellipse at 100% 50%, color-mix(in srgb, var(--c2) 15%, transparent) 0%, transparent 55%),
+        linear-gradient(135deg, color-mix(in srgb, var(--c1) 30%, #0a1220) 0%, #0c1729 48%, color-mix(in srgb, var(--c2) 20%, #0a1220) 100%);
     text-decoration: none;
     position: relative;
     overflow: hidden;
     transition: all 0.18s ease;
 }
 .ap-rank-row::before {
-    /* grey spine on the left edge */
+    /* team-color spine on the left edge */
     content: '';
     position: absolute;
     left: 0; top: 0; bottom: 0;
     width: 3px;
-    background: var(--grey-700);
+    background: var(--c1);
 }
 .ap-rank-row:hover {
     transform: translateY(-2px);
-    border-color: var(--border-gold);
+    border-color: color-mix(in srgb, var(--c1) 55%, rgba(255,255,255,0.3));
     box-shadow: 0 6px 24px rgba(0,0,0,0.4);
 }
 
@@ -437,9 +420,9 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     font-size: var(--text-base); font-weight: 900;
     box-shadow: 0 2px 8px rgba(0,0,0,0.45);
 }
-.ap-medal-1 { background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--bg-base); }
-.ap-medal-2 { background: linear-gradient(135deg, var(--grey-100), var(--grey-500)); color: var(--bg-base); }
-.ap-medal-3 { background: linear-gradient(135deg, var(--gold-dim), var(--grey-900)); color: var(--text-primary); }
+.ap-medal-1 { background: linear-gradient(135deg, #fde68a, var(--gold)); color: #231a00; }
+.ap-medal-2 { background: linear-gradient(135deg, #e5e7eb, #94a3b8); color: #0f172a; }
+.ap-medal-3 { background: linear-gradient(135deg, #d97706, #7c3a10); color: var(--text-primary); }
 .ap-rank-num {
     color: var(--text-secondary);
     font-size: var(--text-md); font-weight: 800;
@@ -460,14 +443,14 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     padding: 3px 8px;
     border-radius: var(--r-sm);
 }
-.ap-trend-up   { color: var(--green); background: rgba(111,207,111,0.12);  border: 1px solid rgba(111,207,111,0.3); }
-.ap-trend-down { color: var(--stat-negative); background: rgba(224,90,90,0.12);  border: 1px solid rgba(224,90,90,0.3); }
+.ap-trend-up   { color: var(--green); background: rgba(34,197,94,0.12);  border: 1px solid rgba(34,197,94,0.3); }
+.ap-trend-down { color: #f87171; background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.3); }
 .ap-trend-flat { color: var(--text-dim); background: rgba(255,255,255,0.05); border: 1px solid var(--border-strong); }
-.ap-trend-new  { color: var(--gold); background: rgba(245,184,0,0.12); border: 1px solid rgba(245,184,0,0.3); }
+.ap-trend-new  { color: #93c5fd; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); }
 
 .ap-final-pill {
-    background: rgba(245,184,0,0.15);
-    border: 1px solid rgba(245,184,0,0.4);
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.4);
     color: var(--gold);
     font-size: var(--text-xs);
     font-weight: 800;
@@ -540,8 +523,8 @@ a.leader-row:hover .leader-name { color: var(--gold); }
 }
 
 .transfer-mismatch-banner {
-    background: rgba(245,184,0,0.08);
-    border: 1px solid rgba(245,184,0,0.2);
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
     border-radius: var(--r-md);
     padding: 10px 16px;
     font-size: var(--text-base);
@@ -554,8 +537,8 @@ a.leader-row:hover .leader-name { color: var(--gold); }
 }
 
 .postseason-row {
-    background: rgba(245,184,0,0.04);
-    border-left: 2px solid rgba(245,184,0,0.3);
+    background: rgba(245, 158, 11, 0.04);
+    border-left: 2px solid rgba(245, 158, 11, 0.3);
 }
 /* tr.postseason-row (not just .postseason-row): postseason rows also carry
    .player-row, and tr.player-row:hover (element + class + pseudo) already
@@ -563,13 +546,13 @@ a.leader-row:hover .leader-name { color: var(--gold); }
    alone — matching the element selector here keeps this rule in the tie,
    which source order then resolves in its favor. */
 tr.postseason-row:hover {
-    background: rgba(245,184,0,0.08);
+    background: rgba(245, 158, 11, 0.08);
 }
 /* !important needed here: the first <td> already carries an inline
    color/font-weight/font-size from the base (non-postseason) row style,
    which would otherwise win over this rule. */
 .postseason-row td:first-child {
-    color: rgba(245,184,0,0.85) !important;
+    color: rgba(245, 158, 11, 0.85) !important;
     font-weight: 600 !important;
     font-size: var(--text-sm) !important;
     white-space: nowrap;
@@ -617,7 +600,7 @@ tr.postseason-row:hover {
     cursor: pointer;
     transition: all 0.15s;
 }
-.compare-download-btn:hover { background: rgba(245,184,0,0.15); border-color: rgba(245,184,0,0.4); }
+.compare-download-btn:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); }
 .compare-download-btn:disabled { opacity: 0.5; cursor: default; }
 
 .compare-slots {
@@ -654,7 +637,7 @@ tr.postseason-row:hover {
     padding: 0;
 }
 .compare-slot-btn:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
-.compare-slot-btn.remove:hover { background: rgba(224,90,90,0.2); border-color: rgba(224,90,90,0.4); color: var(--stat-negative); }
+.compare-slot-btn.remove:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #f87171; }
 
 .compare-search-wrapper { position: relative; isolation: isolate; }
 .compare-search-input {
@@ -669,8 +652,8 @@ tr.postseason-row:hover {
     transition: all 0.15s;
 }
 .compare-search-input:focus {
-    border-color: rgba(245,184,0,0.6);
-    box-shadow: 0 0 0 3px rgba(245,184,0,0.12);
+    border-color: rgba(59,130,246,0.6);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
     background: rgba(255,255,255,0.09);
 }
 .compare-search-input::placeholder { color: var(--text-dim); }
@@ -699,7 +682,7 @@ tr.postseason-row:hover {
     border-bottom: 1px solid var(--border);
 }
 .compare-search-item:last-child { border-bottom: none; }
-.compare-search-item:hover { background: rgba(245,184,0,0.1); }
+.compare-search-item:hover { background: rgba(59,130,246,0.1); }
 .compare-search-empty, .compare-search-loading {
     padding: 16px; text-align: center; color: var(--text-dim); font-size: var(--text-sm);
 }
@@ -761,12 +744,12 @@ tr.postseason-row:hover {
 }
 .compare-team-logo { width: 16px; height: 16px; object-fit: contain; }
 .compare-pos-badge {
-    background: rgba(245,184,0,0.15); border: 1px solid rgba(245,184,0,0.3);
-    color: var(--gold); font-size: var(--text-xs); font-weight: 800;
+    background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
+    color: #93c5fd; font-size: var(--text-xs); font-weight: 800;
     padding: 2px 7px; border-radius: var(--r-sm); letter-spacing: 0.05em;
 }
 .compare-ap-badge {
-    background: rgba(245,184,0,0.15); border: 1px solid rgba(245,184,0,0.4);
+    background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4);
     color: var(--gold); font-size: var(--text-xs); font-weight: 800;
     padding: 2px 7px; border-radius: var(--r-sm);
 }
@@ -800,8 +783,8 @@ tr.postseason-row:hover {
 .compare-bar-fill { height: 100%; border-radius: var(--r-sm); transition: width 0.3s; }
 .compare-bar-cell.compare-bar-left .compare-bar-fill { margin-left: auto; }
 .compare-bar-fill.blue    { background: var(--blue); }
-.compare-bar-fill.gray    { background: var(--grey-500); }
-.compare-bar-fill.red     { background: var(--grey-700); }
+.compare-bar-fill.gray    { background: #95a5a6; }
+.compare-bar-fill.red     { background: #c0392b; }
 .compare-bar-fill.neutral { background: rgba(255,255,255,0.25); }
 .compare-pct-label {
     font-size: var(--text-xs); font-weight: 800; color: var(--text-secondary); text-align: center;
@@ -822,7 +805,7 @@ tr.postseason-row:hover {
 .compare-open-full {
     display: block;
     text-align: center;
-    color: rgba(245,184,0,0.85);
+    color: rgba(59,130,246,0.85);
     font-size: var(--text-sm);
     font-weight: 700;
     text-decoration: none;
@@ -830,7 +813,7 @@ tr.postseason-row:hover {
     padding-top: 14px;
     border-top: 1px solid var(--border);
 }
-.compare-open-full:hover { color: var(--gold); }
+.compare-open-full:hover { color: #60a5fa; }
 
 .compare-waiting-note {
     color: var(--text-dim);
@@ -925,7 +908,7 @@ tr.postseason-row:hover {
 .lb-page-btn.active {
     background: var(--gold);
     border-color: var(--gold);
-    color: var(--bg-base);
+    color: #1a1200;
 }
 .lb-page-btn.disabled {
     opacity: 0.35;
@@ -996,7 +979,7 @@ tr.postseason-row:hover {
 }
 .lb-view-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
 .lb-view-tab.active {
-    color: var(--bg-base);
+    color: #1a1200;
     background: var(--gold);
     border-color: var(--gold);
 }
@@ -1010,7 +993,7 @@ tr.postseason-row:hover {
     top: 100%;
     left: 50%;
     transform: translateX(-50%) translateY(6px);
-    background: var(--grey-900);
+    background: #1a2e4a;
     border: 1px solid var(--border-strong);
     color: var(--text-primary);
     font-size: var(--text-xs);
@@ -1055,7 +1038,7 @@ tr.postseason-row:hover {
     border-left: 1px solid var(--border);
 }
 .lb-th-stat:hover { color: var(--text-primary); }
-.lb-th-sorted { color: var(--gold); border-bottom-color: rgba(245,184,0,0.5); }
+.lb-th-sorted { color: var(--gold); border-bottom-color: rgba(245,158,11,0.5); }
 .lb-th-na { cursor: default; color: var(--text-dim); }
 .lb-th-na:hover { color: var(--text-dim); }
 .lb-sort-arrow { margin-left: 2px; }
@@ -1077,14 +1060,14 @@ tr.postseason-row:hover {
     font-size: var(--text-base);
     border-left: 1px solid var(--border);
 }
-.lb-td-sorted { color: var(--text-primary); font-weight: 800; background: rgba(245,184,0,0.05); }
+.lb-td-sorted { color: var(--text-primary); font-weight: 800; background: rgba(245,158,11,0.05); }
 .lb-td-gold { color: var(--gold) !important; font-weight: 800 !important; }
 .lb-td-na { color: var(--text-dim); text-align: center; }
 
 .lb-player-link, .lb-team-link { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .lb-team-link { gap: 7px; }
 .lb-player-name { color: var(--text-primary); font-weight: 700; font-size: var(--text-base); white-space: nowrap; }
-.lb-player-link:hover .lb-player-name, .lb-team-link:hover .lb-team-name { color: var(--gold); }
+.lb-player-link:hover .lb-player-name, .lb-team-link:hover .lb-team-name { color: #60a5fa; }
 .lb-team-name { color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; transition: color 0.12s; }
 .lb-headshot { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; object-position: top; flex-shrink: 0; border: 1px solid var(--border-strong); }
 .lb-headshot-fallback {
@@ -1094,19 +1077,19 @@ tr.postseason-row:hover {
 }
 .lb-team-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
 .lb-pos-pill {
-    background: rgba(245,184,0,0.12); border: 1px solid rgba(245,184,0,0.2); color: var(--gold);
+    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd;
     font-size: var(--text-xs); font-weight: 800; padding: 2px 7px; border-radius: var(--r-sm);
 }
 .lb-ap-pill {
-    background: rgba(245,184,0,0.15); border: 1px solid rgba(245,184,0,0.4); color: var(--gold);
+    background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--gold);
     font-size: var(--text-xs); font-weight: 800; padding: 2px 7px; border-radius: var(--r-sm);
 }
 .lb-pill {
     display: inline-block; font-weight: 800; font-size: var(--text-sm); padding: 2px 8px;
     border-radius: var(--r-sm); min-width: 54px; text-align: center;
 }
-.lb-pill-pos { background: rgba(111,207,111,0.13); border: 1px solid rgba(111,207,111,0.35); color: var(--green); }
-.lb-pill-neg { background: rgba(224,90,90,0.13); border: 1px solid rgba(224,90,90,0.35); color: var(--red); }
+.lb-pill-pos { background: rgba(34,197,94,0.13); border: 1px solid rgba(34,197,94,0.35); color: var(--green); }
+.lb-pill-neg { background: rgba(239,68,68,0.13); border: 1px solid rgba(239,68,68,0.35); color: var(--red); }
 .lb-pill-neutral { background: rgba(255,255,255,0.06); border: 1px solid var(--border-strong); color: var(--text-secondary); }
 .lb-empty { padding: 48px; text-align: center; color: var(--text-dim); font-size: var(--text-base); }
 
@@ -1119,9 +1102,9 @@ tr.postseason-row:hover {
 .rivalry-badge {
     display: inline-block;
     margin-top: 12px;
-    background: linear-gradient(135deg, rgba(184,137,10,0.35), rgba(245,184,0,0.15));
+    background: linear-gradient(135deg, #7a5c00, #b8860b);
     border: 1px solid var(--gold);
-    box-shadow: 0 0 10px rgba(245,184,0,0.35);
+    box-shadow: 0 0 10px rgba(245,158,11,0.35);
     color: var(--gold);
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -1164,7 +1147,7 @@ tr.postseason-row:hover {
 .t-meta    { color: var(--text-dim);       font-weight: 400; font-family: var(--font-body); }
 /* the gold signal — winning total / leading stat only */
 .t-gold    { color: var(--gold) !important; }
-a.t-label:hover { color: var(--gold); }
+a.t-label:hover { color: #60a5fa; }
 /* .data-table sets th/td colors at higher specificity; let roles win inside
    the quarter table */
 .data-table thead th.t-meta { color: var(--text-dim); }
@@ -1297,7 +1280,7 @@ tr.player-row:hover {
 /* Rivalry cards */
 .rivalry-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(245,184,0,0.3) !important; /* overrides inline base border color */
+    border-color: rgba(245,158,11,0.3) !important; /* overrides inline base border color */
     box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }
 
@@ -1453,7 +1436,7 @@ tr.player-row:hover {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at center, rgba(245,184,0,0.05) 0%, transparent 55%);
+    background: radial-gradient(ellipse at center, rgba(245,158,11,0.05) 0%, transparent 55%);
     pointer-events: none;
 }
 .bk-lines {
@@ -1469,7 +1452,7 @@ tr.player-row:hover {
     stroke: rgba(255,255,255,0.12);
     stroke-width: 1.5;
 }
-.bk-line-done { stroke: rgba(245,184,0,0.7); }
+.bk-line-done { stroke: rgba(245,158,11,0.7); }
 
 .bk-col {
     position: relative;
@@ -1488,7 +1471,7 @@ tr.player-row:hover {
     font-size: var(--text-base);
     white-space: nowrap;
 }
-.bk-col-head-gold { color: rgba(245,184,0,0.75); }
+.bk-col-head-gold { color: rgba(245,158,11,0.75); }
 .bk-col-body {
     flex: 1;
     display: flex;
@@ -1525,14 +1508,14 @@ tr.player-row:hover {
 .bk-match-link { cursor: pointer; }
 .bk-match-link:hover { border-color: var(--text-dim); }
 .bk-match-link:focus-visible {
-    outline: 2px solid rgba(245,184,0,0.7);
+    outline: 2px solid rgba(245,158,11,0.7);
     outline-offset: 2px;
 }
 .bk-match-gold {
-    border: 1px solid rgba(245,184,0,0.4);
-    box-shadow: 0 0 20px rgba(245,184,0,0.12);
+    border: 1px solid rgba(245,158,11,0.4);
+    box-shadow: 0 0 20px rgba(245,158,11,0.12);
 }
-.bk-match-gold.bk-match-link:hover { border-color: rgba(245,184,0,0.7); }
+.bk-match-gold.bk-match-link:hover { border-color: rgba(245,158,11,0.7); }
 .bk-bowl {
     margin-top: 6px;
     text-align: center;
@@ -1570,14 +1553,14 @@ tr.player-row:hover {
 }
 a.bk-team-link:hover { background: rgba(255,255,255,0.04); }
 a.bk-team-link:focus-visible {
-    outline: 2px solid rgba(245,184,0,0.7);
+    outline: 2px solid rgba(245,158,11,0.7);
     outline-offset: -2px;
     border-radius: var(--r-sm);
 }
 a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .bk-won {
     background: rgba(255,255,255,0.03);
-    border-left-color: var(--bk-gold);
+    border-left-color: var(--tc, var(--bk-gold));
 }
 .bk-lost { opacity: 0.6; }
 
@@ -1595,8 +1578,8 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     background: rgba(255,255,255,0.06);
     font-variant-numeric: tabular-nums;
 }
-.bk-seed-bye { background: rgba(245,184,0,0.18); color: var(--gold-bright); }
-.bk-seed-mid { background: rgba(255,255,255,0.08); color: var(--grey-300); }
+.bk-seed-bye { background: rgba(245,158,11,0.18); color: #fbbf24; }
+.bk-seed-mid { background: rgba(59,130,246,0.18); color: #93c5fd; }
 
 .bk-logo {
     flex-shrink: 0;
@@ -1651,7 +1634,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     font-weight: 800;
     letter-spacing: 0.08em;
     color: var(--bk-gold);
-    border: 1px solid rgba(245,184,0,0.4);
+    border: 1px solid rgba(245,158,11,0.4);
     border-radius: var(--r-sm);
     padding: 1px 5px;
 }
@@ -1660,7 +1643,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     top: -8px;
     right: 8px;
     z-index: 2;
-    background: var(--stat-negative);
+    background: #dc2626;
     color: var(--text-primary);
     font-size: 0.56rem;
     font-weight: 800;
@@ -1678,7 +1661,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .bk-trophy {
     text-align: center;
     margin-bottom: 12px;
-    filter: drop-shadow(0 0 12px rgba(245,184,0,0.4));
+    filter: drop-shadow(0 0 12px rgba(245,158,11,0.4));
 }
 .bk-champion {
     margin-top: 20px;
@@ -1696,9 +1679,9 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     text-align: center;
 }
 .bk-champion img { width: 40px; height: 40px; object-fit: contain; }
-.bk-champion:hover { color: var(--gold-bright); }
+.bk-champion:hover { color: #fbbf24; }
 .bk-champion:focus-visible {
-    outline: 2px solid rgba(245,184,0,0.7);
+    outline: 2px solid rgba(245,158,11,0.7);
     outline-offset: 3px;
     border-radius: var(--r-sm);
 }
@@ -1748,7 +1731,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
         padding-bottom: 8px;
         margin-bottom: 14px;
     }
-    .bk-m-head-gold { color: rgba(245,184,0,0.85); border-bottom-color: rgba(245,184,0,0.25); }
+    .bk-m-head-gold { color: rgba(245,158,11,0.85); border-bottom-color: rgba(245,158,11,0.25); }
     .bk-slot-m { width: 100%; max-width: 360px; margin: 0 auto 14px; }
     .bk-mobile .bk-champion { margin-bottom: 8px; }
 }
@@ -1801,21 +1784,21 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     line-height: 1.5;
 }
 .badge-rank, .ap-final-pill, .lb-ap-pill, .compare-ap-badge {
-    background: rgba(245,184,0,0.12);
+    background: rgba(245,158,11,0.12);
     border: 1px solid var(--border-gold);
     color: var(--gold);
 }
 .badge-rivalry, .gc-rivalry, .rivalry-badge {
-    background: linear-gradient(135deg, rgba(245,184,0,0.22), rgba(184,137,10,0.12));
+    background: linear-gradient(135deg, rgba(245,158,11,0.22), rgba(184,134,11,0.12));
     border: 1px solid var(--border-gold);
     box-shadow: none;
     color: var(--gold);
 }
 .badge-rivalry::before, .gc-rivalry::before, .rivalry-badge::before { content: '⚔ '; }
 .badge-pos, .lb-pos-pill, .compare-pos-badge, .search-result-pos {
-    background: rgba(245,184,0,0.12);
-    border: 1px solid rgba(245,184,0,0.3);
-    color: var(--gold);
+    background: rgba(59,130,246,0.12);
+    border: 1px solid rgba(59,130,246,0.3);
+    color: #93c5fd;
 }
 .badge-conf {
     background: rgba(255,255,255,0.05);
@@ -1832,7 +1815,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .btn-primary, .lb-view-tab.active, .lb-mode-btn.active, .lb-page-btn.active {
     background: var(--gold);
     border: 1px solid var(--gold);
-    color: var(--bg-base);
+    color: #1a1200;
 }
 .btn-primary {
     font-family: var(--font-display);
@@ -1879,7 +1862,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .tab-pill:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
 .tab-pill.active, .compare-tab.active {
     color: var(--gold);
-    background: rgba(245,184,0,0.1);
+    background: rgba(245,158,11,0.1);
     border-color: var(--border-gold);
 }
 .lb-team-tab, .lb-page-btn, .compare-download-btn { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.04em; }
@@ -1952,7 +1935,7 @@ input:focus-visible, [tabindex]:focus-visible {
 }
 
 /* Selection */
-::selection { background: rgba(245,184,0,0.28); color: var(--text-primary); }
+::selection { background: rgba(245,158,11,0.28); color: var(--text-primary); }
 
 /* Scrollbars (webkit) — thin, dark, quiet */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
