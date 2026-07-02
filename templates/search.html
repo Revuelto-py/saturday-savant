@@ -41,13 +41,13 @@
         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
         <a href="/team/{{ t[0] }}" style="text-decoration:none;display:block;height:100%">
         <div style="
-            background:linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc }}11 100%);
-            border:1px solid {{ tc }}44;border-radius: var(--r-lg);
+            background:var(--bg-card);
+            border:1px solid var(--border);border-radius: var(--r-lg);
             padding:20px 12px 14px;text-align:center;position:relative;overflow:hidden;
             cursor:pointer;transition:all 0.2s ease;height:100%"
-            onmouseover="this.style.background='linear-gradient(135deg, {{ tc }}66 0%, #0d1628 50%, {{ tc }}33 100%)';this.style.borderColor='{{ tc }}88';this.style.transform='translateY(-3px)'"
-            onmouseout="this.style.background='linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc }}11 100%)';this.style.borderColor='{{ tc }}44';this.style.transform='translateY(0)'">
-            <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:80%;height:60%;background:radial-gradient(ellipse at 50% 0%, {{ tc }}22 0%, transparent 70%);pointer-events:none"></div>
+            onmouseover="this.style.background='var(--bg-card-hover)';this.style.borderColor='var(--border-strong)';this.style.transform='translateY(-3px)'"
+            onmouseout="this.style.background='var(--bg-card)';this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
+            <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:80%;height:60%;background:radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05) 0%, transparent 70%);pointer-events:none"></div>
             {% if t[2] %}
             <div style="height:52px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;position:relative;z-index:1">
                 <img src="{{ t[2] }}" style="max-height:48px;max-width:100%;object-fit:contain">
@@ -96,7 +96,7 @@
                 {% if p[5] %}
                     <span style="color: var(--text-secondary);font-size: var(--text-sm)">#{{ p[5] }}</span>
                 {% endif %}
-                <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;font-size: var(--text-xs);font-weight:800;padding:3px 8px;border-radius: var(--r-sm);letter-spacing:0.06em">
+                <span style="background:rgba(245,184,0,0.15);border:1px solid rgba(245,184,0,0.3);color:var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 8px;border-radius: var(--r-sm);letter-spacing:0.06em">
                     {{ p[4] or '—' }}
                 </span>
             </div>

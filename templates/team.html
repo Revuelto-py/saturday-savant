@@ -6,8 +6,8 @@
 {% block content %}
 
 <!-- HERO -->
-<div style="background:linear-gradient(135deg,{{ c1 }} 0%,#0a1220 50%,{{ c2 }}88 100%);padding:40px 0 0;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
-    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,{{ c1 }}66 0%,transparent 55%),radial-gradient(ellipse at 100% 50%,{{ c2 }}44 0%,transparent 55%);pointer-events:none"></div>
+<div style="background:radial-gradient(ellipse at center, #141414 0%, #000000 70%);padding:40px 0 0;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(255,255,255,0.04) 0%,transparent 55%),radial-gradient(ellipse at 100% 50%,rgba(255,255,255,0.03) 0%,transparent 55%);pointer-events:none"></div>
     <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);pointer-events:none"></div>
     <div class="page-wrapper" style="padding-bottom:0;position:relative;z-index:1">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-4">
@@ -99,7 +99,7 @@
                     <tbody>
                         {% for s in standings %}
                         {% set ic = s[0]==team[0] %}
-                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(59,130,246,0.1)' if ic else 'transparent' }};cursor:pointer" onclick="window.location.href='/team/{{ s[0] }}'">
+                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(245,184,0,0.1)' if ic else 'transparent' }};cursor:pointer" onclick="window.location.href='/team/{{ s[0] }}'">
                             <td style="padding:9px 14px">
                                 <div style="display:flex;align-items:center;gap:8px">
                                     {% if s[6] %}
@@ -138,28 +138,28 @@
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Overall</div>
                     <div style="color: var(--text-primary);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.rating }}</div>
-                    <div style="margin-top:8px"><span style="background:{{ c1 }}33;border:1px solid {{ c1 }}55;color: var(--text-primary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.ranking }} Nationally</span></div>
+                    <div style="margin-top:8px"><span style="background:rgba(245,184,0,0.12);border:1px solid rgba(245,184,0,0.35);color: var(--text-primary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.ranking }} Nationally</span></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offense</div>
-                    <div style="color:#34d399;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.off_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.off_ranking }} Nationally</span></div>
+                    <div style="color:var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.off_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(245,184,0,0.1);border:1px solid rgba(245,184,0,0.25);color:var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.off_ranking }} Nationally</span></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#60a5fa;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.def_ranking }} Nationally</span></div>
+                    <div style="color:var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.def_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(245,184,0,0.1);border:1px solid rgba(245,184,0,0.25);color:var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.def_ranking }} Nationally</span></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Special Teams</div>
-                    <div style="color:#fbbf24;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.st_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#fbbf24;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">SP+ Rating</span></div>
+                    <div style="color:var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.st_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(245,184,0,0.1);border:1px solid rgba(245,184,0,0.25);color:var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">SP+ Rating</span></div>
                 </div>
             </div>
         </div>
@@ -203,7 +203,7 @@
         <!-- Legend -->
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:16px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius: var(--r-md);border: 1px solid var(--border)">
             <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;letter-spacing:0.05em">PERCENTILE:</span>
-            {% for color, label in [('#c0392b','80–99'),('#e74c3c','60–79'),('#95a5a6','45–59'),('#5d8aa8','25–44'),('#2980b9','1–24')] %}
+            {% for color, label in [('var(--gold)','80–99'),('var(--gold-dim)','60–79'),('var(--grey-300)','45–59'),('var(--grey-500)','25–44'),('var(--grey-700)','1–24')] %}
             <div style="display:flex;align-items:center;gap:6px">
                 <div style="width:28px;height:10px;background:{{ color }};border-radius: 2px"></div>
                 <span style="color: var(--text-secondary);font-size: var(--text-xs)">{{ label }}</span>
@@ -214,11 +214,11 @@
         {% macro pct_bar(label, val, metric, suffix='') %}
         {% set p = percentiles.get(metric) %}
         {% if p is not none %}
-            {% if p >= 80 %}{% set bc = '#c0392b' %}
-            {% elif p >= 60 %}{% set bc = '#e74c3c' %}
-            {% elif p >= 45 %}{% set bc = '#95a5a6' %}
-            {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
-            {% else %}{% set bc = '#2980b9' %}{% endif %}
+            {% if p >= 80 %}{% set bc = 'var(--gold)' %}
+            {% elif p >= 60 %}{% set bc = 'var(--gold-dim)' %}
+            {% elif p >= 45 %}{% set bc = 'var(--grey-300)' %}
+            {% elif p >= 25 %}{% set bc = 'var(--grey-500)' %}
+            {% else %}{% set bc = 'var(--grey-700)' %}{% endif %}
         {% else %}{% set bc = 'rgba(255,255,255,0.08)' %}{% endif %}
         <div class="percentile-row" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
             <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:160px;text-align:right;flex-shrink:0">{{ label }}</div>
@@ -241,9 +241,9 @@
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0 6px;margin-bottom:4px;border-bottom: 1px solid var(--border)">
             <div style="min-width:160px;flex-shrink:0"></div>
             <div style="flex:1;display:flex;justify-content:space-between;padding:0 4px">
-                <span style="color:#2980b9;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">POOR</span>
+                <span style="color:var(--grey-700);font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">POOR</span>
                 <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">AVERAGE</span>
-                <span style="color:#c0392b;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">GREAT</span>
+                <span style="color:var(--gold);font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">GREAT</span>
             </div>
             <div style="min-width:50px;flex-shrink:0"></div>
         </div>
@@ -252,7 +252,7 @@
         <div class="row g-3">
             <div class="col-lg-6">
                 <div class="dark-card p-4">
-                    <div style="margin-bottom:8px"><span style="background:{{ c1 }}33;border:1px solid {{ c1 }}66;color: var(--text-primary);font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">OFFENSE</span></div>
+                    <div style="margin-bottom:8px"><span style="background:rgba(245,184,0,0.12);border:1px solid rgba(245,184,0,0.35);color: var(--text-primary);font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">OFFENSE</span></div>
                     {{ scale_header() }}
                     {{ pct_bar('EPA / Play',          team_adv.off_ppa,                'off_ppa') }}
                     {{ pct_bar('Success Rate',         team_adv.off_success_rate,       'off_success_rate',   '%') }}
@@ -273,7 +273,7 @@
             </div>
             <div class="col-lg-6">
                 <div class="dark-card p-4">
-                    <div style="margin-bottom:8px"><span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">DEFENSE</span></div>
+                    <div style="margin-bottom:8px"><span style="background:rgba(245,184,0,0.15);border:1px solid rgba(245,184,0,0.3);color:var(--gold);font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">DEFENSE</span></div>
                     {{ scale_header() }}
                     {{ pct_bar('EPA / Play Allowed',         team_adv.def_ppa,                'def_ppa') }}
                     {{ pct_bar('Success Rate Allowed',       team_adv.def_success_rate,       'def_success_rate',   '%') }}
@@ -338,20 +338,20 @@
 
 <!-- ===== LINEUP ===== -->
 <div class="tab-pane fade" id="lineup">
-    <div style="background:radial-gradient(ellipse at 50% 0%,{{ c1 }}33 0%,transparent 60%),linear-gradient(180deg,#060c1a 0%,#0d1a2e 100%);border-radius: var(--r-lg);padding:32px 0 28px;margin-top:24px;position:relative;overflow:hidden">
+    <div style="background:radial-gradient(ellipse at 50% 0%,rgba(245,184,0,0.06) 0%,transparent 60%),linear-gradient(180deg,#0a0a0a 0%,#141414 100%);border-radius: var(--r-lg);padding:32px 0 28px;margin-top:24px;position:relative;overflow:hidden">
         <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.012) 1px,transparent 1px);background-size:48px 48px;pointer-events:none"></div>
         <div style="display:flex;justify-content:center;margin-bottom:28px;position:relative;z-index:1">
-            <button id="offBtn" onclick="showSide('offense')" style="padding:9px 36px;background:{{ c1 }};color: var(--text-primary);border:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer">⚔ OFFENSE</button>
+            <button id="offBtn" onclick="showSide('offense')" style="padding:9px 36px;background:var(--gold);color: var(--bg-base);border:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer">⚔ OFFENSE</button>
             <button id="defBtn" onclick="showSide('defense')" style="padding:9px 36px;background:rgba(255,255,255,0.07);color: var(--text-secondary);border: 1px solid var(--border-strong);border-left:none;border-radius:0 6px 6px 0;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer">🛡 DEFENSE</button>
         </div>
 
         {% macro card(slot, border_col, label_bg, label_col) %}
         {% set p = lineup.get(slot) %}
         <div style="display:flex;flex-direction:column;align-items:center;min-width:0;flex:1">
-            <div style="width:100%;border-radius: var(--r-md);overflow:hidden;border:2px solid {{ border_col }};box-shadow:0 0 12px {{ border_col }}44,0 4px 18px rgba(0,0,0,0.65);background:linear-gradient(180deg,#101827,#1a2640)">
+            <div style="width:100%;border-radius: var(--r-md);overflow:hidden;border:2px solid {{ border_col }};box-shadow:0 0 12px {{ border_col }}44,0 4px 18px rgba(0,0,0,0.65);background:linear-gradient(180deg,#141414,#232323)">
                 {% if p %}
                     {% if p.headshot %}<img src="{{ p.headshot }}" style="width:100%;height:80px;object-fit:cover;object-position:top center;display:block">
-                    {% else %}<div style="width:100%;height:80px;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size: var(--text-lg);font-weight:bold;color: var(--text-secondary)">{{ p.first[0] if p.first else '' }}{{ p.name[0] if p.name else '' }}</div>{% endif %}
+                    {% else %}<div style="width:100%;height:80px;background:#232323;display:flex;align-items:center;justify-content:center;font-size: var(--text-lg);font-weight:bold;color: var(--text-secondary)">{{ p.first[0] if p.first else '' }}{{ p.name[0] if p.name else '' }}</div>{% endif %}
                     <div style="padding:4px 3px 5px;text-align:center;background:rgba(0,0,0,0.35)">
                         <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-xs);line-height:1.2">#{{ p.jersey if p.jersey else '—' }}</div>
                         <div style="color: var(--text-secondary);font-size: 0.46rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</div>
@@ -367,47 +367,47 @@
         <div id="offense-layer" style="position:relative;z-index:1;padding:0 20px">
             <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:8px;align-items:start">
                 <div></div><div></div>
-                {{ card('LT','#64748b','#334155','#94a3b8') }}
-                {{ card('LG','#64748b','#334155','#94a3b8') }}
-                {{ card('C', '#64748b','#334155','#94a3b8') }}
-                {{ card('RG','#64748b','#334155','#94a3b8') }}
-                {{ card('RT','#64748b','#334155','#94a3b8') }}
+                {{ card('LT','#232323','#4d4d4d','#c9c9c9') }}
+                {{ card('LG','#232323','#4d4d4d','#c9c9c9') }}
+                {{ card('C', '#232323','#4d4d4d','#c9c9c9') }}
+                {{ card('RG','#232323','#4d4d4d','#c9c9c9') }}
+                {{ card('RT','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div><div></div>
-                {{ card('WR1',c1,c1,'white') }}
+                {{ card('WR1','#232323','#4d4d4d','#ffffff') }}
                 <div></div><div></div><div></div><div></div><div></div><div></div>
-                {{ card('TE','#10b981','#064e3b','#6ee7b7') }}
+                {{ card('TE','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div>
-                {{ card('WR2',c1,c1,'white') }}
+                {{ card('WR2','#232323','#4d4d4d','#ffffff') }}
                 <div></div><div></div><div></div><div></div>
-                {{ card('QB','var(--red)','#7f1d1d','#fca5a5') }}
-                {{ card('RB','#8b5cf6','#4c1d95','#ddd6fe') }}
+                {{ card('QB','#232323','#4d4d4d','#c9c9c9') }}
+                {{ card('RB','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div><div></div><div></div>
             </div>
         </div>
 
         <div id="defense-layer" style="display:none;position:relative;z-index:1;padding:0 20px">
             <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:8px;align-items:start">
-                {{ card('CB1','var(--blue)','#1e3a8a','#bfdbfe') }}
+                {{ card('CB1','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
-                {{ card('S1','#06b6d4','#0c4a6e','#a5f3fc') }}
+                {{ card('S1','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
-                {{ card('S2','#06b6d4','#0c4a6e','#a5f3fc') }}
+                {{ card('S2','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
-                {{ card('CB2','var(--blue)','#1e3a8a','#bfdbfe') }}
+                {{ card('CB2','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
-                {{ card('LB1','#a855f7','#581c87','#e9d5ff') }}
+                {{ card('LB1','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div>
-                {{ card('LB2','#a855f7','#581c87','#e9d5ff') }}
+                {{ card('LB2','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
-                {{ card('LB3','#a855f7','#581c87','#e9d5ff') }}
+                {{ card('LB3','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
                 <div></div><div></div>
-                {{ card('DE1','#f97316','#7c2d12','#fed7aa') }}
+                {{ card('DE1','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div>
-                {{ card('DT1','var(--red)','#7f1d1d','#fca5a5') }}
-                {{ card('DT2','var(--red)','#7f1d1d','#fca5a5') }}
+                {{ card('DT1','#232323','#4d4d4d','#c9c9c9') }}
+                {{ card('DT2','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div>
-                {{ card('DE2','#f97316','#7c2d12','#fed7aa') }}
+                {{ card('DE2','#232323','#4d4d4d','#c9c9c9') }}
                 <div></div><div></div>
             </div>
         </div>
@@ -448,7 +448,7 @@
 
 {% if passing_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Passing Leaders','#34d399') }}
+    {{ stat_table_header('Passing Leaders','var(--gold)') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
@@ -456,7 +456,7 @@
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Cmp</th>
             <th style="text-align:center">Att</th>
-            <th style="color:#34d399;text-align:center">Yds ↓</th>
+            <th style="color:var(--gold);text-align:center">Yds ↓</th>
             <th style="text-align:center">TD</th>
             <th style="text-align:center">INT</th>
             <th style="text-align:center">Pct</th>
@@ -469,7 +469,7 @@
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('COMPLETIONS')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('ATT')) }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(52,211,153,0.04)"><span style="color:#34d399;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(245,184,0,0.04)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('PCT')|float) if p.get('PCT') else '—' }}%</td>
@@ -484,14 +484,14 @@
 
 {% if rushing_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Rushing Leaders','#60a5fa') }}
+    {{ stat_table_header('Rushing Leaders','var(--gold)') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
             <th style="width:36px">Rk</th>
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Att</th>
-            <th style="color:#60a5fa;text-align:center">Yds ↓</th>
+            <th style="color:var(--gold);text-align:center">Yds ↓</th>
             <th style="text-align:center">Avg</th>
             <th style="text-align:center">TD</th>
             <th style="text-align:center">Long</th>
@@ -502,7 +502,7 @@
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('ATT')) }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(245,184,0,0.04)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPC')|float) if p.get('YPC') else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
@@ -516,14 +516,14 @@
 
 {% if receiving_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Receiving Leaders','#fbbf24') }}
+    {{ stat_table_header('Receiving Leaders','var(--gold)') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
             <th style="width:36px">Rk</th>
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Rec</th>
-            <th style="color:#fbbf24;text-align:center">Yds ↓</th>
+            <th style="color:var(--gold);text-align:center">Yds ↓</th>
             <th style="text-align:center">Avg</th>
             <th style="text-align:center">TD</th>
             <th style="text-align:center">Long</th>
@@ -534,7 +534,7 @@
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('REC')) }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(251,191,36,0.04)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(245,184,0,0.04)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPR')|float) if p.get('YPR') else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
@@ -548,7 +548,7 @@
 
 {% if defensive_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Defensive Leaders','#a78bfa') }}
+    {{ stat_table_header('Defensive Leaders','var(--gold)') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
@@ -556,7 +556,7 @@
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Solo</th>
             <th style="text-align:center">Ast</th>
-            <th style="color:#a78bfa;text-align:center">Tot ↓</th>
+            <th style="color:var(--gold);text-align:center">Tot ↓</th>
             <th style="text-align:center">TFL</th>
             <th style="text-align:center">Sacks</th>
             <th style="text-align:center">Int</th>
@@ -569,7 +569,7 @@
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('SOLO')|int if p.get('SOLO') else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('AST')|int if p.get('AST') else '—' }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(167,139,250,0.04)"><span style="color:#a78bfa;font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(245,184,0,0.04)"><span style="color:var(--gold);font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TFL')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('SACKS')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
@@ -585,12 +585,12 @@
 <div class="row g-4 mb-4">
     {% if kicking_stats %}
     <div class="col-lg-6">
-        {{ stat_table_header('Kicking','#34d399') }}
+        {{ stat_table_header('Kicking','var(--gold)') }}
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
             <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
                 <th style="text-align:left">Player</th>
-                <th style="color:#34d399;text-align:center">FGM</th>
+                <th style="color:var(--gold);text-align:center">FGM</th>
                 <th style="text-align:center">FGA</th>
                 <th style="text-align:center">Pct</th>
                 <th style="text-align:center">Long</th>
@@ -599,7 +599,7 @@
                 {% for p in kicking_stats %}
                 <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
                     {{ player_cell(p) }}
-                    <td style="padding:10px 10px;text-align:center;background:rgba(52,211,153,0.04)"><span style="color:#34d399;font-weight:800">{{ p.get('FGM')|int if p.get('FGM') else '—' }}</span></td>
+                    <td style="padding:10px 10px;text-align:center;background:rgba(245,184,0,0.04)"><span style="color:var(--gold);font-weight:800">{{ p.get('FGM')|int if p.get('FGM') else '—' }}</span></td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('FGA')|int if p.get('FGA') else '—' }}</td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('PCT')|float) if p.get('PCT') else '—' }}%</td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
@@ -612,13 +612,13 @@
     {% endif %}
     {% if punting_stats %}
     <div class="col-lg-6">
-        {{ stat_table_header('Punting','#60a5fa') }}
+        {{ stat_table_header('Punting','var(--gold)') }}
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
             <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
                 <th style="text-align:left">Player</th>
                 <th style="text-align:center">No</th>
-                <th style="color:#60a5fa;text-align:center">Yds</th>
+                <th style="color:var(--gold);text-align:center">Yds</th>
                 <th style="text-align:center">Avg</th>
                 <th style="text-align:center">Long</th>
             </tr></thead>
@@ -627,7 +627,7 @@
                 <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
                     {{ player_cell(p) }}
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('NO')|int if p.get('NO') else '—' }}</td>
-                    <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                    <td style="padding:10px 10px;text-align:center;background:rgba(245,184,0,0.04)"><span style="color:var(--gold);font-weight:800">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPP')|float) if p.get('YPP') else '—' }}</td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
                 </tr>
@@ -727,7 +727,7 @@ function showSide(side) {
     document.getElementById('offense-layer').style.display = isOff ? 'block' : 'none';
     document.getElementById('defense-layer').style.display = isOff ? 'none' : 'block';
     document.getElementById('offBtn').style.cssText = isOff
-        ? 'padding:9px 36px;background:{{ c1 }};color: var(--text-primary);border:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer'
+        ? 'padding:9px 36px;background:var(--gold);color: var(--bg-base);border:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer'
         : 'padding:9px 36px;background:rgba(255,255,255,0.07);color: var(--text-secondary);border: 1px solid var(--border-strong);border-right:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer';
     document.getElementById('defBtn').style.cssText = isOff
         ? 'padding:9px 36px;background:rgba(255,255,255,0.07);color: var(--text-secondary);border: 1px solid var(--border-strong);border-left:none;border-radius:0 6px 6px 0;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer'

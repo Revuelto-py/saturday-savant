@@ -39,8 +39,8 @@
     </div>
     {% if total > 0 %}
     <div style="height:3px;border-radius: 2px;background:rgba(255,255,255,0.05);overflow:hidden;display:flex">
-        <div style="width:{{ away_pct }}%;background:{{ away_color }};transition:width 0.4s"></div>
-        <div style="width:{{ home_pct }}%;background:{{ home_color }};transition:width 0.4s"></div>
+        <div style="width:{{ away_pct }}%;background:{% if away_pct >= home_pct %}var(--gold){% else %}var(--grey-700){% endif %};transition:width 0.4s"></div>
+        <div style="width:{{ home_pct }}%;background:{% if home_pct > away_pct %}var(--gold){% else %}var(--grey-700){% endif %};transition:width 0.4s"></div>
     </div>
     {% endif %}
 </div>
@@ -49,8 +49,7 @@
 {% block content %}
 
 {# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
-<div class="game-hero" style="background:linear-gradient(135deg,{{ away_color }}bb 0%,#060d1f 42%,#060d1f 58%,{{ home_color }}bb 100%);border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
-    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.48);pointer-events:none"></div>
+<div class="game-hero" style="background:radial-gradient(ellipse at center, #141414 0%, #000000 70%);border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
     <div class="page-wrapper" style="position:relative;z-index:1;padding-top:0;padding-bottom:0">
 
         <div style="display:flex;flex-direction:column;align-items:center;flex-wrap:wrap;text-align:center;margin-bottom:28px">
@@ -303,10 +302,9 @@
         </div>
 
         {% for play in q_plays %}
-        {% set play_border_color = home_color if play.side == 'home' else (away_color if play.side == 'away' else 'var(--gold)') %}
         <div class="play-row dark-card mb-2"
              data-scoring="{{ 'true' if play.is_scoring else 'false' }}"
-             style="{% if play.is_scoring %}border-left:4px solid {{ play_border_color }};background:{{ play_border_color }}08;{% else %}border-left:3px solid {{ play_border_color }}55;{% endif %}padding:14px 16px;{% if not play.is_scoring %}display:none;{% endif %}">
+             style="{% if play.is_scoring %}border-left:4px solid var(--gold);background:rgba(245,184,0,0.04);{% else %}border-left:3px solid var(--grey-700);{% endif %}padding:14px 16px;{% if not play.is_scoring %}display:none;{% endif %}">
 
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
                 <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
@@ -384,8 +382,8 @@
         <span class="t-value" style="font-size: var(--text-lg);min-width:60px;text-align:right">{{ home_val or '—' }}</span>
     </div>
     <div style="display:flex;height:8px;border-radius: var(--r-sm);overflow:hidden;gap:2px">
-        <div style="flex:{{ away_pct }};background:{{ away_color }};border-radius: var(--r-sm) 0 0 4px;min-width:4px"></div>
-        <div style="flex:{{ home_pct }};background:{{ home_color }};border-radius:0 4px 4px 0;min-width:4px"></div>
+        <div style="flex:{{ away_pct }};background:{% if away_pct >= home_pct %}var(--gold){% else %}var(--grey-700){% endif %};border-radius: var(--r-sm) 0 0 4px;min-width:4px"></div>
+        <div style="flex:{{ home_pct }};background:{% if home_pct > away_pct %}var(--gold){% else %}var(--grey-700){% endif %};border-radius:0 4px 4px 0;min-width:4px"></div>
     </div>
 </div>
 {% endif %}
@@ -433,7 +431,7 @@
             <div>
                 <div id="away-prob-pct" class="t-value" style="font-size: var(--text-lg);line-height:1">—</div>
                 <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
-                    <div style="width:16px;height:2px;background:{{ away_color }};border-radius: 2px"></div>
+                    <div style="width:16px;height:2px;background:var(--grey-300);border-radius: 2px"></div>
                     <span class="t-support" style="font-size: var(--text-xs)">{{ away_team }}</span>
                 </div>
             </div>
@@ -444,7 +442,7 @@
                 <div id="home-prob-pct" class="t-value" style="font-size: var(--text-lg);line-height:1">—</div>
                 <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-top:2px">
                     <span class="t-support" style="font-size: var(--text-xs)">{{ home_team }}</span>
-                    <div style="width:16px;height:2px;background:{{ home_color }};border-radius: 2px"></div>
+                    <div style="width:16px;height:2px;background:var(--gold);border-radius: 2px"></div>
                 </div>
             </div>
         </div>
@@ -478,8 +476,9 @@
 const WP_DATA = {{ win_prob | tojson }};
 const AWAY_TEAM = {{ away_team | tojson }};
 const HOME_TEAM = {{ home_team | tojson }};
-const AWAY_COLOR = '{{ away_color }}';
-const HOME_COLOR = '{{ home_color }}';
+/* palette rule: chart lines are gold vs grey, never team colors */
+const AWAY_COLOR = '#c9c9c9';
+const HOME_COLOR = '#f5b800';
 
 function initWinProb() {
     const chartDiv = document.getElementById('win-prob-chart');
@@ -683,7 +682,7 @@ if (typeof Plotly !== 'undefined') {
 {% set athletes = cat.athletes | selectattr('name') | list if cat else [] %}
 {% if cat and athletes %}
 <div style="margin-bottom:28px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid {{ t_color }}">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:2px solid var(--grey-700)">
         {% if t_logo %}<img src="{{ t_logo }}" style="width:22px;height:22px;object-fit:contain">{% endif %}
         <span style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)">{{ t_name }} {{ display_name }}</span>
     </div>
@@ -819,12 +818,10 @@ if (typeof Plotly !== 'undefined') {
     function buildField(svg) {
         while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-        var homeColor = hexToRgbTriplet(svg.dataset.homeColor);
-        var awayColor = hexToRgbTriplet(svg.dataset.awayColor);
-
-        svg.appendChild(svgEl('rect', { x: FIELD_X, y: 0, width: FIELD_W, height: FIELD_H, fill: '#1b4332' }));
-        svg.appendChild(svgEl('rect', { x: 0, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(' + awayColor + ',0.55)' }));
-        svg.appendChild(svgEl('rect', { x: SVG_W - EZ_W, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(' + homeColor + ',0.55)' }));
+        /* palette rule: neutral dark field, no team-color or green fills */
+        svg.appendChild(svgEl('rect', { x: FIELD_X, y: 0, width: FIELD_W, height: FIELD_H, fill: '#181818' }));
+        svg.appendChild(svgEl('rect', { x: 0, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(255,255,255,0.06)' }));
+        svg.appendChild(svgEl('rect', { x: SVG_W - EZ_W, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(255,255,255,0.06)' }));
 
         var labels = ['10', '20', '30', '40', '50', '40', '30', '20', '10'];
         for (var i = 1; i <= 9; i++) {
@@ -981,7 +978,7 @@ function showDriveTooltip(e, text) {
     if (!tip) {
         tip = document.createElement('div');
         tip.id = 'drive-tip';
-        tip.style.cssText = 'position:fixed;background:rgba(5,12,30,0.95);color: var(--text-primary);padding:8px 12px;border-radius: var(--r-md);font-size: var(--text-sm);pointer-events:none;z-index:9999;max-width:320px;border: 1px solid var(--border-strong);line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5)';
+        tip.style.cssText = 'position:fixed;background:rgba(10,10,10,0.95);color: var(--text-primary);padding:8px 12px;border-radius: var(--r-md);font-size: var(--text-sm);pointer-events:none;z-index:9999;max-width:320px;border: 1px solid var(--border-strong);line-height:1.5;box-shadow:0 4px 16px rgba(0,0,0,0.5)';
         document.body.appendChild(tip);
     }
     tip.textContent = text;

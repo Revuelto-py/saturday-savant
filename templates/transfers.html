@@ -17,7 +17,7 @@
        style="color:{{ 'var(--text-primary)' if year==yr else 'var(--text-secondary)' }};font-weight:{{ '800' if year==yr else '500' }};font-size: var(--text-base);text-decoration:none;padding:10px 20px;border-bottom:2px solid {{ 'var(--gold)' if year==yr else 'transparent' }};margin-bottom:-1px;display:inline-block"
        onmouseover="if('{{ year }}' !== '{{ yr }}')this.style.color='var(--text-primary)'"
        onmouseout="if('{{ year }}' !== '{{ yr }}')this.style.color='var(--text-secondary)'">
-        {{ yr }}{% if yr == '2026' %} <span style="font-size: var(--text-xs);font-weight:700;color:#34d399;vertical-align:middle;letter-spacing:0.08em">NEW</span>{% endif %}
+        {{ yr }}{% if yr == '2026' %} <span style="font-size: var(--text-xs);font-weight:700;color:var(--gold);vertical-align:middle;letter-spacing:0.08em">NEW</span>{% endif %}
     </a>
     {% endfor %}
 </div>
@@ -28,7 +28,7 @@
 <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-md);align-items:flex-end">
     <div>
         <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Position</div>
-        <select name="pos" onchange="this.form.submit()" style="background:#152035;border: 1px solid var(--border-strong);color: var(--text-primary);padding:7px 12px;border-radius: var(--r-sm);font-size: var(--text-sm);min-width:140px">
+        <select name="pos" onchange="this.form.submit()" style="background:var(--bg-subtle);border: 1px solid var(--border-strong);color: var(--text-primary);padding:7px 12px;border-radius: var(--r-sm);font-size: var(--text-sm);min-width:140px">
             <option value="">All Positions</option>
             {% for pos in positions %}
             <option value="{{ pos }}" {{ 'selected' if pos_filter==pos }}>{{ pos }}</option>
@@ -37,7 +37,7 @@
     </div>
     <div>
         <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Destination Conf</div>
-        <select name="conf" onchange="this.form.submit()" style="background:#152035;border: 1px solid var(--border-strong);color: var(--text-primary);padding:7px 12px;border-radius: var(--r-sm);font-size: var(--text-sm);min-width:160px">
+        <select name="conf" onchange="this.form.submit()" style="background:var(--bg-subtle);border: 1px solid var(--border-strong);color: var(--text-primary);padding:7px 12px;border-radius: var(--r-sm);font-size: var(--text-sm);min-width:160px">
             <option value="">All Conferences</option>
             {% for conf in conferences %}
             <option value="{{ conf }}" {{ 'selected' if conf_filter==conf }}>{{ conf }}</option>
@@ -91,7 +91,7 @@
 
             <!-- Position -->
             <td style="padding:11px 10px;text-align:center;border-left: 1px solid var(--border)">
-                <span style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.2);color:#93c5fd;font-size: var(--text-xs);font-weight:800;padding:2px 7px;border-radius: var(--r-sm)">{{ t[2] or '—' }}</span>
+                <span style="background:rgba(245,184,0,0.12);border:1px solid rgba(245,184,0,0.2);color:var(--gold);font-size: var(--text-xs);font-weight:800;padding:2px 7px;border-radius: var(--r-sm)">{{ t[2] or '—' }}</span>
             </td>
 
             <!-- From -->
@@ -108,7 +108,7 @@
                 <a href="/team/{{ t[4] }}" style="display:flex;align-items:center;gap:8px;text-decoration:none">
                     {% if t[11] %}<img src="{{ t[11] }}" style="width:20px;height:20px;object-fit:contain">{% endif %}
                     <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)"
-                          onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-primary)'">{{ t[4] }}</span>
+                          onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ t[4] }}</span>
                 </a>
                 {% else %}
                 <span style="color: var(--text-dim);font-size: var(--text-sm);font-style:italic">Undecided</span>
@@ -120,9 +120,9 @@
                 {% if t[6] %}
                 {% set rating = t[6] %}
                 <span style="display:inline-block;
-                    background:{{ 'rgba(52,211,153,0.15)' if rating >= 0.9 else ('rgba(96,165,250,0.12)' if rating >= 0.85 else 'var(--text-dim)') }};
-                    border:1px solid {{ 'rgba(52,211,153,0.3)' if rating >= 0.9 else ('rgba(96,165,250,0.25)' if rating >= 0.85 else 'var(--text-dim)') }};
-                    color:{{ '#34d399' if rating >= 0.9 else ('#93c5fd' if rating >= 0.85 else 'var(--text-secondary)') }};
+                    background:{{ 'rgba(245,184,0,0.15)' if rating >= 0.9 else ('rgba(255,255,255,0.08)' if rating >= 0.85 else 'var(--text-dim)') }};
+                    border:1px solid {{ 'rgba(245,184,0,0.3)' if rating >= 0.9 else ('rgba(255,255,255,0.16)' if rating >= 0.85 else 'var(--text-dim)') }};
+                    color:{{ 'var(--gold)' if rating >= 0.9 else ('var(--grey-300)' if rating >= 0.85 else 'var(--text-secondary)') }};
                     font-weight:800;font-size: var(--text-sm);padding:2px 8px;border-radius: var(--r-sm);min-width:52px;text-align:center">
                     {{ "%.4f" | format(rating) }}
                 </span>

@@ -710,11 +710,11 @@ def get_cached_season_leaders():
     try:
         cursor = conn.cursor()
         return [
-            ('Passing Yards',   '/leaderboards/passing',   '#fbbf24', leaders_query(cursor, 'passing',       'YDS')),
-            ('Rushing Yards',   '/leaderboards/rushing',   '#60a5fa', leaders_query(cursor, 'rushing',       'YDS')),
-            ('Receiving Yards', '/leaderboards/receiving', '#34d399', leaders_query(cursor, 'receiving',     'YDS')),
-            ('Tackles',         '/leaderboards/defense',   '#a78bfa', leaders_query(cursor, 'defensive',     'TOT')),
-            ('Interceptions',   '/leaderboards/defense',   '#f87171', leaders_query(cursor, 'interceptions', 'INT')),
+            ('Passing Yards',   '/leaderboards/passing',   'var(--gold)', leaders_query(cursor, 'passing',       'YDS')),
+            ('Rushing Yards',   '/leaderboards/rushing',   'var(--gold)', leaders_query(cursor, 'rushing',       'YDS')),
+            ('Receiving Yards', '/leaderboards/receiving', 'var(--gold)', leaders_query(cursor, 'receiving',     'YDS')),
+            ('Tackles',         '/leaderboards/defense',   'var(--gold)', leaders_query(cursor, 'defensive',     'TOT')),
+            ('Interceptions',   '/leaderboards/defense',   'var(--gold)', leaders_query(cursor, 'interceptions', 'INT')),
         ]
     finally:
         release_db(conn)
@@ -1728,44 +1728,44 @@ def _classify_play(play_type_text):
     if any(s in t for s in _NON_SCRIMMAGE_TYPES):
         return None
     if 'interception' in t:
-        return ('INT', '#dc2626', True)
+        return ('INT', '#e05a5a', True)
     if 'fumble' in t:
         if 'recovery (own)' in t:
-            return ('Fumble', '#6b7280', False)
-        return ('FUM', '#dc2626', True)
+            return ('Fumble', '#8a8a8a', False)
+        return ('FUM', '#e05a5a', True)
     if 'sack' in t:
-        return ('Sack', '#ef4444', False)
+        return ('Sack', '#e05a5a', False)
     if 'safety' in t:
-        return ('Safety', '#dc2626', False)
+        return ('Safety', '#e05a5a', False)
     if 'penalty' in t:
-        return ('Penalty', '#eab308', False)
+        return ('Penalty', '#f5b800', False)
     if 'field goal' in t:
         if 'missed' in t or 'blocked' in t:
-            return ('FG Miss', '#6b7280', False)
-        return ('FG', '#f97316', False)
+            return ('FG Miss', '#4d4d4d', False)
+        return ('FG', '#ffd23f', False)
     if 'punt' in t:
-        return ('Punt', '#a855f7', False)
+        return ('Punt', '#8a8a8a', False)
     if 'incompletion' in t:
-        return ('Inc', '#6b7280', False)
+        return ('Inc', '#4d4d4d', False)
     if 'reception' in t or 'pass' in t:
-        return ('Pass', '#3b82f6', False)
+        return ('Pass', '#ffffff', False)
     if 'rush' in t or 'run' in t or 'kneel' in t:
-        return ('Rush', '#22c55e', False)
-    return ('Play', '#6b7280', False)
+        return ('Rush', '#c9c9c9', False)
+    return ('Play', '#8a8a8a', False)
 
 def _classify_drive_result(display_result):
     """(badge_label, bg_color, text_color) for a drive's header badge."""
     r = (display_result or '').lower()
     if 'fumble' in r or 'interception' in r or 'pick' in r:
-        return ('TURNOVER', '#dc2626', '#fff')
+        return ('TURNOVER', '#e05a5a', '#fff')
     if 'safety' in r:
-        return ('SAFETY', '#dc2626', '#fff')
+        return ('SAFETY', '#e05a5a', '#fff')
     if 'touchdown' in r:
-        return ('TOUCHDOWN', '#16a34a', '#fff')
+        return ('TOUCHDOWN', '#f5b800', '#000')
     if 'missed' in r and 'field goal' in r or r == 'missed fg':
         return ('MISSED FG', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
     if 'field goal' in r:
-        return ('FIELD GOAL', '#f97316', '#fff')
+        return ('FIELD GOAL', '#ffd23f', '#000')
     if 'punt' in r:
         return ('PUNT', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.6)')
     if 'downs' in r:
@@ -2123,7 +2123,7 @@ def game_detail(game_id):
                     fallback_end = max(0.0, min(100.0, start_yl_abs + direction * drive_yards))
                     drive_play_list.append({
                         'label':       (drive_result or 'Drive')[:10],
-                        'color':       '#6b7280',
+                        'color':       '#8a8a8a',
                         'start_pct':   round(min(start_yl_abs, fallback_end), 2),
                         'width_pct':   round(abs(fallback_end - start_yl_abs), 2),
                         'yards':       drive_yards,
@@ -3656,7 +3656,7 @@ def bracket_page():
             FROM teams WHERE name = ANY(%s)
         ''', (list(seeds.keys()) or [''],))
         teams_map = {r[0]: {
-            'name': r[0], 'logo': r[1] or r[2], 'color': r[3] or '#f59e0b',
+            'name': r[0], 'logo': r[1] or r[2], 'color': r[3] or '#f5b800',
             'alt_color': r[4], 'abbreviation': r[5], 'conference': r[6],
         } for r in cursor.fetchall()}
     finally:
@@ -3678,7 +3678,7 @@ def bracket_page():
             'name': name,
             'seed': seed,
             'logo': info.get('logo'),
-            'color': info.get('color', '#f59e0b'),
+            'color': info.get('color', '#f5b800'),
             'conference': info.get('conference'),
             'abbreviation': info.get('abbreviation'),
             'points': pts,
