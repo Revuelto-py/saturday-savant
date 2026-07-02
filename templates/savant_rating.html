@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-wrapper" style="max-width:1000px">
+
+    <!-- Header -->
+    <div style="margin-bottom:28px">
+        <div class="section-label" style="margin-bottom: var(--s2)">Methodology</div>
+        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">Savant Rating
+            <span style="color: var(--gold);font-size: var(--text-lg);font-weight:800;letter-spacing:0.08em;vertical-align:middle;margin-left:6px">SVR</span>
+        </h1>
+        <p style="color: var(--text-secondary);font-size: var(--text-md);margin:10px 0 0;max-width:64ch;line-height:1.7">
+            Saturday Savant's signature team strength model: how many points a team's offense
+            and defense are really worth, once you strip away schedule luck, pace, garbage time,
+            and home cooking.
+        </p>
+    </div>
+
+    <!-- The three numbers -->
+    <div class="row g-3" style="margin-bottom:28px">
+        <div class="col-md-4">
+            <div class="dark-card p-4" style="height:100%">
+                <div style="color:#34d399;font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offensive Rating</div>
+                <div style="color: var(--text-primary);font-size: var(--text-base);line-height:1.7">Points scored per <strong>10 drives</strong>, adjusted for every defense faced. The national average is about 21.5.</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="dark-card p-4" style="height:100%">
+                <div style="color:#60a5fa;font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defensive Rating</div>
+                <div style="color: var(--text-primary);font-size: var(--text-base);line-height:1.7">Points allowed per <strong>10 drives</strong>, adjusted for every offense faced. Lower is better.</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="dark-card p-4" style="height:100%;border-color: var(--border-gold)">
+                <div style="color: var(--gold);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Net Rating</div>
+                <div style="color: var(--text-primary);font-size: var(--text-base);line-height:1.7">Offense minus Defense: the margin we'd expect against a <strong>perfectly average FBS team on a neutral field</strong>.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How it works -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">How It Works</h5>
+        <div style="flex:1;height:1px;background: var(--border)"></div>
+    </div>
+
+    <div class="dark-card" style="padding:28px 32px;margin-bottom:28px">
+        <div style="max-width:70ch;color: var(--text-secondary);font-size: var(--text-base);line-height:1.8">
+
+            <div style="color: var(--text-primary);font-weight:700;margin-bottom:6px">1 · The drive is football's possession</div>
+            <p>Points per game rewards fast offenses that simply get more chances. SVR measures
+            points <em>per drive</em> instead, then scales by 10 — roughly one game's worth of
+            possessions — so the numbers read like scores. A methodical offense that scores on
+            half its drives rates identically whether it runs 9 possessions a game or 14.</p>
+
+            <div style="color: var(--text-primary);font-weight:700;margin:18px 0 6px">2 · Not every drive counts</div>
+            <p>Drives that aren't real attempts to score are thrown out before anything is
+            computed: kneel-downs at the end of a half, overtime possessions (which start in
+            field-goal range), and all of <strong>garbage time</strong> — any drive beginning
+            with the score out of hand for that stage of the game (up 38+ in the 2nd quarter,
+            28+ in the 3rd, 21+ in the 4th). That's also why SVR needs no artificial cap on
+            blowout wins: a drive maxes out at 8 points, and the padded second half of a 56–0
+            game simply never enters the sample. Pick-sixes and kick-return touchdowns belong
+            to neither an offense nor the defense that allowed a drive, so they're excluded
+            from both sides. Games against FCS opponents don't count at all.</p>
+
+            <div style="color: var(--text-primary);font-weight:700;margin:18px 0 6px">3 · Every number is opponent-adjusted</div>
+            <p>Scoring 2.5 points per drive on the best defense in America means something
+            entirely different from doing it against the worst. Each game's efficiency is
+            rescaled by the opponent's own adjusted rating — and since those ratings depend on
+            <em>their</em> opponents too, the whole system is recalculated over and over until
+            every rating is consistent with every other. Home-field advantage (worth about 20%
+            more points per drive in 2025) is measured from the data and removed, so every
+            rating is expressed at a neutral site.</p>
+
+            <div style="color: var(--text-primary);font-weight:700;margin:18px 0 6px">4 · Built to predict, not to reward</div>
+            <p>Recent games count a little more than September ones, and early in a season every
+            team's small sample is blended toward the national average until it earns its
+            extremes. SVR answers one question: <em>"if these two teams played tonight on a
+            neutral field, what's the margin?"</em> It doesn't care about résumés, rankings, or
+            who deserved to make the playoff — which is exactly why it occasionally disagrees
+            with the polls, and why that disagreement is informative.</p>
+
+        </div>
+    </div>
+
+    <!-- Current top 10 -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Current Top 10</h5>
+        <div style="flex:1;height:1px;background: var(--border)"></div>
+        <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ n_teams }} FBS teams · {{ '{:,}'.format(n_drives) }} offensive drives rated · 2025</span>
+    </div>
+
+    <div class="dark-card" style="overflow:hidden;margin-bottom:24px"><div style="overflow-x:auto">
+    <table class="data-table" style="width:100%">
+        <thead><tr>
+            <th style="width:44px;text-align:center">RK</th>
+            <th style="text-align:left">Team</th>
+            <th style="text-align:center">Net</th>
+            <th style="text-align:center">Off</th>
+            <th style="text-align:center">Def</th>
+            <th style="text-align:center">SOS</th>
+            <th style="text-align:center">AP</th>
+        </tr></thead>
+        <tbody>
+            {% for t in top10 %}
+            <tr class="player-row" style="cursor:pointer" onclick="window.location.href='/team/{{ t.team }}'">
+                <td style="text-align:center;color: var(--text-dim);font-weight:700">{{ t.rank }}</td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        {% if t.logo %}<img src="{{ t.logo }}" style="width:26px;height:26px;object-fit:contain" alt="" loading="lazy">{% endif %}
+                        <span style="color: var(--text-primary);font-weight:700">{{ t.team }}</span>
+                        <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ t.conf }}</span>
+                    </div>
+                </td>
+                <td style="text-align:center;color: var(--gold);font-weight:800">{{ '%+.1f'|format(t.net) }}</td>
+                <td style="text-align:center;color: var(--text-primary)">{{ t.off }}</td>
+                <td style="text-align:center;color: var(--text-primary)">{{ t.def }}</td>
+                <td style="text-align:center;color: var(--text-secondary)">{{ '%+.1f'|format(t.sos) }}</td>
+                <td style="text-align:center;color: var(--text-secondary)">{{ t.ap or '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+
+    <div style="text-align:center;margin-bottom:16px">
+        <a href="/leaderboards/teams/savant" class="btn-primary" style="display:inline-block;text-decoration:none;padding:10px 24px">Full Savant Rating leaderboard →</a>
+    </div>
+
+</div>
+{% endblock %}

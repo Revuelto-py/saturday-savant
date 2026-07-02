@@ -610,6 +610,22 @@ TEAM_COLUMNS = {
         ],
         'advanced': [],  # no additional split for SP+ — Standard is the full picture
     },
+    'savant': {
+        'standard': [
+            ('net_rating', 'NET', 'Savant Net Rating — expected scoring margin per 10 drives vs an average FBS team on a neutral field', True, 'float1'),
+            ('off_rating', 'OFF', 'Savant Offensive Rating — opponent-adjusted points scored per 10 drives', True, 'float1'),
+            ('def_rating', 'DEF', 'Savant Defensive Rating — opponent-adjusted points allowed per 10 drives. Lower is better', True, 'float1'),
+            ('sos', 'SOS', 'Strength of Schedule — drive-weighted average opponent Net Rating', True, 'float1'),
+            ('svr_games', 'GP', 'FBS-vs-FBS games in the rating sample', True, 'int'),
+        ],
+        'advanced': [
+            ('raw_off', 'RAW.O', 'Unadjusted points scored per 10 drives (before opponent adjustment)', True, 'float1'),
+            ('raw_def', 'RAW.D', 'Unadjusted points allowed per 10 drives — lower is better', True, 'float1'),
+            ('drives_off', 'DRV.O', 'Countable offensive drives (garbage time, kneel-outs, and OT excluded)', True, 'int'),
+            ('drives_def', 'DRV.D', 'Countable defensive drives', True, 'int'),
+            ('net_ranking', 'NET.RK', 'Savant Net Rating national rank', True, 'int'),
+        ],
+    },
 }
 
 # Preferred default sort per (category, view) — falls back to the first
@@ -1180,6 +1196,7 @@ TEAM_CATEGORY_DEFAULTS = {
     'offense': ('off_ppa', 'desc'),
     'defense': ('def_ppa', 'asc'),   # lower is better, so ascending = best first
     'sp':      ('rating', 'desc'),
+    'savant':  ('net_rating', 'desc'),
 }
 
 # Columns fetched from team_stats — offense is always-higher-better.
@@ -1207,11 +1224,18 @@ TEAM_SORTABLE_COLS = {
     'rating': 'sp.rating', 'offense_rating': 'sp.offense_rating',
     'defense_rating': 'sp.defense_rating', 'special_teams_rating': 'sp.special_teams_rating',
     'ranking': 'sp.ranking',
+    'net_rating': 'svr.net_rating', 'off_rating': 'svr.off_rating',
+    'def_rating': 'svr.def_rating', 'sos': 'svr.sos',
+    'svr_games': 'svr.games', 'raw_off': 'svr.raw_off', 'raw_def': 'svr.raw_def',
+    'drives_off': 'svr.drives_off', 'drives_def': 'svr.drives_def',
+    'net_ranking': 'svr.net_ranking',
 }
 TEAM_LOWER_BETTER = {
     'def_ppa','def_success_rate','def_explosiveness',
     'def_line_yards','def_open_field_yards','def_second_level_yards',
     'ranking',  # SP+ national rank — #1 is best
+    'def_rating','raw_def',  # Savant points allowed per 10 drives — lower is better
+    'net_ranking',           # Savant national rank — #1 is best
 }
 
 def _hex_to_rgba(hex_color, alpha):
@@ -1289,11 +1313,15 @@ def leaderboards_teams(category='offense'):
                 adv.def_havoc_total, adv.def_havoc_front7, adv.def_havoc_db,
                 adv.off_scoring_opps, adv.off_pts_per_opp, adv.off_field_pos_avg_start,
                 sp.rating, sp.offense_rating, sp.defense_rating, sp.special_teams_rating, sp.ranking,
+                svr.net_rating, svr.off_rating, svr.def_rating, svr.sos,
+                svr.games AS svr_games, svr.raw_off, svr.raw_def,
+                svr.drives_off, svr.drives_def, svr.net_ranking,
                 RANK() OVER (ORDER BY {sort_sql} {goodness_dir} NULLS LAST) as goodness_rank
             FROM teams t
             LEFT JOIN team_stats ts ON ts.team = t.name
             LEFT JOIN team_advanced adv ON adv.team = t.name
             LEFT JOIN sp_ratings sp ON sp.team = t.name
+            LEFT JOIN savant_ratings svr ON svr.team = t.name
             LEFT JOIN ap_rankings ar ON ar.team = t.name
             WHERE t.conference NOT IN ('{fcs_in}')
             {conf_sql} {team_sql}
@@ -1335,6 +1363,11 @@ def leaderboards_teams(category='offense'):
                 'rating': _r(d['rating'], 1), 'offense_rating': _r(d['offense_rating'], 1),
                 'defense_rating': _r(d['defense_rating'], 1), 'special_teams_rating': _r(d['special_teams_rating'], 1),
                 'ranking': d['ranking'],
+                'net_rating': _r(d['net_rating'], 1), 'off_rating': _r(d['off_rating'], 1),
+                'def_rating': _r(d['def_rating'], 1), 'sos': _r(d['sos'], 1),
+                'svr_games': d['svr_games'], 'raw_off': _r(d['raw_off'], 1), 'raw_def': _r(d['raw_def'], 1),
+                'drives_off': d['drives_off'], 'drives_def': d['drives_def'],
+                'net_ranking': d['net_ranking'],
                 # unavailable-in-dataset columns, kept as None so column_defs 'na' entries render consistently
                 'def_passing_plays_ppa': None, 'def_passing_success_rate': None, 'def_passing_explosiveness': None,
                 'def_rushing_plays_ppa': None, 'def_rushing_success_rate': None, 'def_rushing_explosiveness': None,
@@ -1381,6 +1414,32 @@ def teams():
     for conf in conferences:
         if conf not in sorted_confs: sorted_confs[conf] = conferences[conf]
     return render_template('teams.html', conferences=sorted_confs, ap_rankings=ap_rankings)
+
+@app.route('/savant-rating')
+@cache.cached(timeout=86400)  # 24 hours — recomputed offline by compute_savant_ratings.py
+def savant_rating_methodology():
+    """Plain-language methodology page for the Savant Rating (SVR) system."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT sr.team, t.logo_dark, t.conference, sr.net_rating, sr.off_rating,
+                   sr.def_rating, sr.sos, sr.net_ranking, ar.rank
+            FROM savant_ratings sr
+            JOIN teams t ON t.name = sr.team
+            LEFT JOIN ap_rankings ar ON ar.team = sr.team
+            ORDER BY sr.net_ranking
+            LIMIT 10
+        ''')
+        top10 = [{'team': r[0], 'logo': r[1], 'conf': r[2], 'net': r[3], 'off': r[4],
+                  'def': r[5], 'sos': r[6], 'rank': r[7], 'ap': r[8]}
+                 for r in cursor.fetchall()]
+        cursor.execute('SELECT COUNT(*), SUM(drives_off), SUM(games)/2 FROM savant_ratings')
+        n_teams, n_drives, n_games = cursor.fetchone()
+    finally:
+        release_db(conn)
+    return render_template('savant_rating.html', top10=top10,
+                           n_teams=n_teams, n_drives=n_drives, n_games=n_games)
 
 @app.route('/team/<path:team_name>')
 @cache.cached(timeout=3600)  # 1 hour — stats don't change during offseason
@@ -1600,6 +1659,27 @@ def team(team_name):
                 'st_rating':        round(sp_row[6], 1) if sp_row[6] else None,
             }
 
+        # Savant Rating (SVR) — the site's proprietary opponent-adjusted
+        # points-per-10-drives model (computed by compute_savant_ratings.py)
+        cursor.execute('''
+            SELECT off_rating, off_ranking, def_rating, def_ranking,
+                   net_rating, net_ranking, sos, games
+            FROM savant_ratings WHERE team=%s
+        ''', (team_name,))
+        svr_row = cursor.fetchone()
+        svr = None
+        if svr_row:
+            svr = {
+                'off_rating':  round(svr_row[0], 1) if svr_row[0] is not None else None,
+                'off_ranking': svr_row[1],
+                'def_rating':  round(svr_row[2], 1) if svr_row[2] is not None else None,
+                'def_ranking': svr_row[3],
+                'net_rating':  round(svr_row[4], 1) if svr_row[4] is not None else None,
+                'net_ranking': svr_row[5],
+                'sos':         round(svr_row[6], 1) if svr_row[6] is not None else None,
+                'games':       svr_row[7],
+            }
+
         # Recruiting rankings trend
         cursor.execute('''
             SELECT year, rank, points FROM team_recruiting
@@ -1635,7 +1715,7 @@ def team(team_name):
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
                 kicking_stats=kicking_stats, punting_stats=punting_stats,
                 kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
-                team_adv=team_adv, percentiles=percentiles, sp=sp,
+                team_adv=team_adv, percentiles=percentiles, sp=sp, svr=svr,
                 ap_rankings=ap_rankings, team_rank=team_rank,
                 recruiting=recruiting, havoc=havoc)
     finally:

@@ -125,6 +125,50 @@
         </div>
     </div>
 
+    <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
+    {% if svr %}
+    <div class="mt-4">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h5>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · 2025 ·
+                <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
+                   onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
+            </span>
+        </div>
+        <div class="row g-3">
+            <div class="col-6 col-lg-3">
+                <div class="dark-card p-4 text-center">
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Net Rating</div>
+                    <div style="color: var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.net_rating) }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color: var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.net_ranking }} Nationally</span></div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="dark-card p-4 text-center">
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offense</div>
+                    <div style="color:#34d399;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.off_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.off_ranking }} Nationally</span></div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="dark-card p-4 text-center">
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
+                    <div style="color:#60a5fa;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.def_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.def_ranking }} Nationally</span></div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="dark-card p-4 text-center">
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Schedule</div>
+                    <div style="color: var(--text-primary);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.sos) }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-strong);color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">Avg Opponent Net</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- SP+ Ratings -->
     {% if sp %}
     <div class="mt-4">
@@ -306,6 +350,7 @@
             <div style="flex:1;height:1px;background: var(--border)"></div>
         </div>
         {% set glossary = [
+            ('Savant Rating (SVR)', 'Saturday Savant\'s proprietary efficiency model. Offense = opponent-adjusted points scored per 10 drives; Defense = points allowed per 10 drives (lower is better); Net = the difference, i.e. the expected margin against an average FBS team on a neutral field. Garbage time, kneel-downs, and overtime are excluded, and every number is adjusted for schedule strength.'),
             ('SP+', 'Bill Connelly\'s tempo- and opponent-adjusted efficiency metric. Combines offense, defense, and special teams into a single predictive rating. Higher is better.'),
             ('EPA / Play', 'Expected Points Added per play. Measures how much a team moves the needle toward scoring relative to what\'s expected given down, distance, and field position. The single best measure of efficiency.'),
             ('Success Rate', 'The percentage of plays deemed "successful" — gaining 50% of yards needed on 1st down, 70% on 2nd, or 100% on 3rd/4th. Measures consistency.'),

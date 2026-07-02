@@ -4,7 +4,7 @@
 <div class="page-wrapper" style="padding-top:32px">
 
 {% set PLAYER_CATS = [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense')] %}
-{% set TEAM_CATS = [('offense','Offense'),('defense','Defense'),('sp','SP+')] %}
+{% set TEAM_CATS = [('offense','Offense'),('defense','Defense'),('sp','SP+'),('savant','Savant Rating')] %}
 
 {% macro player_path(cat) %}/leaderboards/{{ cat }}{% endmacro %}
 {% macro team_path(cat) %}/leaderboards/teams/{{ cat }}{% endmacro %}
@@ -179,6 +179,15 @@
        class="lb-team-tab {{ 'active' if category == cat else '' }}">{{ label }}</a>
     {% endfor %}
 </div>
+
+{% if category == 'savant' %}
+<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 16px;color: var(--text-dim);font-size: var(--text-sm)">
+    <span style="color: var(--gold);font-weight:800;font-size: var(--text-xs);letter-spacing:0.08em">SVR</span>
+    <span>Saturday Savant's proprietary opponent-adjusted points-per-drive model.</span>
+    <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
+       onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
+</div>
+{% endif %}
 
 <!-- Filter bar -->
 <form method="GET" action="{{ team_path(category) }}" class="lb-filter-section">
