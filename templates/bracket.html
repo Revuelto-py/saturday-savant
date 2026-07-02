@@ -1,10 +1,6 @@
 {% extends "base.html" %}
 
 {% block content %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
-
 {# ── Matchup card macro ─────────────────────────────────────────────── #}
 {% macro seed_class(seed) -%}
   {%- if seed and seed <= 4 %}bk-seed-bye{% elif seed and seed <= 8 %}bk-seed-mid{% else %}bk-seed-low{% endif -%}
@@ -96,7 +92,7 @@
         <div class="bk-col-head bk-col-head-gold">National Championship</div>
         <div class="bk-col-body">
           <div class="bk-trophy" aria-hidden="true">
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" style="stroke: var(--gold)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <path d="M6 3h12v5a6 6 0 0 1-12 0V3z" fill="rgba(245,158,11,0.16)"/>
               <path d="M6 5H4a2 2 0 0 0 0 4h2M18 5h2a2 2 0 0 1 0 4h-2"/>
               <path d="M12 14v3"/>

@@ -3,8 +3,8 @@
 <div class="page-wrapper" style="padding-top:32px">
 
 <div style="margin-bottom:32px">
-    <h1 style="color:white;font-weight:900;font-size:2rem;margin:0">&#x2694; Rivalries</h1>
-    <div style="color:rgba(255,255,255,0.35);font-size:0.82rem;margin-top:6px">
+    <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">&#x2694; Rivalries</h1>
+    <div style="color: var(--text-dim);font-size: var(--text-base);margin-top:6px">
         {{ rivalries|length }} named rivalries &middot; Click any card to see last meeting
     </div>
 </div>
@@ -16,18 +16,18 @@
 {% set rid = loop.index %}
 
 <div class="col-md-6 col-lg-4">
-    <div class="rivalry-card" style="border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,0.09);cursor:pointer"
+    <div class="rivalry-card" style="border-radius: var(--r-lg);overflow:hidden;border: 1px solid var(--border);cursor:pointer"
          onclick="toggleRivalry({{ rid }})">
 
         <!-- Main card -->
         <div style="background:linear-gradient(135deg,{{ c1 }}22 0%,#0d1628 60%,{{ c2 }}18 100%);
-                    padding:18px 20px">
+                    padding:20px 20px">
 
             <!-- Rivalry name + chevron -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                <div style="color:rgba(255,255,255,0.5);font-size:0.62rem;font-weight:800;
+                <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;
                             letter-spacing:0.12em;text-transform:uppercase">&#x2694; {{ r.name }}</div>
-                <div id="chevron-{{ rid }}" style="color:rgba(255,255,255,0.3);font-size:0.8rem;
+                <div id="chevron-{{ rid }}" style="color: var(--text-dim);font-size: var(--text-sm);
                             transition:transform 0.2s">&#x25BC;</div>
             </div>
 
@@ -39,11 +39,11 @@
                     {% if r.logo_a %}
                     <img src="{{ r.logo_a }}" style="width:44px;height:44px;object-fit:contain">
                     {% endif %}
-                    <span style="color:white;font-weight:700;font-size:0.74rem;text-align:center;line-height:1.3"
-                          onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='white'">{{ r.ta }}</span>
+                    <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-sm);text-align:center;line-height:1.3"
+                          onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ r.ta }}</span>
                 </a>
 
-                <div style="color:rgba(255,255,255,0.2);font-size:1rem;font-weight:900;flex-shrink:0">vs</div>
+                <div style="color: var(--text-dim);font-size: var(--text-md);font-weight:900;flex-shrink:0">vs</div>
 
                 <a href="/team/{{ r.tb }}" onclick="event.stopPropagation()"
                    style="display:flex;flex-direction:column;align-items:center;gap:8px;
@@ -51,30 +51,30 @@
                     {% if r.logo_b %}
                     <img src="{{ r.logo_b }}" style="width:44px;height:44px;object-fit:contain">
                     {% endif %}
-                    <span style="color:white;font-weight:700;font-size:0.74rem;text-align:center;line-height:1.3"
-                          onmouseover="this.style.color='#f59e0b'" onmouseout="this.style.color='white'">{{ r.tb }}</span>
+                    <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-sm);text-align:center;line-height:1.3"
+                          onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ r.tb }}</span>
                 </a>
             </div>
         </div>
 
         <!-- Dropdown -->
         <div id="rivalry-{{ rid }}"
-             style="display:none;background:#0d1e35;border-top:1px solid rgba(255,255,255,0.07)">
+             style="display:none;background:var(--bg-card);border-top: 1px solid var(--border)">
 
             {% if r.last_game %}
             {% set g = r.last_game %}
             {% set home_won = g.home_pts is not none and g.away_pts is not none and g.home_pts > g.away_pts %}
             {% set away_won = g.home_pts is not none and g.away_pts is not none and g.away_pts > g.home_pts %}
 
-            <div style="padding:12px 18px 8px;color:rgba(255,255,255,0.35);
-                        font-size:0.6rem;font-weight:800;letter-spacing:0.12em;text-transform:uppercase">
+            <div style="padding:12px 20px 8px;color: var(--text-dim);
+                        font-size: var(--text-xs);font-weight:800;letter-spacing:0.12em;text-transform:uppercase">
                 Most Recent Meeting{% if g.date %} &middot; {{ g.date[:4] }}{% endif %}
             </div>
 
             <!-- Score row -->
             <a href="/game/{{ g.id }}" onclick="event.stopPropagation()"
                style="display:flex;align-items:center;justify-content:space-between;
-                      padding:12px 18px;text-decoration:none;gap:12px;transition:background 0.1s"
+                      padding:12px 20px;text-decoration:none;gap:12px;transition:background 0.1s"
                onmouseover="this.style.background='rgba(255,255,255,0.04)'"
                onmouseout="this.style.background='transparent'">
 
@@ -84,27 +84,27 @@
                     <img src="{{ g.away_logo }}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
                     {% endif %}
                     <div>
-                        <div style="color:{{ 'white' if away_won else 'rgba(255,255,255,0.55)' }};
-                                    font-weight:{{ '800' if away_won else '500' }};font-size:0.82rem">
+                        <div style="color:{{ 'var(--text-primary)' if away_won else 'var(--text-secondary)' }};
+                                    font-weight:{{ '800' if away_won else '500' }};font-size: var(--text-base)">
                             {{ g.away_team }}
                         </div>
-                        {% if away_won %}<div style="color:#22c55e;font-size:0.6rem;font-weight:700">WIN</div>{% endif %}
+                        {% if away_won %}<div style="color:var(--green);font-size: var(--text-xs);font-weight:700">WIN</div>{% endif %}
                     </div>
                 </div>
 
                 <!-- Score -->
                 <div style="text-align:center;flex-shrink:0">
                     <div style="display:flex;align-items:center;gap:6px">
-                        <span style="color:{{ 'white' if away_won else 'rgba(255,255,255,0.45)' }};
-                                     font-weight:900;font-size:1.4rem">{{ g.away_pts if g.away_pts is not none else '—' }}</span>
-                        <span style="color:rgba(255,255,255,0.25);font-size:0.9rem;font-weight:400">–</span>
-                        <span style="color:{{ 'white' if home_won else 'rgba(255,255,255,0.45)' }};
-                                     font-weight:900;font-size:1.4rem">{{ g.home_pts if g.home_pts is not none else '—' }}</span>
+                        <span style="color:{{ 'var(--text-primary)' if away_won else 'var(--text-secondary)' }};
+                                     font-weight:800;font-size: var(--text-lg)">{{ g.away_pts if g.away_pts is not none else '—' }}</span>
+                        <span style="color: var(--text-dim);font-size: var(--text-base);font-weight:400">–</span>
+                        <span style="color:{{ 'var(--text-primary)' if home_won else 'var(--text-secondary)' }};
+                                     font-weight:800;font-size: var(--text-lg)">{{ g.home_pts if g.home_pts is not none else '—' }}</span>
                     </div>
                     {% if g.notes and g.notes not in ['None',''] %}
-                    <div style="color:rgba(255,255,255,0.25);font-size:0.6rem;margin-top:2px">{{ g.notes[:30] }}</div>
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ g.notes[:30] }}</div>
                     {% elif g.season_type and 'REGULAR' in g.season_type %}
-                    <div style="color:rgba(255,255,255,0.25);font-size:0.6rem;margin-top:2px">Week {{ g.week }}</div>
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">Week {{ g.week }}</div>
                     {% endif %}
                 </div>
 
@@ -114,47 +114,47 @@
                     <img src="{{ g.home_logo }}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
                     {% endif %}
                     <div style="text-align:right">
-                        <div style="color:{{ 'white' if home_won else 'rgba(255,255,255,0.55)' }};
-                                    font-weight:{{ '800' if home_won else '500' }};font-size:0.82rem">
+                        <div style="color:{{ 'var(--text-primary)' if home_won else 'var(--text-secondary)' }};
+                                    font-weight:{{ '800' if home_won else '500' }};font-size: var(--text-base)">
                             {{ g.home_team }}
                         </div>
-                        {% if home_won %}<div style="color:#22c55e;font-size:0.6rem;font-weight:700;text-align:right">WIN</div>{% endif %}
+                        {% if home_won %}<div style="color:var(--green);font-size: var(--text-xs);font-weight:700;text-align:right">WIN</div>{% endif %}
                     </div>
                 </div>
             </a>
 
-            <div style="padding:8px 18px 4px;border-top:1px solid rgba(255,255,255,0.05)">
+            <div style="padding:8px 20px 4px;border-top: 1px solid var(--border)">
                 <a href="/game/{{ g.id }}" onclick="event.stopPropagation()"
-                   style="color:rgba(255,255,255,0.4);font-size:0.72rem;font-weight:600;
+                   style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;
                           text-decoration:none;transition:color 0.15s"
-                   onmouseover="this.style.color='white'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">
+                   onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">
                     View full game recap &#x2192;
                 </a>
             </div>
 
             {% else %}
-            <div style="padding:16px 18px;color:rgba(255,255,255,0.25);font-size:0.78rem;text-align:center">
+            <div style="padding:16px 20px;color: var(--text-dim);font-size: var(--text-sm);text-align:center">
                 No recent game data available
             </div>
             {% endif %}
 
             <!-- Historical series link -->
-            <div style="padding:10px 18px 14px;border-top:1px solid rgba(255,255,255,0.05);margin-top:4px">
+            <div style="padding:10px 20px 14px;border-top: 1px solid var(--border);margin-top:4px">
                 <a href="/rivalry/{{ r.ta | urlencode }}/{{ r.tb | urlencode }}"
                    onclick="event.stopPropagation()"
                    style="display:flex;align-items:center;justify-content:space-between;
                           text-decoration:none;padding:10px 14px;
-                          background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
-                          border-radius:8px;transition:all 0.15s"
+                          background:rgba(255,255,255,0.04);border: 1px solid var(--border);
+                          border-radius: var(--r-md);transition:all 0.15s"
                    onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.borderColor='rgba(255,255,255,0.15)'"
                    onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.borderColor='rgba(255,255,255,0.08)'">
                     <div>
-                        <div style="color:white;font-weight:700;font-size:0.8rem">All-Time Series</div>
-                        <div style="color:rgba(255,255,255,0.3);font-size:0.68rem;margin-top:1px">
+                        <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-sm)">All-Time Series</div>
+                        <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:1px">
                             Full historical record &middot; {{ r.ta }} vs {{ r.tb }}
                         </div>
                     </div>
-                    <div style="color:rgba(255,255,255,0.3);font-size:1rem">&#x2192;</div>
+                    <div style="color: var(--text-dim);font-size: var(--text-md)">&#x2192;</div>
                 </a>
             </div>
 
@@ -177,7 +177,7 @@ function toggleRivalry(id) {
     });
     document.querySelectorAll('[id^="chevron-"]').forEach(function(el) {
         el.style.transform = 'rotate(0deg)';
-        el.style.color = 'rgba(255,255,255,0.3)';
+        el.style.color = 'var(--text-dim)';
     });
 
     if (!isOpen) {

@@ -27,14 +27,14 @@
 
 <!-- Page header -->
 <div style="margin-bottom:20px">
-    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">Leaderboards</div>
-    <h1 style="color:white;font-weight:900;font-size:2rem;margin:0;letter-spacing:-0.01em">
+    <div class="section-label" style="margin-bottom: var(--s2)">Leaderboards</div>
+    <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
         {% if mode == 'team' %}
             {% for c, l in TEAM_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
         {% else %}
             {% for c, l in PLAYER_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
         {% endif %}
-        <span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:1.4rem"> · 2025 Season</span>
+        <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · 2025 Season</span>
     </h1>
 </div>
 

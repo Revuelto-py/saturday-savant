@@ -7,7 +7,7 @@
     <!-- Games Section -->
     <div class="col-lg-8">
         <div class="d-flex align-items-center justify-content-between mb-4">
-            <h5 style="color:white;font-weight:800;margin:0;letter-spacing:0.06em;text-transform:uppercase;font-size:0.82rem">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">
                 {% if season_type == 'postseason' %}Postseason Results{% else %}Week {{ selected_week }} Results{% endif %}
             </h5>
             <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
@@ -70,7 +70,7 @@
 
     <!-- Leaders Section -->
     <div class="col-lg-4">
-        <h5 style="color:white;font-weight:800;margin-bottom:24px;letter-spacing:0.06em;text-transform:uppercase;font-size:0.82rem">Season Leaders</h5>
+        <h5 class="section-label" style="margin-bottom: var(--s6);font-size: var(--text-sm)">Season Leaders</h5>
 
         {% for label, href, accent, players in leaders %}
         <div class="leader-card">

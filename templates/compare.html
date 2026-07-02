@@ -7,9 +7,9 @@
 
 <div class="page-wrapper">
 
-    <div style="margin-bottom:18px">
-        <h2 style="font-weight:900;margin:0 0 4px">Compare</h2>
-        <div style="color:rgba(255,255,255,0.4);font-size:0.82rem">
+    <div style="margin-bottom:20px">
+        <h2 style="font-weight:800;font-size: var(--text-2xl);margin:0 0 var(--s1)">Compare</h2>
+        <div style="color: var(--text-secondary);font-size: var(--text-base)">
             Pick up to 3 {{ 'players' if mode == 'player' else 'teams' }} to compare side-by-side.
         </div>
     </div>
@@ -50,13 +50,13 @@
                 {% if mode == 'player' %}
                 <div class="dark-card" style="padding:14px;display:flex;align-items:center;gap:12px">
                     {% if entity.headshot %}
-                    <img src="{{ entity.headshot }}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:top;border:1px solid rgba(255,255,255,0.15)">
+                    <img src="{{ entity.headshot }}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:top;border: 1px solid var(--border-strong)">
                     {% else %}
                     <div class="avatar-placeholder" style="width:44px;height:44px;flex-shrink:0">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
                     {% endif %}
                     <div style="flex:1;min-width:0">
-                        <div style="color:white;font-weight:800;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ entity.first_name }} {{ entity.last_name }}</div>
-                        <div style="color:rgba(255,255,255,0.45);font-size:0.72rem">{{ entity.position or '—' }} · {{ entity.team }}</div>
+                        <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ entity.first_name }} {{ entity.last_name }}</div>
+                        <div style="color: var(--text-secondary);font-size: var(--text-xs)">{{ entity.position or '—' }} · {{ entity.team }}</div>
                     </div>
                 </div>
                 {% else %}
@@ -65,8 +65,8 @@
                     <img src="{{ entity.logo_dark }}" style="width:36px;height:36px;object-fit:contain">
                     {% endif %}
                     <div style="flex:1;min-width:0">
-                        <div style="color:white;font-weight:800;font-size:0.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ entity.name }}</div>
-                        <div style="color:rgba(255,255,255,0.45);font-size:0.72rem">{{ entity.conference or '' }}</div>
+                        <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-base);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ entity.name }}</div>
+                        <div style="color: var(--text-secondary);font-size: var(--text-xs)">{{ entity.conference or '' }}</div>
                     </div>
                 </div>
                 {% endif %}
@@ -140,7 +140,7 @@
                 {% endfor %}
             {% else %}
                 {% for row in rows %}
-                <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div style="padding:12px 0;border-bottom: 1px solid var(--border)">
                     <div class="compare-label" style="margin-bottom:8px">{{ row.label }}</div>
                     <div style="display:grid;grid-template-columns:repeat({{ active_entities|length }}, minmax(0,1fr));gap:14px">
                         {% for v in row['values'] %}
@@ -218,20 +218,20 @@
                 if (wanted === 'player') {
                     const avatar = r.headshot
                         ? `<img src="${r.headshot}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0">`
-                        : `<div class="avatar-placeholder" style="width:32px;height:32px;flex-shrink:0;font-size:0.65rem">${(r.first||'')[0]||''}${(r.last||'')[0]||''}</div>`;
+                        : `<div class="avatar-placeholder" style="width:32px;height:32px;flex-shrink:0;font-size: var(--text-xs)">${(r.first||'')[0]||''}${(r.last||'')[0]||''}</div>`;
                     html += `<div class="compare-search-item" data-id="${r.id}">
                         ${avatar}
                         <div style="flex:1;min-width:0">
-                            <div style="color:white;font-weight:700;font-size:0.82rem">${r.first} ${r.last}</div>
-                            <div style="color:rgba(255,255,255,0.4);font-size:0.68rem">${r.pos || ''} · ${r.team || ''}</div>
+                            <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">${r.first} ${r.last}</div>
+                            <div style="color: var(--text-secondary);font-size: var(--text-xs)">${r.pos || ''} · ${r.team || ''}</div>
                         </div>
                     </div>`;
                 } else {
                     html += `<div class="compare-search-item" data-name="${r.name}">
                         ${r.logo ? `<img src="${r.logo}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">` : ''}
                         <div style="flex:1;min-width:0">
-                            <div style="color:white;font-weight:700;font-size:0.82rem">${r.name}</div>
-                            <div style="color:rgba(255,255,255,0.4);font-size:0.68rem">${r.conference || ''}</div>
+                            <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">${r.name}</div>
+                            <div style="color: var(--text-secondary);font-size: var(--text-xs)">${r.conference || ''}</div>
                         </div>
                     </div>`;
                 }
@@ -286,7 +286,7 @@
             // useCORS: true — headshots are served from R2 and logos from ESPN's
             // CDN, both cross-origin. Without this, any image load taints the
             // canvas and toDataURL() throws for the whole image, not just that stat.
-            html2canvas(card, { backgroundColor: '#0d1e35', scale: 2, useCORS: true }).then(function(canvas) {
+            html2canvas(card, { backgroundColor: 'var(--bg-card)', scale: 2, useCORS: true }).then(function(canvas) {
                 const link = document.createElement('a');
                 link.download = 'saturday-savant-compare.png';
                 link.href = canvas.toDataURL('image/png');

@@ -5,12 +5,12 @@
 
 <div class="d-flex align-items-end justify-content-between mb-4 flex-wrap gap-3">
     <div>
-        <h2 style="color:white;font-weight:900;font-size:1.6rem;margin:0;letter-spacing:-0.01em">
+        <h2 style="color: var(--text-primary);font-weight:900;font-size: var(--text-xl);margin:0;letter-spacing:-0.01em">
             AP Top 25
             {% if meta and meta[2] == 'postseason' %}<span class="ap-final-pill">Final</span>{% endif %}
         </h2>
         {% if meta %}
-        <div style="color:rgba(255,255,255,0.35);font-size:0.75rem;margin-top:6px">
+        <div style="color: var(--text-dim);font-size: var(--text-sm);margin-top:6px">
             {% if meta[2] == 'postseason' %}
                 Final Poll · {{ meta[1] }} Season
             {% else %}

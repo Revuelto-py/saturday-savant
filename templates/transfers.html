@@ -3,21 +3,21 @@
 <div class="page-wrapper" style="padding-top:32px">
 
 <div style="margin-bottom:28px">
-    <div style="color:rgba(255,255,255,0.4);font-size:0.65rem;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:6px">Transfer Portal</div>
-    <h1 style="color:white;font-weight:900;font-size:2rem;margin:0;letter-spacing:-0.01em">
+    <div class="section-label" style="margin-bottom: var(--s2)">Transfer Portal</div>
+    <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
         {{ year }} Transfer Portal
-        <span style="color:rgba(255,255,255,0.3);font-weight:400;font-size:1.2rem"> · {{ total_count }} transfers</span>
+        <span style="color: var(--text-dim);font-weight:400;font-size: var(--text-lg)"> · {{ total_count }} transfers</span>
     </h1>
 </div>
 
 <!-- Year tabs -->
-<div style="display:flex;gap:4px;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.08)">
+<div style="display:flex;gap:4px;margin-bottom:24px;border-bottom: 1px solid var(--border)">
     {% for yr in ['2026','2025','2024'] %}
     <a href="/transfers?year={{ yr }}&pos={{ pos_filter }}&conf={{ conf_filter }}"
-       style="color:{{ 'white' if year==yr else 'rgba(255,255,255,0.4)' }};font-weight:{{ '800' if year==yr else '500' }};font-size:0.82rem;text-decoration:none;padding:10px 18px;border-bottom:2px solid {{ '#f59e0b' if year==yr else 'transparent' }};margin-bottom:-1px;display:inline-block"
-       onmouseover="if('{{ year }}' !== '{{ yr }}')this.style.color='rgba(255,255,255,0.7)'"
-       onmouseout="if('{{ year }}' !== '{{ yr }}')this.style.color='rgba(255,255,255,0.4)'">
-        {{ yr }}{% if yr == '2026' %} <span style="font-size:0.55rem;font-weight:700;color:#34d399;vertical-align:middle;letter-spacing:0.08em">NEW</span>{% endif %}
+       style="color:{{ 'var(--text-primary)' if year==yr else 'var(--text-secondary)' }};font-weight:{{ '800' if year==yr else '500' }};font-size: var(--text-base);text-decoration:none;padding:10px 20px;border-bottom:2px solid {{ 'var(--gold)' if year==yr else 'transparent' }};margin-bottom:-1px;display:inline-block"
+       onmouseover="if('{{ year }}' !== '{{ yr }}')this.style.color='var(--text-primary)'"
+       onmouseout="if('{{ year }}' !== '{{ yr }}')this.style.color='var(--text-secondary)'">
+        {{ yr }}{% if yr == '2026' %} <span style="font-size: var(--text-xs);font-weight:700;color:#34d399;vertical-align:middle;letter-spacing:0.08em">NEW</span>{% endif %}
     </a>
     {% endfor %}
 </div>
@@ -25,10 +25,10 @@
 <!-- Filters -->
 <form method="GET">
 <input type="hidden" name="year" value="{{ year }}">
-<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:10px;align-items:flex-end">
+<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-md);align-items:flex-end">
     <div>
-        <div style="color:rgba(255,255,255,0.4);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Position</div>
-        <select name="pos" onchange="this.form.submit()" style="background:#152035;border:1px solid rgba(255,255,255,0.15);color:white;padding:7px 12px;border-radius:6px;font-size:0.8rem;min-width:140px">
+        <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Position</div>
+        <select name="pos" onchange="this.form.submit()" style="background:#152035;border: 1px solid var(--border-strong);color: var(--text-primary);padding:7px 12px;border-radius: var(--r-sm);font-size: var(--text-sm);min-width:140px">
             <option value="">All Positions</option>
             {% for pos in positions %}
             <option value="{{ pos }}" {{ 'selected' if pos_filter==pos }}>{{ pos }}</option>
@@ -36,40 +36,40 @@
         </select>
     </div>
     <div>
-        <div style="color:rgba(255,255,255,0.4);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Destination Conf</div>
-        <select name="conf" onchange="this.form.submit()" style="background:#152035;border:1px solid rgba(255,255,255,0.15);color:white;padding:7px 12px;border-radius:6px;font-size:0.8rem;min-width:160px">
+        <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px">Destination Conf</div>
+        <select name="conf" onchange="this.form.submit()" style="background:#152035;border: 1px solid var(--border-strong);color: var(--text-primary);padding:7px 12px;border-radius: var(--r-sm);font-size: var(--text-sm);min-width:160px">
             <option value="">All Conferences</option>
             {% for conf in conferences %}
             <option value="{{ conf }}" {{ 'selected' if conf_filter==conf }}>{{ conf }}</option>
             {% endfor %}
         </select>
     </div>
-    <div style="margin-left:auto;color:rgba(255,255,255,0.3);font-size:0.75rem;align-self:center">
+    <div style="margin-left:auto;color: var(--text-dim);font-size: var(--text-sm);align-self:center">
         Showing {{ ((page-1)*per_page)+1 }}–{{ [page*per_page, total_count]|min }} of {{ total_count }}
     </div>
 </div>
 </form>
 
 <!-- Table -->
-<div style="background:#0d1e35;border:1px solid rgba(255,255,255,0.09);border-radius:12px;overflow:hidden">
+<div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);overflow:hidden">
 <div style="overflow-x:auto">
-<table style="width:100%;border-collapse:collapse;min-width:780px">
+<table class="data-table" style="min-width:780px;border:none;border-radius:0">
     <thead>
-        <tr style="background:rgba(255,255,255,0.05);border-bottom:2px solid rgba(255,255,255,0.1)">
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 16px;text-align:left">Player</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.06)">POS</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 16px;text-align:left;border-left:1px solid rgba(255,255,255,0.06)">From</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 16px;text-align:left;border-left:1px solid rgba(255,255,255,0.06)">To</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.06)">Rating</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.06)">Stars</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.06)">Eligibility</th>
-            <th style="color:rgba(255,255,255,0.35);font-size:0.6rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;padding:12px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.06)">Date</th>
+        <tr style="background:rgba(255,255,255,0.05);border-bottom: 2px solid var(--border-strong)">
+            <th style="text-align:left">Player</th>
+            <th style="text-align:center">POS</th>
+            <th style="text-align:left">From</th>
+            <th style="text-align:left">To</th>
+            <th style="text-align:center">Rating</th>
+            <th style="text-align:center">Stars</th>
+            <th style="text-align:center">Eligibility</th>
+            <th style="text-align:center">Date</th>
         </tr>
     </thead>
     <tbody>
         {% for t in portal %}
         {# t: 0=first,1=last,2=pos,3=origin,4=dest,5=date,6=rating,7=stars,8=elig,9=pid,10=headshot,11=dest_logo,12=orig_logo,13=dest_conf #}
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.05)"
+        <tr style="border-bottom: 1px solid var(--border)"
             onmouseover="this.style.background='rgba(255,255,255,0.04)'"
             onmouseout="this.style.background='transparent'">
 
@@ -81,81 +81,81 @@
                 <div style="display:flex;align-items:center;gap:10px">
                 {% endif %}
                     {% if t[10] %}
-                    <img src="{{ t[10] }}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border:1px solid rgba(255,255,255,0.1)">
+                    <img src="{{ t[10] }}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border: 1px solid var(--border-strong)">
                     {% else %}
-                    <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;color:rgba(255,255,255,0.4)">{{ t[0][0] if t[0] else '?' }}{{ t[1][0] if t[1] else '' }}</div>
+                    <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary)">{{ t[0][0] if t[0] else '?' }}{{ t[1][0] if t[1] else '' }}</div>
                     {% endif %}
-                    <span style="color:white;font-weight:700;font-size:0.86rem;white-space:nowrap">{{ t[0] }} {{ t[1] }}</span>
+                    <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);white-space:nowrap">{{ t[0] }} {{ t[1] }}</span>
                 {% if t[9] %}</a>{% else %}</div>{% endif %}
             </td>
 
             <!-- Position -->
-            <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05)">
-                <span style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.2);color:#93c5fd;font-size:0.6rem;font-weight:800;padding:2px 7px;border-radius:4px">{{ t[2] or '—' }}</span>
+            <td style="padding:11px 10px;text-align:center;border-left: 1px solid var(--border)">
+                <span style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.2);color:#93c5fd;font-size: var(--text-xs);font-weight:800;padding:2px 7px;border-radius: var(--r-sm)">{{ t[2] or '—' }}</span>
             </td>
 
             <!-- From -->
-            <td style="padding:11px 16px;border-left:1px solid rgba(255,255,255,0.05)">
+            <td style="padding:11px 16px;border-left: 1px solid var(--border)">
                 <div style="display:flex;align-items:center;gap:8px">
                     {% if t[12] %}<img src="{{ t[12] }}" style="width:20px;height:20px;object-fit:contain;opacity:0.65">{% endif %}
-                    <span style="color:rgba(255,255,255,0.5);font-size:0.82rem">{{ t[3] or '—' }}</span>
+                    <span style="color: var(--text-secondary);font-size: var(--text-base)">{{ t[3] or '—' }}</span>
                 </div>
             </td>
 
             <!-- To -->
-            <td style="padding:11px 16px;border-left:1px solid rgba(255,255,255,0.05)">
+            <td style="padding:11px 16px;border-left: 1px solid var(--border)">
                 {% if t[4] %}
                 <a href="/team/{{ t[4] }}" style="display:flex;align-items:center;gap:8px;text-decoration:none">
                     {% if t[11] %}<img src="{{ t[11] }}" style="width:20px;height:20px;object-fit:contain">{% endif %}
-                    <span style="color:white;font-weight:700;font-size:0.82rem"
-                          onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='white'">{{ t[4] }}</span>
+                    <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)"
+                          onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-primary)'">{{ t[4] }}</span>
                 </a>
                 {% else %}
-                <span style="color:rgba(255,255,255,0.22);font-size:0.8rem;font-style:italic">Undecided</span>
+                <span style="color: var(--text-dim);font-size: var(--text-sm);font-style:italic">Undecided</span>
                 {% endif %}
             </td>
 
             <!-- Rating -->
-            <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05)">
+            <td style="padding:11px 10px;text-align:center;border-left: 1px solid var(--border)">
                 {% if t[6] %}
                 {% set rating = t[6] %}
                 <span style="display:inline-block;
-                    background:{{ 'rgba(52,211,153,0.15)' if rating >= 0.9 else ('rgba(96,165,250,0.12)' if rating >= 0.85 else 'rgba(255,255,255,0.06)') }};
-                    border:1px solid {{ 'rgba(52,211,153,0.3)' if rating >= 0.9 else ('rgba(96,165,250,0.25)' if rating >= 0.85 else 'rgba(255,255,255,0.1)') }};
-                    color:{{ '#34d399' if rating >= 0.9 else ('#93c5fd' if rating >= 0.85 else 'rgba(255,255,255,0.6)') }};
-                    font-weight:800;font-size:0.8rem;padding:2px 8px;border-radius:4px;min-width:52px;text-align:center">
+                    background:{{ 'rgba(52,211,153,0.15)' if rating >= 0.9 else ('rgba(96,165,250,0.12)' if rating >= 0.85 else 'var(--text-dim)') }};
+                    border:1px solid {{ 'rgba(52,211,153,0.3)' if rating >= 0.9 else ('rgba(96,165,250,0.25)' if rating >= 0.85 else 'var(--text-dim)') }};
+                    color:{{ '#34d399' if rating >= 0.9 else ('#93c5fd' if rating >= 0.85 else 'var(--text-secondary)') }};
+                    font-weight:800;font-size: var(--text-sm);padding:2px 8px;border-radius: var(--r-sm);min-width:52px;text-align:center">
                     {{ "%.4f" | format(rating) }}
                 </span>
                 {% else %}
-                <span style="color:rgba(255,255,255,0.2)">—</span>
+                <span style="color: var(--text-dim)">—</span>
                 {% endif %}
             </td>
 
             <!-- Stars -->
-            <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05)">
+            <td style="padding:11px 10px;text-align:center;border-left: 1px solid var(--border)">
                 {% if t[7] %}
-                <span style="color:#f59e0b;font-size:0.85rem;letter-spacing:-1px">{{ '★' * t[7] }}</span>
+                <span style="color:var(--gold);font-size: var(--text-base);letter-spacing:-1px">{{ '★' * t[7] }}</span>
                 {% else %}
-                <span style="color:rgba(255,255,255,0.2);font-size:0.75rem">—</span>
+                <span style="color: var(--text-dim);font-size: var(--text-sm)">—</span>
                 {% endif %}
             </td>
 
             <!-- Eligibility -->
-            <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05)">
+            <td style="padding:11px 10px;text-align:center;border-left: 1px solid var(--border)">
                 {% if t[8] %}
-                <span style="color:rgba(255,255,255,0.45);font-size:0.72rem">{{ t[8] }}</span>
+                <span style="color: var(--text-secondary);font-size: var(--text-xs)">{{ t[8] }}</span>
                 {% else %}
-                <span style="color:rgba(255,255,255,0.2)">—</span>
+                <span style="color: var(--text-dim)">—</span>
                 {% endif %}
             </td>
 
             <!-- Date -->
-            <td style="padding:11px 10px;text-align:center;border-left:1px solid rgba(255,255,255,0.05);color:rgba(255,255,255,0.3);font-size:0.75rem;white-space:nowrap">
+            <td style="padding:11px 10px;text-align:center;border-left: 1px solid var(--border);color: var(--text-dim);font-size: var(--text-sm);white-space:nowrap">
                 {{ t[5][:10] if t[5] else '—' }}
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" style="padding:48px;text-align:center;color:rgba(255,255,255,0.25);font-size:0.84rem">No transfers found.</td></tr>
+        <tr><td colspan="8" style="padding:48px;text-align:center;color: var(--text-dim);font-size: var(--text-base)">No transfers found.</td></tr>
         {% endfor %}
     </tbody>
 </table>
@@ -171,9 +171,9 @@
     {% if page > 1 %}
     <a href="{{ base_url ~ (page-1) }}"
        style="display:inline-flex;align-items:center;justify-content:center;
-              min-width:36px;height:36px;padding:0 12px;border-radius:8px;
-              background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
-              color:white;font-size:0.82rem;font-weight:600;text-decoration:none;
+              min-width:36px;height:36px;padding:0 12px;border-radius: var(--r-md);
+              background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);
+              color: var(--text-primary);font-size: var(--text-base);font-weight:600;text-decoration:none;
               transition:all 0.15s"
        onmouseover="this.style.background='rgba(255,255,255,0.12)'"
        onmouseout="this.style.background='rgba(255,255,255,0.06)'">&#x2190; Prev</a>
@@ -184,18 +184,18 @@
     {% set win_end   = [total_pages, page+3]|min %}
 
     {% if win_start > 1 %}
-    <a href="{{ base_url ~ 1 }}" style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-size:0.82rem;font-weight:600;text-decoration:none" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">1</a>
-    {% if win_start > 2 %}<span style="color:rgba(255,255,255,0.3);font-size:0.82rem;padding:0 4px">…</span>{% endif %}
+    <a href="{{ base_url ~ 1 }}" style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius: var(--r-md);background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);color: var(--text-primary);font-size: var(--text-base);font-weight:600;text-decoration:none" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">1</a>
+    {% if win_start > 2 %}<span style="color: var(--text-dim);font-size: var(--text-base);padding:0 4px">…</span>{% endif %}
     {% endif %}
 
     {% for p in range(win_start, win_end+1) %}
     <a href="{{ base_url ~ p }}"
        style="display:inline-flex;align-items:center;justify-content:center;
-              min-width:36px;height:36px;border-radius:8px;
-              background:{{ '#3b82f6' if p==page else 'rgba(255,255,255,0.06)' }};
-              border:1px solid {{ 'transparent' if p==page else 'rgba(255,255,255,0.1)' }};
-              color:{{ 'white' if p==page else 'rgba(255,255,255,0.7)' }};
-              font-size:0.82rem;font-weight:{{ '800' if p==page else '600' }};
+              min-width:36px;height:36px;border-radius: var(--r-md);
+              background:{{ 'var(--blue)' if p==page else 'var(--text-dim)' }};
+              border:1px solid {{ 'transparent' if p==page else 'var(--text-dim)' }};
+              color:{{ 'var(--text-primary)' if p==page else 'var(--text-primary)' }};
+              font-size: var(--text-base);font-weight:{{ '800' if p==page else '600' }};
               text-decoration:none;transition:all 0.15s"
        {% if p != page %}onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"{% endif %}>
         {{ p }}
@@ -203,24 +203,24 @@
     {% endfor %}
 
     {% if win_end < total_pages %}
-    {% if win_end < total_pages-1 %}<span style="color:rgba(255,255,255,0.3);font-size:0.82rem;padding:0 4px">…</span>{% endif %}
-    <a href="{{ base_url ~ total_pages }}" style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-size:0.82rem;font-weight:600;text-decoration:none" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">{{ total_pages }}</a>
+    {% if win_end < total_pages-1 %}<span style="color: var(--text-dim);font-size: var(--text-base);padding:0 4px">…</span>{% endif %}
+    <a href="{{ base_url ~ total_pages }}" style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:36px;border-radius: var(--r-md);background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);color: var(--text-primary);font-size: var(--text-base);font-weight:600;text-decoration:none" onmouseover="this.style.background='rgba(255,255,255,0.12)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">{{ total_pages }}</a>
     {% endif %}
 
     <!-- Next -->
     {% if page < total_pages %}
     <a href="{{ base_url ~ (page+1) }}"
        style="display:inline-flex;align-items:center;justify-content:center;
-              min-width:36px;height:36px;padding:0 12px;border-radius:8px;
-              background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
-              color:white;font-size:0.82rem;font-weight:600;text-decoration:none;
+              min-width:36px;height:36px;padding:0 12px;border-radius: var(--r-md);
+              background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);
+              color: var(--text-primary);font-size: var(--text-base);font-weight:600;text-decoration:none;
               transition:all 0.15s"
        onmouseover="this.style.background='rgba(255,255,255,0.12)'"
        onmouseout="this.style.background='rgba(255,255,255,0.06)'">Next &#x2192;</a>
     {% endif %}
 
 </div>
-<div style="text-align:center;margin-top:10px;color:rgba(255,255,255,0.25);font-size:0.72rem">
+<div style="text-align:center;margin-top:10px;color: var(--text-dim);font-size: var(--text-xs)">
     Page {{ page }} of {{ total_pages }}
 </div>
 {% endif %}

@@ -4,9 +4,9 @@
 <div class="page-wrapper" style="padding-top:40px">
 
     <!-- Page header -->
-    <div style="margin-bottom:36px">
-        <h1 style="color:white;font-weight:900;font-size:1.8rem;margin:0;letter-spacing:-0.01em">FBS Teams</h1>
-        <div style="color:rgba(255,255,255,0.35);font-size:0.82rem;margin-top:6px">
+    <div style="margin-bottom: var(--s8)">
+        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">FBS Teams</h1>
+        <div style="color: var(--text-dim);font-size: var(--text-base);margin-top: var(--s1)">
             {{ conferences|length }} conferences &middot; 2025 season
         </div>
     </div>
@@ -14,12 +14,11 @@
     {% for conf, teams in conferences.items() %}
 
     <!-- Conference header -->
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;
-                {% if loop.first %}margin-top:8px{% else %}margin-top:48px{% endif %}">
-        <div style="width:3px;height:22px;background:linear-gradient(180deg,#f59e0b,#f97316);border-radius:2px;flex-shrink:0"></div>
-        <h3 style="color:white;font-weight:900;font-size:1.05rem;margin:0;letter-spacing:0.02em">{{ conf }}</h3>
-        <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
-        <span style="color:rgba(255,255,255,0.25);font-size:0.72rem">{{ teams|length }} teams</span>
+    <div style="display:flex;align-items:center;gap: var(--s4);margin-bottom: var(--s6);
+                {% if loop.first %}margin-top: var(--s2){% else %}margin-top: var(--s10){% endif %}">
+        <h3 class="section-label" style="margin:0;font-size: var(--text-base);color: var(--text-primary)">{{ conf }}</h3>
+        <div style="flex:1;height:1px;background: var(--border)"></div>
+        <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ teams|length }} teams</span>
     </div>
 
     <div class="row g-3">
@@ -32,7 +31,7 @@
         <div class="team-card" style="
             background: linear-gradient(135deg, {{ tc }}33 0%, #0d1628 60%, {{ tc2 }}22 100%);
             border: 1px solid {{ tc }}44;
-            border-radius: 12px;
+            border-radius: var(--r-lg);
             padding: 20px 12px 14px;
             text-align: center;
             position: relative;
@@ -48,12 +47,7 @@
             <!-- AP Rank badge -->
             {% set rank = ap_rankings.get(team[0]) %}
             {% if rank %}
-            <div style="position:absolute;top:8px;right:8px;
-                        background:rgba(245,158,11,0.15);
-                        border:1px solid rgba(245,158,11,0.4);
-                        color:#f59e0b;font-size:0.52rem;font-weight:900;
-                        padding:2px 6px;border-radius:4px;
-                        letter-spacing:0.04em">#{{ rank }}</div>
+            <div class="badge-rank" style="position:absolute;top: var(--s2);right: var(--s2)">#{{ rank }}</div>
             {% endif %}
 
             <!-- Logo -->
@@ -65,14 +59,14 @@
                 <div style="width:52px;height:52px;border-radius:50%;
                             background:{{ tc }}44;border:1px solid {{ tc }}66;
                             display:flex;align-items:center;justify-content:center;
-                            font-size:1.2rem;font-weight:900;color:white">
+                            font-size: var(--text-lg);font-weight:900;color: var(--text-primary)">
                     {{ team[0][0] }}
                 </div>
                 {% endif %}
             </div>
 
             <!-- Team name -->
-            <div style="color:rgba(255,255,255,0.9);font-weight:700;font-size:0.75rem;
+            <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-sm);
                         line-height:1.3;position:relative;z-index:1">{{ team[0] }}</div>
 
         </div>
