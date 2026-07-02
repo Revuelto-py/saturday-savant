@@ -3519,6 +3519,249 @@ def compare():
     )
 
 
+# ── CFP Bracket ──────────────────────────────────────────────────────────
+
+_CFP_BOWL_SITES = OrderedDict([
+    ('Rose Bowl', 'Pasadena, CA'),
+    ('Sugar Bowl', 'New Orleans, LA'),
+    ('Orange Bowl', 'Miami Gardens, FL'),
+    ('Cotton Bowl', 'Arlington, TX'),
+    ('Peach Bowl', 'Atlanta, GA'),
+    ('Fiesta Bowl', 'Glendale, AZ'),
+])
+
+# In the 12-team format, the bye seed hosting each quarterfinal determines
+# which first-round pairing feeds it: #1 gets the 8/9 winner, #4 the 5/12
+# winner, #2 the 7/10 winner, #3 the 6/11 winner.
+_CFP_FEED_BY_BYE = {1: (8, 9), 4: (5, 12), 2: (7, 10), 3: (6, 11)}
+
+
+def _cfp_bowl_label(notes):
+    low = (notes or '').lower()
+    for bowl, site in _CFP_BOWL_SITES.items():
+        if bowl.split()[0].lower() in low:
+            return f'{bowl} · {site}'
+    if 'national championship' in low:
+        return 'Miami Gardens, FL'
+    return None
+
+
+def _cfp_game_winner(g):
+    if not g or not g['completed']:
+        return None
+    if g['home_points'] is None or g['away_points'] is None:
+        return None
+    if g['home_points'] == g['away_points']:
+        return None
+    return g['home_team'] if g['home_points'] > g['away_points'] else g['away_team']
+
+
+def _cfp_game_is_live(g):
+    if not g or g['completed']:
+        return False
+    try:
+        return g['start_date'][:10] == datetime.date.today().isoformat()
+    except (TypeError, IndexError):
+        return False
+
+
+def _cfp_find_game(pool, *names):
+    """Game in pool whose participants include every given (non-None) name."""
+    wanted = {n for n in names if n}
+    if not wanted:
+        return None
+    for g in pool:
+        if wanted <= {g['home_team'], g['away_team']}:
+            return g
+    return None
+
+
+def _cfp_seed_teams(poll, fr_games, qf_games):
+    """team -> seed (1-12). Reconstructed from the playoff games themselves:
+    first-round hosts are seeds 5-8 and the four bye teams are 1-4, with
+    exact numbers pinned down by which first-round winner each bye met in
+    the quarterfinals. The AP poll only breaks the tie of ordering the four
+    byes 1-4 — the final poll can't be used directly as seeds because it
+    re-ranks teams after the playoff ran."""
+    ap_rank = {t: r for t, r in poll}
+
+    fr_teams = {t for g in fr_games for t in (g['home_team'], g['away_team'])}
+    qf_ready = len(fr_games) == 4 and len(qf_games) == 4
+
+    if qf_ready:
+        seeds = {}
+        pairs = []  # (bye_team, feeder_fr_game)
+        for g in qf_games:
+            bye = next((t for t in (g['home_team'], g['away_team'])
+                        if t not in fr_teams), None)
+            other = g['away_team'] if bye == g['home_team'] else g['home_team']
+            feeder = next((f for f in fr_games if _cfp_game_winner(f) == other), None)
+            if bye is None or feeder is None:
+                qf_ready = False
+                break
+            pairs.append((bye, feeder))
+        if qf_ready:
+            for i, (bye, _) in enumerate(
+                    sorted(pairs, key=lambda p: ap_rank.get(p[0], 99))):
+                seeds[bye] = i + 1
+            for bye, feeder in pairs:
+                hi, lo = _CFP_FEED_BY_BYE[seeds[bye]]
+                seeds[feeder['home_team']] = hi
+                seeds[feeder['away_team']] = lo
+            return seeds
+
+    # Fallback (playoff not yet played / partial data): straight AP top 12.
+    return {t: r for t, r in poll[:12]}
+
+
+@app.route('/bracket')
+@cache.cached(timeout=3600)
+def bracket_page():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT team, rank FROM ap_rankings
+            WHERE season = 2025
+            ORDER BY (season_type = 'postseason') DESC, week DESC, rank ASC
+            LIMIT 25
+        ''')
+        poll = cursor.fetchall()
+
+        cursor.execute('''
+            SELECT id, home_team, away_team, home_points, away_points,
+                   completed, notes, start_date
+            FROM games
+            WHERE season = 2025
+              AND UPPER(season_type) LIKE '%%POSTSEASON%%'
+              AND notes ILIKE '%%college football playoff%%'
+            ORDER BY start_date ASC
+        ''')
+        cfp_games = [{
+            'id': r[0], 'home_team': r[1], 'away_team': r[2],
+            'home_points': r[3], 'away_points': r[4], 'completed': r[5],
+            'notes': r[6] or '', 'start_date': r[7] or '',
+        } for r in cursor.fetchall()]
+
+        fr_games = [g for g in cfp_games if 'first round' in g['notes'].lower()]
+        qf_games = [g for g in cfp_games if 'quarterfinal' in g['notes'].lower()]
+        sf_games = [g for g in cfp_games if 'semifinal' in g['notes'].lower()]
+        nc_games = [g for g in cfp_games if 'national championship' in g['notes'].lower()]
+
+        seeds = _cfp_seed_teams(poll, fr_games, qf_games)
+        team_by_seed = {s: t for t, s in seeds.items()}
+
+        cursor.execute('''
+            SELECT name, logo_dark, logo, color, alt_color, abbreviation, conference
+            FROM teams WHERE name = ANY(%s)
+        ''', (list(seeds.keys()) or [''],))
+        teams_map = {r[0]: {
+            'name': r[0], 'logo': r[1] or r[2], 'color': r[3] or '#f59e0b',
+            'alt_color': r[4], 'abbreviation': r[5], 'conference': r[6],
+        } for r in cursor.fetchall()}
+    finally:
+        release_db(conn)
+
+    def team_side(name, seed, game, bye=False):
+        if name is None:
+            return None
+        info = teams_map.get(name, {})
+        pts = opp_pts = None
+        if game:
+            if game['home_team'] == name:
+                pts, opp_pts = game['home_points'], game['away_points']
+            elif game['away_team'] == name:
+                pts, opp_pts = game['away_points'], game['home_points']
+        decided = bool(game and game['completed'] and pts is not None
+                       and opp_pts is not None and pts != opp_pts)
+        return {
+            'name': name,
+            'seed': seed,
+            'logo': info.get('logo'),
+            'color': info.get('color', '#f59e0b'),
+            'conference': info.get('conference'),
+            'abbreviation': info.get('abbreviation'),
+            'points': pts,
+            'is_winner': decided and pts > opp_pts,
+            'is_loser': decided and pts < opp_pts,
+            'is_bye': bye,
+        }
+
+    def matchup(slot, top_name, top_seed, bottom_name, bottom_seed, game,
+                top_bye=False):
+        winner = _cfp_game_winner(game)
+        score = None
+        if winner and game:
+            hi, lo = sorted((game['home_points'], game['away_points']), reverse=True)
+            score = f'{hi}-{lo}'
+        return {
+            'slot': slot,
+            'top': team_side(top_name, top_seed, game, bye=top_bye),
+            'bottom': team_side(bottom_name, bottom_seed, game),
+            'winner': winner,
+            'score': score,
+            'game_id': game['id'] if game else None,
+            'completed': bool(game and game['completed']),
+            'live': _cfp_game_is_live(game),
+            'bowl': _cfp_bowl_label(game['notes']) if game else None,
+        }
+
+    # First round — slot letter, high seed, low seed
+    round1 = []
+    for slot, hi, lo in (('A', 8, 9), ('B', 5, 12), ('C', 6, 11), ('D', 7, 10)):
+        t_hi, t_lo = team_by_seed.get(hi), team_by_seed.get(lo)
+        round1.append(matchup(slot, t_hi, hi, t_lo, lo,
+                              _cfp_find_game(fr_games, t_hi, t_lo)))
+    r1_by_slot = {m['slot']: m for m in round1}
+
+    # Quarterfinals — bye seed on top, first-round winner below
+    quarterfinals = []
+    for slot, bye_seed, feed_slot in (('QF1', 1, 'A'), ('QF2', 4, 'B'),
+                                      ('QF3', 2, 'D'), ('QF4', 3, 'C')):
+        bye_team = team_by_seed.get(bye_seed)
+        adv = r1_by_slot[feed_slot]['winner']
+        game = _cfp_find_game(qf_games, bye_team, adv) or \
+            _cfp_find_game(qf_games, bye_team)
+        quarterfinals.append(matchup(slot, bye_team, bye_seed, adv,
+                                     seeds.get(adv), game, top_bye=True))
+    qf_by_slot = {m['slot']: m for m in quarterfinals}
+
+    # Semifinals — winners of the paired quarterfinals
+    semifinals = []
+    for slot, top_feed, bottom_feed in (('SF1', 'QF1', 'QF2'),
+                                        ('SF2', 'QF3', 'QF4')):
+        t_top = qf_by_slot[top_feed]['winner']
+        t_bot = qf_by_slot[bottom_feed]['winner']
+        game = _cfp_find_game(sf_games, t_top, t_bot)
+        semifinals.append(matchup(slot, t_top, seeds.get(t_top),
+                                  t_bot, seeds.get(t_bot), game))
+
+    # Championship
+    t_left = semifinals[0]['winner']
+    t_right = semifinals[1]['winner']
+    nc_game = _cfp_find_game(nc_games, t_left, t_right)
+    championship = matchup('NC', t_left, seeds.get(t_left),
+                           t_right, seeds.get(t_right), nc_game)
+
+    champion = None
+    if championship['winner']:
+        champion = team_side(championship['winner'],
+                             seeds.get(championship['winner']), nc_game)
+
+    bracket = {
+        'round1': round1,
+        'quarterfinals': quarterfinals,
+        'semifinals': semifinals,
+        'championship': championship,
+    }
+    cfp_teams = [dict(teams_map.get(team_by_seed.get(s), {}) or {},
+                      seed=s, name=team_by_seed.get(s))
+                 for s in range(1, 13) if team_by_seed.get(s)]
+
+    return render_template('bracket.html', bracket=bracket,
+                           cfp_teams=cfp_teams, champion=champion)
+
+
 @app.route('/admin/clear-cache')
 def clear_cache():
     if request.args.get('key') != os.getenv('ADMIN_KEY', 'changeme'):

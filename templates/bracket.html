@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block content %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+
+{# ── Matchup card macro ─────────────────────────────────────────────── #}
+{% macro seed_class(seed) -%}
+  {%- if seed and seed <= 4 %}bk-seed-bye{% elif seed and seed <= 8 %}bk-seed-mid{% else %}bk-seed-low{% endif -%}
+{%- endmacro %}
+
+{% macro team_row(side, m, show_bye=False) %}
+  {% if side %}
+  <div class="bk-team{{ ' bk-won' if side.is_winner }}{{ ' bk-lost' if side.is_loser }}"
+       style="--tc:{{ side.color }}">
+    <a class="bk-team-link" href="/team/{{ side.name }}" title="{{ side.name }}">
+      <span class="bk-seed {{ seed_class(side.seed) }}">{{ side.seed or '–' }}</span>
+      {% if side.logo %}
+        <img class="bk-logo" src="{{ side.logo }}" alt="" loading="lazy" width="28" height="28">
+      {% else %}
+        <span class="bk-logo bk-logo-empty"></span>
+      {% endif %}
+      <span class="bk-id">
+        <span class="bk-name">{{ side.name }}</span>
+        {% if side.conference %}<span class="bk-conf">{{ side.conference }}</span>{% endif %}
+      </span>
+    </a>
+    {% if show_bye and side.is_bye and not m.completed %}<span class="bk-bye">BYE</span>{% endif %}
+    {% if side.points is not none and m.completed %}
+      <span class="bk-pts{{ ' bk-pts-won' if side.is_winner }}">{{ side.points }}</span>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="bk-team bk-tbd">
+    <span class="bk-seed bk-seed-low">·</span>
+    <span class="bk-logo bk-logo-empty"></span>
+    <span class="bk-id"><span class="bk-name bk-name-tbd">TBD</span></span>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro match_card(m, size, dom_id=None, label=None, show_bye=False, gold=False) %}
+<div class="bk-slot bk-slot-{{ size }}">
+  {% if label %}<div class="bk-card-label">{{ label }}</div>{% endif %}
+  <div class="bk-match{{ ' bk-match-gold' if gold }}{{ ' bk-match-link' if m.game_id }}"
+       {% if dom_id %}id="{{ dom_id }}"{% endif %}
+       data-completed="{{ 1 if m.completed else 0 }}"
+       {% if m.game_id %}data-game="/game/{{ m.game_id }}" role="link" tabindex="0"
+       aria-label="Open game page{% if m.top and m.bottom %}: {{ m.top.name }} vs {{ m.bottom.name }}{% endif %}"{% endif %}>
+    {% if m.live %}<span class="bk-live">LIVE</span>{% endif %}
+    {{ team_row(m.top, m, show_bye=show_bye) }}
+    {{ team_row(m.bottom, m) }}
+  </div>
+  {% if m.bowl %}<div class="bk-bowl">{{ m.bowl }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+<div class="page-wrapper bracket-page">
+
+  <header class="bk-header">
+    <img class="bk-watermark" src="/static/logo-128.png" alt="">
+    <h1 class="bk-title">College Football Playoff</h1>
+    <div class="bk-subtitle">2025 Season · 12-Team Bracket</div>
+  </header>
+
+  {# ── Desktop / tablet: horizontal bracket ─────────────────────────── #}
+  <div class="bk-board-wrap">
+    <div class="bk-board" id="bkBoard">
+      <svg class="bk-lines" id="bkLines" aria-hidden="true"></svg>
+
+      <div class="bk-col">
+        <div class="bk-col-head">First Round</div>
+        <div class="bk-col-body">
+          {{ match_card(bracket.round1[0], 'r1', dom_id='m-r1-a', label='First Round · On Campus') }}
+          {{ match_card(bracket.round1[1], 'r1', dom_id='m-r1-b', label='First Round · On Campus') }}
+        </div>
+      </div>
+
+      <div class="bk-col">
+        <div class="bk-col-head">Quarterfinals</div>
+        <div class="bk-col-body">
+          {{ match_card(bracket.quarterfinals[0], 'qf', dom_id='m-qf-1', show_bye=True) }}
+          {{ match_card(bracket.quarterfinals[1], 'qf', dom_id='m-qf-2', show_bye=True) }}
+        </div>
+      </div>
+
+      <div class="bk-col">
+        <div class="bk-col-head">Semifinals</div>
+        <div class="bk-col-body">
+          {{ match_card(bracket.semifinals[0], 'sf', dom_id='m-sf-1') }}
+        </div>
+      </div>
+
+      <div class="bk-col bk-col-center">
+        <div class="bk-col-head bk-col-head-gold">National Championship</div>
+        <div class="bk-col-body">
+          <div class="bk-trophy" aria-hidden="true">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3h12v5a6 6 0 0 1-12 0V3z" fill="rgba(245,158,11,0.16)"/>
+              <path d="M6 5H4a2 2 0 0 0 0 4h2M18 5h2a2 2 0 0 1 0 4h-2"/>
+              <path d="M12 14v3"/>
+              <path d="M8 21h8M9 21c0-2 1.2-3 3-3s3 1 3 3"/>
+            </svg>
+          </div>
+          {{ match_card(bracket.championship, 'nc', dom_id='m-nc', gold=True) }}
+          {% if champion %}
+          <a class="bk-champion" href="/team/{{ champion.name }}">
+            {% if champion.logo %}<img src="{{ champion.logo }}" alt="" width="40" height="40">{% endif %}
+            <span>{{ champion.name }} — 2025 CFP Champions</span>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="bk-col">
+        <div class="bk-col-head">Semifinals</div>
+        <div class="bk-col-body">
+          {{ match_card(bracket.semifinals[1], 'sf', dom_id='m-sf-2') }}
+        </div>
+      </div>
+
+      <div class="bk-col">
+        <div class="bk-col-head">Quarterfinals</div>
+        <div class="bk-col-body">
+          {{ match_card(bracket.quarterfinals[2], 'qf', dom_id='m-qf-3', show_bye=True) }}
+          {{ match_card(bracket.quarterfinals[3], 'qf', dom_id='m-qf-4', show_bye=True) }}
+        </div>
+      </div>
+
+      <div class="bk-col">
+        <div class="bk-col-head">First Round</div>
+        <div class="bk-col-body">
+          {{ match_card(bracket.round1[3], 'r1', dom_id='m-r1-d', label='First Round · On Campus') }}
+          {{ match_card(bracket.round1[2], 'r1', dom_id='m-r1-c', label='First Round · On Campus') }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Mobile: rounds stacked vertically ────────────────────────────── #}
+  <div class="bk-mobile">
+    <section class="bk-m-round">
+      <h2 class="bk-m-head">First Round</h2>
+      {% for m in bracket.round1 %}
+        {{ match_card(m, 'm', label='On Campus') }}
+      {% endfor %}
+    </section>
+    <section class="bk-m-round">
+      <h2 class="bk-m-head">Quarterfinals</h2>
+      {% for m in bracket.quarterfinals %}
+        {{ match_card(m, 'm', show_bye=True) }}
+      {% endfor %}
+    </section>
+    <section class="bk-m-round">
+      <h2 class="bk-m-head">Semifinals</h2>
+      {% for m in bracket.semifinals %}
+        {{ match_card(m, 'm') }}
+      {% endfor %}
+    </section>
+    <section class="bk-m-round">
+      <h2 class="bk-m-head bk-m-head-gold">National Championship</h2>
+      {{ match_card(bracket.championship, 'm', gold=True) }}
+      {% if champion %}
+      <a class="bk-champion" href="/team/{{ champion.name }}">
+        {% if champion.logo %}<img src="{{ champion.logo }}" alt="" width="40" height="40">{% endif %}
+        <span>{{ champion.name }} — 2025 CFP Champions</span>
+      </a>
+      {% endif %}
+    </section>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // Whole-card click → game page (team rows inside stay normal links)
+  document.querySelectorAll('.bk-match[data-game]').forEach(function (card) {
+    card.addEventListener('click', function (e) {
+      if (e.target.closest('a')) return;
+      window.location.href = card.dataset.game;
+    });
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target === card) {
+        window.location.href = card.dataset.game;
+      }
+    });
+  });
+
+  // SVG connector lines between rounds
+  var board = document.getElementById('bkBoard');
+  var svg = document.getElementById('bkLines');
+  if (!board || !svg) return;
+
+  // [from, to, side] — side 'L' exits the card's right edge, 'R' its left
+  var LINKS = [
+    ['m-r1-a', 'm-qf-1', 'L'], ['m-r1-b', 'm-qf-2', 'L'],
+    ['m-qf-1', 'm-sf-1', 'L'], ['m-qf-2', 'm-sf-1', 'L'],
+    ['m-sf-1', 'm-nc',   'L'],
+    ['m-r1-d', 'm-qf-3', 'R'], ['m-r1-c', 'm-qf-4', 'R'],
+    ['m-qf-3', 'm-sf-2', 'R'], ['m-qf-4', 'm-sf-2', 'R'],
+    ['m-sf-2', 'm-nc',   'R']
+  ];
+
+  function draw() {
+    var b = board.getBoundingClientRect();
+    svg.setAttribute('viewBox', '0 0 ' + b.width + ' ' + b.height);
+    svg.innerHTML = '';
+    LINKS.forEach(function (link) {
+      var from = document.getElementById(link[0]);
+      var to = document.getElementById(link[1]);
+      if (!from || !to) return;
+      var f = from.getBoundingClientRect();
+      var t = to.getBoundingClientRect();
+      var y1 = f.top + f.height / 2 - b.top;
+      var y2 = t.top + t.height / 2 - b.top;
+      var x1, x2;
+      if (link[2] === 'L') { x1 = f.right - b.left; x2 = t.left - b.left; }
+      else                 { x1 = f.left - b.left;  x2 = t.right - b.left; }
+      var mx = (x1 + x2) / 2;
+      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d',
+        'M' + x1 + ' ' + y1 + ' H' + mx + ' V' + y2 + ' H' + x2);
+      path.setAttribute('class',
+        from.dataset.completed === '1' ? 'bk-line bk-line-done' : 'bk-line');
+      svg.appendChild(path);
+    });
+  }
+
+  draw();
+  var t;
+  window.addEventListener('resize', function () {
+    clearTimeout(t); t = setTimeout(draw, 100);
+  });
+  // Redraw once fonts/images settle card heights
+  window.addEventListener('load', draw);
+})();
+</script>
+{% endblock %}
