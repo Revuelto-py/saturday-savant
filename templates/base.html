@@ -37,7 +37,7 @@
             background: linear-gradient(180deg, rgba(15,30,56,0.98) 0%, rgba(7,14,30,0.98) 100%) !important;
             border-bottom: 2px solid rgba(245,158,11,0.55);
             box-shadow: 0 4px 20px rgba(0,0,0,0.45);
-            padding: 0 32px; height: 64px;
+            padding: 0 var(--s8, 32px); height: 64px;
             backdrop-filter: blur(10px);
             position: sticky; top: 0; z-index: 1000;
         }
@@ -154,8 +154,8 @@
             input, select, textarea { font-size: 16px !important; }
         }
 
-        /* Page */
-        .page-wrapper { max-width: 1300px; margin: 0 auto; padding: 32px 32px; }
+        /* Page — fluid padding tokens so gutters grow with the viewport */
+        .page-wrapper { max-width: 1300px; margin: 0 auto; padding: var(--s8, 32px) var(--s8, 32px); }
         @media (max-width: 767.98px) {
             .page-wrapper { padding: 20px 14px; }
         }

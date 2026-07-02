@@ -20,16 +20,25 @@
   --red:            #ef4444;
   --blue:           #3b82f6;
 
-  /* Type */
+  /* Type — fluid: sizes grow smoothly with viewport width instead of
+     staying fixed past a breakpoint and leaving dead margins */
   --font-display: 'Barlow Condensed', sans-serif;
   --font-body:    'DM Sans', sans-serif;
-  --text-xs: 0.68rem;  --text-sm: 0.78rem;  --text-base: 0.875rem;
-  --text-md: 1rem;     --text-lg: 1.2rem;   --text-xl: 1.6rem;
-  --text-2xl: 2.2rem;  --text-3xl: 3.2rem;
+  --text-xs:  clamp(0.68rem, 0.6rem + 0.2vw, 0.78rem);
+  --text-sm:  clamp(0.78rem, 0.7rem + 0.25vw, 0.9rem);
+  --text-base:clamp(0.875rem, 0.8rem + 0.3vw, 1rem);
+  --text-md:  clamp(1rem, 0.9rem + 0.35vw, 1.15rem);
+  --text-lg:  clamp(1.2rem, 1.05rem + 0.5vw, 1.45rem);
+  --text-xl:  clamp(1.6rem, 1.3rem + 1vw, 2.1rem);
+  --text-2xl: clamp(2.2rem, 1.8rem + 1.5vw, 3rem);
+  --text-3xl: clamp(3.2rem, 2.5rem + 2.5vw, 5rem);
 
-  /* Spacing (use ONLY these values sitewide) */
+  /* Spacing (use ONLY these values sitewide; s6+ are fluid) */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px;
-  --s6: 24px; --s8: 32px; --s10: 40px; --s12: 48px;
+  --s6:  clamp(20px, 1.2vw + 12px, 28px);
+  --s8:  clamp(28px, 1.6vw + 16px, 40px);
+  --s10: clamp(36px, 2vw + 20px, 52px);
+  --s12: clamp(44px, 2.4vw + 24px, 64px);
 
   /* Radius */
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-pill: 999px;
@@ -53,13 +62,15 @@
     }
 }
 @media (min-width: 1200px) {
+    /* fluid ceiling: the column keeps growing with the viewport (up to
+       1600px) instead of freezing at 1400px and accumulating dead margin */
     .page-wrapper {
-        max-width: 1400px;
-        padding-left: 24px;
-        padding-right: 24px;
+        max-width: clamp(1320px, 82vw, 1600px);
+        padding-left: var(--s6);
+        padding-right: var(--s6);
     }
     .navbar-inner {
-        max-width: 1400px;
+        max-width: clamp(1320px, 82vw, 1600px);
     }
 }
 
@@ -67,6 +78,8 @@
 .score-ticker {
     display: flex;
     align-items: stretch;
+    width: 100%;
+    box-sizing: border-box;
     background: #060d1c;
     border-bottom: 1px solid var(--border);
 }
@@ -76,7 +89,9 @@
     flex-direction: column;
     justify-content: center;
     gap: 2px;
-    padding: 0 18px;
+    /* horizontal padding matches the site's edge padding so the leading
+       "2025 Season" label never sits against (or past) the viewport edge */
+    padding: var(--s2) var(--s6);
     border-right: 1px solid var(--border);
     background: rgba(255,255,255,0.02);
 }
@@ -90,20 +105,27 @@
 }
 .ticker-week-season {
     color: var(--text-dim);
-    font-size: 0.56rem;
+    font-size: var(--text-xs);
     font-weight: 600;
     white-space: nowrap;
 }
 .ticker-scroll {
     display: flex;
+    align-items: stretch;
+    flex: 1;
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* trailing padding so the last score isn't clipped by the viewport edge */
+    padding-right: var(--s6);
 }
 .ticker-scroll::-webkit-scrollbar { display: none; }
 .ticker-item {
     flex-shrink: 0;
-    min-width: 148px;
-    padding: 7px 14px 8px;
+    min-width: clamp(148px, 9vw + 40px, 184px);
+    padding: var(--s2) var(--s4);
+    white-space: nowrap;
     border-right: 1px solid var(--border);
     text-decoration: none;
     cursor: pointer;
@@ -112,7 +134,7 @@
 .ticker-item:hover { background: rgba(255,255,255,0.04); }
 .ticker-status {
     color: var(--text-dim);
-    font-size: 0.54rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1107,14 +1129,84 @@ tr.postseason-row:hover {
 /* ── Game page: score hero winner/loser styling ───────────────────────── */
 .hero-score-winner { color: var(--text-primary); }
 .hero-score-loser { color: var(--text-dim); }
-.team-name-default { font-weight: 900; color: var(--text-primary); }
+.team-name-default { font-weight: 700; color: var(--text-primary); }
 .team-name-winner { font-weight: 800; color: var(--text-primary); }
-.team-name-loser { font-weight: 400; color: var(--text-secondary); }
+.team-name-loser { font-weight: 600; color: var(--text-secondary); }
+
+/* ── Game page: the 4 text roles ──────────────────────────────────────────
+   Every text element on the game page maps to exactly one of these.
+   1  .t-value   — the number/fact that matters most in its row
+   2  .t-label   — names things (teams, players)
+   3  .t-support — context, not the focus (categories, dates, records)
+   4  .t-meta    — least important (column headers, sub-labels)
+   Gold is reserved for: winning score/total, AP rank badge, and the
+   leading side of a head-to-head stat. Nowhere else. */
+.t-value   { color: var(--text-primary);   font-weight: 700; font-family: var(--font-display); }
+.t-label   { color: var(--text-primary);   font-weight: 600; font-family: var(--font-body); }
+.t-support { color: var(--text-secondary); font-weight: 400; font-family: var(--font-body); }
+.t-meta    { color: var(--text-dim);       font-weight: 400; font-family: var(--font-body); }
+/* the gold signal — winning total / leading stat only */
+.t-gold    { color: var(--gold) !important; }
+a.t-label:hover { color: #60a5fa; }
+/* .data-table sets th/td colors at higher specificity; let roles win inside
+   the quarter table */
+.data-table thead th.t-meta { color: var(--text-dim); }
+.data-table tbody td.t-value { font-weight: 700; font-family: var(--font-display); }
+.data-table tbody td.t-value.t-gold { font-weight: 800; }
+
+/* ── Game hero — the score is the focal point; everything scales fluidly
+   with the viewport so wide screens get a genuinely bigger hero ───────── */
+.game-hero {
+    padding: clamp(48px, 2vw + 36px, 76px) 0 clamp(40px, 1.8vw + 30px, 64px);
+}
+.game-hero .week-label {
+    font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem);
+    letter-spacing: 0.14em;
+    color: var(--text-secondary);
+}
+.game-hero .game-date {
+    font-size: clamp(1rem, 0.88rem + 0.4vw, 1.15rem);
+    color: var(--text-secondary);
+}
+.game-hero .team-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.8rem, 1.35rem + 1.1vw, 2.7rem);
+    letter-spacing: -0.01em;
+    line-height: 1.05;
+}
+.game-hero .score {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(3.5rem, 2.6rem + 3vw, 6.5rem);
+    line-height: 1;
+}
+.game-hero .score-divider {
+    font-size: clamp(1.6rem, 1rem + 2vw, 3.2rem);
+    font-weight: 200;
+    color: var(--text-dim);
+}
+.game-hero .team-record {
+    font-size: clamp(0.85rem, 0.75rem + 0.3vw, 1rem);
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+.game-hero .ap-rank-badge {
+    font-size: clamp(0.72rem, 0.64rem + 0.25vw, 0.85rem);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: var(--gold);
+}
+.game-hero .team-logo {
+    height: clamp(120px, 5vw + 90px, 180px);
+    width: auto;
+}
+.game-hero .gh-score { min-width: clamp(90px, 7vw, 150px); }
 
 /* ── Game page: subtle team-color glow behind hero logos ──────────────── */
 .team-logo-glow {
-    width: 180px;
-    height: 180px;
+    width: clamp(160px, 5vw + 100px, 200px);
+    height: clamp(160px, 5vw + 100px, 200px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1817,7 +1909,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 /* ── Scores: winner gold, loser faded ── */
 .gc-team.winner .gc-score, .ticker-score.won, .bk-pts-won { color: var(--gold) !important; }
 .hero-score-winner { color: var(--gold); font-weight: 800; }
-.hero-score-loser { color: rgba(240,244,248,0.45); font-weight: 600; }
+.hero-score-loser { color: var(--text-secondary); font-weight: 600; }
 
 /* ── Leaderboard table: drop vertical rules, keep horizontal only ── */
 .lb-th-stat, .lb-td-stat { border-left: none; }

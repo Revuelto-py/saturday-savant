@@ -33,9 +33,9 @@
 {% set away_better = (away_pct > home_pct and not flip) or (away_pct < home_pct and flip) %}
 <div style="padding:8px 0;border-bottom: 1px solid var(--border)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <span style="font-weight:700;font-size: var(--text-sm);min-width:40px;color:{% if away_better %}white{% else %}rgba(255,255,255,0.32){% endif %}">{{ aval or '—' }}</span>
-        <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.09em;text-transform:uppercase;text-align:center;flex:1;padding:0 4px">{{ label }}</span>
-        <span style="font-weight:700;font-size: var(--text-sm);min-width:40px;text-align:right;color:{% if not away_better %}white{% else %}rgba(255,255,255,0.32){% endif %}">{{ hval or '—' }}</span>
+        <span style="font-weight:700;font-size: var(--text-sm);min-width:40px;color:{% if away_better %}var(--text-primary){% else %}var(--text-dim){% endif %}">{{ aval or '—' }}</span>
+        <span class="t-support" style="font-size: var(--text-xs);letter-spacing:0.09em;text-transform:uppercase;text-align:center;flex:1;padding:0 4px">{{ label }}</span>
+        <span style="font-weight:700;font-size: var(--text-sm);min-width:40px;text-align:right;color:{% if not away_better %}var(--text-primary){% else %}var(--text-dim){% endif %}">{{ hval or '—' }}</span>
     </div>
     {% if total > 0 %}
     <div style="height:3px;border-radius: 2px;background:rgba(255,255,255,0.05);overflow:hidden;display:flex">
@@ -49,20 +49,20 @@
 {% block content %}
 
 {# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
-<div style="background:linear-gradient(135deg,{{ away_color }}bb 0%,#060d1f 42%,#060d1f 58%,{{ home_color }}bb 100%);border-bottom: 1px solid var(--border);padding:40px 0 28px;position:relative;overflow:hidden">
+<div class="game-hero" style="background:linear-gradient(135deg,{{ away_color }}bb 0%,#060d1f 42%,#060d1f 58%,{{ home_color }}bb 100%);border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
     <div style="position:absolute;inset:0;background:rgba(0,0,0,0.48);pointer-events:none"></div>
-    <div class="page-wrapper" style="position:relative;z-index:1">
+    <div class="page-wrapper" style="position:relative;z-index:1;padding-top:0;padding-bottom:0">
 
-        <div style="display:flex;flex-direction:column;align-items:center;flex-wrap:wrap;text-align:center;margin-bottom:24px">
+        <div style="display:flex;flex-direction:column;align-items:center;flex-wrap:wrap;text-align:center;margin-bottom:28px">
             {% if notes %}
-                <div style="color: var(--text-secondary);font-size: var(--text-sm);font-weight:900;letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ notes }}</div>
+                <div class="week-label" style="font-weight:700;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ notes }}</div>
             {% else %}
-                <div style="color: var(--text-secondary);font-size: var(--text-sm);font-weight:700;letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">
+                <div class="week-label" style="font-weight:700;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">
                     {% if is_post %}Postseason{% else %}Week {{ week_num }} · 2025 Regular Season{% endif %}
                 </div>
             {% endif %}
             {% if game_date %}
-                <div style="color: var(--text-primary);font-size: var(--text-md);margin-top:4px;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ game_date }}</div>
+                <div class="game-date" style="margin-top:6px;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ game_date }}</div>
             {% endif %}
         </div>
 
@@ -71,24 +71,24 @@
             <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
                 {% if game[10] %}
                 <div class="team-logo-glow" style="--glow-rgb:{{ away_rgb }}">
-                    <a href="/team/{{ away_team }}"><img src="{{ game[10] }}" class="gh-logo-img" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
+                    <a href="/team/{{ away_team }}"><img src="{{ game[10] }}" class="gh-logo-img team-logo" style="object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
                 </div>
                 {% endif %}
                 <div style="text-align:right">
-                    {% if away_rank %}<div style="color:var(--gold);font-size: var(--text-xs);font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
-                    <div class="gh-team-name" style="font-size: var(--text-lg);line-height:1.1"><a href="/team/{{ away_team }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ away_team }}</a></div>
-                    {% if records.away %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:3px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
+                    {% if away_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
+                    <div class="gh-team-name team-name"><a href="/team/{{ away_team }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ away_team }}</a></div>
+                    {% if records.away %}<div class="team-record" style="margin-top:4px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
                 </div>
             </div>
 
             {# Scores #}
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
-                <div class="gh-score" style="min-width:80px;text-align:center">
-                    <div class="{{ 'hero-score-loser' if home_won_final else 'hero-score-winner' }}" style="font-size: var(--text-3xl);line-height:1">{{ game[4] if game[4] is not none else '—' }}</div>
+                <div class="gh-score" style="text-align:center">
+                    <div class="score {{ 'hero-score-loser' if home_won_final else 'hero-score-winner' }}">{{ game[4] if game[4] is not none else '—' }}</div>
                 </div>
-                <div class="gh-dash" style="color: var(--text-dim);font-size: 2.4rem;font-weight:200;padding:0 6px">–</div>
-                <div class="gh-score" style="min-width:80px;text-align:center">
-                    <div class="{{ 'hero-score-loser' if away_won_final else 'hero-score-winner' }}" style="font-size: var(--text-3xl);line-height:1">{{ game[3] if game[3] is not none else '—' }}</div>
+                <div class="gh-dash score-divider" style="padding:0 10px">–</div>
+                <div class="gh-score" style="text-align:center">
+                    <div class="score {{ 'hero-score-loser' if away_won_final else 'hero-score-winner' }}">{{ game[3] if game[3] is not none else '—' }}</div>
                 </div>
             </div>
 
@@ -96,13 +96,13 @@
             <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:36px">
                 {% if game[9] %}
                 <div class="team-logo-glow" style="--glow-rgb:{{ home_rgb }}">
-                    <a href="/team/{{ home_team }}"><img src="{{ game[9] }}" class="gh-logo-img" style="height:160px;object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
+                    <a href="/team/{{ home_team }}"><img src="{{ game[9] }}" class="gh-logo-img team-logo" style="object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>
                 </div>
                 {% endif %}
                 <div style="text-align:left">
-                    {% if home_rank %}<div style="color:var(--gold);font-size: var(--text-xs);font-weight:900;letter-spacing:0.1em;margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
-                    <div class="gh-team-name" style="font-size: var(--text-lg);line-height:1.1"><a href="/team/{{ home_team }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ home_team }}</a></div>
-                    {% if records.home %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:3px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
+                    {% if home_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
+                    <div class="gh-team-name team-name"><a href="/team/{{ home_team }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ home_team }}</a></div>
+                    {% if records.home %}<div class="team-record" style="margin-top:4px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
                 </div>
             </div>
         </div>
@@ -131,11 +131,11 @@
             <tr style="background:rgba(255,255,255,0.04)">
                 <th style="padding:8px 12px;text-align:left;min-width:160px"></th>
                 {% for i in range(num_periods) %}
-                <th style="text-align:center">
+                <th class="t-meta" style="text-align:center">
                     {% if i < 4 %}Q{{ i+1 }}{% elif i == 4 %}OT{% else %}OT{{ i-3 }}{% endif %}
                 </th>
                 {% endfor %}
-                <th style="text-align:center">T</th>
+                <th class="t-meta" style="text-align:center">T</th>
             </tr>
         </thead>
         <tbody>
@@ -143,25 +143,25 @@
                 <td style="padding:8px 12px;vertical-align:middle">
                     <div style="display:flex;align-items:center;gap:10px">
                         {% if game[10] %}<img src="{{ game[10] }}" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
-                        <span style="color:rgba(255,255,255,{% if game_final and home_won %}0.4{% else %}0.85{% endif %});font-weight:{% if not home_won %}700{% else %}500{% endif %};white-space:nowrap">{{ away_team }}</span>
+                        <span class="t-label" style="white-space:nowrap">{{ away_team }}</span>
                     </div>
                 </td>
                 {% for i in range(num_periods) %}
-                <td style="color: var(--text-secondary);font-weight:600;padding:8px 12px;text-align:center">{{ away_q[i]|int if i < away_q|length else 0 }}</td>
+                <td class="t-value" style="padding:8px 12px;text-align:center">{{ away_q[i]|int if i < away_q|length else 0 }}</td>
                 {% endfor %}
-                <td style="color:{% if game_final and home_won %}rgba(255,255,255,0.35){% else %}var(--gold){% endif %};font-weight:900;padding:8px 12px;text-align:center;border-left: 1px solid var(--border-strong);font-size: var(--text-md)">{{ game[4] }}</td>
+                <td class="t-value{% if game_final and not home_won %} t-gold{% endif %}" style="padding:8px 12px;text-align:center;border-left: 1px solid var(--border-strong);font-size: var(--text-md)">{{ game[4] }}</td>
             </tr>
             <tr>
                 <td style="padding:8px 12px;vertical-align:middle">
                     <div style="display:flex;align-items:center;gap:10px">
                         {% if game[9] %}<img src="{{ game[9] }}" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
-                        <span style="color:rgba(255,255,255,{% if game_final and not home_won %}0.4{% else %}0.85{% endif %});font-weight:{% if home_won %}700{% else %}500{% endif %};white-space:nowrap">{{ home_team }}</span>
+                        <span class="t-label" style="white-space:nowrap">{{ home_team }}</span>
                     </div>
                 </td>
                 {% for i in range(num_periods) %}
-                <td style="color: var(--text-secondary);font-weight:600;padding:8px 12px;text-align:center">{{ home_q[i]|int if i < home_q|length else 0 }}</td>
+                <td class="t-value" style="padding:8px 12px;text-align:center">{{ home_q[i]|int if i < home_q|length else 0 }}</td>
                 {% endfor %}
-                <td style="color:{% if game_final and not home_won %}rgba(255,255,255,0.35){% else %}var(--gold){% endif %};font-weight:900;padding:8px 12px;text-align:center;border-left: 1px solid var(--border-strong);font-size: var(--text-md)">{{ game[3] }}</td>
+                <td class="t-value{% if game_final and home_won %} t-gold{% endif %}" style="padding:8px 12px;text-align:center;border-left: 1px solid var(--border-strong);font-size: var(--text-md)">{{ game[3] }}</td>
             </tr>
         </tbody>
     </table>
@@ -202,10 +202,10 @@
     <div class="d-flex justify-content-between align-items-center w-100" style="padding-bottom:12px;border-bottom: 1px solid var(--border);margin-bottom:4px">
         <div class="d-flex align-items-center gap-2">
             {% if game[10] %}<img src="{{ game[10] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
-            <span style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)">{{ away_team }}</span>
+            <span class="t-label" style="font-size: var(--text-base)">{{ away_team }}</span>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <span style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)">{{ home_team }}</span>
+            <span class="t-label" style="font-size: var(--text-base)">{{ home_team }}</span>
             {% if game[9] %}<img src="{{ game[9] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
         </div>
     </div>
@@ -224,23 +224,23 @@
             <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color: var(--text-secondary);font-size: var(--text-sm)">{{ cat.away.name[0] if cat.away.name else '?' }}</div>
             {% endif %}
             <div>
-                <div style="color: var(--text-primary);font-weight:900;font-size: 1.1rem;line-height:1">{{ cat.away.stat }}</div>
+                <div class="t-value" style="font-size: var(--text-lg);line-height:1">{{ cat.away.stat }}</div>
                 {% if cat.away.player_id %}
-                <a href="/player/{{ cat.away.player_id }}" style="color: var(--text-primary);font-weight:600;font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ cat.away.name }}</a>
+                <a href="/player/{{ cat.away.player_id }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.away.name }}</a>
                 {% else %}
-                <div style="color: var(--text-primary);font-weight:600;font-size: var(--text-sm);margin-top:3px">{{ cat.away.name }}</div>
+                <div class="t-label" style="font-size: var(--text-sm);margin-top:3px">{{ cat.away.name }}</div>
                 {% endif %}
-                {% if cat.away.position %}<div style="color: var(--text-secondary);font-size: var(--text-xs);margin-top:1px">{{ cat.away.position }}</div>{% endif %}
-                {% if cat.away.stat_detail %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ cat.away.stat_detail }}</div>{% endif %}
+                {% if cat.away.position %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:1px">{{ cat.away.position }}</div>{% endif %}
+                {% if cat.away.stat_detail %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:2px">{{ cat.away.stat_detail }}</div>{% endif %}
             </div>
             {% else %}
-            <div style="color: var(--text-dim);font-size: var(--text-sm)">—</div>
+            <div class="t-meta" style="font-size: var(--text-sm)">—</div>
             {% endif %}
         </div>
 
         <!-- Center label -->
         <div class="col-2 text-center d-flex align-items-center justify-content-center">
-            <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;line-height:1.4">{{ label }}</div>
+            <div class="t-support" style="font-size: var(--text-xs);line-height:1.4">{{ label }}</div>
         </div>
 
         <!-- Home leader (right, mirrored) -->
@@ -252,17 +252,17 @@
             <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color: var(--text-secondary);font-size: var(--text-sm)">{{ cat.home.name[0] if cat.home.name else '?' }}</div>
             {% endif %}
             <div>
-                <div style="color: var(--text-primary);font-weight:900;font-size: 1.1rem;line-height:1">{{ cat.home.stat }}</div>
+                <div class="t-value" style="font-size: var(--text-lg);line-height:1">{{ cat.home.stat }}</div>
                 {% if cat.home.player_id %}
-                <a href="/player/{{ cat.home.player_id }}" style="color: var(--text-primary);font-weight:600;font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ cat.home.name }}</a>
+                <a href="/player/{{ cat.home.player_id }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.home.name }}</a>
                 {% else %}
-                <div style="color: var(--text-primary);font-weight:600;font-size: var(--text-sm);margin-top:3px">{{ cat.home.name }}</div>
+                <div class="t-label" style="font-size: var(--text-sm);margin-top:3px">{{ cat.home.name }}</div>
                 {% endif %}
-                {% if cat.home.position %}<div style="color: var(--text-secondary);font-size: var(--text-xs);margin-top:1px">{{ cat.home.position }}</div>{% endif %}
-                {% if cat.home.stat_detail %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ cat.home.stat_detail }}</div>{% endif %}
+                {% if cat.home.position %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:1px">{{ cat.home.position }}</div>{% endif %}
+                {% if cat.home.stat_detail %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:2px">{{ cat.home.stat_detail }}</div>{% endif %}
             </div>
             {% else %}
-            <div style="color: var(--text-dim);font-size: var(--text-sm)">—</div>
+            <div class="t-meta" style="font-size: var(--text-sm)">—</div>
             {% endif %}
         </div>
 
@@ -276,7 +276,7 @@
 <div style="margin-top:{% if structured_leaders %}28px{% else %}0{% endif %}">
 
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-        <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.14em;text-transform:uppercase;white-space:nowrap">Play by Play</span>
+        <span class="section-header" style="margin-bottom:0;white-space:nowrap">Play by Play</span>
         <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
     </div>
 
@@ -298,7 +298,7 @@
     {% set q_plays = plays | selectattr('period', 'equalto', q) | list %}
     {% if q_plays %}
     <div class="quarter-section" style="margin-bottom:8px">
-        <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;padding:12px 0 8px">
+        <div class="t-meta" style="font-size: var(--text-xs);font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:12px 0 8px">
             {{ q_labels[q] }} QUARTER
         </div>
 
@@ -320,7 +320,7 @@
 
                     <div style="flex:1;min-width:0">
                         {% if play.is_scoring and play.type %}
-                        <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-base);margin-bottom:2px">
+                        <div class="t-label" style="font-size: var(--text-base);margin-bottom:2px">
                             {% set pt = play.type | lower %}
                             {% if 'touchdown' in pt %}Touchdown
                             {% elif 'field goal' in pt %}Field Goal
@@ -329,12 +329,12 @@
                             {% else %}{{ play.type }}{% endif %}
                         </div>
                         {% endif %}
-                        <div style="color: var(--text-secondary);font-size: var(--text-xs);margin-bottom:6px">
+                        <div class="t-meta" style="font-size: var(--text-xs);margin-bottom:6px">
                             {{ play.clock }}{% if play.clock and play_quarters %} · {% endif %}{{ q_labels[q] if q <= 4 else 'OT' }}
                         </div>
-                        <div style="color:{% if play.is_scoring %}rgba(255,255,255,0.85){% else %}rgba(255,255,255,0.6){% endif %};font-size: var(--text-base);line-height:1.5">{{ play.text }}</div>
+                        <div class="t-support" style="font-size: var(--text-base);line-height:1.5">{{ play.text }}</div>
                         {% if play.is_scoring and play.drive_summary %}
-                        <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:4px">{{ play.drive_summary }}</div>
+                        <div class="t-meta" style="font-size: var(--text-xs);margin-top:4px">{{ play.drive_summary }}</div>
                         {% endif %}
                     </div>
                 </div>
@@ -342,10 +342,10 @@
                 {# Score after play #}
                 {% if play.is_scoring %}
                 <div style="text-align:right;flex-shrink:0;min-width:72px">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;margin-bottom:2px;letter-spacing:0.06em">
+                    <div class="t-meta" style="font-size: var(--text-xs);margin-bottom:2px;letter-spacing:0.06em">
                         {{ away_team[:3] | upper }}&nbsp;&nbsp;{{ home_team[:3] | upper }}
                     </div>
-                    <div style="color: var(--text-primary);font-weight:900;font-size: 1.05rem">
+                    <div class="t-value" style="font-size: var(--text-md)">
                         {{ play.away_score }} – {{ play.home_score }}
                     </div>
                 </div>
@@ -379,9 +379,9 @@
 {% set home_pct = 100 - away_pct %}
 <div style="margin-bottom:20px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
-        <span style="color: var(--text-primary);font-weight:800;font-size: 1.05rem;min-width:60px">{{ away_val or '—' }}</span>
-        <span style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:0.06em;text-align:center;flex:1">{{ label }}</span>
-        <span style="color: var(--text-primary);font-weight:800;font-size: 1.05rem;min-width:60px;text-align:right">{{ home_val or '—' }}</span>
+        <span class="t-value" style="font-size: var(--text-lg);min-width:60px">{{ away_val or '—' }}</span>
+        <span class="t-support" style="font-size: var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;text-align:center;flex:1">{{ label }}</span>
+        <span class="t-value" style="font-size: var(--text-lg);min-width:60px;text-align:right">{{ home_val or '—' }}</span>
     </div>
     <div style="display:flex;height:8px;border-radius: var(--r-sm);overflow:hidden;gap:2px">
         <div style="flex:{{ away_pct }};background:{{ away_color }};border-radius: var(--r-sm) 0 0 4px;min-width:4px"></div>
@@ -398,11 +398,11 @@
     <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom: 1px solid var(--border);margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:10px">
             {% if game[10] %}<img src="{{ game[10] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
-            <span style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)">{{ away_team }}</span>
+            <span class="t-label" style="font-size: var(--text-base)">{{ away_team }}</span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-direction:row-reverse">
             {% if game[9] %}<img src="{{ game[9] }}" style="width:40px;height:40px;object-fit:contain">{% endif %}
-            <span style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)">{{ home_team }}</span>
+            <span class="t-label" style="font-size: var(--text-base)">{{ home_team }}</span>
         </div>
     </div>
 
@@ -431,19 +431,19 @@
         <div style="display:flex;align-items:center;gap:8px">
             {% if game[10] %}<img src="{{ game[10] }}" style="width:32px;height:32px;object-fit:contain">{% endif %}
             <div>
-                <div id="away-prob-pct" style="color: var(--text-primary);font-size: var(--text-lg);font-weight:900;line-height:1">—</div>
+                <div id="away-prob-pct" class="t-value" style="font-size: var(--text-lg);line-height:1">—</div>
                 <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
                     <div style="width:16px;height:2px;background:{{ away_color }};border-radius: 2px"></div>
-                    <span style="color: var(--text-secondary);font-size: var(--text-xs)">{{ away_team }}</span>
+                    <span class="t-support" style="font-size: var(--text-xs)">{{ away_team }}</span>
                 </div>
             </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-direction:row-reverse">
             {% if game[9] %}<img src="{{ game[9] }}" style="width:32px;height:32px;object-fit:contain">{% endif %}
             <div style="text-align:right">
-                <div id="home-prob-pct" style="color: var(--text-primary);font-size: var(--text-lg);font-weight:900;line-height:1">—</div>
+                <div id="home-prob-pct" class="t-value" style="font-size: var(--text-lg);line-height:1">—</div>
                 <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-top:2px">
-                    <span style="color: var(--text-secondary);font-size: var(--text-xs)">{{ home_team }}</span>
+                    <span class="t-support" style="font-size: var(--text-xs)">{{ home_team }}</span>
                     <div style="width:16px;height:2px;background:{{ home_color }};border-radius: 2px"></div>
                 </div>
             </div>
@@ -459,18 +459,18 @@
          border-radius: var(--r-md)">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px">
             <div>
-                <div id="pd-down-dist" style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)"></div>
-                <div id="pd-clock" style="color: var(--text-secondary);font-size: var(--text-xs);margin-top:1px"></div>
+                <div id="pd-down-dist" class="t-label" style="font-size: var(--text-base)"></div>
+                <div id="pd-clock" class="t-meta" style="font-size: var(--text-xs);margin-top:1px"></div>
             </div>
             <div style="text-align:right;flex-shrink:0;margin-left:8px">
-                <div id="pd-score" style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)"></div>
-                <div id="pd-teams" style="color: var(--text-dim);font-size: var(--text-xs);margin-top:1px"></div>
+                <div id="pd-score" class="t-value" style="font-size: var(--text-base)"></div>
+                <div id="pd-teams" class="t-meta" style="font-size: var(--text-xs);margin-top:1px"></div>
             </div>
         </div>
-        <div id="pd-text" style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.5"></div>
+        <div id="pd-text" class="t-support" style="font-size: var(--text-sm);line-height:1.5"></div>
     </div>
 
-    <div style="color: var(--text-dim);font-size: var(--text-xs);text-align:center;margin-top:10px">According to ESPN Analytics</div>
+    <div class="t-meta" style="font-size: var(--text-xs);text-align:center;margin-top:10px">According to ESPN Analytics</div>
 </div>
 
 <script>
@@ -625,8 +625,8 @@ if (typeof Plotly !== 'undefined') {
     <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom: 1px solid var(--border)">
         <span style="font-size: var(--text-md);flex-shrink:0;display:flex;align-items:center">📅</span>
         <div>
-            <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">{{ game_date }}</div>
-            {% if game_time %}<div style="color: var(--text-secondary);font-size: var(--text-sm);margin-top:2px">{{ game_time }}</div>{% endif %}
+            <div class="t-label" style="font-size: var(--text-base)">{{ game_date }}</div>
+            {% if game_time %}<div class="t-support" style="font-size: var(--text-sm);margin-top:2px">{{ game_time }}</div>{% endif %}
         </div>
     </div>
     {% endif %}
@@ -635,8 +635,8 @@ if (typeof Plotly !== 'undefined') {
     <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom: 1px solid var(--border)">
         <span style="font-size: var(--text-md);flex-shrink:0;display:flex;align-items:center">📍</span>
         <div>
-            <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">{{ venue_name }}</div>
-            {% if venue_location %}<div style="color: var(--text-secondary);font-size: var(--text-sm);margin-top:2px">{{ venue_location }}</div>{% endif %}
+            <div class="t-label" style="font-size: var(--text-base)">{{ venue_name }}</div>
+            {% if venue_location %}<div class="t-support" style="font-size: var(--text-sm);margin-top:2px">{{ venue_location }}</div>{% endif %}
         </div>
     </div>
     {% endif %}
@@ -645,7 +645,7 @@ if (typeof Plotly !== 'undefined') {
     <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom: 1px solid var(--border)">
         <span style="font-size: var(--text-md);flex-shrink:0;display:flex;align-items:center">👥</span>
         <div>
-            <div style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">Attendance: {{ attendance_fmt }}</div>
+            <div class="t-label" style="font-size: var(--text-base)">Attendance: {{ attendance_fmt }}</div>
         </div>
     </div>
     {% endif %}
@@ -654,15 +654,15 @@ if (typeof Plotly !== 'undefined') {
     <div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom: 1px solid var(--border)">
         <span style="font-size: var(--text-md);flex-shrink:0;display:flex;align-items:center">📺</span>
         <div>
-            <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Where to Watch</div>
-            <span style="background:rgba(255,255,255,0.1);border: 1px solid var(--border-strong);color: var(--text-primary);font-weight:800;font-size: var(--text-base);padding:3px 12px;border-radius: var(--r-sm)">{{ tv_broadcast }}</span>
+            <div class="t-meta" style="font-size: var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Where to Watch</div>
+            <span class="t-label" style="background:rgba(255,255,255,0.1);border: 1px solid var(--border-strong);font-size: var(--text-base);padding:3px 12px;border-radius: var(--r-sm)">{{ tv_broadcast }}</span>
         </div>
     </div>
     {% endif %}
 
     <div style="display:flex;align-items:center;gap:14px;padding:10px 0">
         <span style="font-size: var(--text-md);flex-shrink:0;display:flex;align-items:center">🏈</span>
-        <div style="color: var(--text-secondary);font-size: var(--text-base)">
+        <div class="t-support" style="font-size: var(--text-base)">
             Week {{ week_num }} · {{ season_type_display }}{% if notes %} · {{ notes }}{% endif %}
         </div>
     </div>
@@ -767,11 +767,11 @@ if (typeof Plotly !== 'undefined') {
     <div class="drive-header">
         <div style="display:flex;align-items:center;gap:10px">
             {% if d_logo %}<img src="{{ d_logo }}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">{% endif %}
-            <span style="color: var(--text-primary);font-weight:800">{{ drive.team }}</span>
-            <span style="color: var(--text-dim)">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
+            <span class="t-label">{{ drive.team }}</span>
+            <span class="t-meta">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-            <span style="color: var(--text-secondary);font-size: var(--text-sm)">{{ drive.plays_count }} plays · {{ drive.yards }} yds{% if drive.time_elapsed %} · {{ drive.time_elapsed }}{% endif %}</span>
+            <span class="t-support" style="font-size: var(--text-sm)">{{ drive.plays_count }} plays · {{ drive.yards }} yds{% if drive.time_elapsed %} · {{ drive.time_elapsed }}{% endif %}</span>
             <span class="drive-badge" style="background:{{ drive.badge_bg }};color:{{ drive.badge_color }}">{{ drive.badge_label }}</span>
         </div>
     </div>
