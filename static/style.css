@@ -1950,63 +1950,120 @@ input:focus-visible, [tabindex]:focus-visible {
 /* Numbers align in every table */
 table, .data-table { font-variant-numeric: tabular-nums; }
 
-/* Homepage Banner — slim permanent identity strip above the games grid.
-   Full-bleed background like the ticker; inner content rides .page-wrapper
-   so it aligns with the game cards below. Gold appears exactly once: the
-   thin underline beneath the tagline. */
-.welcome-banner {
+/* Homepage Hero — the infinite grid.
+   Two stacked drifting grid layers: a faint base that is always visible,
+   and a gold layer unmasked only inside a radial spotlight that follows
+   the cursor (CSS vars --mx/--my set from JS in home.html). The drift is
+   transform-only on oversized layers so it stays on the compositor.
+   Touch devices keep the drift but park the spotlight at its CSS default;
+   reduced motion gets a static grid (JS skips both effects). */
+.ig-hero {
+    position: relative;
+    overflow: hidden;
     background: var(--bg-base);
     border-bottom: 1px solid var(--border);
-}
-.welcome-banner .wb-inner {
-    padding-top: var(--s5);
-    padding-bottom: var(--s5);
+    min-height: clamp(340px, 42vh, 500px);
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--s8);
-    flex-wrap: wrap;
+    justify-content: center;
 }
-.welcome-banner .intro {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+.ig-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
 }
-.wb-brand {
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
+/* one cell (40px) of bleed on the top/left so the wrap-around never shows */
+.ig-grid {
+    position: absolute;
+    top: -40px;
+    left: -40px;
+    width: calc(100% + 40px);
+    height: calc(100% + 40px);
+    background-image:
+        linear-gradient(var(--ig-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--ig-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+    will-change: transform;
 }
-.wb-logo { height: 32px; width: auto; }
-.wb-wordmark {
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: var(--text-md);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-primary);
+.ig-base { --ig-line: rgba(141,164,190,0.30); opacity: 0.16; }
+.ig-reveal {
+    --ig-line: rgba(245,158,11,0.55);
+    opacity: 0.9;
+    -webkit-mask-image: radial-gradient(300px circle at var(--mx, 50%) var(--my, 38%), #000 0%, transparent 100%);
+    mask-image: radial-gradient(300px circle at var(--mx, 50%) var(--my, 38%), #000 0%, transparent 100%);
 }
-.wb-tagline {
+/* palette glows — gold is the brand, navy keeps it in the site's night sky */
+.ig-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(110px);
+    pointer-events: none;
+}
+.ig-glow-gold {
+    top: -22%; right: -12%;
+    width: 44%; height: 62%;
+    background: rgba(245,158,11,0.10);
+}
+.ig-glow-navy {
+    bottom: -30%; left: -12%;
+    width: 46%; height: 66%;
+    background: rgba(59,130,246,0.07);
+}
+/* content — centered, links interactive, everything else lets the mouse
+   through so the reveal keeps tracking */
+.ig-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: var(--s10) var(--s6);
+    max-width: 860px;
+    pointer-events: none;
+}
+.ig-eyebrow {
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: var(--text-lg);
-    color: var(--text-secondary);
-    width: fit-content;
-    padding-bottom: 3px;
-    border-bottom: 2px solid var(--gold);
+    font-size: var(--text-xs);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: var(--s3);
 }
-.wb-sub {
+.ig-title {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(2.8rem, 2rem + 4vw, 5.5rem);
+    line-height: 0.95;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    margin: 0 0 var(--s3);
+    text-shadow: 0 2px 24px rgba(0,0,0,0.55);
+}
+.ig-title-gold { color: var(--gold); }
+.ig-tagline {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(1.15rem, 1rem + 0.8vw, 1.6rem);
+    color: var(--text-secondary);
+    margin: 0 0 var(--s2);
+}
+.ig-sub {
     font-family: var(--font-body);
     font-size: var(--text-sm);
+    line-height: 1.7;
     color: var(--text-dim);
-    margin-top: 4px;
+    margin: 0 auto var(--s6);
+    max-width: 52ch;
 }
-.welcome-banner .features {
+.ig-features {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--s5);
+    pointer-events: auto;
 }
-.welcome-banner .feature-item {
+.ig-feature {
     display: flex;
     align-items: center;
     gap: var(--s2);
@@ -2019,33 +2076,37 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     text-decoration: none;
     transition: color var(--t-fast);
 }
-.welcome-banner .feature-item:hover { color: var(--gold); cursor: pointer; }
-.welcome-banner .feature-item svg { flex-shrink: 0; opacity: 0.75; }
-.welcome-banner .divider {
+.ig-feature:hover { color: var(--gold); cursor: pointer; }
+.ig-feature svg { flex-shrink: 0; opacity: 0.75; }
+.ig-divider {
     width: 1px;
     height: 16px;
-    background: var(--border);
+    background: var(--border-strong);
     flex-shrink: 0;
 }
-/* Below 992px: intro stacks on top, feature row flows underneath */
-@media (max-width: 991.98px) {
-    .welcome-banner .wb-inner {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--s4);
-    }
-    .welcome-banner .features { flex-wrap: wrap; row-gap: var(--s2); }
+/* Touch / no-hover devices: no cursor to follow — keep the reveal parked
+   as a soft center glow */
+@media (hover: none) {
+    .ig-reveal { opacity: 0.55; }
 }
-/* Below 640px: feature row becomes a quiet horizontal scroll strip */
+/* Below 640px: shorter hero, feature row becomes a quiet scroll strip */
 @media (max-width: 639.98px) {
-    .welcome-banner .features {
+    .ig-hero { min-height: 300px; }
+    .ig-content { padding: var(--s8) var(--s4); width: 100%; }
+    .ig-features {
+        justify-content: flex-start;
         flex-wrap: nowrap;
-        width: 100%;
         overflow-x: auto;
         scrollbar-width: none;
         -ms-overflow-style: none;
     }
-    .welcome-banner .features::-webkit-scrollbar { display: none; }
+    .ig-features::-webkit-scrollbar { display: none; }
+}
+/* Reduced motion: JS never starts the drift or spotlight; also quiet the
+   grid itself so the hero reads as a calm static texture */
+@media (prefers-reduced-motion: reduce) {
+    .ig-grid { will-change: auto; }
+    .ig-reveal { opacity: 0.4; }
 }
 
 /* Reduced motion: kill transforms + transitions */

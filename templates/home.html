@@ -2,40 +2,46 @@
 
 {% block content %}
 
-{# ── Welcome banner — permanent identity strip; games stay the first primary content ── #}
-<div class="welcome-banner">
-    <div class="page-wrapper wb-inner">
-        <div class="intro">
-            <div class="wb-brand">
-                <img src="/static/logo-128.png" alt="" class="wb-logo">
-                <span class="wb-wordmark">Saturday Savant</span>
-            </div>
-            <div class="wb-tagline">College football, quantified.</div>
-            <div class="wb-sub">EPA-driven stats, percentile rankings, and live game data for every FBS team.</div>
-        </div>
-        <nav class="features" aria-label="Site features">
-            <a class="feature-item" href="/teams">
+{# ── Infinite-grid hero — animated grid with a mouse-following gold reveal.
+     Sits below the ticker; all game content stays directly beneath it. ── #}
+<section class="ig-hero" id="igHero" aria-label="Saturday Savant — college football, quantified">
+    {# base grid: always faintly visible, drifting #}
+    <div class="ig-layer ig-base" aria-hidden="true"><div class="ig-grid"></div></div>
+    {# reveal grid: gold lines, unmasked only around the cursor #}
+    <div class="ig-layer ig-reveal" aria-hidden="true"><div class="ig-grid"></div></div>
+    {# palette glows — brand gold up right, deep field-navy down left #}
+    <div class="ig-glow ig-glow-gold" aria-hidden="true"></div>
+    <div class="ig-glow ig-glow-navy" aria-hidden="true"></div>
+
+    <div class="ig-content">
+        <div class="ig-eyebrow">College Football Analytics</div>
+        <h1 class="ig-title">Saturday <span class="ig-title-gold">Savant</span></h1>
+        <p class="ig-tagline">College football, quantified.</p>
+        <p class="ig-sub">Opponent-adjusted ratings, EPA-driven stats, and drive-level data for every FBS team.</p>
+
+        <nav class="ig-features" aria-label="Site features">
+            <a class="ig-feature" href="/teams">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 4.6-3.2 8.4-8 10-4.8-1.6-8-5.4-8-10V6l8-4z"/></svg>
                 130+ FBS Teams
             </a>
-            <span class="divider"></span>
-            <a class="feature-item" href="/leaderboards/passing">
+            <span class="ig-divider"></span>
+            <a class="ig-feature" href="/savant-rating">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
-                EPA &amp; PPA Metrics
+                Savant Ratings
             </a>
-            <span class="divider"></span>
-            <a class="feature-item" href="/bracket">
+            <span class="ig-divider"></span>
+            <a class="ig-feature" href="/bracket">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Live Drive Tracking
             </a>
-            <span class="divider"></span>
-            <a class="feature-item" href="/compare">
+            <span class="ig-divider"></span>
+            <a class="ig-feature" href="/compare">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
                 Player Compare Tool
             </a>
         </nav>
     </div>
-</div>
+</section>
 
 <div class="page-wrapper">
 <div class="row g-5">
@@ -155,4 +161,55 @@
 
 </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var hero = document.getElementById('igHero');
+    if (!hero) return;
+
+    var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var canHover      = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+    /* ── Mouse-following reveal — updates CSS vars consumed by the mask.
+       Skipped on touch devices (the reveal stays parked at its CSS default)
+       and under reduced motion. ── */
+    if (canHover && !reducedMotion) {
+        hero.addEventListener('mousemove', function (e) {
+            var r = hero.getBoundingClientRect();
+            hero.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+            hero.style.setProperty('--my', (e.clientY - r.top) + 'px');
+        });
+        hero.addEventListener('mouseleave', function () {
+            hero.style.removeProperty('--mx');
+            hero.style.removeProperty('--my');
+        });
+    }
+
+    /* ── Infinite drift — translate the oversized grid layers one cell
+       (40px) and wrap, so the pattern scrolls forever. transform-only,
+       runs on the compositor, and pauses when the hero is off-screen. ── */
+    if (!reducedMotion) {
+        var grids = hero.querySelectorAll('.ig-grid');
+        var offset = 0, SPEED = 0.5, CELL = 40, visible = true, rafId = null;
+
+        function tick() {
+            offset = (offset + SPEED) % CELL;
+            for (var i = 0; i < grids.length; i++) {
+                grids[i].style.transform = 'translate3d(' + offset + 'px,' + offset + 'px,0)';
+            }
+            rafId = visible ? requestAnimationFrame(tick) : null;
+        }
+
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(function (entries) {
+                visible = entries[0].isIntersecting;
+                if (visible && rafId === null) rafId = requestAnimationFrame(tick);
+            }).observe(hero);
+        }
+        rafId = requestAnimationFrame(tick);
+    }
+})();
+</script>
 {% endblock %}
