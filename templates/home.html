@@ -1,6 +1,42 @@
 {% extends "base.html" %}
 
 {% block content %}
+
+{# ── Welcome banner — permanent identity strip; games stay the first primary content ── #}
+<div class="welcome-banner">
+    <div class="page-wrapper wb-inner">
+        <div class="intro">
+            <div class="wb-brand">
+                <img src="/static/logo-128.png" alt="" class="wb-logo">
+                <span class="wb-wordmark">Saturday Savant</span>
+            </div>
+            <div class="wb-tagline">College football, quantified.</div>
+            <div class="wb-sub">EPA-driven stats, percentile rankings, and live game data for every FBS team.</div>
+        </div>
+        <nav class="features" aria-label="Site features">
+            <a class="feature-item" href="/teams">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 4.6-3.2 8.4-8 10-4.8-1.6-8-5.4-8-10V6l8-4z"/></svg>
+                130+ FBS Teams
+            </a>
+            <span class="divider"></span>
+            <a class="feature-item" href="/leaderboards/passing">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
+                EPA &amp; PPA Metrics
+            </a>
+            <span class="divider"></span>
+            <a class="feature-item" href="/bracket">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Live Drive Tracking
+            </a>
+            <span class="divider"></span>
+            <a class="feature-item" href="/compare">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
+                Player Compare Tool
+            </a>
+        </nav>
+    </div>
+</div>
+
 <div class="page-wrapper">
 <div class="row g-5">
 

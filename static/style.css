@@ -1950,6 +1950,104 @@ input:focus-visible, [tabindex]:focus-visible {
 /* Numbers align in every table */
 table, .data-table { font-variant-numeric: tabular-nums; }
 
+/* Homepage Banner — slim permanent identity strip above the games grid.
+   Full-bleed background like the ticker; inner content rides .page-wrapper
+   so it aligns with the game cards below. Gold appears exactly once: the
+   thin underline beneath the tagline. */
+.welcome-banner {
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--border);
+}
+.welcome-banner .wb-inner {
+    padding-top: var(--s5);
+    padding-bottom: var(--s5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s8);
+    flex-wrap: wrap;
+}
+.welcome-banner .intro {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.wb-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+}
+.wb-logo { height: 32px; width: auto; }
+.wb-wordmark {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: var(--text-md);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+.wb-tagline {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+    width: fit-content;
+    padding-bottom: 3px;
+    border-bottom: 2px solid var(--gold);
+}
+.wb-sub {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+.welcome-banner .features {
+    display: flex;
+    align-items: center;
+    gap: var(--s5);
+}
+.welcome-banner .feature-item {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: color var(--t-fast);
+}
+.welcome-banner .feature-item:hover { color: var(--gold); cursor: pointer; }
+.welcome-banner .feature-item svg { flex-shrink: 0; opacity: 0.75; }
+.welcome-banner .divider {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    flex-shrink: 0;
+}
+/* Below 992px: intro stacks on top, feature row flows underneath */
+@media (max-width: 991.98px) {
+    .welcome-banner .wb-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--s4);
+    }
+    .welcome-banner .features { flex-wrap: wrap; row-gap: var(--s2); }
+}
+/* Below 640px: feature row becomes a quiet horizontal scroll strip */
+@media (max-width: 639.98px) {
+    .welcome-banner .features {
+        flex-wrap: nowrap;
+        width: 100%;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .welcome-banner .features::-webkit-scrollbar { display: none; }
+}
+
 /* Reduced motion: kill transforms + transitions */
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
