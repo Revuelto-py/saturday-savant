@@ -2224,3 +2224,30 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .conf-logo-md img { width: 30px; height: 30px; }
 .conf-logo-sm { padding: 4px; }
 .conf-logo-sm img { width: 22px; height: 22px; }
+
+/* ── Sitewide footer ───────────────────────────────────────────────────
+   Minimal attribution strip below all page content. Understated: dim text,
+   a quiet top keyline, and the GitHub link warming to gold on hover like
+   other interactive text on the site. */
+.site-footer {
+    margin-top: var(--s12);
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+}
+.site-footer-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: var(--s3);
+    padding-top: var(--s6); padding-bottom: var(--s6);
+}
+.footer-gh {
+    display: inline-flex; align-items: center; gap: var(--s2);
+    color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600;
+    text-decoration: none; transition: color var(--t-fast);
+}
+.footer-gh:hover { color: var(--gold); }
+.footer-gh svg { flex-shrink: 0; }
+.footer-credit { color: var(--text-dim); font-size: var(--text-sm); }
+
+@media (max-width: 575.98px) {
+    .site-footer-inner { flex-direction: column; align-items: flex-start; gap: var(--s2); }
+}
