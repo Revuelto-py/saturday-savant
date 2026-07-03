@@ -42,7 +42,6 @@
         </div>
         <ul class="nav nav-tabs" id="teamTabs" style="margin-top:28px">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview">Overview</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lineup">Lineup</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#stats">Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#roster">Roster</button></li>
         </ul>
@@ -382,84 +381,6 @@
 </div>
 <!-- ===== END OVERVIEW ===== -->
 
-<!-- ===== LINEUP ===== -->
-<div class="tab-pane fade" id="lineup">
-    <div style="background:radial-gradient(ellipse at 50% 0%,{{ c1 }}33 0%,transparent 60%),linear-gradient(180deg,#060c1a 0%,#0d1a2e 100%);border-radius: var(--r-lg);padding:32px 0 28px;margin-top:24px;position:relative;overflow:hidden">
-        <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.012) 1px,transparent 1px);background-size:48px 48px;pointer-events:none"></div>
-        <div style="display:flex;justify-content:center;margin-bottom:28px;position:relative;z-index:1">
-            <button id="offBtn" onclick="showSide('offense')" style="padding:9px 36px;background:{{ c1 }};color: var(--text-primary);border:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer">⚔ OFFENSE</button>
-            <button id="defBtn" onclick="showSide('defense')" style="padding:9px 36px;background:rgba(255,255,255,0.07);color: var(--text-secondary);border: 1px solid var(--border-strong);border-left:none;border-radius:0 6px 6px 0;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer">🛡 DEFENSE</button>
-        </div>
-
-        {% macro card(slot, border_col, label_bg, label_col) %}
-        {% set p = lineup.get(slot) %}
-        <div style="display:flex;flex-direction:column;align-items:center;min-width:0;flex:1">
-            <div style="width:100%;border-radius: var(--r-md);overflow:hidden;border:2px solid {{ border_col }};box-shadow:0 0 12px {{ border_col }}44,0 4px 18px rgba(0,0,0,0.65);background:linear-gradient(180deg,#101827,#1a2640)">
-                {% if p %}
-                    {% if p.headshot %}<img src="{{ p.headshot }}" style="width:100%;height:80px;object-fit:cover;object-position:top center;display:block">
-                    {% else %}<div style="width:100%;height:80px;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size: var(--text-lg);font-weight:bold;color: var(--text-secondary)">{{ p.first[0] if p.first else '' }}{{ p.name[0] if p.name else '' }}</div>{% endif %}
-                    <div style="padding:4px 3px 5px;text-align:center;background:rgba(0,0,0,0.35)">
-                        <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-xs);line-height:1.2">#{{ p.jersey if p.jersey else '—' }}</div>
-                        <div style="color: var(--text-secondary);font-size: 0.46rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</div>
-                    </div>
-                {% else %}
-                    <div style="height:106px;display:flex;align-items:center;justify-content:center;color: var(--text-dim);font-size: 0.5rem">—</div>
-                {% endif %}
-            </div>
-            <div style="margin-top:5px;background:{{ label_bg }};color:{{ label_col }};font-size: 0.44rem;font-weight:900;padding:2px 6px;border-radius: var(--r-sm);letter-spacing:0.12em">{{ slot }}</div>
-        </div>
-        {% endmacro %}
-
-        <div id="offense-layer" style="position:relative;z-index:1;padding:0 20px">
-            <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:8px;align-items:start">
-                <div></div><div></div>
-                {{ card('LT','#64748b','#334155','#94a3b8') }}
-                {{ card('LG','#64748b','#334155','#94a3b8') }}
-                {{ card('C', '#64748b','#334155','#94a3b8') }}
-                {{ card('RG','#64748b','#334155','#94a3b8') }}
-                {{ card('RT','#64748b','#334155','#94a3b8') }}
-                <div></div><div></div><div></div>
-                {{ card('WR1',c1,c1,'white') }}
-                <div></div><div></div><div></div><div></div><div></div><div></div>
-                {{ card('TE','#10b981','#064e3b','#6ee7b7') }}
-                <div></div>
-                {{ card('WR2',c1,c1,'white') }}
-                <div></div><div></div><div></div><div></div>
-                {{ card('QB','var(--red)','#7f1d1d','#fca5a5') }}
-                {{ card('RB','#8b5cf6','#4c1d95','#ddd6fe') }}
-                <div></div><div></div><div></div><div></div>
-            </div>
-        </div>
-
-        <div id="defense-layer" style="display:none;position:relative;z-index:1;padding:0 20px">
-            <div style="display:grid;grid-template-columns:repeat(10,1fr);gap:8px;align-items:start">
-                {{ card('CB1','var(--blue)','#1e3a8a','#bfdbfe') }}
-                <div></div><div></div>
-                {{ card('S1','#06b6d4','#0c4a6e','#a5f3fc') }}
-                <div></div><div></div>
-                {{ card('S2','#06b6d4','#0c4a6e','#a5f3fc') }}
-                <div></div><div></div>
-                {{ card('CB2','var(--blue)','#1e3a8a','#bfdbfe') }}
-                <div></div><div></div>
-                {{ card('LB1','#a855f7','#581c87','#e9d5ff') }}
-                <div></div>
-                {{ card('LB2','#a855f7','#581c87','#e9d5ff') }}
-                <div></div><div></div>
-                {{ card('LB3','#a855f7','#581c87','#e9d5ff') }}
-                <div></div><div></div>
-                <div></div><div></div>
-                {{ card('DE1','#f97316','#7c2d12','#fed7aa') }}
-                <div></div>
-                {{ card('DT1','var(--red)','#7f1d1d','#fca5a5') }}
-                {{ card('DT2','var(--red)','#7f1d1d','#fca5a5') }}
-                <div></div>
-                {{ card('DE2','#f97316','#7c2d12','#fed7aa') }}
-                <div></div><div></div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- ===== END LINEUP ===== -->
 
 <!-- ===== STATS ===== -->
 <div class="tab-pane fade" id="stats">
@@ -693,6 +614,79 @@
 <div class="tab-pane fade" id="roster">
 <div class="pt-4">
 
+{# ── Projected starting lineup — formation diagram above the roster table ── #}
+{% if lineup %}
+{% macro lf_card(slot, unit) %}
+{% set p = lineup.get(slot) %}
+{% set label = slot | replace('1','') | replace('2','') | replace('3','') %}
+{% if p %}
+<a class="lf-card lf-unit-{{ unit }}" href="/player/{{ p.idx }}" title="{{ p.first }} {{ p.name }}">
+    <div class="lf-card-inner">
+        {% if p.headshot %}<img src="{{ p.headshot }}" class="lf-photo" alt="" loading="lazy">
+        {% else %}<div class="lf-photo-fallback">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</div>{% endif %}
+        <div class="lf-meta">
+            <div class="lf-jersey">#{{ p.jersey if p.jersey else '—' }}</div>
+            <div class="lf-name">{{ p.name }}</div>
+        </div>
+    </div>
+    <span class="lf-tag">{{ label }}</span>
+</a>
+{% else %}
+<div class="lf-card lf-card--empty lf-unit-{{ unit }}">
+    <div class="lf-card-inner"><div class="lf-empty">—</div><div class="lf-meta"><div class="lf-jersey">—</div><div class="lf-name">&nbsp;</div></div></div>
+    <span class="lf-tag">{{ label }}</span>
+</div>
+{% endif %}
+{% endmacro %}
+
+<div class="lineup-block">
+    <div class="lineup-head">
+        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected Starters</h5>
+        <div class="lineup-toggle" role="tablist" aria-label="Lineup side">
+            <button id="lf-btn-off" class="active" onclick="lineupSide('offense')">Offense</button>
+            <button id="lf-btn-def" onclick="lineupSide('defense')">Defense</button>
+        </div>
+    </div>
+
+    <div class="lineup-field">
+        <!-- OFFENSE -->
+        <div id="lf-offense" class="lf-rows">
+            <div class="lf-row lf-row--spread">
+                {{ lf_card('WR1','skill') }}
+                {{ lf_card('WR2','skill') }}
+            </div>
+            <div class="lf-row">
+                {{ lf_card('LT','ol') }}{{ lf_card('LG','ol') }}{{ lf_card('C','ol') }}{{ lf_card('RG','ol') }}{{ lf_card('RT','ol') }}{{ lf_card('TE','skill') }}
+            </div>
+            <div class="lf-row">{{ lf_card('QB','skill') }}</div>
+            <div class="lf-row">{{ lf_card('RB','skill') }}</div>
+        </div>
+
+        <!-- DEFENSE -->
+        <div id="lf-defense" class="lf-rows" style="display:none">
+            <div class="lf-row">
+                {{ lf_card('DE1','dl') }}{{ lf_card('DT1','dl') }}{{ lf_card('DT2','dl') }}{{ lf_card('DE2','dl') }}
+            </div>
+            <div class="lf-row">
+                {{ lf_card('LB1','lb') }}{{ lf_card('LB2','lb') }}{{ lf_card('LB3','lb') }}
+            </div>
+            <div class="lf-row lf-row--spread">
+                {{ lf_card('CB1','db') }}{{ lf_card('S1','db') }}{{ lf_card('S2','db') }}{{ lf_card('CB2','db') }}
+            </div>
+        </div>
+
+        <div class="lineup-legend">
+            <span class="lg-item"><span class="lg-dot" style="background: var(--gold)"></span>Playmakers</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--text-dim)"></span>Offensive Line</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--red)"></span>Defensive Line</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--blue)"></span>Linebackers</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--green)"></span>Secondary</span>
+        </div>
+    </div>
+    <div class="lineup-note" style="margin-top:8px">Projected from 2025 snap share, usage and production (transfers included). Offensive line ordered by seniority — individual line snaps aren't tracked in the available data.</div>
+</div>
+{% endif %}
+
 {% set off_positions = ['QB','RB','HB','FB','WR','TE','OL','OT','OG','LT','LG','C','RG','RT'] %}
 {% set def_positions = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB','CB','S','SS','FS','SAF','DB'] %}
 {% set spc_positions = ['K','P','LS','ATH','APB'] %}
@@ -768,16 +762,14 @@
 
 {% block scripts %}
 <script>
-function showSide(side) {
-    const isOff = side === 'offense';
-    document.getElementById('offense-layer').style.display = isOff ? 'block' : 'none';
-    document.getElementById('defense-layer').style.display = isOff ? 'none' : 'block';
-    document.getElementById('offBtn').style.cssText = isOff
-        ? 'padding:9px 36px;background:{{ c1 }};color: var(--text-primary);border:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer'
-        : 'padding:9px 36px;background:rgba(255,255,255,0.07);color: var(--text-secondary);border: 1px solid var(--border-strong);border-right:none;border-radius: var(--r-sm) 0 0 6px;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer';
-    document.getElementById('defBtn').style.cssText = isOff
-        ? 'padding:9px 36px;background:rgba(255,255,255,0.07);color: var(--text-secondary);border: 1px solid var(--border-strong);border-left:none;border-radius:0 6px 6px 0;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer'
-        : 'padding:9px 36px;background:var(--blue);color: var(--text-primary);border:none;border-radius:0 6px 6px 0;font-weight:900;font-size: var(--text-sm);letter-spacing:0.1em;cursor:pointer';
+function lineupSide(side) {
+    const off = side === 'offense';
+    const o = document.getElementById('lf-offense');
+    const d = document.getElementById('lf-defense');
+    if (o) o.style.display = off ? 'flex' : 'none';
+    if (d) d.style.display = off ? 'none' : 'flex';
+    document.getElementById('lf-btn-off').classList.toggle('active', off);
+    document.getElementById('lf-btn-def').classList.toggle('active', !off);
 }
 </script>
 {% endblock %}

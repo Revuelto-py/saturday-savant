@@ -290,14 +290,97 @@ def get_game_label(notes):
     if 'Conference Championship' in notes: return 'Conference Championships'
     return 'Bowl Games'
 
-def build_lineup(roster, player_stats_map=None):
-    if player_stats_map is None:
-        player_stats_map = {}
+# Lineup position groups. OL excludes NT (a defensive nose tackle).
+_LINEUP_OL    = {'OL','OT','OG','G','C','LT','LG','RG','RT'}
+_LINEUP_SKILL = {'QB','RB','HB','FB','WR','TE','ATH','APB'}
+
+def compute_starter_scores(cursor, roster):
+    """Return {player_id(str): score} used to pick lineup starters.
+
+    Starters are chosen by real 2025 signal, not roster order or jersey.
+    Every lookup keys on the stable player_id rather than the current team,
+    so a player who transferred in for 2026 is still scored on the
+    production he recorded at his prior team (the same id-based attribution
+    the player page and leaderboards already rely on):
+
+      • skill offense (QB/RB/WR/TE) -> player_usage.overall, the share of
+        team plays the player was involved in — the closest available proxy
+        for snap count, which CFBD does not provide. Total scrimmage yards
+        break ties / cover the rare skill player with no usage row.
+      • defense (DL/DE/DT/LB/CB/S/DB) -> a weighted production score built
+        from tackles (the volume signal for a full-time defender) plus
+        splash plays: TOT + 2·SACKS + 1.5·TFL + 1.5·PD + 3·INT + 0.5·QB HUR.
+      • offensive line -> no individual OL production exists in any
+        integrated data source (no snap counts, and linemen accrue no
+        box-score stats), so OL falls back to seniority (class year), with
+        jersey as a deterministic tiebreak. This is a documented proxy, not
+        a production measure — the set of five is reasonable but the
+        specific LT/LG/C/RG/RT labels are not individually verifiable.
+    """
+    ids = [str(p[4]) for p in roster if p[4] is not None]
+    int_ids = [int(p[4]) for p in roster if p[4] is not None]
+    if not ids:
+        return {}
+
+    usage = {}
+    cursor.execute('SELECT player_id, overall FROM player_usage WHERE player_id = ANY(%s)', (int_ids,))
+    for pid, overall in cursor.fetchall():
+        usage[str(pid)] = float(overall or 0)
+
+    dstat = {}
+    cursor.execute('''
+        SELECT player_id, stat_type, MAX(CAST(stat AS REAL))
+        FROM player_stats
+        WHERE player_id = ANY(%s) AND category IN ('defensive','interceptions')
+        GROUP BY player_id, stat_type
+    ''', (ids,))
+    for pid, st, val in cursor.fetchall():
+        dstat.setdefault(pid, {})[st] = val or 0
+
+    yds = {}
+    cursor.execute('''
+        SELECT player_id, SUM(CAST(stat AS REAL))
+        FROM player_stats
+        WHERE player_id = ANY(%s)
+          AND category IN ('passing','rushing','receiving') AND stat_type = 'YDS'
+        GROUP BY player_id
+    ''', (ids,))
+    for pid, total in cursor.fetchall():
+        yds[str(pid)] = float(total or 0)
+
+    year_rank = {'4': 4, '3': 3, '2': 2, '1': 1}
+    scores = {}
+    for p in roster:
+        if p[4] is None:
+            continue
+        pid = str(p[4])
+        pos = (p[2] or '').upper()
+        if pos in _LINEUP_OL:
+            yr = year_rank.get(str(p[8]), 0)
+            jersey = int(p[3]) if str(p[3]).isdigit() else 99
+            scores[pid] = yr * 100 + (99 - min(jersey, 99))  # senior first, then lower jersey
+        elif pos in _LINEUP_SKILL:
+            scores[pid] = usage.get(pid, 0) * 1000 + yds.get(pid, 0) / 1000.0
+        else:  # defense
+            d = dstat.get(pid, {})
+            scores[pid] = (d.get('TOT', 0) + 2 * d.get('SACKS', 0) + 1.5 * d.get('TFL', 0)
+                           + 1.5 * d.get('PD', 0) + 3 * d.get('INT', 0) + 0.5 * d.get('QB HUR', 0))
+    return scores
+
+
+def build_lineup(roster, starter_scores=None):
+    """Slot the highest-scoring available player into each formation spot.
+    `starter_scores` comes from compute_starter_scores(); absent, everyone
+    scores 0 and slots fall back to roster order."""
+    if starter_scores is None:
+        starter_scores = {}
+    # Slot -> eligible positions, most-specific first so dedicated players
+    # claim their natural spot before generic pools (DL, DB) fill the gaps.
     slot_positions = {
-        'QB': ['QB'], 'WR1': ['WR'], 'WR2': ['WR'], 'TE': ['TE'],
-        'LT': ['LT','OT','OL'], 'LG': ['LG','OG','OL'], 'C': ['C','OL'],
-        'RG': ['RG','OG','OL'], 'RT': ['RT','OT','OL'],
-        'RB': ['RB','HB','FB','APB','ATH'],
+        'QB': ['QB'], 'RB': ['RB','HB','FB','APB','ATH'],
+        'WR1': ['WR'], 'WR2': ['WR'], 'TE': ['TE'],
+        'LT': ['OT','LT','OL','OG','G'], 'LG': ['OG','G','LG','OL','OT'],
+        'C':  ['C','OL','OG','G'], 'RG': ['OG','G','RG','OL','OT'], 'RT': ['OT','RT','OL','OG','G'],
         'DE1': ['DE','EDGE','DL'], 'DE2': ['DE','EDGE','DL'],
         'DT1': ['DT','NT','DL'], 'DT2': ['DT','NT','DL'],
         'LB1': ['LB','ILB','MLB','OLB'], 'LB2': ['LB','ILB','MLB','OLB'], 'LB3': ['LB','ILB','MLB','OLB'],
@@ -308,23 +391,23 @@ def build_lineup(roster, player_stats_map=None):
     for player in roster:
         first, last, pos, jersey, pid, headshot = player[0], player[1], player[2], player[3], player[4], player[5]
         if not pos: continue
-        key = pos.upper()
-        if key not in pos_pool: pos_pool[key] = []
-        stats = player_stats_map.get(str(pid), {})
-        pos_pool[key].append({'idx': pid, 'name': last, 'first': first,
-            'jersey': jersey or '', 'pos': pos, 'headshot': headshot, 'yds': stats.get('YDS', 0) or 0})
-    for pos_key in pos_pool:
-        pos_pool[pos_key].sort(key=lambda x: x['yds'], reverse=True)
-    lineup = {}
-    used = set()
-    for slot, positions in slot_positions.items():
-        for pos_type in positions:
-            if pos_type in pos_pool:
-                for player in pos_pool[pos_type]:
-                    if player['idx'] not in used:
-                        lineup[slot] = player
-                        used.add(player['idx'])
-                        break
+        pos_pool.setdefault(pos.upper(), []).append({
+            'idx': pid, 'name': last, 'first': first, 'jersey': jersey or '',
+            'pos': pos, 'headshot': headshot, 'score': starter_scores.get(str(pid), 0)})
+    for pool in pos_pool.values():
+        pool.sort(key=lambda x: x['score'], reverse=True)
+
+    lineup, used = {}, set()
+    # Explicit fill order: skill first, then OL, then dedicated D before generic pools
+    fill_order = ['QB','RB','WR1','WR2','TE','C','LT','RT','LG','RG',
+                  'DE1','DE2','DT1','DT2','LB1','LB2','LB3','CB1','CB2','S1','S2']
+    for slot in fill_order:
+        for pos_type in slot_positions[slot]:
+            for player in pos_pool.get(pos_type, []):
+                if player['idx'] not in used:
+                    lineup[slot] = player
+                    used.add(player['idx'])
+                    break
             if slot in lineup: break
     return lineup
 
@@ -1545,15 +1628,12 @@ def team(team_name):
         ''', (team_name,))
         roster = cursor.fetchall()
 
-        cursor.execute("SELECT player_id, stat_type, MAX(stat) FROM player_stats WHERE team=%s AND category IN ('passing','rushing','receiving') GROUP BY player_id, stat_type", (team_name,))
-        player_stats_map = {}
-        for pid, stat_type, val in cursor.fetchall():
-            if pid not in player_stats_map: player_stats_map[pid] = {}
-            player_stats_map[pid][stat_type] = val
-
-        # Build lineup from first 6 columns only
-        lineup_roster = [r[:6] for r in roster]
-        lineup = build_lineup(lineup_roster, player_stats_map)
+        # Starters are picked from real 2025 usage/production keyed on
+        # player_id (transfer-aware — see compute_starter_scores), not from
+        # roster order. Pass the full roster tuples so OL seniority (the
+        # year column) is available to the scorer and the slotter.
+        starter_scores = compute_starter_scores(cursor, roster)
+        lineup = build_lineup(roster, starter_scores)
 
         cursor.execute('SELECT player_name, category, stat_type, stat FROM player_stats WHERE team=%s', (team_name,))
         all_stats = pivot_stats(cursor.fetchall())
