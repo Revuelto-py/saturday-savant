@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}{{ away_team }} vs {{ home_team }} · Saturday Savant{% endblock %}
 
 {% set home_color = '#' + game[11].lstrip('#') if game[11] else '#1e3a5f' %}
 {% set away_color = '#' + game[12].lstrip('#') if game[12] else '#7f1d1d' %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} Leaderboards · {{ {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) }} · Saturday Savant{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <div class="page-wrapper" style="padding-top:32px">

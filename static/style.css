@@ -2020,6 +2020,12 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     max-width: 860px;
     pointer-events: none;
 }
+.ig-logo {
+    height: clamp(64px, 6vw + 32px, 104px);
+    width: auto;
+    margin-bottom: var(--s4);
+    filter: drop-shadow(0 0 24px rgba(245,158,11,0.25)) drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+}
 .ig-eyebrow {
     font-family: var(--font-display);
     font-weight: 600;
