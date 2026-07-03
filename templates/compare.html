@@ -12,14 +12,16 @@
 {{ x }}{% if (x % 100) in [11, 12, 13] %}th{% elif (x % 10) == 1 %}st{% elif (x % 10) == 2 %}nd{% elif (x % 10) == 3 %}rd{% else %}th{% endif %}
 {%- endmacro %}
 
-<div class="page-wrapper">
-
-    <div style="margin-bottom:18px">
-        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0 0 var(--s1)">Head-to-Head</h1>
-        <div style="color: var(--text-secondary);font-size: var(--text-base)">
-            Compare up to three {{ 'players' if mode == 'player' else 'teams' }} side by side — the leading number in every row is highlighted.
-        </div>
+<!-- HERO — matches the player/team hero gradient treatment -->
+<div class="cmp-hero">
+    <div class="page-wrapper cmp-hero-inner">
+        <div class="section-label" style="margin-bottom: var(--s2)">Compare</div>
+        <h1 class="cmp-hero-title">Head-to-Head</h1>
+        <p class="cmp-hero-sub">Compare up to three {{ 'players' if mode == 'player' else 'teams' }} side by side — the leading number in every row is highlighted.</p>
     </div>
+</div>
+
+<div class="page-wrapper" style="padding-top: var(--s6)">
 
     <!-- Toolbar: position / mode pills + download -->
     <div class="cmp-toolbar" data-compare-hide>
@@ -96,7 +98,9 @@
         {% if mode == 'player' %}
             <div class="cmp-hphoto-wrap">
                 {% if e.headshot %}
-                <img src="{{ e.headshot }}" class="cmp-hphoto" alt="">
+                {# background-image (cover) instead of <img object-fit> — html2canvas
+                   respects background-size but not object-fit, which warped the export #}
+                <div class="cmp-hphoto" data-headshot="{{ e.headshot }}" style="background-image:url('{{ e.headshot }}')"></div>
                 {% else %}
                 <div class="cmp-hph-fallback">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
                 {% endif %}
@@ -186,6 +190,7 @@
 <script>
 (function() {
     const MODE = {{ mode|tojson }};
+    const POS = {{ (group_name or '')|tojson }};  // active position group filters player search
 
     function currentParams() { return new URLSearchParams(window.location.search); }
     function navigate(params) { window.location.href = '/compare?' + params.toString(); }
@@ -253,8 +258,11 @@
             if (q.length < 2) { dropdown.classList.remove('active'); dropdown.innerHTML = ''; return; }
             dropdown.innerHTML = '<div class="cmp-dd-note">Searching…</div>';
             dropdown.classList.add('active');
+            // In player mode the active position tab filters the results server-side.
+            let apiUrl = '/api/players?q=' + encodeURIComponent(q);
+            if (MODE === 'player' && POS) apiUrl += '&pos=' + encodeURIComponent(POS);
             timer = setTimeout(() =>
-                fetch('/api/players?q=' + encodeURIComponent(q))
+                fetch(apiUrl)
                     .then(r => r.json()).then(render)
                     .catch(() => { dropdown.innerHTML = '<div class="cmp-dd-note">Search unavailable</div>'; }),
             220);
@@ -287,21 +295,33 @@
             if (nav) nav.style.display = 'none';
             downloadBtn.disabled = true;
 
-            // Swap every external image (headshots + logos) to the proxy and
-            // wait for them to load before capturing; restore originals after.
+            // Route external images (logo <img>s and the headshot background
+            // divs) through the same-origin proxy so html2canvas can rasterise
+            // them; wait for the proxied images to load, then restore after.
             const restores = [];
             const loads = [];
+            function preload(url) {
+                loads.push(new Promise(function(res) {
+                    const im = new Image();
+                    im.onload = im.onerror = res;
+                    im.src = url;
+                }));
+            }
             card.querySelectorAll('img').forEach(function(img) {
-                const orig = img.getAttribute('src') || '';
+                const px = proxied(img.getAttribute('src') || '');
+                if (!px) return;
+                img.setAttribute('data-orig-src', img.getAttribute('src'));
+                img.src = px;
+                restores.push(function() { img.src = img.getAttribute('data-orig-src'); img.removeAttribute('data-orig-src'); });
+                preload(px);
+            });
+            card.querySelectorAll('.cmp-hphoto[data-headshot]').forEach(function(el) {
+                const orig = el.getAttribute('data-headshot');
                 const px = proxied(orig);
                 if (!px) return;
-                img.setAttribute('data-orig-src', orig);
-                img.src = px;
-                restores.push(img);
-                loads.push(new Promise(function(res) {
-                    if (img.complete && img.naturalWidth) return res();
-                    img.onload = img.onerror = res;
-                }));
+                el.style.backgroundImage = "url('" + px + "')";
+                restores.push(function() { el.style.backgroundImage = "url('" + orig + "')"; });
+                preload(px);
             });
             // preload, but never hang the export if a proxy fetch stalls
             await Promise.race([
@@ -319,7 +339,7 @@
                 console.error('Compare image export failed:', err);
                 alert('Could not generate the image — please try again.');
             }).finally(function() {
-                restores.forEach(function(img) { img.src = img.getAttribute('data-orig-src'); img.removeAttribute('data-orig-src'); });
+                restores.forEach(function(fn) { fn(); });
                 hidden.forEach(el => el.style.display = '');
                 if (nav) nav.style.display = '';
                 downloadBtn.disabled = false;

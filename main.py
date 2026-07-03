@@ -1806,28 +1806,47 @@ def api_players():
     q = request.args.get('q', '').strip()
     if len(q) < 2:
         return jsonify([])
+    # Optional position filter (used by the compare page's position tabs).
+    # Backward compatible: the navbar search sends no `pos`, so it is ignored.
+    pos = request.args.get('pos', '').strip().upper()
+    pos_cols = POSITION_GROUPS.get(pos)
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT p.id, p.first_name, p.last_name, p.team, p.position,
-                   p.jersey, p.headshot, t.logo_dark, 'player' as result_type
-            FROM players p
-            INNER JOIN teams t ON p.team = t.name
-            WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
-               OR p.last_name ILIKE %s
-            ORDER BY p.last_name, p.first_name
-            LIMIT 6
-        ''', (f'%{q}%', f'{q}%'))
-        player_rows = cursor.fetchall()
-        cursor.execute('''
-            SELECT name, conference, logo_dark, color, 'team' as result_type
-            FROM teams
-            WHERE name ILIKE %s OR abbreviation ILIKE %s
-            ORDER BY name
-            LIMIT 4
-        ''', (f'%{q}%', f'%{q}%'))
-        team_rows = cursor.fetchall()
+        if pos_cols:
+            pos_ph = ','.join(['%s'] * len(pos_cols))
+            cursor.execute(f'''
+                SELECT p.id, p.first_name, p.last_name, p.team, p.position,
+                       p.jersey, p.headshot, t.logo_dark, 'player' as result_type
+                FROM players p
+                INNER JOIN teams t ON p.team = t.name
+                WHERE ((p.first_name || ' ' || p.last_name) ILIKE %s OR p.last_name ILIKE %s)
+                  AND p.position IN ({pos_ph})
+                ORDER BY p.last_name, p.first_name
+                LIMIT 6
+            ''', (f'%{q}%', f'{q}%', *pos_cols))
+            player_rows = cursor.fetchall()
+            team_rows = []  # a position filter means the user is picking a player
+        else:
+            cursor.execute('''
+                SELECT p.id, p.first_name, p.last_name, p.team, p.position,
+                       p.jersey, p.headshot, t.logo_dark, 'player' as result_type
+                FROM players p
+                INNER JOIN teams t ON p.team = t.name
+                WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
+                   OR p.last_name ILIKE %s
+                ORDER BY p.last_name, p.first_name
+                LIMIT 6
+            ''', (f'%{q}%', f'{q}%'))
+            player_rows = cursor.fetchall()
+            cursor.execute('''
+                SELECT name, conference, logo_dark, color, 'team' as result_type
+                FROM teams
+                WHERE name ILIKE %s OR abbreviation ILIKE %s
+                ORDER BY name
+                LIMIT 4
+            ''', (f'%{q}%', f'%{q}%'))
+            team_rows = cursor.fetchall()
     finally:
         release_db(conn)
     results = []
