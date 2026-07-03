@@ -60,7 +60,7 @@ import datetime
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from flask_caching import Cache
 from collections import OrderedDict
 
@@ -3546,7 +3546,28 @@ def _build_compare_team_rows(cursor, team_names):
     cursor.execute(f'SELECT team, rating, ranking FROM sp_ratings WHERE team IN ({ph})', team_names)
     sp_by_team = {r[0]: {'rating': r[1], 'ranking': r[2]} for r in cursor.fetchall()}
 
-    rows = []
+    # Savant Rating — the site's signature metric leads the team comparison.
+    cursor.execute(f'''SELECT team, net_rating, net_ranking, off_rating, off_ranking, def_rating, def_ranking
+                       FROM savant_ratings WHERE team IN ({ph})''', team_names)
+    svr_by_team = {r[0]: {'net': r[1], 'net_rk': r[2], 'off': r[3], 'off_rk': r[4],
+                          'def': r[5], 'def_rk': r[6]} for r in cursor.fetchall()}
+
+    def _svr_row(label, key, rk_key, higher_better, signed=False):
+        values = []
+        for team in team_names:
+            s = svr_by_team.get(team)
+            if s and s.get(key) is not None:
+                num = f'{s[key]:+.1f}' if signed else f'{s[key]:.1f}'
+                values.append({'raw': s[key], 'display': f'{num} (#{s[rk_key]})', 'percentile': None})
+            else:
+                values.append({'raw': None, 'display': '—', 'percentile': None})
+        return {'label': label, 'higher_better': higher_better, 'values': values}
+
+    rows = [
+        _svr_row('Net Rating',        'net', 'net_rk', True, signed=True),
+        _svr_row('Offensive Rating',  'off', 'off_rk', True),
+        _svr_row('Defensive Rating',  'def', 'def_rk', False),
+    ]
     for label, col, higher_better, decimals, suffix in COMPARE_TEAM_STAT_DEFS:
         values = []
         for team in team_names:
@@ -3570,6 +3591,29 @@ def _build_compare_team_rows(cursor, team_names):
     for row in rows:
         _cmp_assign_colors(row)
     return rows
+
+
+@app.route('/img-proxy')
+def img_proxy():
+    """Same-origin passthrough for headshots/logos used by the compare
+    export. The R2 headshot bucket sends no CORS headers, so loading those
+    images cross-origin taints the html2canvas canvas and the download
+    fails to render them. Routing them through our own origin fixes that.
+    Host-allowlisted to image CDNs to avoid an open proxy."""
+    from urllib.parse import urlparse
+    url = request.args.get('url', '')
+    netloc = urlparse(url).netloc.lower()
+    if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
+        return 'Forbidden', 403
+    try:
+        r = req.get(url, timeout=8)
+        ctype = r.headers.get('Content-Type', 'image/png')
+        if r.status_code != 200 or not ctype.startswith('image/'):
+            return '', 502
+        return Response(r.content, content_type=ctype,
+                        headers={'Cache-Control': 'public, max-age=604800'})
+    except Exception:
+        return '', 502
 
 
 @app.route('/compare')

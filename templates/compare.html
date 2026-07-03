@@ -8,6 +8,10 @@
 {% set n = active_entities|length %}
 {% set cols = 3 if n == 3 else 2 %}
 
+{% macro ord(x) -%}
+{{ x }}{% if (x % 100) in [11, 12, 13] %}th{% elif (x % 10) == 1 %}st{% elif (x % 10) == 2 %}nd{% elif (x % 10) == 3 %}rd{% else %}th{% endif %}
+{%- endmacro %}
+
 <div class="page-wrapper">
 
     <div style="margin-bottom:18px">
@@ -121,7 +125,7 @@
         <div class="cmp-val">{{ v.display }}</div>
         {% if v.raw is not none and v.percentile is not none %}
         <div class="cmp-bar"><span style="width:{{ v.percentile }}%"></span></div>
-        <div class="cmp-pct">{{ v.percentile }} pctl</div>
+        <div class="cmp-pct">{{ ord(v.percentile) }} percentile</div>
         {% endif %}
     </div>
     {% endmacro %}
@@ -170,7 +174,7 @@
         <div class="compare-watermark">saturdaysavant.com</div>
     </div>
 
-    <a href="/compare?{{ request.query_string.decode() }}" class="cmp-openfull" data-compare-hide>Open full compare →</a>
+    <button type="button" class="cmp-openfull" id="cmpShare" data-compare-hide>Copy shareable link</button>
     {% endif %}
 
 </div>
@@ -261,10 +265,20 @@
         });
     });
 
+    // Route a cross-origin image through our same-origin proxy so html2canvas
+    // can rasterise it. The R2 headshot bucket sends no CORS headers, which
+    // otherwise leaves the photos blank in the export.
+    function proxied(src) {
+        if (!/^https?:\/\//i.test(src)) return null;      // relative = same-origin
+        try { if (new URL(src, location.href).host === location.host) return null; }
+        catch (e) { return null; }
+        return '/img-proxy?url=' + encodeURIComponent(src);
+    }
+
     // Download image
     const downloadBtn = document.getElementById('cmpDownload');
     if (downloadBtn) {
-        downloadBtn.addEventListener('click', function() {
+        downloadBtn.addEventListener('click', async function() {
             const card = document.getElementById('compareCard');
             if (!card || typeof html2canvas === 'undefined') return;
             const hidden = document.querySelectorAll('[data-compare-hide]');
@@ -273,24 +287,28 @@
             if (nav) nav.style.display = 'none';
             downloadBtn.disabled = true;
 
-            // The R2 headshot bucket doesn't send CORS headers, so html2canvas
-            // can't embed the photos (they'd render as blank rings). Swap each
-            // headshot for the site's monogram avatar just for the capture, then
-            // restore the real photos. Team logos (ESPN, CORS *) export fine.
+            // Swap every external image (headshots + logos) to the proxy and
+            // wait for them to load before capturing; restore originals after.
             const restores = [];
-            card.querySelectorAll('.cmp-hphoto').forEach(function(img) {
-                const cell = img.closest('.cmp-hcell');
-                const nameEl = cell && cell.querySelector('.cmp-hname');
-                const parts = (nameEl ? nameEl.textContent.trim() : '').split(/\s+/);
-                const initials = ((parts[0] || '')[0] || '') + ((parts[parts.length - 1] || '')[0] || '');
-                const mono = document.createElement('div');
-                mono.className = 'cmp-hph-fallback';
-                mono.textContent = initials.toUpperCase();
-                img.replaceWith(mono);
-                restores.push([mono, img]);
+            const loads = [];
+            card.querySelectorAll('img').forEach(function(img) {
+                const orig = img.getAttribute('src') || '';
+                const px = proxied(orig);
+                if (!px) return;
+                img.setAttribute('data-orig-src', orig);
+                img.src = px;
+                restores.push(img);
+                loads.push(new Promise(function(res) {
+                    if (img.complete && img.naturalWidth) return res();
+                    img.onload = img.onerror = res;
+                }));
             });
+            // preload, but never hang the export if a proxy fetch stalls
+            await Promise.race([
+                Promise.all(loads),
+                new Promise(function(r) { setTimeout(r, 5000); }),
+            ]);
 
-            // Resolve a concrete background colour — html2canvas can't read CSS vars.
             const bg = getComputedStyle(card).backgroundColor || '#0d1e35';
             html2canvas(card, { backgroundColor: bg, scale: 2, useCORS: true }).then(function(canvas) {
                 const link = document.createElement('a');
@@ -301,11 +319,35 @@
                 console.error('Compare image export failed:', err);
                 alert('Could not generate the image — please try again.');
             }).finally(function() {
-                restores.forEach(function(pair) { pair[0].replaceWith(pair[1]); });
+                restores.forEach(function(img) { img.src = img.getAttribute('data-orig-src'); img.removeAttribute('data-orig-src'); });
                 hidden.forEach(el => el.style.display = '');
                 if (nav) nav.style.display = '';
                 downloadBtn.disabled = false;
             });
+        });
+    }
+
+    // Copy shareable link — this comparison's own URL is the shareable version.
+    const shareBtn = document.getElementById('cmpShare');
+    if (shareBtn) {
+        const original = shareBtn.textContent;
+        let resetTimer;
+        shareBtn.addEventListener('click', function() {
+            const url = window.location.href;
+            const done = function(ok) {
+                shareBtn.textContent = ok ? 'Link copied ✓' : 'Press Ctrl/⌘+C to copy';
+                clearTimeout(resetTimer);
+                resetTimer = setTimeout(function() { shareBtn.textContent = original; }, 2200);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function() { done(true); }, function() { done(false); });
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta); done(ok);
+            }
         });
     }
 })();

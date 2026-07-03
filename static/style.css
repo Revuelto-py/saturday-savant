@@ -660,9 +660,9 @@ tr.postseason-row:hover {
 
 /* ── The comparison card (also the exported graphic) ── */
 .compare-card-capture { position: relative; padding: 0; overflow: hidden; }
-.cmp-brand { display: flex; align-items: center; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
-.cmp-brand img { height: 22px; width: auto; }
-.cmp-brand-text { font-family: var(--font-display); font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; font-size: var(--text-sm); color: var(--text-primary); }
+.cmp-brand { display: flex; align-items: center; gap: 13px; padding: 18px 22px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+.cmp-brand img { height: 36px; width: auto; }
+.cmp-brand-text { font-family: var(--font-display); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; font-size: var(--text-xl); line-height: 1; color: var(--text-primary); }
 .cmp-brand-sub { margin-left: auto; color: var(--text-dim); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 
 /* header + rows share one grid so columns line up like a spreadsheet */
@@ -701,12 +701,14 @@ tr.postseason-row:hover {
 .cmp-cols-2 .cmp-cell-right { align-items: flex-start; }
 .cmp-cols-3 .cmp-cell { align-items: center; }
 .cmp-val { font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); line-height: 1; }
-.cmp-cell.is-worst .cmp-val, .cmp-cell.is-none .cmp-val { color: var(--text-dim); }
+/* trailing value stays clearly readable — the gold leader carries the emphasis */
+.cmp-cell.is-worst .cmp-val { color: var(--text-secondary); }
+.cmp-cell.is-none .cmp-val { color: var(--text-dim); }
 .cmp-bar { width: min(100%, 120px); height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .cmp-cols-2 .cmp-cell-left .cmp-bar { direction: rtl; }
-.cmp-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--text-dim); }
+.cmp-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--grey-500, #8a8a8a); }
 .cmp-cell.is-lead .cmp-bar > span { background: var(--gold); }
-.cmp-pct { font-size: 0.62rem; font-weight: 700; color: var(--text-dim); letter-spacing: 0.02em; }
+.cmp-pct { font-size: 0.62rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.02em; white-space: nowrap; }
 /* leading value per row — the reference's shaded highlight */
 .cmp-cell.is-lead { background: rgba(245,158,11,0.10); box-shadow: inset 0 0 0 1px var(--border-gold); }
 .cmp-cell.is-lead .cmp-val { color: var(--gold); }
@@ -714,8 +716,15 @@ tr.postseason-row:hover {
 
 .cmp-empty-note { padding: 36px 16px; text-align: center; color: var(--text-dim); font-size: var(--text-sm); }
 .compare-watermark { text-align: right; padding: 11px 20px; color: var(--text-dim); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.04em; border-top: 1px solid var(--border); }
-.cmp-openfull { display: block; text-align: center; color: var(--gold); font-family: var(--font-display); font-weight: 600; letter-spacing: 0.06em; font-size: var(--text-sm); text-decoration: none; margin-top: 16px; }
-.cmp-openfull:hover { color: #fbbf24; }
+.cmp-openfull {
+    display: block; margin: 16px auto 0;
+    background: rgba(245,158,11,0.1); border: 1px solid var(--border-gold);
+    color: var(--gold); font-family: var(--font-display); font-weight: 600;
+    letter-spacing: 0.06em; font-size: var(--text-sm);
+    padding: 9px 22px; border-radius: var(--r-pill); cursor: pointer;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+.cmp-openfull:hover { background: rgba(245,158,11,0.18); color: #fbbf24; }
 
 @media (max-width: 768px) {
     .cmp-hname { font-size: var(--text-md); }
