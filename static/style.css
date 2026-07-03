@@ -2209,21 +2209,16 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 }
 
 /* ── Conference logos ──────────────────────────────────────────────────
-   Rendered on the site's white logo chip (matching .team-logo-bg) so every
-   conference mark stays legible on the dark UI — ESPN publishes no dark/
-   white conference variants, and several marks (ACC, Big Ten, C-USA, the
-   2026 Pac-12) are dark and would otherwise vanish. */
-.conf-logo {
-    background: #fff;
-    border-radius: var(--r-sm);
-    display: inline-flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+   Shown bare on the dark theme like team logos — no background chip.
+   fetch_conf_logos.py serves a white monochrome mark for the conferences
+   whose colour logo is too dark to read (ACC, Big Ten, C-USA, FBS
+   Independents, Pac-12) and the colour logo for the rest. Height-locked
+   with auto width so square shields and wide wordmarks both sit right. */
+.conf-logo-img {
+    height: 42px; width: auto; max-width: 138px;
+    object-fit: contain; display: block; flex-shrink: 0;
 }
-.conf-logo img { display: block; object-fit: contain; }
-.conf-logo-md { padding: 5px; }
-.conf-logo-md img { width: 30px; height: 30px; }
-.conf-logo-sm { padding: 4px; }
-.conf-logo-sm img { width: 22px; height: 22px; }
+.conf-logo-img-sm { height: 26px; max-width: 92px; }
 
 /* ── Sitewide footer ───────────────────────────────────────────────────
    Minimal attribution strip below all page content. Understated: dim text,

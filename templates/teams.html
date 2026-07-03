@@ -15,7 +15,7 @@
     <div style="display:flex;align-items:center;gap: var(--s3);margin-bottom: var(--s6);
                 {% if loop.first %}margin-top: var(--s2){% else %}margin-top: var(--s10){% endif %}">
         {% set clogo = conf_logos.get(conf) %}
-        {% if clogo %}<span class="conf-logo conf-logo-md"><img src="{{ clogo }}" alt="{{ conf }} logo" loading="lazy"></span>{% endif %}
+        {% if clogo %}<img src="{{ clogo }}" class="conf-logo-img" alt="{{ conf }} logo" loading="lazy">{% endif %}
         <h3 style="margin:0;font-family: var(--font-display);font-weight:600;font-size: var(--text-lg);letter-spacing:0.02em;color: var(--text-primary)">{{ conf }}</h3>
         <div style="flex:1;height:1px;background: var(--border)"></div>
         <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ teams|length }} teams</span>
