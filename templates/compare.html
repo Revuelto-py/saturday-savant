@@ -94,25 +94,17 @@
     {% if n >= 1 %}
 
     {% macro hcell(e) %}
-    {# team-color gradient tile behind the headshot/logo — same 135deg
-       color→#0a1220→alt treatment (plus scrim) as the player/team hero.
-       Opaque hex + rgba only, so it captures in the html2canvas export. #}
-    {% set g1 = e.color or '#1e3a5f' %}
-    {% set g2 = e.alt_color or '#0f1e3a' %}
     <div class="cmp-hcell">
         {% if mode == 'player' %}
-            <div class="cmp-htile" style="background:linear-gradient(135deg, {{ g1 }} 0%, #0a1220 58%, {{ g2 }} 100%)">
-                <div class="cmp-htile-scrim"></div>
-                <div class="cmp-hphoto-wrap">
-                    {% if e.headshot %}
-                    {# background-image (cover) instead of <img object-fit> — html2canvas
-                       respects background-size but not object-fit, which warped the export #}
-                    <div class="cmp-hphoto" data-headshot="{{ e.headshot }}" style="background-image:url('{{ e.headshot }}')"></div>
-                    {% else %}
-                    <div class="cmp-hph-fallback">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
-                    {% endif %}
-                    {% if e.jersey %}<div class="cmp-hjersey">{{ e.jersey }}</div>{% endif %}
-                </div>
+            <div class="cmp-hphoto-wrap">
+                {% if e.headshot %}
+                {# background-image (cover) instead of <img object-fit> — html2canvas
+                   respects background-size but not object-fit, which warped the export #}
+                <div class="cmp-hphoto" data-headshot="{{ e.headshot }}" style="background-image:url('{{ e.headshot }}')"></div>
+                {% else %}
+                <div class="cmp-hph-fallback">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
+                {% endif %}
+                {% if e.jersey %}<div class="cmp-hjersey">{{ e.jersey }}</div>{% endif %}
             </div>
             <div class="cmp-hname">{{ e.first_name }} {{ e.last_name }}</div>
             <div class="cmp-hmeta">
@@ -122,10 +114,7 @@
                 {% if e.ap_rank %}<span class="compare-ap-badge">AP #{{ e.ap_rank }}</span>{% endif %}
             </div>
         {% else %}
-            <div class="cmp-htile cmp-htile-team" style="background:linear-gradient(135deg, {{ g1 }} 0%, #0a1220 58%, {{ g2 }} 100%)">
-                <div class="cmp-htile-scrim"></div>
-                {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo" alt="">{% endif %}
-            </div>
+            {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo" alt="">{% endif %}
             <div class="cmp-hname">{{ e.name }}</div>
             <div class="cmp-hmeta">
                 <span>{{ e.conference or '' }}</span>
