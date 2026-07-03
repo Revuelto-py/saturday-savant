@@ -490,11 +490,19 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
     .ph-name { font-size: var(--text-xl) !important; }
 }
 
-.nfl-status-badge {
+/* Player hero status badges — transfer history + NFL draft status share one
+   bottom-right band so neither adds height to the hero's content column */
+.ph-hero-badges {
     position: absolute;
     bottom: 16px;
     right: 24px;
     z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+.nfl-status-badge {
     background: rgba(0,0,0,0.45);
     backdrop-filter: blur(6px);
     border: 1px solid var(--border-strong);
@@ -503,14 +511,16 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
     width: fit-content;
 }
 @media (max-width: 767.98px) {
-    .nfl-status-badge {
+    .ph-hero-badges {
         position: static;
         margin: 12px 0 0 32px;
+        align-items: flex-start;
     }
 }
 
 .transfer-badge {
-    background: rgba(0,0,0,0.35);
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(6px);
     border: 1px solid var(--border-strong);
     border-radius: var(--r-md);
     padding: 6px 12px;
@@ -521,19 +531,14 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
     color: var(--text-primary);
     width: fit-content;
 }
-
-.transfer-mismatch-banner {
-    background: rgba(59,130,246,0.08);
-    border: 1px solid rgba(59,130,246,0.2);
-    border-radius: var(--r-md);
-    padding: 10px 16px;
-    font-size: var(--text-base);
-    color: var(--text-primary);
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
+.transfer-badge .tb-label {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-xs);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding-right: 2px;
 }
 
 .postseason-row {

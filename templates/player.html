@@ -67,31 +67,6 @@
                     {% endif %}
                 </div>
 
-                {% if transfers_history %}
-                <div style="margin-top:10px">
-                    <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;
-                                letter-spacing:0.14em;text-transform:uppercase;margin-bottom:6px">
-                        Transfer History
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:6px">
-                        {% for t in transfers_history %}
-                        <div class="transfer-badge">
-                            {% set origin_logo = transfer_team_logos.get(t.origin) %}
-                            {% if origin_logo %}<img src="{{ origin_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0">{% endif %}
-                            <span>{{ t.origin }}</span>
-                            <span style="color: var(--text-secondary)">&#x2192;</span>
-                            {% set dest_logo = transfer_team_logos.get(t.destination) %}
-                            {% if dest_logo %}<img src="{{ dest_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0">{% endif %}
-                            <span>{{ t.destination }}</span>
-                            <span style="color: var(--text-secondary)">&middot;</span>
-                            <span>{{ t.year }}</span>
-                            {% if t.stars > 0 %}<span style="color:var(--gold)">{{ '★' * t.stars }}</span>{% endif %}
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-
                 <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
                     {% if player.year_fmt %}<span style="color: var(--text-secondary);font-size: var(--text-base)">{{ player.year_fmt }}</span>{% endif %}
                     {% if player.height_fmt %}<span style="color: var(--text-dim);font-size: var(--text-sm)">·</span><span style="color: var(--text-secondary);font-size: var(--text-base)">{{ player.height_fmt }}</span>{% endif %}
@@ -235,37 +210,59 @@
         </div>
     </div>
 
-    {% if player.nfl_status %}
-    <div class="nfl-status-badge d-flex align-items-center gap-2">
-        {% if player.nfl_status == 'drafted' %}
-            {% if player.nfl_team_logo %}
-            <img src="{{ player.nfl_team_logo }}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
+    {% if player.nfl_status or transfers_history %}
+    {# Compact status badges — transfer history and NFL draft status share the
+       same bottom-right band so neither pushes the hero content around #}
+    <div class="ph-hero-badges">
+        {% for t in transfers_history %}
+        <div class="transfer-badge" title="{{ t.origin }} → {{ t.destination }} · {{ t.year }}">
+            <span class="tb-label">Transfer</span>
+            {% set origin_logo = transfer_team_logos.get(t.origin) %}
+            {% if origin_logo %}<img src="{{ origin_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" alt="{{ t.origin }}">{% endif %}
+            <span>{{ team_abbrevs.get(t.origin, t.origin) }}</span>
+            <span style="color: var(--text-secondary)">&#x2192;</span>
+            {% set dest_logo = transfer_team_logos.get(t.destination) %}
+            {% if dest_logo %}<img src="{{ dest_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" alt="{{ t.destination }}">{% endif %}
+            <span>{{ team_abbrevs.get(t.destination, t.destination) }}</span>
+            <span style="color: var(--text-secondary)">&middot;</span>
+            <span>{{ t.year }}</span>
+            {% if t.stars > 0 %}<span style="color:var(--gold)">{{ '★' * t.stars }}</span>{% endif %}
+        </div>
+        {% endfor %}
+
+        {% if player.nfl_status %}
+        <div class="nfl-status-badge d-flex align-items-center gap-2">
+            {% if player.nfl_status == 'drafted' %}
+                {% if player.nfl_team_logo %}
+                <img src="{{ player.nfl_team_logo }}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
+                {% endif %}
+                <div>
+                    <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
+                        Round {{ player.draft_round }}, Pick {{ player.draft_pick }} · {{ player.nfl_team }}
+                    </div>
+                    <div style="font-size: var(--text-xs);color: var(--text-secondary)">
+                        {{ player.draft_year }} NFL Draft
+                    </div>
+                </div>
+
+            {% elif player.nfl_status == 'udfa' %}
+                {% if player.nfl_team_logo %}
+                <img src="{{ player.nfl_team_logo }}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
+                {% endif %}
+                <div>
+                    <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
+                        UDFA · {{ player.nfl_team }}
+                    </div>
+                    <div style="font-size: var(--text-xs);color: var(--text-secondary)">
+                        Undrafted Free Agent
+                    </div>
+                </div>
+
+            {% elif player.nfl_status == 'graduated' %}
+                <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">Graduated</div>
+
             {% endif %}
-            <div>
-                <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
-                    Round {{ player.draft_round }}, Pick {{ player.draft_pick }} · {{ player.nfl_team }}
-                </div>
-                <div style="font-size: var(--text-xs);color: var(--text-secondary)">
-                    {{ player.draft_year }} NFL Draft
-                </div>
-            </div>
-
-        {% elif player.nfl_status == 'udfa' %}
-            {% if player.nfl_team_logo %}
-            <img src="{{ player.nfl_team_logo }}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
-            {% endif %}
-            <div>
-                <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
-                    UDFA · {{ player.nfl_team }}
-                </div>
-                <div style="font-size: var(--text-xs);color: var(--text-secondary)">
-                    Undrafted Free Agent
-                </div>
-            </div>
-
-        {% elif player.nfl_status == 'graduated' %}
-            <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">Graduated</div>
-
+        </div>
         {% endif %}
     </div>
     {% endif %}
@@ -610,21 +607,6 @@
     </div>
     {% endif %}
 
-    {% if previous_stat_teams %}
-    {% set prev_team = previous_stat_teams[0] %}
-    {% set prev_logo = transfer_team_logos.get(prev_team) %}
-    {% set cur_logo  = transfer_team_logos.get(player.team) or player.logo_dark %}
-    <div class="transfer-mismatch-banner">
-        <span>&#128203;</span>
-        <span>2025 stats are from</span>
-        {% if prev_logo %}<img src="{{ prev_logo }}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle">{% endif %}
-        <strong style="color: var(--text-primary)">{{ prev_team }}</strong>.
-        {{ player.first_name }} transferred to
-        {% if cur_logo %}<img src="{{ cur_logo }}" style="width:18px;height:18px;object-fit:contain;vertical-align:middle">{% endif %}
-        <strong style="color: var(--text-primary)">{{ player.team }}</strong> for 2026.
-    </div>
-    {% endif %}
-
     <!-- ROW 2: Game Log (full width) -->
     {% if game_log %}
     {% if pos == 'QB' %}
@@ -675,7 +657,12 @@
                         {{ g.game_label }}{% if g.game_id %}<span style="color: var(--text-dim);font-size: var(--text-xs);margin-left:3px">↗</span>{% endif %}
                     </td>
                     <td style="padding:11px 12px;white-space:nowrap">
-                        <span style="color:{{ 'var(--text-secondary)' if g.team != player.team else 'var(--text-primary)' }};font-weight:600;font-size: var(--text-sm)">{{ team_abbrevs.get(g.team, g.team) }}</span>
+                        {% set row_logo = transfer_team_logos.get(g.team) or (player.logo_dark if g.team == player.team else none) %}
+                        {% if row_logo %}
+                        <img src="{{ row_logo }}" alt="{{ g.team }}" title="{{ g.team }}" style="width:22px;height:22px;object-fit:contain;display:block">
+                        {% else %}
+                        <span style="color: var(--text-secondary);font-weight:600;font-size: var(--text-sm)">{{ team_abbrevs.get(g.team, g.team) }}</span>
+                        {% endif %}
                     </td>
                     <td style="padding:11px 16px;white-space:nowrap">
                         <div style="display:flex;align-items:center;gap:8px">

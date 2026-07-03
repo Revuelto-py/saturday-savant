@@ -943,7 +943,7 @@ def leaderboards(category='passing'):
             params.append(conf_filter)
         team_sql = ''
         if team_filter:
-            team_sql = 'AND p.team = %s'
+            team_sql = 'AND ps.team = %s'
             params.append(team_filter)
         pos_sql = ''
         if pos_filter in POSITION_GROUPS:
@@ -966,7 +966,7 @@ def leaderboards(category='passing'):
 
             cursor.execute(f'''
                 SELECT
-                    p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
+                    p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
                     t.logo_dark, t.conference, t.color,
                     MAX(CASE WHEN ps.stat_type='YDS'         THEN CAST(ps.stat AS REAL) END) as yds,
                     MAX(CASE WHEN ps.stat_type='TD'          THEN CAST(ps.stat AS REAL) END) as td,
@@ -977,13 +977,13 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='YPA'         THEN CAST(ps.stat AS REAL) END) as ypa
                     {ppa_select}
                 FROM players p
-                JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing'
+                JOIN teams t ON ps.team = t.name
                 {ppa_join}
                 WHERE p.position = 'QB'
                   AND t.conference NOT IN ('{fcs_in}')
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color{ppa_group}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}
                 HAVING MAX(CASE WHEN ps.stat_type='ATT' THEN CAST(ps.stat AS REAL) END) >= {min_att}
             ''', params)
             for r in cursor.fetchall():
@@ -1022,7 +1022,7 @@ def leaderboards(category='passing'):
 
             cursor.execute(f'''
                 SELECT
-                    p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
+                    p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
                     t.logo_dark, t.conference, t.color,
                     MAX(CASE WHEN ps.stat_type='YDS'  THEN CAST(ps.stat AS REAL) END) as yds,
                     MAX(CASE WHEN ps.stat_type='TD'   THEN CAST(ps.stat AS REAL) END) as td,
@@ -1032,15 +1032,15 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN pf.stat_type='FUM'  THEN CAST(pf.stat AS REAL) END) as fum
                     {ppa_select}{usage_select}
                 FROM players p
-                JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing'
+                JOIN teams t ON ps.team = t.name
                 LEFT JOIN player_stats pf ON pf.player_id = p.id::text AND pf.category = 'fumbles'
                 {ppa_join}
                 {usage_join}
                 WHERE p.position IN ('RB','FB','QB','WR','ATH')
                   AND t.conference NOT IN ('{fcs_in}')
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color{ppa_group}{usage_group}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}{usage_group}
                 HAVING MAX(CASE WHEN ps.stat_type='CAR' THEN CAST(ps.stat AS REAL) END) >= {min_att}
             ''', params)
             for r in cursor.fetchall():
@@ -1077,7 +1077,7 @@ def leaderboards(category='passing'):
 
             cursor.execute(f'''
                 SELECT
-                    p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
+                    p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
                     t.logo_dark, t.conference, t.color,
                     MAX(CASE WHEN ps.stat_type='YDS'  THEN CAST(ps.stat AS REAL) END) as yds,
                     MAX(CASE WHEN ps.stat_type='TD'   THEN CAST(ps.stat AS REAL) END) as td,
@@ -1086,13 +1086,13 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_
                     {ppa_select}
                 FROM players p
-                JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving'
+                JOIN teams t ON ps.team = t.name
                 {ppa_join}
                 WHERE p.position IN ('WR','TE','RB','ATH')
                   AND t.conference NOT IN ('{fcs_in}')
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color{ppa_group}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}
                 HAVING MAX(CASE WHEN ps.stat_type='REC' THEN CAST(ps.stat AS REAL) END) >= {min_rec}
             ''', params)
             for r in cursor.fetchall():
@@ -1117,7 +1117,7 @@ def leaderboards(category='passing'):
 
             cursor.execute(f'''
                 SELECT
-                    p.id, p.first_name, p.last_name, p.team, p.position, p.jersey, p.headshot,
+                    p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
                     t.logo_dark, t.conference, t.color,
                     MAX(CASE WHEN ps.stat_type='TOT'   THEN CAST(ps.stat AS REAL) END) as tot,
                     MAX(CASE WHEN ps.stat_type='SOLO'  THEN CAST(ps.stat AS REAL) END) as solo,
@@ -1127,13 +1127,13 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='TD'    THEN CAST(ps.stat AS REAL) END) as td,
                     MAX(CASE WHEN pi.stat_type='INT'   THEN CAST(pi.stat AS REAL) END) as int_
                 FROM players p
-                JOIN teams t ON p.team = t.name
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive'
+                JOIN teams t ON ps.team = t.name
                 LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions'
                 WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
                   AND t.conference NOT IN ('{fcs_in}')
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, t.logo_dark, t.conference, t.color
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color
                 HAVING MAX(CASE WHEN ps.stat_type='TOT' THEN CAST(ps.stat AS REAL) END) >= {min_tot}
             ''', params)
             defense_rows = cursor.fetchall()
