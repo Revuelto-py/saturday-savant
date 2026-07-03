@@ -706,6 +706,16 @@ tr.postseason-row:hover {
 .cmp-hphoto { background-size: cover; background-position: top center; background-repeat: no-repeat; }
 .cmp-hlogo { width: clamp(58px, 10vw, 84px); height: clamp(58px, 10vw, 84px); object-fit: contain; }
 .cmp-hph-fallback { display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 800; font-size: var(--text-xl); color: var(--text-dim); }
+/* team-colour gradient tile behind the headshot/logo (gradient set inline per
+   slot from teams.color/alt_color); scrim keeps the subject readable */
+.cmp-htile {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    padding: 14px; border-radius: var(--r-lg); overflow: hidden;
+    background-color: var(--bg-subtle);
+}
+.cmp-htile-team { padding: 16px; }
+.cmp-htile-scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.34); pointer-events: none; }
+.cmp-htile .cmp-hphoto-wrap, .cmp-htile .cmp-hlogo { position: relative; z-index: 1; }
 .cmp-hphoto-wrap { position: relative; display: inline-flex; }
 .cmp-hjersey {
     position: absolute; bottom: -2px; right: -4px; width: 24px; height: 24px;
