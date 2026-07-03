@@ -83,7 +83,10 @@
             {% endfor %}
         </div>
         <div class="col-lg-5">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ team[1] }} Standings</h5>
+            <div style="display:flex;align-items:center;gap: var(--s2);margin-bottom: var(--s3)">
+                {% if conf_logo %}<span class="conf-logo conf-logo-sm"><img src="{{ conf_logo }}" alt="{{ team[1] }} logo" loading="lazy"></span>{% endif %}
+                <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ team[1] }} Standings</h5>
+            </div>
             <div class="dark-card" style="overflow:hidden">
                 <table class="data-table" style="width:100%">
                     <thead>

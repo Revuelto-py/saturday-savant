@@ -2207,3 +2207,20 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 @media (prefers-reduced-motion: reduce) {
     a.lf-card:hover .lf-card-inner { transform: none; }
 }
+
+/* ── Conference logos ──────────────────────────────────────────────────
+   Rendered on the site's white logo chip (matching .team-logo-bg) so every
+   conference mark stays legible on the dark UI — ESPN publishes no dark/
+   white conference variants, and several marks (ACC, Big Ten, C-USA, the
+   2026 Pac-12) are dark and would otherwise vanish. */
+.conf-logo {
+    background: #fff;
+    border-radius: var(--r-sm);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.conf-logo img { display: block; object-fit: contain; }
+.conf-logo-md { padding: 5px; }
+.conf-logo-md img { width: 30px; height: 30px; }
+.conf-logo-sm { padding: 4px; }
+.conf-logo-sm img { width: 22px; height: 22px; }

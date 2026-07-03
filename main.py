@@ -126,6 +126,16 @@ def get_ap_rankings(cursor):
     cursor.execute('SELECT team, rank FROM ap_rankings ORDER BY rank')
     return {row[0]: row[1] for row in cursor.fetchall()}
 
+def get_conference_logos(cursor):
+    """{conference_name: logo_url} for the Teams page and team-page standings.
+    Populated by fetch_conf_logos.py; empty dict if the table isn't present yet."""
+    try:
+        cursor.execute('SELECT conference, logo FROM conference_logos')
+        return {row[0]: row[1] for row in cursor.fetchall()}
+    except psycopg2.Error:
+        cursor.connection.rollback()
+        return {}
+
 _VALID_PPA_COLS = {'avg_ppa_all', 'avg_ppa_pass', 'avg_ppa_rush', 'total_ppa'}
 
 def _fetch_stats_pool(cursor, category, positions):
@@ -1481,6 +1491,7 @@ def teams():
     try:
         cursor = conn.cursor()
         ap_rankings = get_ap_rankings(cursor)
+        conf_logos = get_conference_logos(cursor)
         cursor.execute('SELECT name, conference, logo_dark, color, alt_color FROM teams ORDER BY conference, name')
         rows = cursor.fetchall()
     finally:
@@ -1496,7 +1507,8 @@ def teams():
         if conf in conferences: sorted_confs[conf] = conferences[conf]
     for conf in conferences:
         if conf not in sorted_confs: sorted_confs[conf] = conferences[conf]
-    return render_template('teams.html', conferences=sorted_confs, ap_rankings=ap_rankings)
+    return render_template('teams.html', conferences=sorted_confs, ap_rankings=ap_rankings,
+                           conf_logos=conf_logos)
 
 @app.route('/savant-rating')
 @cache.cached(timeout=86400)  # 24 hours — recomputed offline by compute_savant_ratings.py
@@ -1788,6 +1800,8 @@ def team(team_name):
             }
         percentiles.update(compute_havoc_field_pos_percentiles(all_teams_advanced, team_name))
 
+        conf_logo = get_conference_logos(cursor).get(team_info[1])
+
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
                 standings=standings, schedule=schedule, roster=roster, lineup=lineup,
@@ -1797,7 +1811,7 @@ def team(team_name):
                 kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
                 team_adv=team_adv, percentiles=percentiles, sp=sp, svr=svr,
                 ap_rankings=ap_rankings, team_rank=team_rank,
-                recruiting=recruiting, havoc=havoc)
+                recruiting=recruiting, havoc=havoc, conf_logo=conf_logo)
     finally:
         release_db(conn)
 

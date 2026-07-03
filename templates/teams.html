@@ -7,17 +7,16 @@
     <!-- Page header -->
     <div style="margin-bottom: var(--s8)">
         <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">FBS Teams</h1>
-        <div style="color: var(--text-dim);font-size: var(--text-base);margin-top: var(--s1)">
-            {{ conferences|length }} conferences &middot; 2025 season
-        </div>
     </div>
 
     {% for conf, teams in conferences.items() %}
 
     <!-- Conference header -->
-    <div style="display:flex;align-items:center;gap: var(--s4);margin-bottom: var(--s6);
+    <div style="display:flex;align-items:center;gap: var(--s3);margin-bottom: var(--s6);
                 {% if loop.first %}margin-top: var(--s2){% else %}margin-top: var(--s10){% endif %}">
-        <h3 class="section-label" style="margin:0;font-size: var(--text-base);color: var(--text-primary)">{{ conf }}</h3>
+        {% set clogo = conf_logos.get(conf) %}
+        {% if clogo %}<span class="conf-logo conf-logo-md"><img src="{{ clogo }}" alt="{{ conf }} logo" loading="lazy"></span>{% endif %}
+        <h3 style="margin:0;font-family: var(--font-display);font-weight:600;font-size: var(--text-lg);letter-spacing:0.02em;color: var(--text-primary)">{{ conf }}</h3>
         <div style="flex:1;height:1px;background: var(--border)"></div>
         <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ teams|length }} teams</span>
     </div>
