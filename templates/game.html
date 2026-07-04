@@ -276,27 +276,16 @@
 {# ── PLAY BY PLAY ──────────────────────────────────────────────────────────── #}
 <div style="margin-top:{% if structured_leaders %}28px{% else %}0{% endif %}">
 
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-        <span class="section-header" style="margin-bottom:0;white-space:nowrap">Play by Play</span>
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:20px">
+        <span class="section-header" style="margin-bottom:0;white-space:nowrap">Scoring Plays</span>
         <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
     </div>
 
-    {% if plays %}
-    {# Toggle buttons #}
-    <div style="display:flex;border-radius: var(--r-md);overflow:hidden;border: 1px solid var(--border-strong);margin-bottom:20px">
-        <button id="btn-scoring" class="tab-btn" onclick="showPlays('scoring')"
-            style="flex:1;padding:10px;background:rgba(255,255,255,0.08);color: var(--text-primary);border:none;font-weight:700;font-size: var(--text-base);cursor:pointer">
-            Scoring Plays
-        </button>
-        <button id="btn-all" class="tab-btn" onclick="showPlays('all')"
-            style="flex:1;padding:10px;background:transparent;color: var(--text-secondary);border:none;font-weight:700;font-size: var(--text-base);cursor:pointer">
-            All Plays
-        </button>
-    </div>
-
+    {% set scoring_plays = plays | selectattr('is_scoring') | list %}
+    {% if scoring_plays %}
     {% set q_labels = ['','1st','2nd','3rd','4th'] %}
     {% for q in [1, 2, 3, 4] %}
-    {% set q_plays = plays | selectattr('period', 'equalto', q) | list %}
+    {% set q_plays = scoring_plays | selectattr('period', 'equalto', q) | list %}
     {% if q_plays %}
     <div class="quarter-section" style="margin-bottom:8px">
         <div class="t-meta" style="font-size: var(--text-xs);font-weight:700;letter-spacing:0.15em;text-transform:uppercase;padding:12px 0 8px">
@@ -306,8 +295,7 @@
         {% for play in q_plays %}
         {% set play_border_color = home_color if play.side == 'home' else (away_color if play.side == 'away' else 'var(--gold)') %}
         <div class="play-row dark-card mb-2"
-             data-scoring="{{ 'true' if play.is_scoring else 'false' }}"
-             style="{% if play.is_scoring %}border-left:4px solid {{ play_border_color }};background:{{ play_border_color }}08;{% else %}border-left:3px solid {{ play_border_color }}55;{% endif %}padding:14px 16px;{% if not play.is_scoring %}display:none;{% endif %}">
+             style="border-left:4px solid {{ play_border_color }};background:{{ play_border_color }}08;padding:14px 16px">
 
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
                 <div style="display:flex;align-items:flex-start;gap:12px;flex:1">
@@ -359,7 +347,7 @@
     {% endfor %}
 
     {% else %}
-    <div class="dark-card" style="padding:40px;text-align:center;color: var(--text-dim);font-size: var(--text-base)">No play-by-play data available.</div>
+    <div class="dark-card" style="padding:40px;text-align:center;color: var(--text-dim);font-size: var(--text-base)">No scoring plays available.</div>
     {% endif %}
 </div>
 
@@ -434,7 +422,7 @@
             <div>
                 <div id="away-prob-pct" class="t-value" style="font-size: var(--text-lg);line-height:1">—</div>
                 <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
-                    <div style="width:16px;height:2px;background:{{ away_color }};border-radius: 2px"></div>
+                    <div id="away-prob-swatch" style="width:16px;height:2px;background:{{ away_color }};border-radius: 2px"></div>
                     <span class="t-support" style="font-size: var(--text-xs)">{{ away_team }}</span>
                 </div>
             </div>
@@ -445,7 +433,7 @@
                 <div id="home-prob-pct" class="t-value" style="font-size: var(--text-lg);line-height:1">—</div>
                 <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;margin-top:2px">
                     <span class="t-support" style="font-size: var(--text-xs)">{{ home_team }}</span>
-                    <div style="width:16px;height:2px;background:{{ home_color }};border-radius: 2px"></div>
+                    <div id="home-prob-swatch" style="width:16px;height:2px;background:{{ home_color }};border-radius: 2px"></div>
                 </div>
             </div>
         </div>
@@ -482,6 +470,40 @@ const HOME_TEAM = {{ home_team | tojson }};
 const AWAY_COLOR = '{{ away_color }}';
 const HOME_COLOR = '{{ home_color }}';
 
+// The chart sits on a near-black surface, so very dark team colors (deep navy,
+// black) render almost invisibly. Measure each color's luminance and, when it's
+// too dark to read, lighten it toward white until it clears a legible floor.
+// Generic — works for any low-contrast team color, not a per-team override.
+function hexToRgb(hex) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const n = parseInt(hex, 16);
+    if (isNaN(n)) return [30, 58, 95];
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function relLuminance(rgb) {
+    const a = rgb.map(v => {
+        v /= 255;
+        return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+}
+function toHex(rgb) {
+    return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+}
+function readableLineColor(hex) {
+    let rgb = hexToRgb(hex);
+    let guard = 0;
+    // ~0.16 luminance gives roughly 3:1 contrast against the dark chart bg.
+    while (relLuminance(rgb) < 0.16 && guard < 12) {
+        rgb = rgb.map(v => v + (255 - v) * 0.22);
+        guard++;
+    }
+    return toHex(rgb);
+}
+const AWAY_LINE = readableLineColor(AWAY_COLOR);
+const HOME_LINE = readableLineColor(HOME_COLOR);
+
 function initWinProb() {
     const chartDiv = document.getElementById('win-prob-chart');
     if (!chartDiv) return;
@@ -494,6 +516,13 @@ function initWinProb() {
     const last = WP_DATA[WP_DATA.length - 1];
     document.getElementById('away-prob-pct').textContent = Math.round(last.away * 100) + '%';
     document.getElementById('home-prob-pct').textContent = Math.round(last.home * 100) + '%';
+
+    // Keep the header legend swatches consistent with the (possibly lightened)
+    // chart lines.
+    const awaySwatch = document.getElementById('away-prob-swatch');
+    const homeSwatch = document.getElementById('home-prob-swatch');
+    if (awaySwatch) awaySwatch.style.background = AWAY_LINE;
+    if (homeSwatch) homeSwatch.style.background = HOME_LINE;
 
     const xVals = WP_DATA.map(p => p.x);
     const yAway = WP_DATA.map(p => p.away * 100);
@@ -512,15 +541,15 @@ function initWinProb() {
         {
             x: xVals, y: yAway,
             type: 'scatter', mode: 'lines',
-            line: { color: AWAY_COLOR, width: 2, shape: 'spline', smoothing: 0.3 },
-            fill: 'tozeroy', fillcolor: AWAY_COLOR + '20',
+            line: { color: AWAY_LINE, width: 2, shape: 'spline', smoothing: 0.3 },
+            fill: 'tozeroy', fillcolor: AWAY_LINE + '20',
             name: AWAY_TEAM, hoverinfo: 'none',
         },
         {
             x: xVals, y: yHome,
             type: 'scatter', mode: 'lines',
-            line: { color: HOME_COLOR, width: 2, shape: 'spline', smoothing: 0.3 },
-            fill: 'tozeroy', fillcolor: HOME_COLOR + '20',
+            line: { color: HOME_LINE, width: 2, shape: 'spline', smoothing: 0.3 },
+            fill: 'tozeroy', fillcolor: HOME_LINE + '20',
             name: HOME_TEAM, hoverinfo: 'none',
         },
     ];
@@ -618,6 +647,35 @@ if (typeof Plotly !== 'undefined') {
 </script>
 {% endif %}
 
+{# ── TOP PLAYS BY WIN PROBABILITY ADDED ────────────────────────────────────── #}
+{% if top_wpa %}
+{% set wpa_q = ['','1st','2nd','3rd','4th'] %}
+<div style="background:var(--bg-card);border: 1px solid var(--border);
+            border-radius: var(--r-lg);padding:20px;margin-top:16px">
+    <div class="section-header">Top Plays by Win Probability Added</div>
+
+    {% for p in top_wpa %}
+    {% set fav_logo = game[9] if p.toward == 'home' else game[10] %}
+    <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 0;{% if not loop.last %}border-bottom: 1px solid var(--border){% endif %}">
+        <div class="t-value" style="font-size: var(--text-md);color: var(--text-dim);min-width:16px;line-height:1.3;flex-shrink:0">{{ loop.index }}</div>
+        <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                {% if fav_logo %}<img src="{{ fav_logo }}" style="width:20px;height:20px;object-fit:contain;flex-shrink:0" alt="{{ home_team if p.toward == 'home' else away_team }}">{% endif %}
+                <span class="t-gold" style="font-weight:800;font-size: var(--text-md)">+{{ p.swing_pct }}%</span>
+                <span class="t-meta" style="font-size: var(--text-xs);letter-spacing:0.08em;text-transform:uppercase">Win Prob</span>
+            </div>
+            <div class="t-support" style="font-size: var(--text-sm);line-height:1.5;margin-bottom:5px">{{ p.play_text }}</div>
+            <div class="t-meta" style="font-size: var(--text-xs)">
+                {{ p.clock }}{% if p.clock %} · {% endif %}{{ wpa_q[p.period] if p.period < wpa_q|length else 'OT' }} &nbsp;·&nbsp; {{ away_team[:3]|upper }} {{ p.away_score }}–{{ p.home_score }} {{ home_team[:3]|upper }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="t-meta" style="font-size: var(--text-xs);text-align:center;margin-top:10px">Largest swings in ESPN win probability</div>
+</div>
+{% endif %}
+
 {# ── GAME INFO ─────────────────────────────────────────────────────────────── #}
 <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:20px;margin-top:16px">
     <div class="section-header">Game Information</div>
@@ -713,7 +771,12 @@ if (typeof Plotly !== 'undefined') {
                         <div style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary)">{{ ath.name[0] if ath.name else '?' }}</div>
                         {% endif %}
                         {% endif %}
+                        {% if not is_team and ath.player_id %}
+                        <a href="/player/{{ ath.player_id }}" style="color: var(--text-primary);font-weight:600;font-size: var(--text-base);white-space:nowrap;text-decoration:none;transition:color 0.15s"
+                           onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ ath.name }}</a>
+                        {% else %}
                         <span style="color:{{ 'var(--text-secondary)' if is_team else 'var(--text-primary)' }};font-weight:{{ '800' if is_team else '600' }};font-size: var(--text-base);white-space:nowrap">{{ ath.name }}</span>
+                        {% endif %}
                     </div>
                 </td>
                 {% for lbl in cat.labels %}
@@ -947,24 +1010,6 @@ if (typeof Plotly !== 'undefined') {
 {% block scripts %}
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
-function showPlays(type) {
-    document.querySelectorAll('.play-row').forEach(function(el) {
-        if (type === 'scoring') {
-            el.style.display = el.dataset.scoring === 'true' ? 'block' : 'none';
-        } else {
-            el.style.display = 'block';
-        }
-    });
-    var bScoring = document.getElementById('btn-scoring');
-    var bAll     = document.getElementById('btn-all');
-    if (!bScoring || !bAll) return;
-    var ON  = 'flex:1;padding:10px;background:rgba(255,255,255,0.08);color: var(--text-primary);border:none;font-weight:700;font-size: var(--text-base);cursor:pointer';
-    var OFF = 'flex:1;padding:10px;background:transparent;color: var(--text-secondary);border:none;font-weight:700;font-size: var(--text-base);cursor:pointer';
-    bScoring.style.cssText = type === 'scoring' ? ON : OFF;
-    bAll.style.cssText     = type === 'all'     ? ON : OFF;
-}
-showPlays('scoring');
-
 function switchTab(name) {
     ['overview', 'boxscore', 'drives'].forEach(function(t) {
         var el = document.getElementById('tab-content-' + t);

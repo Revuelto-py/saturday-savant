@@ -2397,10 +2397,12 @@ def game_detail(game_id):
                                 'headshot': hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
                                 'team':     t_name,
                             }
+                        ath_name = ad.get('displayName', '')
                         athletes.append({
-                            'name':     ad.get('displayName', ''),
-                            'headshot': hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
-                            'stats':    dict(zip(labels, ae.get('stats', []))),
+                            'name':      ath_name,
+                            'headshot':  hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
+                            'stats':     dict(zip(labels, ae.get('stats', []))),
+                            'player_id': name_to_player_id.get(ath_name.lower()),
                         })
                     cats.append({'name': cat.get('name', ''), 'labels': labels, 'athletes': athletes})
                 player_stats.append({'side': side, 'categories': cats})
@@ -2553,6 +2555,28 @@ def game_detail(game_id):
             if ldr:
                 ldr['player_id'] = name_to_player_id.get((ldr.get('name') or '').lower())
 
+    # Top plays by win probability added — derived from the same WP series
+    # that feeds the chart. Each sample carries the post-play win %, so the
+    # swing a play produced is the change from the previous sample. No extra
+    # data source: if win_prob is empty/unmatched, top_wpa is simply empty.
+    top_wpa = []
+    for i in range(1, len(win_prob)):
+        cur = win_prob[i]
+        if not cur.get('play_text'):
+            continue
+        delta = cur['home'] - win_prob[i - 1]['home']   # change in home win %
+        top_wpa.append({
+            'swing_pct':  round(abs(delta) * 100),
+            'toward':     'home' if delta > 0 else 'away',
+            'play_text':  cur.get('play_text', ''),
+            'clock':      cur.get('clock', ''),
+            'period':     cur.get('period', 0),
+            'home_score': cur.get('home_score', 0),
+            'away_score': cur.get('away_score', 0),
+        })
+    top_wpa.sort(key=lambda p: p['swing_pct'], reverse=True)
+    top_wpa = [p for p in top_wpa if p['swing_pct'] >= 1][:5]
+
     # Date + season type formatting
     start_date_raw = game_info[8] or ''
     try:
@@ -2591,6 +2615,7 @@ def game_detail(game_id):
         box_score=box_score,
         structured_leaders=structured_leaders,
         win_prob=win_prob,
+        top_wpa=top_wpa,
         records=records,
         game_date=game_date,
         game_time=game_time,
