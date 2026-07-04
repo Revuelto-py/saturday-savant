@@ -601,7 +601,12 @@ def sort_players(cat_dict, sort_key, min_val=0):
             players.append({'name': name, **stats})
     return sorted(players, key=lambda x: float(x.get(sort_key, 0) or 0), reverse=True)
 
-FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC','Patriot','NEC','Pioneer','FCS Independents')
+# FCS conferences excluded from FBS-only pages. Includes the CFBD labels used
+# by the FCS opponents added for logo display in fetch_fcs_logos.py — notably
+# 'Southern' (SoCon), 'Big South-OVC' and 'UAC', which must be listed here so
+# those teams don't leak onto the Teams grid / Rankings / Leaderboards.
+FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC',
+             'Big South-OVC','Southern','UAC','Patriot','NEC','Pioneer','Ivy','FCS Independents')
 
 LEADERBOARD_PER_PAGE = 25
 
@@ -1550,7 +1555,10 @@ def teams():
         cursor = conn.cursor()
         ap_rankings = get_ap_rankings(cursor)
         conf_logos = get_conference_logos(cursor)
-        cursor.execute('SELECT name, conference, logo_dark, color, alt_color FROM teams ORDER BY conference, name')
+        # Exclude FCS programs (present only for opponent-logo lookups on
+        # schedule/game pages) so they never surface on this FBS-only grid.
+        cursor.execute('SELECT name, conference, logo_dark, color, alt_color FROM teams '
+                       'WHERE conference NOT IN %s ORDER BY conference, name', (FCS_CONFS,))
         rows = cursor.fetchall()
     finally:
         release_db(conn)
