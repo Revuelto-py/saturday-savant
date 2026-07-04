@@ -1407,38 +1407,6 @@ def _hex_to_rgba(hex_color, alpha):
     return f'rgba({r},{g},{b},{alpha})'
 
 
-def _rel_luminance(r, g, b):
-    def lin(v):
-        v /= 255.0
-        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
-    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
-
-
-def hero_accent_color(hex_color):
-    """A display-safe version of a team's primary color for hero gradients.
-
-    Many teams' primary color is a deep navy/black (e.g. Penn State #041E42)
-    that vanishes against the dark hero background, leaving no team identity.
-    Measure luminance and, when too dark, lighten toward white until it clears
-    a legible floor — the same idea used for the win-probability chart lines.
-    Bright colors pass through unchanged.
-    """
-    h = (hex_color or '').lstrip('#')
-    if len(h) != 6:
-        return hex_color or '#3b6ea5'
-    try:
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    except ValueError:
-        return hex_color
-    guard = 0
-    while _rel_luminance(r, g, b) < 0.14 and guard < 12:
-        r = round(r + (255 - r) * 0.22)
-        g = round(g + (255 - g) * 0.22)
-        b = round(b + (255 - b) * 0.22)
-        guard += 1
-    return f'#{r:02x}{g:02x}{b:02x}'
-
-
 @app.route('/leaderboards/teams')
 @app.route('/leaderboards/teams/<category>')
 @cache.cached(timeout=3600, query_string=True)  # view/team are part of the query string, so each combo caches separately
@@ -1726,7 +1694,6 @@ def team(team_name):
             'pass_yds_pg':    _rank_of(pass_pg, higher_better=True),
             'rush_yds_pg':    _rank_of(rush_pg, higher_better=True),
         }
-        hero_accent = hero_accent_color(team_info[4] or '#1e3a5f')
 
         standings = []
         if team_info[1]:
@@ -1950,7 +1917,7 @@ def team(team_name):
 
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
-                hero_ranks=hero_ranks, hero_accent=hero_accent,
+                hero_ranks=hero_ranks,
                 standings=standings, schedule=schedule, roster=roster, lineup=lineup,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,

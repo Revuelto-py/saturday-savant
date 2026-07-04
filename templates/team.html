@@ -3,9 +3,6 @@
 
 {% set c1 = team[4] if team[4] else '#1e3a5f' %}
 {% set c2 = team[5] if team[5] else '#0f1e3a' %}
-{# hero_accent: c1 lightened for dark navy/black teams so the hero keeps team
-   identity instead of reading flat black (computed in the route). #}
-{% set ha = hero_accent if hero_accent else c1 %}
 
 {# National-rank ordinal (1st/2nd/3rd/…/11th), matching the player hero. #}
 {% macro ordinal(n) -%}
@@ -17,21 +14,14 @@
 {% block content %}
 
 <!-- HERO -->
-<div style="background:
-        radial-gradient(60% 90% at 8% 52%, {{ ha }}40 0%, transparent 60%),
-        radial-gradient(95% 130% at 100% 112%, {{ c2 }}4d 0%, transparent 55%),
-        linear-gradient(150deg, {{ c1 }}a6 0%, #0b1626 45%, #070f1e 100%);
-    padding:40px 0 0;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
-    <!-- bottom scrim so hero content + tabs stay legible over any team color -->
-    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,9,18,0.12) 0%,rgba(4,9,18,0.30) 52%,rgba(4,9,18,0.72) 100%);pointer-events:none"></div>
+<div style="background:linear-gradient(135deg,{{ c1 }} 0%,#0a1220 50%,{{ c2 }}88 100%);padding:40px 0 0;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,{{ c1 }}66 0%,transparent 55%),radial-gradient(ellipse at 100% 50%,{{ c2 }}44 0%,transparent 55%);pointer-events:none"></div>
+    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);pointer-events:none"></div>
     <div class="page-wrapper" style="padding-bottom:0;position:relative;z-index:1">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-4">
             <div class="d-flex align-items-center gap-4">
                 {% if team[6] %}
-                <div style="position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <div style="position:absolute;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,{{ ha }}3d 0%,transparent 68%);pointer-events:none"></div>
-                    <img src="{{ team[6] }}" style="height:120px;object-fit:contain;position:relative;filter:drop-shadow(0 4px 14px rgba(0,0,0,0.5))">
-                </div>
+                <img src="{{ team[6] }}" style="height:120px;object-fit:contain">
                 {% endif %}
                 <div>
                     <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.5)">
