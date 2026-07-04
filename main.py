@@ -1406,6 +1406,39 @@ def _hex_to_rgba(hex_color, alpha):
         return None
     return f'rgba({r},{g},{b},{alpha})'
 
+
+def _rel_luminance(r, g, b):
+    def lin(v):
+        v /= 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+
+def hero_accent_color(hex_color):
+    """A display-safe version of a team's primary color for hero gradients.
+
+    Many teams' primary color is a deep navy/black (e.g. Penn State #041E42)
+    that vanishes against the dark hero background, leaving no team identity.
+    Measure luminance and, when too dark, lighten toward white until it clears
+    a legible floor — the same idea used for the win-probability chart lines.
+    Bright colors pass through unchanged.
+    """
+    h = (hex_color or '').lstrip('#')
+    if len(h) != 6:
+        return hex_color or '#3b6ea5'
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return hex_color
+    guard = 0
+    while _rel_luminance(r, g, b) < 0.14 and guard < 12:
+        r = round(r + (255 - r) * 0.22)
+        g = round(g + (255 - g) * 0.22)
+        b = round(b + (255 - b) * 0.22)
+        guard += 1
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
 @app.route('/leaderboards/teams')
 @app.route('/leaderboards/teams/<category>')
 @cache.cached(timeout=3600, query_string=True)  # view/team are part of the query string, so each combo caches separately
@@ -1648,6 +1681,53 @@ def team(team_name):
             'pts_against_pg': round(pts_against / games_played, 1),
         }
 
+        # National ranks (FBS only) for the hero per-game stat cards — mirrors
+        # the per-player hero's rank ordinals. Uses the same per-game
+        # definitions as season_stats above; #1 = best (fewest for pts allowed).
+        def _rank_of(values, higher_better=True):
+            if team_name not in values:
+                return None
+            ordered = sorted(values.values(), reverse=higher_better)
+            return ordered.index(values[team_name]) + 1
+
+        cursor.execute('''
+            SELECT s.team, COUNT(*) gp, SUM(s.pf) pf, SUM(s.pa) pa
+            FROM (
+                SELECT home_team AS team, home_points AS pf, away_points AS pa
+                  FROM games WHERE completed=1 AND season_type='SeasonType.REGULAR'
+                UNION ALL
+                SELECT away_team AS team, away_points AS pf, home_points AS pa
+                  FROM games WHERE completed=1 AND season_type='SeasonType.REGULAR'
+            ) s
+            JOIN teams t ON t.name = s.team AND t.conference NOT IN %s
+            GROUP BY s.team
+        ''', (FCS_CONFS,))
+        pf_pg, pa_pg, gp_map = {}, {}, {}
+        for tm, gp, pf, pa in cursor.fetchall():
+            if gp:
+                pf_pg[tm], pa_pg[tm], gp_map[tm] = (pf or 0) / gp, (pa or 0) / gp, gp
+
+        cursor.execute('''
+            SELECT ps.team, ps.category, SUM(ps.stat)
+            FROM player_stats ps
+            JOIN teams t ON t.name = ps.team AND t.conference NOT IN %s
+            WHERE ps.category IN ('passing','rushing') AND ps.stat_type='YDS'
+            GROUP BY ps.team, ps.category
+        ''', (FCS_CONFS,))
+        yd = {}
+        for tm, cat, yds in cursor.fetchall():
+            yd.setdefault(tm, {})[cat] = yds or 0
+        pass_pg = {tm: yd.get(tm, {}).get('passing', 0) / gp for tm, gp in gp_map.items()}
+        rush_pg = {tm: yd.get(tm, {}).get('rushing', 0) / gp for tm, gp in gp_map.items()}
+
+        hero_ranks = {
+            'pts_for_pg':     _rank_of(pf_pg, higher_better=True),
+            'pts_against_pg': _rank_of(pa_pg, higher_better=False),
+            'pass_yds_pg':    _rank_of(pass_pg, higher_better=True),
+            'rush_yds_pg':    _rank_of(rush_pg, higher_better=True),
+        }
+        hero_accent = hero_accent_color(team_info[4] or '#1e3a5f')
+
         standings = []
         if team_info[1]:
             cursor.execute('''
@@ -1870,6 +1950,7 @@ def team(team_name):
 
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
+                hero_ranks=hero_ranks, hero_accent=hero_accent,
                 standings=standings, schedule=schedule, roster=roster, lineup=lineup,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
