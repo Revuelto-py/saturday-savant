@@ -1772,11 +1772,21 @@ def team(team_name):
         kick_return_stats = sort_players(all_stats.get('kickReturns', {}), 'YDS')
         punt_return_stats = sort_players(all_stats.get('puntReturns', {}), 'YDS')
 
-        # Add headshots and player IDs to stat tables
-        cursor.execute("SELECT (first_name || ' ' || last_name), headshot, id FROM players WHERE team=%s", (team_name,))
+        # Add headshots and player IDs to stat tables.
+        # Key off player_stats' own stable player_id (which every stat row
+        # carries) rather than the current players.team, so players who
+        # transferred OUT — whose stats still belong to this team but whose
+        # players row now lists their new team — still resolve to a headshot
+        # and a clickable /player/<id> link instead of a broken entry.
+        cursor.execute('''
+            SELECT DISTINCT ps.player_name, ps.player_id, p.headshot
+            FROM player_stats ps
+            LEFT JOIN players p ON p.id::text = ps.player_id
+            WHERE ps.team = %s
+        ''', (team_name,))
         _player_rows = cursor.fetchall()
-        headshot_map   = {row[0]: row[1] for row in _player_rows}
-        player_id_map  = {row[0]: row[2] for row in _player_rows}
+        headshot_map   = {row[0]: row[2] for row in _player_rows}
+        player_id_map  = {row[0]: row[1] for row in _player_rows}
 
         def add_headshots(players):
             for p in players:
