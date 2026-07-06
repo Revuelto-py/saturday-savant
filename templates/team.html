@@ -107,7 +107,7 @@
         <div class="col-lg-5">
             <div style="display:flex;align-items:center;gap: var(--s2);margin-bottom: var(--s3)">
                 {% if conf_logo %}<img src="{{ conf_logo }}" class="conf-logo-img conf-logo-img-sm" alt="{{ team[1] }} logo" loading="lazy">{% endif %}
-                <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ team[1] }} Standings</h5>
+                <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">2025 {{ team[1] }} Standings</h5>
             </div>
             <div class="dark-card" style="overflow:hidden">
                 <table class="data-table" style="width:100%">
@@ -184,8 +184,8 @@
 <div class="pt-4">
 
     <div style="margin-bottom:24px">
-        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Team Analytics</h5>
-        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
+        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">2025 Team Analytics</h5>
+        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the 2025 season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
     </div>
 
     <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
@@ -452,6 +452,12 @@
 </div>
 {% endmacro %}
 
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
+    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">2025 Season Stats</h4>
+    <span class="badge-pos" style="letter-spacing:0.04em">Final</span>
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Individual production from the completed 2025 season</span>
+</div>
+
 {% if passing_stats %}
 <div class="mb-5">
     {{ stat_table_header('Passing Leaders','#34d399') }}
@@ -507,8 +513,8 @@
             <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
-                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('ATT')) }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('CAR')) }}</td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') is not none else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPC')|float) if p.get('YPC') else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
@@ -573,13 +579,13 @@
             <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
-                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('SOLO')|int if p.get('SOLO') else '—' }}</td>
-                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('AST')|int if p.get('AST') else '—' }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(167,139,250,0.04)"><span style="color:#a78bfa;font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('SOLO')|int if p.get('SOLO') is not none else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('AST')|int if p.get('AST') is not none else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(167,139,250,0.04)"><span style="color:#a78bfa;font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') is not none else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TFL')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('SACKS')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
-                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('PD')|int if p.get('PD') else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('PD')|int if p.get('PD') is not none else '—' }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -653,6 +659,12 @@
 <div class="tab-pane fade" id="roster">
 <div class="pt-4">
 
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
+    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">2026 Roster</h4>
+    <span class="badge-pos" style="letter-spacing:0.04em">Current</span>
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Upcoming-season roster, including offseason transfers</span>
+</div>
+
 {# ── Projected starting lineup — formation diagram above the roster table ── #}
 {% if lineup %}
 {% macro lf_card(slot, unit) %}
@@ -680,7 +692,7 @@
 
 <div class="lineup-block">
     <div class="lineup-head">
-        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected Starters</h5>
+        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected 2026 Starters</h5>
         <div class="lineup-toggle" role="tablist" aria-label="Lineup side">
             <button id="lf-btn-off" class="active" onclick="lineupSide('offense')">Offense</button>
             <button id="lf-btn-def" onclick="lineupSide('defense')">Defense</button>

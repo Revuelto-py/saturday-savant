@@ -57,6 +57,7 @@ import json
 import os
 import re
 import datetime
+from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -626,7 +627,6 @@ LEADERBOARD_PER_PAGE = 25
 PLAYER_COLUMNS = {
     'passing': {
         'standard': [
-            ('gp',  'GP',   'Games Played — not available in current dataset', False, 'na'),
             ('cmp', 'CMP',  'Completions', True, 'int'),
             ('att', 'ATT',  'Attempts', True, 'int'),
             ('pct', 'CMP%', 'Completion Percentage', True, 'pct1'),
@@ -645,7 +645,6 @@ PLAYER_COLUMNS = {
     },
     'rushing': {
         'standard': [
-            ('gp',   'GP',   'Games Played — not available in current dataset', False, 'na'),
             ('att',  'CAR',  'Carries', True, 'int'),
             ('yds',  'YDS',  'Rushing Yards', True, 'int'),
             ('ypc',  'YPC',  'Yards Per Carry', True, 'float1'),
@@ -663,7 +662,6 @@ PLAYER_COLUMNS = {
     },
     'receiving': {
         'standard': [
-            ('gp',      'GP',   'Games Played — not available in current dataset', False, 'na'),
             ('rec',     'REC',  'Receptions', True, 'int'),
             ('tgt',     'TGT',  'Targets — not available in current dataset', False, 'na'),
             ('yds',     'YDS',  'Receiving Yards', True, 'int'),
@@ -680,7 +678,6 @@ PLAYER_COLUMNS = {
     },
     'defense': {
         'standard': [
-            ('gp',    'GP',   'Games Played — not available in current dataset', False, 'na'),
             ('tot',   'TOT',  'Total Tackles', True, 'int'),
             ('solo',  'SOLO', 'Solo Tackles', True, 'int'),
             ('ast',   'AST',  'Assisted Tackles (TOT − SOLO)', True, 'int'),
@@ -1407,6 +1404,27 @@ def _hex_to_rgba(hex_color, alpha):
     return f'rgba({r},{g},{b},{alpha})'
 
 
+def clean_play_text(text):
+    """Normalize raw play-by-play descriptions for consistent display.
+
+    Two source feeds mix in this data: ESPN (mixed case, zero-padded yard
+    lines like "Miami00"/"IND05") and an NCAA feed (ALL-CAPS with 1-digit
+    yard lines like "MIAMI16"). Both render awkwardly, so:
+      • split a team token glued to its yard number and drop the pad —
+        "Miami00" -> "Miami 0", "IND05" -> "IND 5", "MIAMI16" -> "MIAMI 16";
+      • title-case ALL-CAPS words (TOUCHDOWN, JOYCE, MIAMI) so casing matches
+        the ESPN feed, leaving short abbreviations (TD, IND, LS, QB) alone.
+    """
+    if not text:
+        return text
+    text = re.sub(r'\b([A-Za-z]{2,})(\d{1,2})\b',
+                  lambda m: f"{m.group(1)} {int(m.group(2))}", text)
+    text = re.sub(r'\b[A-Z]{2,}\b',
+                  lambda m: m.group(0)[:1] + m.group(0)[1:].lower()
+                  if len(m.group(0)) >= 4 else m.group(0), text)
+    return text
+
+
 @app.route('/leaderboards/teams')
 @app.route('/leaderboards/teams/<category>')
 @cache.cached(timeout=3600, query_string=True)  # view/team are part of the query string, so each combo caches separately
@@ -1771,6 +1789,17 @@ def team(team_name):
         punting_stats     = sort_players(all_stats.get('punting', {}),    'YDS')
         kick_return_stats = sort_players(all_stats.get('kickReturns', {}), 'YDS')
         punt_return_stats = sort_players(all_stats.get('puntReturns', {}), 'YDS')
+
+        # The defensive feed doesn't carry assisted tackles or interceptions
+        # directly: AST is derived (TOT = SOLO + AST), and INT lives in the
+        # separate 'interceptions' category. A defender who played but had no
+        # pick has a real INT of 0 (not missing), so default to 0 here.
+        _ints = all_stats.get('interceptions', {})
+        for _p in defensive_stats:
+            _tot, _solo = _p.get('TOT'), _p.get('SOLO')
+            if _tot is not None and _solo is not None:
+                _p['AST'] = _tot - _solo
+            _p['INT'] = (_ints.get(_p['name']) or {}).get('INT', 0)
 
         # Add headshots and player IDs to stat tables.
         # Key off player_stats' own stable player_id (which every stat row
@@ -2273,7 +2302,7 @@ def game_detail(game_id):
                     if pid:
                         _start = _pl.get('start') or {}
                         play_lookup[str(pid)] = {
-                            'text':       _pl.get('text', ''),
+                            'text':       clean_play_text(_pl.get('text', '')),
                             'type':       (_pl.get('type') or {}).get('text', ''),
                             'clock':      (_pl.get('clock') or {}).get('displayValue', ''),
                             'period':     (_pl.get('period') or {}).get('number', 0),
@@ -2325,7 +2354,12 @@ def game_detail(game_id):
             except Exception:
                 pass
 
-            # Play by play + drives
+            # Play by play + drives.
+            # Running score, used to attribute each scoring play to the team
+            # that ACTUALLY scored rather than the team that had possession for
+            # the drive — otherwise defensive/special-teams scores (blocked-punt
+            # TD, pick-six, fumble return, safety) get credited to the offense.
+            prev_home_score = prev_away_score = 0
             for drive in ((data.get('drives') or {}).get('previous') or []):
                 team_name = (drive.get('team') or {}).get('displayName', '')
                 drive_result = drive.get('displayResult', '')
@@ -2355,10 +2389,25 @@ def game_detail(game_id):
                 for play in (drive.get('plays') or []):
                     play_type = (play.get('type') or {}).get('text', '')
                     is_scoring = bool(play.get('scoringPlay', False))
+                    # Attribute the play to the team that actually scored. Every
+                    # play carries the running homeScore/awayScore; the side
+                    # whose score rose on a scoring play is the scorer (defense/
+                    # ST included). Non-scoring plays stay with the offense.
+                    try: ph = int(play.get('homeScore'))
+                    except (TypeError, ValueError): ph = prev_home_score
+                    try: pa = int(play.get('awayScore'))
+                    except (TypeError, ValueError): pa = prev_away_score
+                    scored_side = play_side
+                    if is_scoring:
+                        if ph - prev_home_score > pa - prev_away_score:
+                            scored_side = 'home'
+                        elif pa - prev_away_score > ph - prev_home_score:
+                            scored_side = 'away'
+                    prev_home_score, prev_away_score = ph, pa
                     plays.append({
                         'team': team_name,
-                        'side': play_side,
-                        'text': play.get('text', ''),
+                        'side': scored_side,
+                        'text': clean_play_text(play.get('text', '')),
                         'type': play_type,
                         'period': (play.get('period') or {}).get('number', 0),
                         'clock': (play.get('clock') or {}).get('displayValue', ''),
@@ -2702,11 +2751,18 @@ def game_detail(game_id):
     top_wpa = [p for p in top_wpa if p['swing_pct'] >= 1][:5]
 
     # Date + season type formatting
-    start_date_raw = game_info[8] or ''
+    # start_date is stored in UTC; convert to Eastern before formatting the
+    # date and kickoff time. Previously the tz was stripped and the raw UTC
+    # time was labeled "ET", so e.g. a 00:30 UTC kickoff showed "12:30 AM ET"
+    # (and on the wrong calendar day) instead of the correct 7:30 PM ET.
+    start_date_raw = str(game_info[8]) if game_info[8] else ''
     try:
-        dt = datetime.datetime.fromisoformat(start_date_raw.replace('Z', '').replace('+00:00', ''))
-        game_date = dt.strftime('%A, %B %-d, %Y')
-        game_time = dt.strftime('%-I:%M %p ET')
+        dt = datetime.datetime.fromisoformat(start_date_raw.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        et = dt.astimezone(ZoneInfo('America/New_York'))
+        game_date = et.strftime('%A, %B %-d, %Y')
+        game_time = et.strftime('%-I:%M %p ET')
     except Exception:
         game_date = start_date_raw[:10] if start_date_raw else 'TBD'
         game_time = ''

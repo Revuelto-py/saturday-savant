@@ -722,7 +722,10 @@ if (typeof Plotly !== 'undefined') {
     <div style="display:flex;align-items:center;gap:14px;padding:10px 0">
         <span style="font-size: var(--text-md);flex-shrink:0;display:flex;align-items:center">🏈</span>
         <div class="t-support" style="font-size: var(--text-base)">
-            Week {{ week_num }} · {{ season_type_display }}{% if notes %} · {{ notes }}{% endif %}
+            {# Postseason games are all tagged week 1 in this dataset, so the
+               "Week 1" prefix is meaningless there — show the round/bowl name
+               (notes) instead. Regular-season games keep their real week. #}
+            {% if is_post %}{{ season_type_display }}{% if notes %} · {{ notes }}{% endif %}{% else %}Week {{ week_num }} · {{ season_type_display }}{% if notes %} · {{ notes }}{% endif %}{% endif %}
         </div>
     </div>
 </div>

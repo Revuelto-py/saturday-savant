@@ -99,7 +99,7 @@
                     {% elif pos in ('RB','HB','FB') %}
                         {% set cards = [
                             ('RUSH YDS', stats.get('rushing', {}).get('YDS')),
-                            ('CARRIES',  stats.get('rushing', {}).get('ATT')),
+                            ('CARRIES',  stats.get('rushing', {}).get('CAR')),
                             ('YPC',      stats.get('rushing', {}).get('YPC')),
                             ('RUSH TD',  stats.get('rushing', {}).get('TD')),
                         ] %}
@@ -329,9 +329,9 @@
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('ATT') or '—' }}</td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('PCT') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('INT') %}<span style="display:inline-block;border:1px solid rgba(239,68,68,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--red);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('INT') }}</span>{% else %}—{% endif %}</td>
-                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPA') or '—' }}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('INT') %}<span style="display:inline-block;border:1px solid rgba(239,68,68,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--red);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('INT') }}</span>{% elif p.get('INT') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPA') if p.get('YPA') is not none else '—' }}</td>
                     </tr></tbody>
                 </table>
                 </div>
@@ -354,11 +354,11 @@
                     </tr></thead>
                     <tbody><tr>
                         {% set p = stats.get('rushing', {}) %}
-                        <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('ATT') or '—' }}</td>
+                        <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('CAR') if p.get('CAR') is not none else '—' }}</td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(96,165,250,0.05)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
-                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPC') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
-                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
+                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPC') if p.get('YPC') is not none else '—' }}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') if p.get('LONG') is not none else '—' }}</td>
                     </tr></tbody>
                 </table>
                 </div>
@@ -383,9 +383,9 @@
                         {% set p = stats.get('receiving', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('REC') or '—' }}</td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(52,211,153,0.05)"><span style="color:#34d399;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
-                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('AVG') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% else %}—{% endif %}</td>
-                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
+                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('AVG') if p.get('AVG') is not none else '—' }}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') if p.get('LONG') is not none else '—' }}</td>
                     </tr></tbody>
                 </table>
                 </div>
@@ -677,7 +677,9 @@
                     {% for label, key in cols %}
                     {% set val = g.stats.get(key) %}
                     {% set num = val|float if val is not none else none %}
-                    {% set show = num is not none and (num != 0 or label in ('CMP','ATT','REC','CAR','TOT','NO')) %}
+                    {# Show the value whenever the stat exists for this game — a
+                       real 0 renders as 0; only a genuinely absent stat is "—". #}
+                    {% set show = num is not none %}
                     <td style="padding:11px 10px;text-align:center;white-space:nowrap">
                     {% if show %}
                         {% if 'TD' in label and 'INT' not in label and num > 0 %}
