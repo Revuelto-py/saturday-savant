@@ -1846,6 +1846,10 @@ def team(team_ref):
         # directly: AST is derived (TOT = SOLO + AST), and INT lives in the
         # separate 'interceptions' category. A defender who played but had no
         # pick has a real INT of 0 (not missing), so default to 0 here.
+        # AST is derived (TOT = SOLO + AST); INT comes from the separate
+        # 'interceptions' category. NOTE: player_ppa (EPA/play) is offense-only
+        # in CFBD — defenders have no PPA row — so there is no defensive EPA/
+        # rating column to add here; we don't fabricate one.
         _ints = all_stats.get('interceptions', {})
         for _p in defensive_stats:
             _tot, _solo = _p.get('TOT'), _p.get('SOLO')
@@ -1906,6 +1910,8 @@ def team(team_ref):
         team_adv = None
         if ts:
             team_adv = {
+                'off_plays':                ts[1],
+                'def_plays':                ts[18],
                 'off_ppa':                  round(ts[3], 3)  if ts[3]  else None,
                 'off_success_rate':         round(ts[5]*100, 1) if ts[5] else None,
                 'off_explosiveness':        round(ts[6], 3)  if ts[6]  else None,

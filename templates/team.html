@@ -276,6 +276,94 @@
     </div>
     {% endif %}
 
+    <!-- Team Offense / Team Defense summary tables -->
+    {% if team_adv and season_stats %}
+    {% set gp = season_stats.games or 1 %}
+    {% set tot_ypg = (season_stats.pass_yds_pg + season_stats.rush_yds_pg) %}
+    {% set pass_pct = (season_stats.pass_yds_pg / tot_ypg * 100) if tot_ypg else 0 %}
+    {% set off_ypp = ((tot_ypg * gp) / team_adv.off_plays) if team_adv.off_plays else none %}
+
+    {% macro tcell(val, rank=none, accent=none, sub='') %}
+    <td style="padding:11px 12px;text-align:center;white-space:nowrap">
+        <div style="font-weight:800;font-size: var(--text-base);color:{{ accent or 'var(--text-primary)' }}">{{ val }}</div>
+        {% if rank %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ ordinal(rank) }}</div>{% endif %}
+        {% if sub %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ sub }}</div>{% endif %}
+    </td>
+    {% endmacro %}
+    {% macro epa_fmt(v) %}{{ '%+.2f'|format(v) if v is not none else '—' }}{% endmacro %}
+
+    <div class="mt-4">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Offense</h5>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">2025 · per game · national rank shown for scoring &amp; yardage</span>
+        </div>
+        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+        <table class="data-table" style="width:100%;min-width:760px">
+            <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+                <th style="text-align:center">GP</th>
+                <th class="stat-header" data-tooltip="Points per game" style="text-align:center">PPG</th>
+                <th class="stat-header" data-tooltip="Total yards per game" style="text-align:center">YPG</th>
+                <th class="stat-header" data-tooltip="Passing yards per game" style="text-align:center">Pass YPG</th>
+                <th class="stat-header" data-tooltip="Rushing yards per game" style="text-align:center">Rush YPG</th>
+                <th class="stat-header" data-tooltip="Share of yards from the pass" style="text-align:center">Pass %</th>
+                <th class="stat-header" data-tooltip="Yards per play" style="text-align:center">YPP</th>
+                <th class="stat-header" data-tooltip="EPA per play (all)" style="text-align:center">EPA/Play</th>
+                <th class="stat-header" data-tooltip="EPA per pass play" style="text-align:center">EPA/Pass</th>
+                <th class="stat-header" data-tooltip="EPA per rush play" style="text-align:center">EPA/Rush</th>
+                <th class="stat-header" data-tooltip="Success rate" style="text-align:center">SR%</th>
+            </tr></thead>
+            <tbody><tr style="border-bottom: 1px solid var(--border)">
+                {{ tcell(gp) }}
+                {{ tcell('%.1f'|format(season_stats.pts_for_pg), hero_ranks.pts_for_pg, 'var(--gold)') }}
+                {{ tcell('%.1f'|format(tot_ypg)) }}
+                {{ tcell('%.1f'|format(season_stats.pass_yds_pg), hero_ranks.pass_yds_pg) }}
+                {{ tcell('%.1f'|format(season_stats.rush_yds_pg), hero_ranks.rush_yds_pg) }}
+                {{ tcell('%.0f%%'|format(pass_pct)) }}
+                {{ tcell('%.1f'|format(off_ypp) if off_ypp is not none else '—') }}
+                {{ tcell(epa_fmt(team_adv.off_ppa), none, '#34d399' if (team_adv.off_ppa or 0) > 0 else '#f87171') }}
+                {{ tcell(epa_fmt(team_adv.off_pass_ppa), none, '#34d399' if (team_adv.off_pass_ppa or 0) > 0 else '#f87171') }}
+                {{ tcell(epa_fmt(team_adv.off_rush_ppa), none, '#34d399' if (team_adv.off_rush_ppa or 0) > 0 else '#f87171') }}
+                {{ tcell(('%.1f%%'|format(team_adv.off_success_rate)) if team_adv.off_success_rate is not none else '—') }}
+            </tr></tbody>
+        </table>
+        </div></div>
+    </div>
+
+    <div class="mt-4">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Defense</h5>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">2025 · yards allowed aren't tracked in our data source, so this is EPA/scoring-based</span>
+        </div>
+        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+        <table class="data-table" style="width:100%;min-width:640px">
+            <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+                <th style="text-align:center">GP</th>
+                <th class="stat-header" data-tooltip="Points allowed per game" style="text-align:center">PPG Allowed</th>
+                <th class="stat-header" data-tooltip="EPA per play allowed (lower is better)" style="text-align:center">EPA/Play</th>
+                <th class="stat-header" data-tooltip="EPA per pass play allowed" style="text-align:center">EPA/Pass</th>
+                <th class="stat-header" data-tooltip="EPA per rush play allowed" style="text-align:center">EPA/Rush</th>
+                <th class="stat-header" data-tooltip="Success rate allowed" style="text-align:center">SR% Allowed</th>
+                <th class="stat-header" data-tooltip="Havoc rate — TFL, forced fumbles, PBUs, INTs" style="text-align:center">Havoc %</th>
+            </tr></thead>
+            <tbody><tr style="border-bottom: 1px solid var(--border)">
+                {{ tcell(gp) }}
+                {{ tcell('%.1f'|format(season_stats.pts_against_pg), hero_ranks.pts_against_pg, 'var(--gold)') }}
+                {# Defensive EPA-allowed isn't good/bad at zero (most defenses allow
+                   positive EPA/play), so leave it neutral — the Percentile
+                   Rankings section below conveys where it ranks. #}
+                {{ tcell(epa_fmt(team_adv.def_ppa)) }}
+                {{ tcell(epa_fmt(team_adv.def_pass_ppa)) }}
+                {{ tcell(epa_fmt(team_adv.def_rush_ppa)) }}
+                {{ tcell(('%.1f%%'|format(team_adv.def_success_rate)) if team_adv.def_success_rate is not none else '—') }}
+                {{ tcell(('%.1f%%'|format(havoc.total)) if havoc and havoc.total is not none else '—') }}
+            </tr></tbody>
+        </table>
+        </div></div>
+    </div>
+    {% endif %}
+
     <!-- Advanced Stats Percentile Rankings -->
     {% if team_adv %}
     <div class="mt-4">
@@ -573,9 +661,10 @@
             <th style="text-align:center">Ast</th>
             <th style="color:#a78bfa;text-align:center">Tot ↓</th>
             <th style="text-align:center">TFL</th>
-            <th style="text-align:center">Sacks</th>
-            <th style="text-align:center">Int</th>
-            <th style="text-align:center">PD</th>
+            <th style="text-align:center" data-tt="Sacks">Sacks</th>
+            <th style="text-align:center" data-tt="Interceptions">Int</th>
+            <th style="text-align:center" data-tt="Passes defended (pass breakups)">PD</th>
+            <th style="text-align:center" data-tt="Defensive touchdowns">TD</th>
         </tr></thead>
         <tbody>
             {% for p in defensive_stats %}
@@ -589,6 +678,7 @@
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('SACKS')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('PD')|int if p.get('PD') is not none else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('TD')|int if p.get('TD') is not none else '—' }}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -826,30 +916,107 @@ function lineupSide(side) {
     document.getElementById('lf-btn-def').classList.toggle('active', !off);
 }
 
-// Cap each Player Stats leader table at 10 rows; rows beyond that are marked
-// .leader-extra + [hidden] server-side. For any table that has them, inject a
-// "Show all N" toggle after the table so the full list is one tap away.
-document.querySelectorAll('#player-stats table.data-table').forEach(function (tbl) {
-    var extra = tbl.querySelectorAll('tr.leader-extra');
-    if (!extra.length) return;
-    var card = tbl.closest('.dark-card');
-    if (!card) return;
-    var total = tbl.querySelectorAll('tr.player-row').length;
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'show-all-btn';
-    btn.style.cssText = 'width:100%;margin-top:8px;padding:9px;background:rgba(255,255,255,0.04);' +
-        'border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-secondary);' +
-        'font-weight:700;font-size:var(--text-sm);cursor:pointer;transition:background 0.15s';
-    btn.onmouseover = function () { btn.style.background = 'rgba(255,255,255,0.08)'; };
-    btn.onmouseout = function () { btn.style.background = 'rgba(255,255,255,0.04)'; };
-    btn.textContent = 'Show all ' + total;
-    btn.addEventListener('click', function () {
-        var collapsed = extra[0].hasAttribute('hidden');
-        extra.forEach(function (r) { collapsed ? r.removeAttribute('hidden') : r.setAttribute('hidden', ''); });
-        btn.textContent = collapsed ? 'Show fewer' : 'Show all ' + total;
+// ── Player Stats tables: client-side sorting + 10-row cap ──────────────────
+// Sorting is done in-place in the DOM (rows are already rendered), so it never
+// reloads the page or resets scroll — the failure mode the leaderboards fix
+// addressed. Headers reuse the sitewide .stat-header[data-tooltip] pattern for
+// abbreviation tooltips.
+(function () {
+    var TT = {  // header label -> full name (tooltip)
+        'Cmp':'Completions','Att':'Attempts','Yds':'Yards','TD':'Touchdowns',
+        'INT':'Interceptions','Pct':'Completion percentage','Y/A':'Yards per attempt',
+        'Avg':'Average','Long':'Longest','Rec':'Receptions','Solo':'Solo tackles',
+        'Ast':'Assisted tackles (Tot − Solo)','Tot':'Total tackles',
+        'TFL':'Tackles for loss','Sacks':'Sacks','Int':'Interceptions',
+        'PD':'Passes defended (pass breakups)','EPA':'EPA per play (player_ppa)',
+        'FGM':'Field goals made','FGA':'Field goals attempted','No':'Punts','YPP':'Yards per punt'
+    };
+    function key(th) { return th.textContent.replace(/[↑↓]/g, '').trim(); }
+    function numify(td) {
+        var t = td.textContent.trim().replace('%', '').replace(/,/g, '').replace('+', '');
+        if (t === '' || t === '—') return -Infinity;   // missing sorts to bottom on desc
+        var n = parseFloat(t);
+        return isNaN(n) ? null : n;                     // null => column is text
+    }
+    function applyCap(tbl) {
+        var expanded = tbl.dataset.expanded === '1';
+        tbl.querySelectorAll('tbody tr.player-row').forEach(function (r, i) {
+            if (!expanded && i >= 10) r.setAttribute('hidden', ''); else r.removeAttribute('hidden');
+        });
+    }
+    function renumber(tbl) {
+        var i = 1;
+        tbl.querySelectorAll('tbody tr.player-row').forEach(function (r) {
+            var c = r.children[0];
+            if (c && /^\d{1,3}$/.test(c.textContent.trim())) c.textContent = ('0' + (i++)).slice(-2);
+        });
+    }
+    function sortBy(tbl, idx, dir) {
+        var y = window.scrollY;   // pin scroll — reordering rows can trigger
+                                  // Chrome scroll-anchoring and yank the viewport
+        var tb = tbl.querySelector('tbody');
+        var rows = Array.prototype.slice.call(tb.querySelectorAll('tr.player-row'));
+        var numeric = rows.every(function (r) { return numify(r.children[idx]) !== null; });
+        rows.sort(function (a, b) {
+            if (numeric) {
+                var av = numify(a.children[idx]), bv = numify(b.children[idx]);
+                return dir === 'asc' ? av - bv : bv - av;
+            }
+            var at = a.children[idx].textContent.trim(), bt = b.children[idx].textContent.trim();
+            return dir === 'asc' ? at.localeCompare(bt) : bt.localeCompare(at);
+        });
+        rows.forEach(function (r) { tb.appendChild(r); });
+        tbl.dataset.sortIdx = idx; tbl.dataset.sortDir = dir;
+        tbl.querySelectorAll('thead .sort-arrow').forEach(function (s) { s.remove(); });
+        var ar = document.createElement('span');
+        ar.className = 'sort-arrow'; ar.textContent = dir === 'asc' ? ' ↑' : ' ↓';
+        tbl.querySelectorAll('thead th')[idx].appendChild(ar);
+        renumber(tbl); applyCap(tbl);
+        window.scrollTo(0, y);
+        // Chrome's scroll anchoring adjusts on the next frame after a DOM
+        // mutation; re-pin then so the viewport doesn't drift at all.
+        requestAnimationFrame(function () { window.scrollTo(0, y); });
+    }
+
+    document.querySelectorAll('#player-stats table.data-table').forEach(function (tbl) {
+        tbl.querySelectorAll('thead th').forEach(function (th, idx) {
+            if (idx === 0) return;                       // Rk is a row counter, not data
+            th.classList.add('stat-header');
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+            var tip = th.getAttribute('data-tt') || TT[key(th)];
+            if (tip) th.setAttribute('data-tooltip', tip);
+            // Drop any static ↓/↑ from the label; arrows are managed on sort.
+            th.childNodes.forEach(function (nd) {
+                if (nd.nodeType === 3) nd.textContent = nd.textContent.replace(/[↑↓]/g, '');
+            });
+            th.addEventListener('click', function () {
+                var cur = (tbl.dataset.sortIdx == idx) ? tbl.dataset.sortDir : null;
+                sortBy(tbl, idx, cur === 'desc' ? 'asc' : 'desc');  // stats default to desc
+            });
+        });
+
+        // 10-row cap + "Show all" toggle (respects sort order via applyCap).
+        if (tbl.querySelectorAll('tbody tr.leader-extra').length) {
+            var card = tbl.closest('.dark-card');
+            var total = tbl.querySelectorAll('tbody tr.player-row').length;
+            tbl.dataset.expanded = '0';
+            var btn = document.createElement('button');
+            btn.type = 'button'; btn.className = 'show-all-btn';
+            btn.style.cssText = 'width:100%;margin-top:8px;padding:9px;background:rgba(255,255,255,0.04);' +
+                'border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-secondary);' +
+                'font-weight:700;font-size:var(--text-sm);cursor:pointer;transition:background 0.15s';
+            btn.onmouseover = function () { btn.style.background = 'rgba(255,255,255,0.08)'; };
+            btn.onmouseout = function () { btn.style.background = 'rgba(255,255,255,0.04)'; };
+            btn.textContent = 'Show all ' + total;
+            btn.addEventListener('click', function () {
+                tbl.dataset.expanded = tbl.dataset.expanded === '1' ? '0' : '1';
+                applyCap(tbl);
+                btn.textContent = tbl.dataset.expanded === '1' ? 'Show fewer' : 'Show all ' + total;
+            });
+            if (card) card.insertAdjacentElement('afterend', btn);
+        }
     });
-    card.insertAdjacentElement('afterend', btn);
-});
+})();
 </script>
 {% endblock %}
