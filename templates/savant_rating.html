@@ -105,11 +105,11 @@
         </tr></thead>
         <tbody>
             {% for t in top10 %}
-            <tr class="player-row" style="cursor:pointer" onclick="window.location.href='/team/{{ t.team }}'">
+            <tr class="player-row" style="cursor:pointer" onclick="window.location.href='/team/{{ t.team | team_slug }}'">
                 <td style="text-align:center;color: var(--text-dim);font-weight:700">{{ t.rank }}</td>
                 <td>
                     <div style="display:flex;align-items:center;gap:10px">
-                        {% if t.logo %}<img src="{{ t.logo }}" style="width:26px;height:26px;object-fit:contain" alt="" loading="lazy">{% endif %}
+                        {% if t.logo %}<img src="{{ t.logo }}" style="width:26px;height:26px;object-fit:contain" alt="{{ t.name }} logo" loading="lazy">{% endif %}
                         <span style="color: var(--text-primary);font-weight:700">{{ t.team }}</span>
                         <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ t.conf }}</span>
                     </div>

@@ -25,6 +25,9 @@ updated = 0
 dark_found = 0
 for t in teams:
     logos = getattr(t, 'logos', []) or []
+    # ESPN returns http:// URLs; store https:// to avoid mixed-content on the
+    # HTTPS site.
+    logos = [l.replace('http://', 'https://') if l else l for l in logos]
     logo_dark = logos[1] if len(logos) > 1 else (logos[0] if logos else None)
     logo_regular = logos[0] if logos else None
 

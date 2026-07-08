@@ -34,11 +34,11 @@
 
             <!-- Teams -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-                <a href="/team/{{ r.ta }}" onclick="event.stopPropagation()"
+                <a href="/team/{{ r.ta | team_slug }}" onclick="event.stopPropagation()"
                    style="display:flex;flex-direction:column;align-items:center;gap:8px;
                           text-decoration:none;flex:1">
                     {% if r.logo_a %}
-                    <img src="{{ r.logo_a }}" style="width:44px;height:44px;object-fit:contain">
+                    <img src="{{ r.logo_a }}" alt="{{ r.ta }} logo" style="width:44px;height:44px;object-fit:contain">
                     {% endif %}
                     <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-sm);text-align:center;line-height:1.3"
                           onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ r.ta }}</span>
@@ -46,11 +46,11 @@
 
                 <div style="color: var(--text-dim);font-size: var(--text-md);font-weight:900;flex-shrink:0">vs</div>
 
-                <a href="/team/{{ r.tb }}" onclick="event.stopPropagation()"
+                <a href="/team/{{ r.tb | team_slug }}" onclick="event.stopPropagation()"
                    style="display:flex;flex-direction:column;align-items:center;gap:8px;
                           text-decoration:none;flex:1">
                     {% if r.logo_b %}
-                    <img src="{{ r.logo_b }}" style="width:44px;height:44px;object-fit:contain">
+                    <img src="{{ r.logo_b }}" alt="{{ r.tb }} logo" style="width:44px;height:44px;object-fit:contain">
                     {% endif %}
                     <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-sm);text-align:center;line-height:1.3"
                           onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ r.tb }}</span>
@@ -82,7 +82,7 @@
                 <!-- Away -->
                 <div style="display:flex;align-items:center;gap:10px;flex:1">
                     {% if g.away_logo %}
-                    <img src="{{ g.away_logo }}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
+                    <img src="{{ g.away_logo }}" alt="{{ g.away_team }} logo" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
                     {% endif %}
                     <div>
                         <div style="color:{{ 'var(--text-primary)' if away_won else 'var(--text-secondary)' }};
@@ -112,7 +112,7 @@
                 <!-- Home -->
                 <div style="display:flex;align-items:center;gap:10px;flex:1;justify-content:flex-end;flex-direction:row-reverse">
                     {% if g.home_logo %}
-                    <img src="{{ g.home_logo }}" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
+                    <img src="{{ g.home_logo }}" alt="{{ g.home_team }} logo" style="width:28px;height:28px;object-fit:contain;flex-shrink:0">
                     {% endif %}
                     <div style="text-align:right">
                         <div style="color:{{ 'var(--text-primary)' if home_won else 'var(--text-secondary)' }};

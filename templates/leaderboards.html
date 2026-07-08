@@ -1,5 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} Leaderboards · {{ {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) }} · Saturday Savant{% endblock %}
+{% set _cat_label = {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) %}
+{% block title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} Leaderboards · {{ _cat_label }} · Saturday Savant{% endblock %}
+{% block og_title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} {{ _cat_label }} Leaders · Saturday Savant{% endblock %}
+{% block og_description %}2025 FBS {% if mode == 'team' %}team{% else %}player{% endif %} {{ _cat_label }} leaders, ranked on Saturday Savant.{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <div class="page-wrapper" style="padding-top:32px">
@@ -144,7 +147,7 @@
             <td class="lb-td-player">
                 <a href="/player/{{ p.id }}" onclick="event.stopPropagation()" class="lb-player-link">
                     {% if p.headshot %}
-                    <img src="{{ p.headshot }}" class="lb-headshot">
+                    <img src="{{ p.headshot }}" alt="{{ p.name }} headshot" class="lb-headshot">
                     {% else %}
                     <div class="lb-headshot-fallback">{{ p.first[0] if p.first else '?' }}{{ p.last[0] if p.last else '' }}</div>
                     {% endif %}
@@ -153,8 +156,8 @@
             </td>
             <td class="lb-td-pos"><span class="lb-pos-pill">{{ p.pos or '—' }}</span></td>
             <td class="lb-td-team">
-                <a href="/team/{{ p.team }}" onclick="event.stopPropagation()" class="lb-team-link">
-                    {% if p.logo %}<img src="{{ p.logo }}" class="lb-team-logo">{% endif %}
+                <a href="/team/{{ p.team | team_slug }}" onclick="event.stopPropagation()" class="lb-team-link">
+                    {% if p.logo %}<img src="{{ p.logo }}" alt="{{ p.team }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-team-name">{{ p.team }}</span>
                 </a>
             </td>
@@ -259,11 +262,11 @@
     </thead>
     <tbody>
         {% for t in teams %}
-        <tr class="lb-row" onclick="window.location.href='/team/{{ t.name }}'">
+        <tr class="lb-row" onclick="window.location.href='/team/{{ t.name | team_slug }}'">
             <td class="lb-td-rank">{{ t.rank }}</td>
             <td class="lb-td-player">
-                <a href="/team/{{ t.name }}" onclick="event.stopPropagation()" class="lb-player-link">
-                    {% if t.logo %}<img src="{{ t.logo }}" class="lb-team-logo">{% endif %}
+                <a href="/team/{{ t.name | team_slug }}" onclick="event.stopPropagation()" class="lb-player-link">
+                    {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-player-name">{{ t.name }}</span>
                 </a>
             </td>

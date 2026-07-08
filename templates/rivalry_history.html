@@ -23,7 +23,7 @@
         <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px">
 
             <div style="text-align:center">
-                {% if ta_logo %}<img src="{{ ta_logo }}" style="width:56px;height:56px;object-fit:contain;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto">{% endif %}
+                {% if ta_logo %}<img src="{{ ta_logo }}" alt="{{ team_a }} logo" style="width:56px;height:56px;object-fit:contain;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto">{% endif %}
                 <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-md);margin-bottom:6px">{{ team_a }}</div>
                 <div style="color: var(--text-primary);font-weight:900;font-size: var(--text-3xl);line-height:1">{{ team_a_wins }}</div>
                 <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:4px;letter-spacing:0.1em;text-transform:uppercase">Wins</div>
@@ -36,7 +36,7 @@
             </div>
 
             <div style="text-align:center">
-                {% if tb_logo %}<img src="{{ tb_logo }}" style="width:56px;height:56px;object-fit:contain;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto">{% endif %}
+                {% if tb_logo %}<img src="{{ tb_logo }}" alt="{{ team_b }} logo" style="width:56px;height:56px;object-fit:contain;margin-bottom:10px;display:block;margin-left:auto;margin-right:auto">{% endif %}
                 <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-md);margin-bottom:6px">{{ team_b }}</div>
                 <div style="color: var(--text-primary);font-weight:900;font-size: var(--text-3xl);line-height:1">{{ team_b_wins }}</div>
                 <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:4px;letter-spacing:0.1em;text-transform:uppercase">Wins</div>

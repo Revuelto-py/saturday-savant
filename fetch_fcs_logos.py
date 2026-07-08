@@ -22,7 +22,7 @@ import os
 import cfbd
 from dotenv import load_dotenv
 
-from main import get_db, release_db, FCS_CONFS
+from main import get_db, release_db, FCS_CONFS, slugify_team
 
 load_dotenv()
 
@@ -71,6 +71,8 @@ def main():
                 unmatched.append(name)
                 continue
             logos = getattr(t, 'logos', []) or []
+            # Store https:// (ESPN serves http://) to avoid mixed-content.
+            logos = [l.replace('http://', 'https://') if l else l for l in logos]
             logo = logos[0] if logos else None
             logo_dark = logos[1] if len(logos) > 1 else logo  # fall back to regular
 
@@ -86,10 +88,10 @@ def main():
             if cursor.rowcount == 0:
                 cursor.execute('''
                     INSERT INTO teams
-                        (id, name, conference, abbreviation, logo, logo_dark, color, alt_color)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                ''', (next_id, name, t.conference, t.abbreviation, logo, logo_dark,
-                      t.color, t.alternate_color))
+                        (id, name, slug, conference, abbreviation, logo, logo_dark, color, alt_color)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ''', (next_id, name, slugify_team(name), t.conference, t.abbreviation,
+                      logo, logo_dark, t.color, t.alternate_color))
                 next_id += 1
                 inserted += 1
             else:

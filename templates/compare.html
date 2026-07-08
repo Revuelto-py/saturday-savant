@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Compare {{ 'Teams' if mode == 'team' else 'Players' }} · Saturday Savant{% endblock %}
+{% block og_title %}Compare {{ 'Teams' if mode == 'team' else 'Players' }} · Saturday Savant{% endblock %}
+{% block og_description %}Compare {{ 'college football teams' if mode == 'team' else 'college football players' }} side by side — advanced stats, ratings, and percentile rankings on Saturday Savant.{% endblock %}
 
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -52,7 +54,7 @@
                 <div class="cmp-slot-filled">
                     {% if mode == 'player' %}
                         {% if entity.headshot %}
-                        <img src="{{ entity.headshot }}" class="cmp-avatar" alt="">
+                        <img src="{{ entity.headshot }}" class="cmp-avatar" alt="{{ entity.first_name }} {{ entity.last_name }} headshot">
                         {% else %}
                         <div class="cmp-avatar avatar-placeholder">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
                         {% endif %}
@@ -61,7 +63,7 @@
                             <div class="cmp-slot-meta">{{ entity.position or '—' }} · {{ entity.team }}</div>
                         </div>
                     {% else %}
-                        {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="cmp-slot-logo" alt="">{% endif %}
+                        {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="cmp-slot-logo" alt="{{ entity.team or entity.name }} logo">{% endif %}
                         <div class="cmp-slot-id">
                             <div class="cmp-slot-name">{{ entity.name }}</div>
                             <div class="cmp-slot-meta">{{ entity.conference or '' }}</div>
@@ -109,12 +111,12 @@
             <div class="cmp-hname">{{ e.first_name }} {{ e.last_name }}</div>
             <div class="cmp-hmeta">
                 <span class="compare-pos-badge">{{ e.position or '—' }}</span>
-                {% if e.logo_dark %}<img src="{{ e.logo_dark }}" style="width:16px;height:16px;object-fit:contain">{% endif %}
+                {% if e.logo_dark %}<img src="{{ e.logo_dark }}" alt="{{ e.team }} logo" style="width:16px;height:16px;object-fit:contain">{% endif %}
                 <span>{{ e.team }}</span>
                 {% if e.ap_rank %}<span class="compare-ap-badge">AP #{{ e.ap_rank }}</span>{% endif %}
             </div>
         {% else %}
-            {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo" alt="">{% endif %}
+            {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo" alt="{{ e.team or e.name }} logo">{% endif %}
             <div class="cmp-hname">{{ e.name }}</div>
             <div class="cmp-hmeta">
                 <span>{{ e.conference or '' }}</span>

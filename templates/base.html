@@ -8,9 +8,17 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
     <link rel="apple-touch-icon" href="/static/logo-mark-180.png">
-    <meta property="og:title" content="Saturday Savant">
-    <meta property="og:description" content="College football analytics — advanced stats, EPA, SP+ ratings, player profiles, and game breakdowns.">
-    <meta property="og:image" content="/static/logo-512.png">
+    <meta name="description" content="{{ self.og_description() }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Saturday Savant">
+    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:title" content="{% block og_title %}Saturday Savant · College Football Analytics{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}College football analytics — advanced stats, EPA, SP+ ratings, player profiles, and game breakdowns for every FBS team.{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{{ request.url_root }}static/logo-512.png{% endblock %}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ self.og_title() }}">
+    <meta name="twitter:description" content="{{ self.og_description() }}">
+    <meta name="twitter:image" content="{{ self.og_image() }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">

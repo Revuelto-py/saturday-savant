@@ -82,7 +82,7 @@
                 <div style="display:flex;align-items:center;gap:10px">
                 {% endif %}
                     {% if t[10] %}
-                    <img src="{{ t[10] }}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border: 1px solid var(--border-strong)">
+                    <img src="{{ t[10] }}" alt="{{ t[0] }} {{ t[1] }} headshot" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;border: 1px solid var(--border-strong)">
                     {% else %}
                     <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.07);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary)">{{ t[0][0] if t[0] else '?' }}{{ t[1][0] if t[1] else '' }}</div>
                     {% endif %}
@@ -98,7 +98,7 @@
             <!-- From -->
             <td style="padding:11px 16px;border-left: 1px solid var(--border)">
                 <div style="display:flex;align-items:center;gap:8px">
-                    {% if t[12] %}<img src="{{ t[12] }}" style="width:20px;height:20px;object-fit:contain;opacity:0.65">{% endif %}
+                    {% if t[12] %}<img src="{{ t[12] }}" alt="Previous team logo" style="width:20px;height:20px;object-fit:contain;opacity:0.65">{% endif %}
                     <span style="color: var(--text-secondary);font-size: var(--text-base)">{{ t[3] or '—' }}</span>
                 </div>
             </td>
@@ -106,8 +106,8 @@
             <!-- To -->
             <td style="padding:11px 16px;border-left: 1px solid var(--border)">
                 {% if t[4] %}
-                <a href="/team/{{ t[4] }}" style="display:flex;align-items:center;gap:8px;text-decoration:none">
-                    {% if t[11] %}<img src="{{ t[11] }}" style="width:20px;height:20px;object-fit:contain">{% endif %}
+                <a href="/team/{{ t[4] | team_slug }}" style="display:flex;align-items:center;gap:8px;text-decoration:none">
+                    {% if t[11] %}<img src="{{ t[11] }}" alt="New team logo" style="width:20px;height:20px;object-fit:contain">{% endif %}
                     <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)"
                           onmouseover="this.style.color='#60a5fa'" onmouseout="this.style.color='var(--text-primary)'">{{ t[4] }}</span>
                 </a>

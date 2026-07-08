@@ -39,7 +39,7 @@
     {% set trend = (r[12] - r[0]) if r[12] is not none else none %}
     {% set logo = r[13] or r[5] %}
 
-    <a href="/team/{{ r[1] }}" class="ap-rankings-grid ap-rank-row"
+    <a href="/team/{{ r[1] | team_slug }}" class="ap-rankings-grid ap-rank-row"
        style="--c1:{{ r[7] or '#1e3a5f' }};--c2:{{ r[14] or '#0f1e3a' }}">
 
         <!-- Rank -->
@@ -54,7 +54,7 @@
         <!-- Team -->
         <div class="ap-team-cell" style="display:flex;align-items:center;gap:14px;min-width:150px">
             {% if logo %}
-                <img src="{{ logo }}" class="ap-team-logo">
+                <img src="{{ logo }}" class="ap-team-logo" alt="{{ r[1] }} logo">
             {% endif %}
             <span class="ap-team-name">{{ r[1] }}</span>
         </div>

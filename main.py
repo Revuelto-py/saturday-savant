@@ -58,11 +58,12 @@ import os
 import re
 import datetime
 import hmac
+import unicodedata
 from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, redirect
 from flask_caching import Cache
 from collections import OrderedDict
 
@@ -945,6 +946,17 @@ def get_ticker_data():
                 'home': {'abbr': h_abbr or home, 'pts': hpts, 'logo': h_logo,
                          'rank': ranks.get(home), 'won': (hpts or 0) > (apts or 0)},
             })
+        # Cap the ticker so it doesn't render all ~46 postseason games at once.
+        # Postseason is already ordered by round (championship first); for a
+        # regular week, surface ranked matchups first. Overflow is reachable via
+        # the ticker's existing horizontal scroll.
+        TICKER_MAX = 10
+        if 'POSTSEASON' not in stype:
+            def _relevance(g):
+                present = [r for r in (g['away']['rank'], g['home']['rank']) if r]
+                return min(present) if present else 999
+            games.sort(key=_relevance)
+        games = games[:TICKER_MAX]
         label = 'Postseason' if 'POSTSEASON' in stype else f'Week {week}'
         return {'label': label, 'games': games}
     finally:
@@ -954,6 +966,10 @@ def get_ticker_data():
 def inject_ticker():
     # A ticker failure should never take down page rendering
     try:
+        # The scores ticker adds no value on the head-to-head compare tool, and
+        # its game list distracts from that focused view — hide it there.
+        if request.path.startswith('/compare'):
+            return dict(ticker=None)
         return dict(ticker=get_ticker_data())
     except Exception:
         return dict(ticker=None)
@@ -1021,12 +1037,21 @@ def home(week=None, season_type='regular'):
 
         leaders = get_cached_season_leaders()
 
+        # Live count of FBS teams for the hero pill, so it stays accurate
+        # through realignment instead of a hardcoded "130+".
+        cursor.execute('SELECT COUNT(*) FROM teams WHERE conference NOT IN %s', (FCS_CONFS,))
+        fbs_team_count = cursor.fetchone()[0]
+        # Drive tracking lives on the game page (Drives tab); point the hero
+        # pill at the most prominent recent game rather than an unrelated page.
+        featured_game_id = games[0][11] if games else None
+
     finally:
         release_db(conn)
     return render_template('home.html',
         games=games, grouped_games=grouped_games, all_weeks=all_weeks,
         selected_week=week, season_type=season_type,
-        leaders=leaders, ap_rankings=ap_rankings)
+        leaders=leaders, ap_rankings=ap_rankings,
+        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
 
 @app.route('/search')
 def search():
@@ -1405,6 +1430,18 @@ def _hex_to_rgba(hex_color, alpha):
     return f'rgba({r},{g},{b},{alpha})'
 
 
+def slugify_team(name):
+    """Deterministic URL slug for a team name: 'North Texas' -> 'north-texas',
+    'Miami (OH)' -> 'miami-oh'. Matches the stored teams.slug column and is
+    registered as the `team_slug` Jinja filter for building links."""
+    s = unicodedata.normalize('NFKD', name or '')
+    s = ''.join(c for c in s if not unicodedata.combining(c)).lower().replace("'", '')
+    return re.sub(r'[^a-z0-9]+', '-', s).strip('-')
+
+
+app.jinja_env.filters['team_slug'] = slugify_team
+
+
 def clean_play_text(text):
     """Normalize raw play-by-play descriptions for consistent display.
 
@@ -1622,12 +1659,26 @@ def savant_rating_methodology():
     return render_template('savant_rating.html', top10=top10,
                            n_teams=n_teams, n_drives=n_drives, n_games=n_games)
 
-@app.route('/team/<path:team_name>')
+@app.route('/team/<path:team_ref>')
 @cache.cached(timeout=3600)  # 1 hour — stats don't change during offseason
-def team(team_name):
+def team(team_ref):
     conn = get_db()
     try:
         cursor = conn.cursor()
+        # Canonical URLs use the slug (e.g. /team/north-texas). Old links that
+        # passed the raw name (/team/North Texas) still resolve — they
+        # 301-redirect to the slug so shared/bookmarked links don't break.
+        cursor.execute('SELECT name FROM teams WHERE slug = %s', (team_ref,))
+        _row = cursor.fetchone()
+        if _row:
+            team_name = _row[0]
+        else:
+            cursor.execute('SELECT slug FROM teams WHERE name = %s', (team_ref,))
+            _old = cursor.fetchone()
+            if _old:
+                return redirect('/team/' + _old[0], code=301)
+            return render_template('404.html', message=f'Team "{team_ref}" not found.'), 404
+
         ap_rankings = get_ap_rankings(cursor)
         team_rank = ap_rankings.get(team_name)
 
@@ -2020,7 +2071,7 @@ def api_players():
     results = []
     for r in team_rows:
         results.append({'type': 'team', 'name': r[0], 'conference': r[1],
-                        'logo': r[2], 'color': r[3], 'url': f'/team/{r[0]}'})
+                        'logo': r[2], 'color': r[3], 'url': f'/team/{slugify_team(r[0])}'})
     for r in player_rows:
         results.append({'type': 'player', 'id': r[0], 'first': r[1], 'last': r[2],
                         'team': r[3], 'pos': r[4], 'jersey': r[5],
@@ -4203,6 +4254,42 @@ def bracket_page():
 
     return render_template('bracket.html', bracket=bracket,
                            cfp_teams=cfp_teams, champion=champion)
+
+
+@app.route('/sitemap.xml')
+@cache.cached(timeout=86400)  # regenerated daily
+def sitemap():
+    """XML sitemap of every indexable page, for search-engine discovery."""
+    base = f"https://{request.host}"
+    paths = ['/', '/teams', '/rankings', '/leaderboards', '/leaderboards/teams',
+             '/bracket', '/compare', '/transfers', '/rivalries', '/savant-rating']
+    for cat in ('passing', 'rushing', 'receiving', 'defense'):
+        paths.append(f'/leaderboards/{cat}')
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT slug FROM teams WHERE slug IS NOT NULL ORDER BY slug')
+        paths += [f'/team/{r[0]}' for r in cur.fetchall()]
+        cur.execute('SELECT id FROM games WHERE completed = 1')
+        paths += [f'/game/{r[0]}' for r in cur.fetchall()]
+        cur.execute('SELECT id FROM players ORDER BY id')
+        paths += [f'/player/{r[0]}' for r in cur.fetchall()]
+    finally:
+        release_db(conn)
+    from xml.sax.saxutils import escape
+    body = ['<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    body += [f'<url><loc>{escape(base + p)}</loc></url>' for p in paths]
+    body.append('</urlset>')
+    return Response('\n'.join(body), mimetype='application/xml')
+
+
+@app.route('/robots.txt')
+def robots():
+    base = f"https://{request.host}"
+    return Response(
+        f"User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: {base}/sitemap.xml\n",
+        mimetype='text/plain')
 
 
 @app.route('/admin/clear-cache')

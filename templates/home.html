@@ -24,7 +24,7 @@
         <nav class="ig-features" aria-label="Site features">
             <a class="ig-feature" href="/teams">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 4.6-3.2 8.4-8 10-4.8-1.6-8-5.4-8-10V6l8-4z"/></svg>
-                130+ FBS Teams
+                {{ fbs_team_count or 136 }} FBS Teams
             </a>
             <span class="ig-divider"></span>
             <a class="ig-feature" href="/savant-rating">
@@ -32,7 +32,7 @@
                 Savant Ratings
             </a>
             <span class="ig-divider"></span>
-            <a class="ig-feature" href="/bracket">
+            <a class="ig-feature" href="{{ ('/game/' ~ featured_game_id) if featured_game_id else '/' }}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                 Live Drive Tracking
             </a>
@@ -75,7 +75,7 @@
             </div>
 
             <div class="gc-team{{ ' winner' if away_won else '' }}">
-                {% if game[10] %}<img src="{{ game[10] }}" alt="" loading="lazy">{% endif %}
+                {% if game[10] %}<img src="{{ game[10] }}" alt="{{ game[2] }} logo" loading="lazy">{% endif %}
                 <span class="gc-name">
                     {% set rank2 = ap_rankings.get(game[2]) %}
                     {% if rank2 %}<span class="gc-rank">{{ rank2 }}</span>{% endif %}{{ game[2] }}
@@ -84,7 +84,7 @@
             </div>
 
             <div class="gc-team{{ ' winner' if home_won else '' }}">
-                {% if game[9] %}<img src="{{ game[9] }}" alt="" loading="lazy">{% endif %}
+                {% if game[9] %}<img src="{{ game[9] }}" alt="{{ game[0] }} logo" loading="lazy">{% endif %}
                 <span class="gc-name">
                     {% set rank = ap_rankings.get(game[0]) %}
                     {% if rank %}<span class="gc-rank">{{ rank }}</span>{% endif %}{{ game[0] }}
@@ -125,14 +125,14 @@
             {% for p in players %}
             {% set inner %}
                 {% if p[3] %}
-                    <img src="{{ p[3] }}" class="player-avatar-sm" style="object-position:top" alt="" loading="lazy">
+                    <img src="{{ p[3] }}" class="player-avatar-sm" style="object-position:top" alt="{{ p[0] }} headshot" loading="lazy">
                 {% else %}
                     <div class="player-avatar-sm avatar-placeholder">{{ p[0][0] if p[0] else '?' }}</div>
                 {% endif %}
                 <div style="flex:1;min-width:0">
                     <span class="leader-name">{{ p[0] }}</span>
                     <div class="leader-team">
-                        {% if p[4] %}<img src="{{ p[4] }}" alt="" loading="lazy">{% endif %}
+                        {% if p[4] %}<img src="{{ p[4] }}" alt="{{ p[1] }} logo" loading="lazy">{% endif %}
                         {{ p[1] }}
                     </div>
                 </div>
