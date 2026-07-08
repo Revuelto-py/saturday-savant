@@ -57,6 +57,7 @@ import json
 import os
 import re
 import datetime
+import hmac
 from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
@@ -4206,7 +4207,15 @@ def bracket_page():
 
 @app.route('/admin/clear-cache')
 def clear_cache():
-    if request.args.get('key') != os.getenv('ADMIN_KEY', 'changeme'):
+    # Fail CLOSED: if ADMIN_KEY isn't configured, reject every request rather
+    # than falling back to a guessable default (the old 'changeme' default
+    # silently left the endpoint open to anyone who guessed that string).
+    admin_key = os.getenv('ADMIN_KEY')
+    # Accept the key via the X-Admin-Key header (preferred — stays out of
+    # server/proxy access logs) or the ?key= query param (kept for
+    # compatibility). Constant-time compare avoids leaking it via timing.
+    supplied = request.headers.get('X-Admin-Key') or request.args.get('key', '')
+    if not admin_key or not hmac.compare_digest(supplied, admin_key):
         return 'Unauthorized', 401
     cache.clear()
     return 'Cache cleared', 200
