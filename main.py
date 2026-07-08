@@ -881,7 +881,7 @@ def get_cached_season_leaders():
     try:
         cursor = conn.cursor()
         return [
-            ('Passing Yards',   '/leaderboards/passing',   '#fbbf24', leaders_query(cursor, 'passing',       'YDS')),
+            ('Passing Yards',   '/leaderboards/passing',   '#f7b928', leaders_query(cursor, 'passing',       'YDS')),
             ('Rushing Yards',   '/leaderboards/rushing',   '#60a5fa', leaders_query(cursor, 'rushing',       'YDS')),
             ('Receiving Yards', '/leaderboards/receiving', '#34d399', leaders_query(cursor, 'receiving',     'YDS')),
             ('Tackles',         '/leaderboards/defense',   '#a78bfa', leaders_query(cursor, 'defensive',     'TOT')),
@@ -4156,7 +4156,7 @@ def bracket_page():
             FROM teams WHERE name = ANY(%s)
         ''', (list(seeds.keys()) or [''],))
         teams_map = {r[0]: {
-            'name': r[0], 'logo': r[1] or r[2], 'color': r[3] or '#f59e0b',
+            'name': r[0], 'logo': r[1] or r[2], 'color': r[3] or '#1c9cf0',
             'alt_color': r[4], 'abbreviation': r[5], 'conference': r[6],
         } for r in cursor.fetchall()}
     finally:
@@ -4178,7 +4178,7 @@ def bracket_page():
             'name': name,
             'seed': seed,
             'logo': info.get('logo'),
-            'color': info.get('color', '#f59e0b'),
+            'color': info.get('color', '#1c9cf0'),
             'conference': info.get('conference'),
             'abbreviation': info.get('abbreviation'),
             'points': pts,

@@ -3,22 +3,26 @@
    derives from this block. Do not hardcode values below; use the tokens.
    ══════════════════════════════════════════════════════════════════════ */
 :root {
-  /* Palette */
-  --bg-base:        #050e1a;
-  --bg-surface:     #0a1628;
-  --bg-card:        #0d1e35;
-  --bg-card-hover:  #112240;
-  --bg-subtle:      #0f2035;
-  --border:         rgba(255,255,255,0.07);
-  --border-strong:  rgba(255,255,255,0.13);
-  --border-gold:    rgba(245,158,11,0.35);
-  --text-primary:   #f0f4f8;
-  --text-secondary: #8da4be;
-  --text-dim:       #4a6278;
-  --gold:           #f59e0b;
-  --green:          #22c55e;
-  --red:            #ef4444;
-  --blue:           #3b82f6;
+  /* Palette — X/Twitter-inspired dark scheme (color-value rebrand).
+     The signature "signal" accent moved from gold to blue: --accent is the
+     source of truth and --gold is kept as an alias so existing var(--gold)
+     references resolve to the new blue automatically. */
+  --bg-base:        #000000;   /* background / popover */
+  --bg-surface:     #0a0b0d;
+  --bg-card:        #17181c;    /* card */
+  --bg-card-hover:  #202127;
+  --bg-subtle:      #131417;    /* muted */
+  --border:         rgba(255,255,255,0.08);
+  --border-strong:  rgba(255,255,255,0.15);
+  --accent:         #1c9cf0;    /* primary accent: links, focus, bars, highlights, buttons */
+  --border-gold:    rgba(28,156,240,0.35);
+  --text-primary:   #e7e9ea;    /* foreground */
+  --text-secondary: #9aa0a6;
+  --text-dim:       #72767a;    /* muted-foreground */
+  --gold:           var(--accent);  /* legacy alias — accent is blue now */
+  --green:          #00b87a;
+  --red:            #f4212e;    /* destructive */
+  --blue:           #1e9df1;    /* chart blue */
 
   /* Type — fluid: sizes grow smoothly with viewport width instead of
      staying fixed past a breakpoint and leaving dead margins */
@@ -255,8 +259,8 @@
 .gc-rivalry {
     margin-top: 8px;
     display: inline-block;
-    background: rgba(245,158,11,0.13);
-    border: 1px solid rgba(245,158,11,0.3);
+    background: rgba(28, 156, 240,0.13);
+    border: 1px solid rgba(28, 156, 240,0.3);
     color: var(--gold);
     font-size: 0.58rem;
     font-weight: 800;
@@ -420,7 +424,8 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
     font-size: var(--text-base); font-weight: 900;
     box-shadow: 0 2px 8px rgba(0,0,0,0.45);
 }
-.ap-medal-1 { background: linear-gradient(135deg, #fde68a, var(--gold)); color: #231a00; }
+/* Podium medals stay gold/silver/bronze — universal ranking semantics, not the UI accent. */
+.ap-medal-1 { background: linear-gradient(135deg, #fde68a, #f5a623); color: #231a00; }
 .ap-medal-2 { background: linear-gradient(135deg, #e5e7eb, #94a3b8); color: #0f172a; }
 .ap-medal-3 { background: linear-gradient(135deg, #d97706, #7c3a10); color: var(--text-primary); }
 .ap-rank-num {
@@ -449,8 +454,8 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
 .ap-trend-new  { color: #93c5fd; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); }
 
 .ap-final-pill {
-    background: rgba(245,158,11,0.15);
-    border: 1px solid rgba(245,158,11,0.4);
+    background: rgba(28, 156, 240,0.15);
+    border: 1px solid rgba(28, 156, 240,0.4);
     color: var(--gold);
     font-size: var(--text-xs);
     font-weight: 800;
@@ -542,8 +547,8 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
 }
 
 .postseason-row {
-    background: rgba(245, 158, 11, 0.04);
-    border-left: 2px solid rgba(245, 158, 11, 0.3);
+    background: rgba(28, 156, 240, 0.04);
+    border-left: 2px solid rgba(28, 156, 240, 0.3);
 }
 /* tr.postseason-row (not just .postseason-row): postseason rows also carry
    .player-row, and tr.player-row:hover (element + class + pseudo) already
@@ -551,13 +556,13 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
    alone — matching the element selector here keeps this rule in the tie,
    which source order then resolves in its favor. */
 tr.postseason-row:hover {
-    background: rgba(245, 158, 11, 0.08);
+    background: rgba(28, 156, 240, 0.08);
 }
 /* !important needed here: the first <td> already carries an inline
    color/font-weight/font-size from the base (non-postseason) row style,
    which would otherwise win over this rule. */
 .postseason-row td:first-child {
-    color: rgba(245, 158, 11, 0.85) !important;
+    color: rgba(28, 156, 240, 0.85) !important;
     font-weight: 600 !important;
     font-size: var(--text-sm) !important;
     white-space: nowrap;
@@ -580,7 +585,7 @@ tr.postseason-row:hover {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background:
         radial-gradient(ellipse at 6% 45%, rgba(59,130,246,0.30) 0%, transparent 55%),
-        radial-gradient(ellipse at 96% 62%, rgba(245,158,11,0.22) 0%, transparent 55%);
+        radial-gradient(ellipse at 96% 62%, rgba(28, 156, 240,0.22) 0%, transparent 55%);
 }
 .cmp-hero::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.42); pointer-events: none; }
 .cmp-hero-inner { position: relative; z-index: 1; padding-top: var(--s10); padding-bottom: var(--s8); }
@@ -609,7 +614,7 @@ tr.postseason-row:hover {
 .cmp-pill:hover { color: var(--text-primary); background: rgba(255,255,255,0.09); border-color: var(--text-dim); }
 .cmp-pill.active {
     color: #1a1200; background: var(--gold); border-color: var(--gold);
-    box-shadow: 0 2px 10px rgba(245,158,11,0.3);
+    box-shadow: 0 2px 10px rgba(28, 156, 240,0.3);
 }
 .cmp-pill-sep { width: 1px; height: 20px; background: var(--border-strong); margin: 0 4px; flex-shrink: 0; }
 
@@ -621,7 +626,7 @@ tr.postseason-row:hover {
     padding: 9px 16px; border-radius: var(--r-md); cursor: pointer;
     transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast);
 }
-.cmp-download:hover { background: rgba(245,158,11,0.12); border-color: var(--border-gold); color: var(--gold); }
+.cmp-download:hover { background: rgba(28, 156, 240,0.12); border-color: var(--border-gold); color: var(--gold); }
 .cmp-download:disabled { opacity: 0.5; cursor: default; }
 .cmp-download svg { width: 15px; height: 15px; flex-shrink: 0; }
 
@@ -666,7 +671,7 @@ tr.postseason-row:hover {
 .cmp-search-input::placeholder { color: var(--text-dim); }
 .cmp-search-input:focus {
     border-style: solid; border-color: var(--border-gold);
-    box-shadow: 0 0 0 3px rgba(245,158,11,0.1); background: var(--bg-card-hover);
+    box-shadow: 0 0 0 3px rgba(28, 156, 240,0.1); background: var(--bg-card-hover);
 }
 .cmp-dropdown {
     position: absolute; top: calc(100% + 6px); left: 0; right: 0;
@@ -678,7 +683,7 @@ tr.postseason-row:hover {
 .cmp-dropdown.active { display: block; }
 .cmp-dd-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
 .cmp-dd-item:last-child { border-bottom: none; }
-.cmp-dd-item:hover { background: rgba(245,158,11,0.1); }
+.cmp-dd-item:hover { background: rgba(28, 156, 240,0.1); }
 .cmp-dd-name { color: var(--text-primary); font-weight: 700; font-size: var(--text-base); }
 .cmp-dd-sub { color: var(--text-secondary); font-size: var(--text-xs); }
 .cmp-dd-note { padding: 16px; text-align: center; color: var(--text-dim); font-size: var(--text-sm); }
@@ -738,7 +743,7 @@ tr.postseason-row:hover {
 .cmp-cell.is-lead .cmp-bar > span { background: var(--gold); }
 .cmp-pct { font-size: 0.62rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.02em; white-space: nowrap; }
 /* leading value per row — the reference's shaded highlight */
-.cmp-cell.is-lead { background: rgba(245,158,11,0.14); box-shadow: inset 0 0 0 1px var(--border-gold); }
+.cmp-cell.is-lead { background: rgba(28, 156, 240,0.14); box-shadow: inset 0 0 0 1px var(--border-gold); }
 .cmp-cell.is-lead .cmp-val { color: var(--text-primary); }
 .cmp-cell.is-lead .cmp-pct { color: var(--gold); }
 
@@ -746,13 +751,13 @@ tr.postseason-row:hover {
 .compare-watermark { text-align: right; padding: 11px 20px; color: var(--text-dim); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.04em; border-top: 1px solid var(--border); }
 .cmp-openfull {
     display: block; margin: 16px auto 0;
-    background: rgba(245,158,11,0.1); border: 1px solid var(--border-gold);
+    background: rgba(28, 156, 240,0.1); border: 1px solid var(--border-gold);
     color: var(--gold); font-family: var(--font-display); font-weight: 600;
     letter-spacing: 0.06em; font-size: var(--text-sm);
     padding: 9px 22px; border-radius: var(--r-pill); cursor: pointer;
     transition: background var(--t-fast), color var(--t-fast);
 }
-.cmp-openfull:hover { background: rgba(245,158,11,0.18); color: #fbbf24; }
+.cmp-openfull:hover { background: rgba(28, 156, 240,0.18); color: #f7b928; }
 
 @media (max-width: 768px) {
     .cmp-hname { font-size: var(--text-md); }
@@ -984,7 +989,7 @@ tr.postseason-row:hover {
     border-left: 1px solid var(--border);
 }
 .lb-th-stat:hover { color: var(--text-primary); }
-.lb-th-sorted { color: var(--gold); border-bottom-color: rgba(245,158,11,0.5); }
+.lb-th-sorted { color: var(--gold); border-bottom-color: rgba(28, 156, 240,0.5); }
 .lb-th-na { cursor: default; color: var(--text-dim); }
 .lb-th-na:hover { color: var(--text-dim); }
 .lb-sort-arrow { margin-left: 2px; }
@@ -1006,7 +1011,7 @@ tr.postseason-row:hover {
     font-size: var(--text-base);
     border-left: 1px solid var(--border);
 }
-.lb-td-sorted { color: var(--text-primary); font-weight: 800; background: rgba(245,158,11,0.05); }
+.lb-td-sorted { color: var(--text-primary); font-weight: 800; background: rgba(28, 156, 240,0.05); }
 .lb-td-gold { color: var(--gold) !important; font-weight: 800 !important; }
 .lb-td-na { color: var(--text-dim); text-align: center; }
 
@@ -1027,7 +1032,7 @@ tr.postseason-row:hover {
     font-size: var(--text-xs); font-weight: 800; padding: 2px 7px; border-radius: var(--r-sm);
 }
 .lb-ap-pill {
-    background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--gold);
+    background: rgba(28, 156, 240,0.15); border: 1px solid rgba(28, 156, 240,0.4); color: var(--gold);
     font-size: var(--text-xs); font-weight: 800; padding: 2px 7px; border-radius: var(--r-sm);
 }
 .lb-pill {
@@ -1050,7 +1055,7 @@ tr.postseason-row:hover {
     margin-top: 12px;
     background: linear-gradient(135deg, #7a5c00, #b8860b);
     border: 1px solid var(--gold);
-    box-shadow: 0 0 10px rgba(245,158,11,0.35);
+    box-shadow: 0 0 10px rgba(28, 156, 240,0.35);
     color: var(--gold);
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -1226,7 +1231,7 @@ tr.player-row:hover {
 /* Rivalry cards */
 .rivalry-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(245,158,11,0.3) !important; /* overrides inline base border color */
+    border-color: rgba(28, 156, 240,0.3) !important; /* overrides inline base border color */
     box-shadow: 0 6px 20px rgba(0,0,0,0.3);
 }
 
@@ -1382,7 +1387,7 @@ tr.player-row:hover {
     content: '';
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at center, rgba(245,158,11,0.05) 0%, transparent 55%);
+    background: radial-gradient(ellipse at center, rgba(28, 156, 240,0.05) 0%, transparent 55%);
     pointer-events: none;
 }
 .bk-lines {
@@ -1398,7 +1403,7 @@ tr.player-row:hover {
     stroke: rgba(255,255,255,0.12);
     stroke-width: 1.5;
 }
-.bk-line-done { stroke: rgba(245,158,11,0.7); }
+.bk-line-done { stroke: rgba(28, 156, 240,0.7); }
 
 .bk-col {
     position: relative;
@@ -1417,7 +1422,7 @@ tr.player-row:hover {
     font-size: var(--text-base);
     white-space: nowrap;
 }
-.bk-col-head-gold { color: rgba(245,158,11,0.75); }
+.bk-col-head-gold { color: rgba(28, 156, 240,0.75); }
 .bk-col-body {
     flex: 1;
     display: flex;
@@ -1454,14 +1459,14 @@ tr.player-row:hover {
 .bk-match-link { cursor: pointer; }
 .bk-match-link:hover { border-color: var(--text-dim); }
 .bk-match-link:focus-visible {
-    outline: 2px solid rgba(245,158,11,0.7);
+    outline: 2px solid rgba(28, 156, 240,0.7);
     outline-offset: 2px;
 }
 .bk-match-gold {
-    border: 1px solid rgba(245,158,11,0.4);
-    box-shadow: 0 0 20px rgba(245,158,11,0.12);
+    border: 1px solid rgba(28, 156, 240,0.4);
+    box-shadow: 0 0 20px rgba(28, 156, 240,0.12);
 }
-.bk-match-gold.bk-match-link:hover { border-color: rgba(245,158,11,0.7); }
+.bk-match-gold.bk-match-link:hover { border-color: rgba(28, 156, 240,0.7); }
 .bk-bowl {
     margin-top: 6px;
     text-align: center;
@@ -1499,7 +1504,7 @@ tr.player-row:hover {
 }
 a.bk-team-link:hover { background: rgba(255,255,255,0.04); }
 a.bk-team-link:focus-visible {
-    outline: 2px solid rgba(245,158,11,0.7);
+    outline: 2px solid rgba(28, 156, 240,0.7);
     outline-offset: -2px;
     border-radius: var(--r-sm);
 }
@@ -1524,7 +1529,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     background: rgba(255,255,255,0.06);
     font-variant-numeric: tabular-nums;
 }
-.bk-seed-bye { background: rgba(245,158,11,0.18); color: #fbbf24; }
+.bk-seed-bye { background: rgba(28, 156, 240,0.18); color: #f7b928; }
 .bk-seed-mid { background: rgba(59,130,246,0.18); color: #93c5fd; }
 
 .bk-logo {
@@ -1580,7 +1585,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     font-weight: 800;
     letter-spacing: 0.08em;
     color: var(--bk-gold);
-    border: 1px solid rgba(245,158,11,0.4);
+    border: 1px solid rgba(28, 156, 240,0.4);
     border-radius: var(--r-sm);
     padding: 1px 5px;
 }
@@ -1607,7 +1612,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .bk-trophy {
     text-align: center;
     margin-bottom: 12px;
-    filter: drop-shadow(0 0 12px rgba(245,158,11,0.4));
+    filter: drop-shadow(0 0 12px rgba(28, 156, 240,0.4));
 }
 .bk-champion {
     margin-top: 20px;
@@ -1625,9 +1630,9 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     text-align: center;
 }
 .bk-champion img { width: 40px; height: 40px; object-fit: contain; }
-.bk-champion:hover { color: #fbbf24; }
+.bk-champion:hover { color: #f7b928; }
 .bk-champion:focus-visible {
-    outline: 2px solid rgba(245,158,11,0.7);
+    outline: 2px solid rgba(28, 156, 240,0.7);
     outline-offset: 3px;
     border-radius: var(--r-sm);
 }
@@ -1677,7 +1682,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
         padding-bottom: 8px;
         margin-bottom: 14px;
     }
-    .bk-m-head-gold { color: rgba(245,158,11,0.85); border-bottom-color: rgba(245,158,11,0.25); }
+    .bk-m-head-gold { color: rgba(28, 156, 240,0.85); border-bottom-color: rgba(28, 156, 240,0.25); }
     .bk-slot-m { width: 100%; max-width: 360px; margin: 0 auto 14px; }
     .bk-mobile .bk-champion { margin-bottom: 8px; }
 }
@@ -1730,12 +1735,12 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     line-height: 1.5;
 }
 .badge-rank, .ap-final-pill, .lb-ap-pill, .compare-ap-badge {
-    background: rgba(245,158,11,0.12);
+    background: rgba(28, 156, 240,0.12);
     border: 1px solid var(--border-gold);
     color: var(--gold);
 }
 .badge-rivalry, .gc-rivalry, .rivalry-badge {
-    background: linear-gradient(135deg, rgba(245,158,11,0.22), rgba(184,134,11,0.12));
+    background: linear-gradient(135deg, rgba(28, 156, 240,0.22), rgba(184,134,11,0.12));
     border: 1px solid var(--border-gold);
     box-shadow: none;
     color: var(--gold);
@@ -1808,7 +1813,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .tab-pill:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
 .tab-pill.active, .compare-tab.active {
     color: var(--gold);
-    background: rgba(245,158,11,0.1);
+    background: rgba(28, 156, 240,0.1);
     border-color: var(--border-gold);
 }
 .lb-team-tab, .lb-page-btn, .compare-download-btn { font-family: var(--font-display); font-weight: 600; letter-spacing: 0.04em; }
@@ -1881,7 +1886,7 @@ input:focus-visible, [tabindex]:focus-visible {
 }
 
 /* Selection */
-::selection { background: rgba(245,158,11,0.28); color: var(--text-primary); }
+::selection { background: rgba(28, 156, 240,0.28); color: var(--text-primary); }
 
 /* Scrollbars (webkit) — thin, dark, quiet */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1934,7 +1939,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 }
 .ig-base { --ig-line: rgba(141,164,190,0.30); opacity: 0.16; }
 .ig-reveal {
-    --ig-line: rgba(245,158,11,0.55);
+    --ig-line: rgba(28, 156, 240,0.55);
     opacity: 0.9;
     -webkit-mask-image: radial-gradient(300px circle at var(--mx, 50%) var(--my, 38%), #000 0%, transparent 100%);
     mask-image: radial-gradient(300px circle at var(--mx, 50%) var(--my, 38%), #000 0%, transparent 100%);
@@ -1949,7 +1954,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .ig-glow-gold {
     top: -22%; right: -12%;
     width: 44%; height: 62%;
-    background: rgba(245,158,11,0.10);
+    background: rgba(28, 156, 240,0.10);
 }
 .ig-glow-navy {
     bottom: -30%; left: -12%;
@@ -1970,7 +1975,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     height: clamp(64px, 6vw + 32px, 104px);
     width: auto;
     margin-bottom: var(--s4);
-    filter: drop-shadow(0 0 24px rgba(245,158,11,0.25)) drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 0 24px rgba(28, 156, 240,0.25)) drop-shadow(0 4px 12px rgba(0,0,0,0.5));
 }
 .ig-eyebrow {
     font-family: var(--font-display);
@@ -2125,7 +2130,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 /* gold glow toward the line of scrimmage */
 .lineup-field::after {
     content: ''; position: absolute; left: 0; right: 0; top: 42%; height: 40%;
-    background: radial-gradient(ellipse at 50% 50%, rgba(245,158,11,0.06), transparent 70%);
+    background: radial-gradient(ellipse at 50% 50%, rgba(28, 156, 240,0.06), transparent 70%);
     pointer-events: none;
 }
 .lf-rows {
@@ -2180,7 +2185,7 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 
 /* Unit colour coding — pulled from the site's semantic accent tokens */
 .lf-unit-skill { --lf-accent: var(--gold); }
-.lf-unit-skill .lf-tag { color: var(--gold); background: rgba(245,158,11,0.12); border-color: var(--border-gold); }
+.lf-unit-skill .lf-tag { color: var(--gold); background: rgba(28, 156, 240,0.12); border-color: var(--border-gold); }
 .lf-unit-ol { --lf-accent: var(--text-dim); }
 .lf-unit-ol .lf-tag { color: var(--text-secondary); background: rgba(255,255,255,0.06); border-color: var(--border-strong); }
 .lf-unit-dl { --lf-accent: var(--red); }

@@ -320,7 +320,7 @@
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
                         <th style="text-align:center">CMP</th>
                         <th style="text-align:center">ATT</th>
-                        <th style="color:#fbbf24;text-align:center">YDS ↓</th>
+                        <th style="color:#f7b928;text-align:center">YDS ↓</th>
                         <th style="text-align:center">PCT</th>
                         <th style="text-align:center">TD</th>
                         <th style="text-align:center">INT</th>
@@ -330,9 +330,9 @@
                         {% set p = stats.get('passing', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('COMPLETIONS') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('ATT') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
+                        <td style="padding:12px 10px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#f7b928;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('PCT') or '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;text-align:center">{% if p.get('INT') %}<span style="display:inline-block;border:1px solid rgba(239,68,68,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--red);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('INT') }}</span>{% elif p.get('INT') is not none %}0{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPA') if p.get('YPA') is not none else '—' }}</td>
                     </tr></tbody>
@@ -360,7 +360,7 @@
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('CAR') if p.get('CAR') is not none else '—' }}</td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(96,165,250,0.05)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPC') if p.get('YPC') is not none else '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') if p.get('LONG') is not none else '—' }}</td>
                     </tr></tbody>
                 </table>
@@ -387,7 +387,7 @@
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('REC') or '—' }}</td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(52,211,153,0.05)"><span style="color:#34d399;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('AVG') if p.get('AVG') is not none else '—' }}</td>
-                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
+                        <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') if p.get('LONG') is not none else '—' }}</td>
                     </tr></tbody>
                 </table>
@@ -430,14 +430,14 @@
                 <div style="overflow-x:auto;margin-bottom:4px">
                 <table class="data-table" style="width:100%">
                     <thead><tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
-                        <th style="color:#fbbf24;text-align:center">FGM ↓</th>
+                        <th style="color:#f7b928;text-align:center">FGM ↓</th>
                         <th style="text-align:center">FGA</th>
                         <th style="text-align:center">PCT</th>
                         <th style="text-align:center">LONG</th>
                     </tr></thead>
                     <tbody><tr>
                         {% set p = stats.get('kicking', {}) %}
-                        <td style="padding:12px 14px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-md)">{{ p.get('FGM') or '—' }}</span></td>
+                        <td style="padding:12px 14px;text-align:center;background:rgba(251,191,36,0.05)"><span style="color:#f7b928;font-weight:800;font-size: var(--text-md)">{{ p.get('FGM') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('FGA') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('PCT') or '—' }}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') or '—' }}</td>
@@ -590,7 +590,7 @@
                     ('2nd Down',        'second_down',   '#a78bfa'),
                     ('3rd Down',        'third_down',    '#f87171'),
                     ('Standard Downs',  'standard',      '#6ee7b7'),
-                    ('Passing Downs',   'passing_downs', '#fbbf24'),
+                    ('Passing Downs',   'passing_downs', '#f7b928'),
                 ] %}
                 {% set val = usage.get(key) %}
                 {% if val is not none %}
@@ -686,11 +686,11 @@
                     <td style="padding:11px 10px;text-align:center;white-space:nowrap">
                     {% if show %}
                         {% if 'TD' in label and 'INT' not in label and num > 0 %}
-                            <span style="display:inline-block;border:1px solid rgba(245,158,11,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--gold);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
+                            <span style="display:inline-block;border:1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--gold);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
                         {% elif label == 'INT' and num > 0 %}
                             <span style="display:inline-block;border:1px solid rgba(239,68,68,0.5);border-radius: var(--r-sm);padding:1px 7px;color:var(--red);font-weight:800;font-size: var(--text-sm);min-width:28px;text-align:center">{{ num|int }}</span>
                         {% elif label == 'RTG' %}
-                            <span style="color:{{ '#34d399' if num >= 100 else ('#fbbf24' if num >= 75 else '#f87171') }};font-weight:700;font-size: var(--text-base)">{{ "%.1f"|format(num) }}</span>
+                            <span style="color:{{ '#34d399' if num >= 100 else ('#f7b928' if num >= 75 else '#f87171') }};font-weight:700;font-size: var(--text-base)">{{ "%.1f"|format(num) }}</span>
                         {% elif label == 'CMP%' %}
                             <span style="color: var(--text-primary);font-size: var(--text-sm)">{{ "%.1f"|format(num * 100 if num <= 1 else num) }}%</span>
                         {% elif label in ('YDS','REC YDS','RUSH YDS') %}

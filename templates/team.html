@@ -45,7 +45,7 @@
                 {# Headline evaluative metric — the site's proprietary Net Savant
                    Rating, with its national rank beneath (gold-accented). #}
                 {% if svr %}
-                <div class="stat-card" style="background:rgba(245,158,11,0.08);border: 1px solid rgba(245,158,11,0.4);border-radius: var(--r-md);padding:12px 16px;text-align:center;min-width:110px;backdrop-filter:blur(4px)">
+                <div class="stat-card" style="background:rgba(28, 156, 240,0.08);border: 1px solid rgba(28, 156, 240,0.4);border-radius: var(--r-md);padding:12px 16px;text-align:center;min-width:110px;backdrop-filter:blur(4px)">
                     <div style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
                     <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:4px;text-transform:uppercase">Net Savant</div>
                     {% if svr.net_ranking %}<div style="color: var(--gold);font-size: var(--text-xs);font-weight:700;margin-top:4px;opacity:0.85">{{ ordinal(svr.net_ranking) }}</div>{% endif %}
@@ -207,7 +207,7 @@
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Net Rating</div>
                     <div style="color: var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.net_rating) }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color: var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.net_ranking }} Nationally</span></div>
+                    <div style="margin-top:8px"><span style="background:rgba(28, 156, 240,0.1);border:1px solid rgba(28, 156, 240,0.3);color: var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.net_ranking }} Nationally</span></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
@@ -268,8 +268,8 @@
             <div class="col-6 col-lg-3">
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Special Teams</div>
-                    <div style="color:#fbbf24;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.st_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#fbbf24;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">SP+ Rating</span></div>
+                    <div style="color:#f7b928;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.st_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#f7b928;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">SP+ Rating</span></div>
                 </div>
             </div>
         </div>
@@ -619,14 +619,14 @@
 
 {% if receiving_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Receiving Leaders','#fbbf24') }}
+    {{ stat_table_header('Receiving Leaders','#f7b928') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
             <th style="width:36px">Rk</th>
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Rec</th>
-            <th style="color:#fbbf24;text-align:center">Yds ↓</th>
+            <th style="color:#f7b928;text-align:center">Yds ↓</th>
             <th style="text-align:center">Avg</th>
             <th style="text-align:center">TD</th>
             <th style="text-align:center">Long</th>
@@ -637,7 +637,7 @@
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('REC')) }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(251,191,36,0.04)"><span style="color:#fbbf24;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(251,191,36,0.04)"><span style="color:#f7b928;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPR')|float) if p.get('YPR') else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
