@@ -86,6 +86,10 @@
     box-sizing: border-box;
     background: #060d1c;
     border-bottom: 1px solid var(--border);
+    /* A dimmed variant of the primary accent, used ONLY inside the ticker so it
+       reads as quiet ambient context rather than competing with the full-
+       brightness accent used elsewhere. Still clearly blue and legible. */
+    --ticker-accent: #4f8cba;
 }
 .ticker-week {
     flex-shrink: 0;
@@ -100,7 +104,7 @@
     background: rgba(255,255,255,0.02);
 }
 .ticker-week-label {
-    color: var(--gold);
+    color: var(--ticker-accent);
     font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.1em;
@@ -153,7 +157,7 @@
 }
 .ticker-team img { width: 16px; height: 16px; object-fit: contain; flex-shrink: 0; }
 .ticker-rank {
-    color: var(--gold);
+    color: var(--ticker-accent);
     font-size: 0.58rem;
     font-weight: 800;
     margin-right: 3px;
@@ -165,7 +169,7 @@
     font-weight: 600;
     white-space: nowrap;
 }
-.ticker-name.won { color: var(--text-primary); font-weight: 800; }
+.ticker-name.won { color: var(--text-primary); font-weight: 700; }
 .ticker-score {
     margin-left: auto;
     color: var(--text-secondary);
@@ -173,7 +177,7 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
-.ticker-score.won { color: var(--text-primary); font-weight: 800; }
+.ticker-score.won { color: var(--ticker-accent); font-weight: 700; }
 
 /* ── Home page: game result cards ─────────────────────────────────────── */
 .home-games-grid {
@@ -1859,7 +1863,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .gc-score { font-size: var(--text-lg); font-weight: 700; }
 
 /* ── Scores: winner gold, loser faded ── */
-.gc-team.winner .gc-score, .ticker-score.won, .bk-pts-won { color: var(--gold) !important; }
+.gc-team.winner .gc-score, .bk-pts-won { color: var(--gold) !important; }
 .hero-score-winner { color: var(--gold); font-weight: 800; }
 .hero-score-loser { color: var(--text-secondary); font-weight: 600; }
 
