@@ -875,17 +875,19 @@ def get_cached_season_leaders():
     route — otherwise the same queries would re-run for every distinct
     week URL instead of being computed once per hour.
 
-    Returns (label, leaderboard href, accent color, rows) per category, in
-    the display order used by the home page sidebar."""
+    Returns (label, leaderboard href, rows) per category, in the display order
+    used by the home page sidebar. Stat values are colored via the --gold
+    accent token in the template, so no per-category color is passed."""
     conn = get_db()
     try:
         cursor = conn.cursor()
         return [
-            ('Passing Yards',   '/leaderboards/passing',   '#f7b928', leaders_query(cursor, 'passing',       'YDS')),
-            ('Rushing Yards',   '/leaderboards/rushing',   '#60a5fa', leaders_query(cursor, 'rushing',       'YDS')),
-            ('Receiving Yards', '/leaderboards/receiving', '#34d399', leaders_query(cursor, 'receiving',     'YDS')),
-            ('Tackles',         '/leaderboards/defense',   '#a78bfa', leaders_query(cursor, 'defensive',     'TOT')),
-            ('Interceptions',   '/leaderboards/defense',   '#f87171', leaders_query(cursor, 'interceptions', 'INT')),
+            ('Passing Yards',   '/leaderboards/passing',   leaders_query(cursor, 'passing',       'YDS')),
+            ('Rushing Yards',   '/leaderboards/rushing',   leaders_query(cursor, 'rushing',       'YDS')),
+            ('Receiving Yards', '/leaderboards/receiving', leaders_query(cursor, 'receiving',     'YDS')),
+            ('Tackles',         '/leaderboards/defense',   leaders_query(cursor, 'defensive',     'TOT')),
+            ('Sacks',           '/leaderboards/defense',   leaders_query(cursor, 'defensive',     'SACKS')),
+            ('Interceptions',   '/leaderboards/defense',   leaders_query(cursor, 'interceptions', 'INT')),
         ]
     finally:
         release_db(conn)

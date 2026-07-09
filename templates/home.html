@@ -116,7 +116,7 @@
     <div class="col-lg-4">
         <h5 class="section-label" style="margin-bottom: var(--s6);font-size: var(--text-sm)">Season Leaders</h5>
 
-        {% for label, href, accent, players in leaders %}
+        {% for label, href, players in leaders %}
         <div class="leader-card">
             <div class="leader-head">
                 <span class="section-label">{{ label }}</span>
@@ -136,7 +136,7 @@
                         {{ p[1] }}
                     </div>
                 </div>
-                <span class="leader-val" style="color:{{ accent }}">{{ p[2] }}</span>
+                <span class="leader-val">{{ p[2] }}</span>
             {% endset %}
 
             {% if loop.first %}

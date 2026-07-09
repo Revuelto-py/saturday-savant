@@ -320,7 +320,7 @@
     text-overflow: ellipsis;
     display: block;
 }
-a.leader-row:hover .leader-name { color: #60a5fa; }
+a.leader-row:hover .leader-name { color: var(--gold); }
 .leader-team {
     display: flex;
     align-items: center;
@@ -336,6 +336,7 @@ a.leader-row:hover .leader-name { color: #60a5fa; }
     font-weight: 900;
     font-size: var(--text-md);
     font-variant-numeric: tabular-nums;
+    color: var(--gold);   /* accent — consistent across all leader categories */
 }
 .leader-row.featured { padding: 4px 0 10px; }
 .leader-row.featured .player-avatar-sm { width: 44px; height: 44px; }
@@ -757,7 +758,7 @@ tr.postseason-row:hover {
     padding: 9px 22px; border-radius: var(--r-pill); cursor: pointer;
     transition: background var(--t-fast), color var(--t-fast);
 }
-.cmp-openfull:hover { background: rgba(28, 156, 240,0.18); color: #f7b928; }
+.cmp-openfull:hover { background: rgba(28, 156, 240,0.18); color: var(--gold); }
 
 @media (max-width: 768px) {
     .cmp-hname { font-size: var(--text-md); }
@@ -1529,7 +1530,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     background: rgba(255,255,255,0.06);
     font-variant-numeric: tabular-nums;
 }
-.bk-seed-bye { background: rgba(28, 156, 240,0.18); color: #f7b928; }
+.bk-seed-bye { background: rgba(28, 156, 240,0.18); color: var(--gold); }
 .bk-seed-mid { background: rgba(59,130,246,0.18); color: #93c5fd; }
 
 .bk-logo {
@@ -1630,7 +1631,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     text-align: center;
 }
 .bk-champion img { width: 40px; height: 40px; object-fit: contain; }
-.bk-champion:hover { color: #f7b928; }
+.bk-champion:hover { color: var(--gold); }
 .bk-champion:focus-visible {
     outline: 2px solid rgba(28, 156, 240,0.7);
     outline-offset: 3px;
