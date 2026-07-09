@@ -1827,6 +1827,12 @@ def team(team_ref):
         if not team_info:
             return render_template('404.html', message=f'Team "{team_name}" not found.'), 404
 
+        # FCS teams live in the teams table only so their logo/name can render
+        # when an FBS team plays them — they have no team page of their own.
+        if team_info[1] in FCS_CONFS:
+            return render_template('404.html',
+                message=f'{team_name} is an FCS team — no team page is available.'), 404
+
         cursor.execute('''
             SELECT
                 SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
@@ -2344,7 +2350,8 @@ def game_detail(game_id):
                    g.week, g.season_type, g.notes, g.start_date,
                    t1.logo_dark, t2.logo_dark, t1.color, t2.color,
                    t1.alt_color, t2.alt_color,
-                   g.completed, COALESCE(g.start_time_tbd, 0), g.season
+                   g.completed, COALESCE(g.start_time_tbd, 0), g.season,
+                   t1.conference, t2.conference
             FROM games g
             LEFT JOIN teams t1 ON g.home_team = t1.name
             LEFT JOIN teams t2 ON g.away_team = t2.name
@@ -2356,6 +2363,9 @@ def game_detail(game_id):
 
         home_team = game_info[1]
         away_team = game_info[2]
+        # FCS opponents have no team page — only link the ones we know are FBS.
+        home_is_fbs = bool(game_info[18]) and game_info[18] not in FCS_CONFS
+        away_is_fbs = bool(game_info[19]) and game_info[19] not in FCS_CONFS
         ap_rankings = get_ap_rankings(cursor)
         rivalry_name = get_rivalry(cursor, home_team, away_team)
 
@@ -2405,6 +2415,7 @@ def game_detail(game_id):
         season_type_raw = game_info[6] or ''
         return render_template('game.html',
             game=game_info, home_team=home_team, away_team=away_team,
+            home_is_fbs=home_is_fbs, away_is_fbs=away_is_fbs,
             # No AP ranks on 2026 games — the poll reflects the 2025 season.
             ap_rankings={}, rivalry_name=rivalry_name,
             is_scheduled=True,
@@ -3021,6 +3032,8 @@ def game_detail(game_id):
         is_scheduled=False,
         home_team=home_team,
         away_team=away_team,
+        home_is_fbs=home_is_fbs,
+        away_is_fbs=away_is_fbs,
         ap_rankings=ap_rankings,
         espn_game_id=espn_game_id,
         quarters=quarters,
