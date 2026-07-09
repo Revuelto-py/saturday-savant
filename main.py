@@ -333,14 +333,14 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         a production measure — the set of five is reasonable but the
         specific LT/LG/C/RG/RT labels are not individually verifiable.
 
-    Layered on top of the above is EA Sports College Football 27 overall
-    rating (fetch_ea_ratings.py) as a SECONDARY, internal-only signal. It is a
-    subjective developer rating rather than production, so it supplements
-    rather than replaces the statistical signals: a small tiebreaker for
-    skill/defense (breaking near-ties and ranking transfers with no usage/
-    box-score yet) and the primary talent signal for the OL group, where no
-    production data exists at all. Exact weighting is documented inline below.
-    EA ratings are never surfaced in the UI (licensed/proprietary data).
+    EA Sports College Football 27 overall rating (fetch_ea_ratings.py) is the
+    PRIMARY signal: when a player has a rating it dominates the ordering at his
+    position, and the 2025 production above only (a) breaks ties between
+    similarly-rated players, or (b) ranks players who have no EA rating at all.
+    This is the reverse of the earlier design, where EA was a small tiebreaker
+    layered on top of production. EA ratings are internal-only and never
+    surfaced in the UI (licensed/proprietary data); a missing/unpopulated
+    ea_ratings table degrades gracefully to production-only scoring.
     """
     ids = [str(p[4]) for p in roster if p[4] is not None]
     int_ids = [int(p[4]) for p in roster if p[4] is not None]
@@ -374,12 +374,9 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         yds[str(pid)] = float(total or 0)
 
     # EA Sports College Football 27 overall rating, matched to our players by
-    # name+team at ingest (see fetch_ea_ratings.py). This is a SECONDARY,
-    # internal-only signal — a subjective game-developer talent rating, not
-    # on-field production — so it is weighted to *supplement* the statistical
-    # signals above, never replace them. It is intentionally never displayed
-    # in the UI (licensed/proprietary data). Table may not exist on a fresh
-    # DB, so a missing table degrades gracefully to production-only scoring.
+    # name+team at ingest (see fetch_ea_ratings.py) — the PRIMARY talent signal.
+    # Internal-only, never displayed. Table may not exist on a fresh DB, so a
+    # missing table degrades gracefully to production-only scoring.
     ea = {}
     if use_ea:
         try:
@@ -390,52 +387,54 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         except Exception:
             cursor.connection.rollback()  # ea_ratings not populated yet
 
-    # How EA overall is combined with the existing production signals, by
-    # group. Because build_lineup() sorts each position pool independently,
-    # these weights only need to order players *within* a position group.
-    #
-    #   • skill (QB/RB/WR/TE): usage/yards stay PRIMARY. EA is a bounded
-    #     tiebreaker at 0.3 — its max effect (~30) is under a 3%-usage gap
-    #     (30 = 0.03*1000), so it only reorders players who are near-tied on
-    #     usage or have no usage row at all (e.g. early-season transfers),
-    #     never overturning a clear statistical leader.
-    #   • defense: tackle-based production stays PRIMARY. EA at 0.25 (max ~25)
-    #     likewise only breaks near-ties or ranks rotational players/transfers
-    #     with little box-score production.
-    #   • offensive line: no individual OL production exists in any data
-    #     source, so here EA is the PRIMARY talent signal, blended 70/30 with
-    #     class-year seniority (the previous sole proxy). A lineman with no EA
-    #     rating is treated as replacement-level talent (EA_OL_PRIOR ≈ the
-    #     25th-percentile FBS OL rating), NOT as his seniority-implied value —
-    #     otherwise an unrated senior would leapfrog genuinely EA-rated
-    #     starters. Within an all-unrated OL group every player gets the same
-    #     prior, so ordering collapses back to seniority (no regression).
-    EA_SKILL_W, EA_DEF_W, EA_OL_W = 0.3, 0.25, 0.7
-    EA_OL_PRIOR = 68
+    # EA-primary scoring. build_lineup() sorts each position pool independently,
+    # so a score only has to order players *within* a position group. Each
+    # player's score is his EA overall (0–99) plus a small production nudge, so
+    # EA dominates and production only reorders players whose EA ratings are
+    # within TIE_BAND of each other. Players with no EA rating fall back to a
+    # production-ranked band (UNRATED_BASE … UNRATED_BASE+UNRATED_SPREAD) that
+    # sits below the rated pool, so they start only where a position has no
+    # rated player or their production is genuinely elite.
+    TIE_BAND = 2.5          # production can reorder EA only within ~2.5 points
+    UNRATED_BASE = 48.0     # unrated players rank here (EA ratings run 47–99)…
+    UNRATED_SPREAD = 22.0   # …ordered among themselves by production (48–70)
 
     year_rank = {'4': 4, '3': 3, '2': 2, '1': 1}
+
+    def _quality(p, pid, pos):
+        """0..1 production/quality signal for a player, by position group. Used
+        as the within-group tiebreak for rated players and the ranking signal
+        for unrated ones."""
+        if pos in _LINEUP_OL:
+            # No individual OL box score exists in any source — seniority
+            # (class year) is the only available proxy.
+            return min(1.0, year_rank.get(str(p[8]), 0) / 4.0)
+        if pos in _LINEUP_SKILL:
+            # Usage share of team plays is the snap-count proxy; scrimmage
+            # yards nudge ties and cover players with no usage row.
+            u = usage.get(pid, 0.0)
+            y = yds.get(pid, 0.0)
+            return min(1.0, u + min(y, 4000.0) / 4000.0 * 0.15)
+        # defense: tackle-weighted production, squashed into 0..1
+        d = dstat.get(pid, {})
+        s = (d.get('TOT', 0) + 2 * d.get('SACKS', 0) + 1.5 * d.get('TFL', 0)
+             + 1.5 * d.get('PD', 0) + 3 * d.get('INT', 0) + 0.5 * d.get('QB HUR', 0))
+        return s / (s + 35.0)
+
     scores = {}
     for p in roster:
         if p[4] is None:
             continue
         pid = str(p[4])
         pos = (p[2] or '').upper()
+        jersey = int(p[3]) if str(p[3]).isdigit() else 99
+        q = max(0.0, min(1.0, _quality(p, pid, pos)))
         ovr = ea.get(pid)
-        if pos in _LINEUP_OL:
-            yr = year_rank.get(str(p[8]), 0)
-            jersey = int(p[3]) if str(p[3]).isdigit() else 99
-            senior_100 = yr / 4.0 * 100          # freshman 25 … senior 100
-            ea_100 = ovr if ovr is not None else EA_OL_PRIOR
-            scores[pid] = (EA_OL_W * ea_100 + (1 - EA_OL_W) * senior_100
-                           + (99 - min(jersey, 99)) * 0.001)  # jersey: final tiebreak
-        elif pos in _LINEUP_SKILL:
-            scores[pid] = (usage.get(pid, 0) * 1000 + yds.get(pid, 0) / 1000.0
-                           + (ovr or 0) * EA_SKILL_W)
-        else:  # defense
-            d = dstat.get(pid, {})
-            scores[pid] = (d.get('TOT', 0) + 2 * d.get('SACKS', 0) + 1.5 * d.get('TFL', 0)
-                           + 1.5 * d.get('PD', 0) + 3 * d.get('INT', 0) + 0.5 * d.get('QB HUR', 0)
-                           + (ovr or 0) * EA_DEF_W)
+        if ovr is not None:
+            base = ovr + TIE_BAND * q                    # EA dominant, production breaks near-ties
+        else:
+            base = UNRATED_BASE + UNRATED_SPREAD * q      # no EA → ranked by production, below the rated pool
+        scores[pid] = base + (99 - min(jersey, 99)) * 1e-4  # deterministic final tiebreak
     return scores
 
 

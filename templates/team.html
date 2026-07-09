@@ -829,6 +829,7 @@
 <div class="lineup-block">
     <div class="lineup-head">
         <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected 2026 Starters</h5>
+        <div class="lineup-head-rule"></div>
         <div class="lineup-toggle" role="tablist" aria-label="Lineup side">
             <button id="lf-btn-off" class="active" onclick="lineupSide('offense')">Offense</button>
             <button id="lf-btn-def" onclick="lineupSide('defense')">Defense</button>
@@ -836,17 +837,15 @@
     </div>
 
     <div class="lineup-field">
-        <!-- OFFENSE -->
+        <!-- OFFENSE: receivers split just outside the tackles (extending the
+             line), then a shotgun backfield with the RB set beside the QB. -->
         <div id="lf-offense" class="lf-rows">
-            <div class="lf-row lf-row--spread">
-                {{ lf_card('WR1','skill') }}
-                {{ lf_card('WR2','skill') }}
+            <div class="lf-row lf-row--line">
+                {{ lf_card('WR1','skill') }}{{ lf_card('LT','ol') }}{{ lf_card('LG','ol') }}{{ lf_card('C','ol') }}{{ lf_card('RG','ol') }}{{ lf_card('RT','ol') }}{{ lf_card('TE','skill') }}{{ lf_card('WR2','skill') }}
             </div>
-            <div class="lf-row">
-                {{ lf_card('LT','ol') }}{{ lf_card('LG','ol') }}{{ lf_card('C','ol') }}{{ lf_card('RG','ol') }}{{ lf_card('RT','ol') }}{{ lf_card('TE','skill') }}
+            <div class="lf-row lf-row--backfield">
+                {{ lf_card('QB','skill') }}{{ lf_card('RB','skill') }}
             </div>
-            <div class="lf-row">{{ lf_card('QB','skill') }}</div>
-            <div class="lf-row">{{ lf_card('RB','skill') }}</div>
         </div>
 
         <!-- DEFENSE -->
@@ -870,7 +869,7 @@
             <span class="lg-item"><span class="lg-dot" style="background: var(--green)"></span>Secondary</span>
         </div>
     </div>
-    <div class="lineup-note" style="margin-top:8px">Projected from 2025 snap share, usage and production (transfers included). Offensive line ordered by seniority — individual line snaps aren't tracked in the available data.</div>
+    <div class="lineup-note" style="margin-top:8px">Projected from player talent grades and 2025 production, transfers included. Individual offensive-line snaps aren't tracked in the available data, so line spots are approximate.</div>
 </div>
 {% endif %}
 
