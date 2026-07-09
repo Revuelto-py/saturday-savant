@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_game_card.html" as gc %}
 {% block title %}Saturday Savant · College Football Analytics{% endblock %}
 
 {% block content %}
@@ -65,49 +66,16 @@
             </select>
         </div>
 
-        {% macro game_card(game) %}
-        {% set home_won = (game[1] or 0) > (game[3] or 0) %}
-        {% set away_won = (game[3] or 0) > (game[1] or 0) %}
-        <a class="game-card-v2" href="/game/{{ game[11] }}">
-            <div class="gc-head">
-                <span class="gc-note">{{ game[6] or 'Week ' ~ game[4] }}</span>
-                <span class="gc-final">Final</span>
-            </div>
-
-            <div class="gc-team{{ ' winner' if away_won else '' }}">
-                {% if game[10] %}<img src="{{ game[10] }}" alt="{{ game[2] }} logo" loading="lazy">{% endif %}
-                <span class="gc-name">
-                    {% set rank2 = ap_rankings.get(game[2]) %}
-                    {% if rank2 %}<span class="gc-rank">{{ rank2 }}</span>{% endif %}{{ game[2] }}
-                </span>
-                <span class="gc-score">{{ game[3] }}</span>
-            </div>
-
-            <div class="gc-team{{ ' winner' if home_won else '' }}">
-                {% if game[9] %}<img src="{{ game[9] }}" alt="{{ game[0] }} logo" loading="lazy">{% endif %}
-                <span class="gc-name">
-                    {% set rank = ap_rankings.get(game[0]) %}
-                    {% if rank %}<span class="gc-rank">{{ rank }}</span>{% endif %}{{ game[0] }}
-                </span>
-                <span class="gc-score">{{ game[1] }}</span>
-            </div>
-
-            {% if game[12] %}
-                <span class="gc-rivalry">{{ game[12] }}</span>
-            {% endif %}
-        </a>
-        {% endmacro %}
-
         {% if season_type == 'postseason' %}
             {% for label, games in grouped_games.items() %}
                 <div class="section-label mt-4">{{ label }}</div>
                 <div class="home-games-grid">
-                    {% for game in games %}{{ game_card(game) }}{% endfor %}
+                    {% for game in games %}{{ gc.game_card(game) }}{% endfor %}
                 </div>
             {% endfor %}
         {% else %}
             <div class="home-games-grid">
-                {% for game in games %}{{ game_card(game) }}{% endfor %}
+                {% for game in games %}{{ gc.game_card(game) }}{% endfor %}
             </div>
         {% endif %}
     </div>

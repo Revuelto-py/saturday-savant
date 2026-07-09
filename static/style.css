@@ -273,6 +273,101 @@
     letter-spacing: 0.04em;
 }
 
+/* ── Upcoming (scheduled, not-yet-played) game card ─────────────────────────
+   Same card, minus scores: the kickoff date replaces the FINAL badge and the
+   kickoff time sits where the rivalry badge would. A left accent stripe marks
+   it as upcoming without a second color. */
+.game-card-v2.is-upcoming { border-left: 2px solid rgba(28,156,240,0.55); }
+.gc-upcoming {
+    color: var(--accent);
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.gc-kickoff {
+    margin-top: 8px;
+    display: inline-block;
+    color: var(--text-dim);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── /games hub ─────────────────────────────────────────────────────────────
+   Same game_card as the home page, but a fluid grid that fills the wider
+   full-width layout (home uses a fixed 2-up sidebar-constrained grid). */
+.games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+    margin-top: var(--s4);
+}
+@media (max-width: 575.98px) {
+    .games-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.games-count {
+    margin-left: auto;
+    align-self: center;
+    color: var(--text-dim);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.games-context {
+    margin-top: var(--s4);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+}
+.games-context a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 700;
+    margin-left: 6px;
+}
+.games-context a:hover { text-decoration: underline; }
+.games-empty {
+    margin-top: var(--s6);
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: var(--text-base);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+}
+
+/* ── Team page: schedule season toggle (2025 | 2026) ───────────────────── */
+.sched-toggle {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-pill);
+    padding: 2px;
+}
+.sched-tab {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 4px 14px;
+    border-radius: var(--r-pill);
+    cursor: pointer;
+    transition: color .15s ease, background .15s ease;
+}
+.sched-tab:hover { color: var(--text-primary); }
+.sched-tab.active {
+    background: var(--accent);
+    color: #fff;
+}
+
 /* ── Home page: season leaders sidebar ─────────────────────────────────── */
 .leader-card {
     background: var(--bg-card);

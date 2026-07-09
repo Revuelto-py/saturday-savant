@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% import "_game_card.html" as gc %}
+{% block title %}Games · Saturday Savant{% endblock %}
+{% block og_title %}Games · Saturday Savant{% endblock %}
+{% block og_description %}Every college football game, all season — browse completed results and upcoming matchups by season and week.{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+
+    <!-- Page header -->
+    <div style="margin-bottom:20px">
+        <div class="section-label" style="margin-bottom: var(--s2)">Games</div>
+        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
+            {% if sel_team %}{{ sel_team }}
+                <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} schedule</span>
+            {% else %}
+                {% for o in week_options %}{% if o.week == sel_week and o.stype == sel_stype %}{{ o.label }}{% endif %}{% endfor %}
+                <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} Season</span>
+            {% endif %}
+        </h1>
+    </div>
+
+    <!-- Season toggle -->
+    <div class="lb-mode-toggle" style="margin-bottom: var(--s5)">
+        {% for s in seasons %}
+        <a href="{{ url_for('games_hub', season=s) }}" class="lb-mode-btn {{ 'active' if s == season else '' }}">{{ s }}</a>
+        {% endfor %}
+    </div>
+
+    <!-- Filters: week / conference / team -->
+    <div class="lb-filter-section">
+        <div class="lb-filter-row">
+            <div class="lb-filter-group">
+                <div class="lb-filter-label">Week</div>
+                <select class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
+                    {% for o in week_options %}
+                    <option value="{{ url_for('games_hub', season=season, week=o.week, stype=o.stype, conf=(sel_conf or none)) }}"
+                        {{ 'selected' if (o.week == sel_week and o.stype == sel_stype) else '' }}>{{ o.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="lb-filter-group">
+                <div class="lb-filter-label">Conference</div>
+                <select class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
+                    <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
+                        {{ 'selected' if not sel_conf else '' }}>All Conferences</option>
+                    {% for c in conferences %}
+                    <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype, conf=c) }}"
+                        {{ 'selected' if sel_conf == c else '' }}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="lb-filter-group">
+                <div class="lb-filter-label">Team</div>
+                <select class="lb-select" onchange="location=this.value">
+                    <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
+                        {{ 'selected' if not sel_team else '' }}>All Teams</option>
+                    {% for t in team_names %}
+                    <option value="{{ url_for('games_hub', season=season, team=t) }}"
+                        {{ 'selected' if sel_team == t else '' }}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="games-count">{{ games|length }} game{{ '' if games|length == 1 else 's' }}</div>
+        </div>
+    </div>
+
+    {% if sel_team %}
+    <div class="games-context">
+        Showing {{ sel_team }}'s full {{ season }} schedule.
+        <a href="{{ url_for('games_hub', season=season) }}">Back to weekly view →</a>
+    </div>
+    {% endif %}
+
+    <!-- Games grid -->
+    {% if games %}
+    <div class="games-grid">
+        {% for g in games %}{{ gc.game_card(g) }}{% endfor %}
+    </div>
+    {% else %}
+    <div class="games-empty">
+        No games found for this selection.
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

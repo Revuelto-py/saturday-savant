@@ -1,0 +1,39 @@
+{# Shared game card — used by the home page and the /games hub.
+   Takes a dict built by build_game_card() in main.py. Renders a final score
+   for completed games and a kickoff date/time for scheduled (future) ones. #}
+{% macro game_card(g) %}
+{% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
+{% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
+<a class="game-card-v2{{ ' is-upcoming' if not g.completed else '' }}" href="/game/{{ g.id }}">
+    <div class="gc-head">
+        <span class="gc-note">{{ g.notes or 'Week ' ~ g.week }}</span>
+        {% if g.completed %}
+            <span class="gc-final">Final</span>
+        {% else %}
+            <span class="gc-upcoming">{{ g.kickoff_date }}</span>
+        {% endif %}
+    </div>
+
+    <div class="gc-team{{ ' winner' if away_won else '' }}">
+        {% if g.away_logo %}<img src="{{ g.away_logo }}" alt="{{ g.away }} logo" loading="lazy">{% endif %}
+        <span class="gc-name">
+            {% if g.away_rank %}<span class="gc-rank">{{ g.away_rank }}</span>{% endif %}{{ g.away }}
+        </span>
+        {% if g.completed %}<span class="gc-score">{{ g.away_pts }}</span>{% endif %}
+    </div>
+
+    <div class="gc-team{{ ' winner' if home_won else '' }}">
+        {% if g.home_logo %}<img src="{{ g.home_logo }}" alt="{{ g.home }} logo" loading="lazy">{% endif %}
+        <span class="gc-name">
+            {% if g.home_rank %}<span class="gc-rank">{{ g.home_rank }}</span>{% endif %}{{ g.home }}
+        </span>
+        {% if g.completed %}<span class="gc-score">{{ g.home_pts }}</span>{% endif %}
+    </div>
+
+    {% if not g.completed %}
+        <span class="gc-kickoff">{{ g.kickoff_time }}</span>
+    {% elif g.rivalry %}
+        <span class="gc-rivalry">{{ g.rivalry }}</span>
+    {% endif %}
+</a>
+{% endmacro %}

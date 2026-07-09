@@ -979,6 +979,56 @@ def inject_ticker():
     except Exception:
         return dict(ticker=None)
 
+# ── Shared game-card plumbing ───────────────────────────────────────────────
+# Column list used by every route that renders the game_card component (home
+# page + /games hub). Keep build_game_card() in sync with this order. t1 is the
+# home team, t2 the away team.
+GAME_CARD_SELECT = '''
+    g.id, g.home_team, g.home_points, g.away_team, g.away_points,
+    g.week, g.season_type, g.notes, t1.logo_dark, t2.logo_dark,
+    g.completed, g.start_date, COALESCE(g.start_time_tbd, 0)
+'''
+
+def format_kickoff(start_date_raw, time_tbd):
+    """Format a stored (UTC) start_date as an Eastern (date, time) pair for
+    scheduled games. time is 'TBD' when CFBD hasn't set a kickoff yet, which is
+    true for roughly half the schedule this far out."""
+    if not start_date_raw:
+        return ('Date TBD', 'TBD')
+    try:
+        dt = datetime.datetime.fromisoformat(str(start_date_raw).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        et = dt.astimezone(ZoneInfo('America/New_York'))
+        date_str = et.strftime('%a, %b %-d')
+        time_str = 'TBD' if time_tbd else et.strftime('%-I:%M %p ET')
+        return (date_str, time_str)
+    except Exception:
+        return (str(start_date_raw)[:10], 'TBD')
+
+def build_game_card(row, ap_rankings, rivalry_map):
+    """Turn a GAME_CARD_SELECT row into the dict the game_card macro consumes.
+    Handles both completed games (scores, winner) and scheduled ones (kickoff
+    date/time, no score)."""
+    (gid, home, home_pts, away, away_pts, week, season_type, notes,
+     home_logo, away_logo, completed, start_date, time_tbd) = row
+    date_str, time_str = format_kickoff(start_date, time_tbd)
+    return {
+        'id': gid,
+        'home': home, 'away': away,
+        'home_pts': home_pts, 'away_pts': away_pts,
+        'home_logo': home_logo, 'away_logo': away_logo,
+        'week': week, 'notes': notes,
+        'completed': bool(completed),
+        # AP rankings are the final 2025 poll — only meaningful on completed
+        # (2025) games. Suppress them on scheduled 2026 games so a team doesn't
+        # carry a stale rank into next season.
+        'home_rank': ap_rankings.get(home) if (ap_rankings and completed) else None,
+        'away_rank': ap_rankings.get(away) if (ap_rankings and completed) else None,
+        'rivalry': rivalry_map.get((home, away), '') if rivalry_map else '',
+        'kickoff_date': date_str, 'kickoff_time': time_str,
+    }
+
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
 def home(week=None, season_type='regular'):
@@ -1009,10 +1059,8 @@ def home(week=None, season_type='regular'):
 
         db_season_type = 'SeasonType.POSTSEASON' if season_type == 'postseason' else 'SeasonType.REGULAR'
 
-        cursor.execute('''
-            SELECT g.home_team, g.home_points, g.away_team, g.away_points,
-                   g.week, g.season_type, g.notes, t1.logo, t2.logo,
-                   t1.logo_dark, t2.logo_dark, g.id
+        cursor.execute(f'''
+            SELECT {GAME_CARD_SELECT}
             FROM games g
             LEFT JOIN teams t1 ON g.home_team = t1.name
             LEFT JOIN teams t2 ON g.away_team = t2.name
@@ -1026,18 +1074,14 @@ def home(week=None, season_type='regular'):
         ''', (week, db_season_type))
         raw_games = cursor.fetchall()
 
-        # Enrich each game tuple with rivalry name as last element — one query
-        # for the whole rivalries table instead of one per game (N+1 fix)
+        # One query for the whole rivalries table instead of one per game (N+1 fix)
         rivalry_map = get_rivalry_map(cursor)
-        games = []
-        for g in raw_games:
-            rivalry = rivalry_map.get((g[0], g[2]), '')
-            games.append(g + (rivalry,))
+        games = [build_game_card(row, ap_rankings, rivalry_map) for row in raw_games]
 
         label_order = ['National Championship','Semifinal','Quarterfinal','First Round','Conference Championships','Bowl Games']
         grouped_games = OrderedDict((label, []) for label in label_order)
         for game in games:
-            grouped_games[get_game_label(game[6])].append(game)
+            grouped_games[get_game_label(game['notes'])].append(game)
         grouped_games = {k: v for k, v in grouped_games.items() if v}
 
         leaders = get_cached_season_leaders()
@@ -1048,7 +1092,7 @@ def home(week=None, season_type='regular'):
         fbs_team_count = cursor.fetchone()[0]
         # Drive tracking lives on the game page (Drives tab); point the hero
         # pill at the most prominent recent game rather than an unrelated page.
-        featured_game_id = games[0][11] if games else None
+        featured_game_id = games[0]['id'] if games else None
 
     finally:
         release_db(conn)
@@ -1057,6 +1101,97 @@ def home(week=None, season_type='regular'):
         selected_week=week, season_type=season_type,
         leaders=leaders, ap_rankings=ap_rankings,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
+
+@app.route('/games')
+@cache.cached(timeout=3600, query_string=True)
+def games_hub():
+    """Full-season games hub: browse every game (completed 2025 + upcoming
+    2026) by season and week, with a conference filter and a team filter that
+    switches to a team's whole-season schedule. Reuses the home page's
+    game_card component so completed and scheduled games look consistent."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        ap_rankings = get_ap_rankings(cursor)
+
+        cursor.execute('SELECT DISTINCT season FROM games ORDER BY season DESC')
+        seasons = [r[0] for r in cursor.fetchall()]
+        if not seasons:
+            seasons = [2026]
+        # Default to the newest season — this far out that's the upcoming 2026 slate.
+        season = request.args.get('season', type=int)
+        if season not in seasons:
+            season = seasons[0]
+
+        # Weeks available for the chosen season (regular first, postseason last).
+        # DISTINCT requires ORDER BY cols to be selected; 'SeasonType.REGULAR'
+        # sorts after 'SeasonType.POSTSEASON', so DESC puts regular weeks first
+        # and the postseason last, which is the order we want.
+        cursor.execute('''
+            SELECT DISTINCT week, season_type FROM games WHERE season = %s
+            ORDER BY season_type DESC, week
+        ''', (season,))
+        week_options = []
+        for w, st in cursor.fetchall():
+            is_post = 'POSTSEASON' in (st or '')
+            week_options.append({
+                'week': w,
+                'stype': 'postseason' if is_post else 'regular',
+                'label': 'Postseason' if is_post else f'Week {w}',
+            })
+
+        sel_week = request.args.get('week', type=int)
+        sel_stype = request.args.get('stype', 'regular')
+        match = next((o for o in week_options
+                      if o['week'] == sel_week and o['stype'] == sel_stype), None)
+        if not match:
+            match = week_options[0] if week_options else {'week': 1, 'stype': 'regular'}
+        sel_week, sel_stype = match['week'], match['stype']
+        db_stype = 'SeasonType.POSTSEASON' if sel_stype == 'postseason' else 'SeasonType.REGULAR'
+
+        sel_conf = request.args.get('conf', '')
+        sel_team = request.args.get('team', '')
+
+        # Filter dropdown data — FBS conferences and every FBS team.
+        cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference NOT IN %s ORDER BY conference', (FCS_CONFS,))
+        conferences = [r[0] for r in cursor.fetchall() if r[0]]
+        cursor.execute('SELECT name FROM teams WHERE conference NOT IN %s ORDER BY name', (FCS_CONFS,))
+        team_names = [r[0] for r in cursor.fetchall()]
+
+        # A team selection shows that team's full-season schedule (weeks stop
+        # applying); otherwise browse the selected week, optionally by conference.
+        where = ['g.season = %s']
+        params = [season]
+        if sel_team:
+            where.append('(g.home_team = %s OR g.away_team = %s)')
+            params += [sel_team, sel_team]
+        else:
+            where.append('g.week = %s AND g.season_type = %s')
+            params += [sel_week, db_stype]
+            if sel_conf:
+                where.append('(t1.conference = %s OR t2.conference = %s)')
+                params += [sel_conf, sel_conf]
+
+        cursor.execute(f'''
+            SELECT {GAME_CARD_SELECT}
+            FROM games g
+            LEFT JOIN teams t1 ON g.home_team = t1.name
+            LEFT JOIN teams t2 ON g.away_team = t2.name
+            WHERE {' AND '.join(where)}
+            ORDER BY g.start_date NULLS LAST, g.id
+        ''', params)
+        raw_games = cursor.fetchall()
+
+        rivalry_map = get_rivalry_map(cursor)
+        games = [build_game_card(row, ap_rankings, rivalry_map) for row in raw_games]
+    finally:
+        release_db(conn)
+
+    return render_template('games.html',
+        games=games, seasons=seasons, season=season,
+        week_options=week_options, sel_week=sel_week, sel_stype=sel_stype,
+        conferences=conferences, team_names=team_names,
+        sel_conf=sel_conf, sel_team=sel_team)
 
 @app.route('/search')
 def search():
@@ -1787,26 +1922,39 @@ def team(team_ref):
             ''', (team_info[1],))
             standings = cursor.fetchall()
 
-        cursor.execute('''
-            SELECT g.id,
-                CASE WHEN g.home_team=%s THEN 'home' ELSE 'away' END,
-                CASE WHEN g.home_team=%s THEN g.away_team ELSE g.home_team END,
-                CASE WHEN g.home_team=%s THEN t2.logo ELSE t1.logo END,
-                CASE WHEN g.home_team=%s THEN g.home_points ELSE g.away_points END,
-                CASE WHEN g.home_team=%s THEN g.away_points ELSE g.home_points END,
-                g.week, g.season_type, g.notes,
-                CASE WHEN g.home_team=%s THEN t2.logo_dark ELSE t1.logo_dark END
-            FROM games g
-            LEFT JOIN teams t1 ON g.home_team=t1.name
-            LEFT JOIN teams t2 ON g.away_team=t2.name
-            WHERE (g.home_team=%s OR g.away_team=%s) AND g.completed=1
-            ORDER BY CASE WHEN g.season_type='SeasonType.REGULAR' THEN 0 ELSE 1 END, g.week
-        ''', (team_name,)*8)
-        raw_schedule = cursor.fetchall()
         # One query for the whole rivalries table instead of one per
         # schedule row (N+1 fix)
         rivalry_map = get_rivalry_map(cursor)
-        schedule = [g + (rivalry_map.get((team_name, g[2]), ''),) for g in raw_schedule]
+
+        def _team_schedule(season):
+            # Opponent-centric schedule rows for one season. Trailing fields
+            # (completed, kickoff_date, kickoff_time) let the template render
+            # 2025 results and upcoming 2026 kickoffs from the same markup.
+            cursor.execute('''
+                SELECT g.id,
+                    CASE WHEN g.home_team=%s THEN 'home' ELSE 'away' END,
+                    CASE WHEN g.home_team=%s THEN g.away_team ELSE g.home_team END,
+                    CASE WHEN g.home_team=%s THEN t2.logo ELSE t1.logo END,
+                    CASE WHEN g.home_team=%s THEN g.home_points ELSE g.away_points END,
+                    CASE WHEN g.home_team=%s THEN g.away_points ELSE g.home_points END,
+                    g.week, g.season_type, g.notes,
+                    CASE WHEN g.home_team=%s THEN t2.logo_dark ELSE t1.logo_dark END,
+                    g.completed, g.start_date, COALESCE(g.start_time_tbd, 0)
+                FROM games g
+                LEFT JOIN teams t1 ON g.home_team=t1.name
+                LEFT JOIN teams t2 ON g.away_team=t2.name
+                WHERE (g.home_team=%s OR g.away_team=%s) AND g.season=%s
+                ORDER BY CASE WHEN g.season_type='SeasonType.REGULAR' THEN 0 ELSE 1 END, g.week
+            ''', (team_name,)*8 + (season,))
+            out = []
+            for r in cursor.fetchall():
+                kd, kt = format_kickoff(r[11], r[12])
+                rivalry = rivalry_map.get((team_name, r[2]), '')
+                out.append(r[:10] + (r[10], kd, kt, rivalry))
+            return out
+
+        schedule = _team_schedule(2025)
+        schedule_2026 = _team_schedule(2026)
 
         cursor.execute('''
             SELECT first_name, last_name, position, jersey, id, headshot, height, weight, year
@@ -2020,7 +2168,8 @@ def team(team_ref):
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
                 hero_ranks=hero_ranks,
-                standings=standings, schedule=schedule, roster=roster, lineup=lineup,
+                standings=standings, schedule=schedule, schedule_2026=schedule_2026,
+                roster=roster, lineup=lineup,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
                 kicking_stats=kicking_stats, punting_stats=punting_stats,
@@ -2194,7 +2343,8 @@ def game_detail(game_id):
             SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points,
                    g.week, g.season_type, g.notes, g.start_date,
                    t1.logo_dark, t2.logo_dark, t1.color, t2.color,
-                   t1.alt_color, t2.alt_color
+                   t1.alt_color, t2.alt_color,
+                   g.completed, COALESCE(g.start_time_tbd, 0), g.season
             FROM games g
             LEFT JOIN teams t1 ON g.home_team = t1.name
             LEFT JOIN teams t2 ON g.away_team = t2.name
@@ -2209,36 +2359,67 @@ def game_detail(game_id):
         ap_rankings = get_ap_rankings(cursor)
         rivalry_name = get_rivalry(cursor, home_team, away_team)
 
-        def _record(team):
-            cursor.execute('''
-                SELECT
-                    SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
-                FROM games
-                WHERE (home_team=%s OR away_team=%s) AND home_points IS NOT NULL AND away_points IS NOT NULL
-                  AND id <= %s
-            ''', (team, team, team, team, team, team, game_id))
-            row = cursor.fetchone()
-            return (row[0] or 0, row[1] or 0) if row else (0, 0)
+        # Scheduled-but-unplayed game (e.g. the 2026 season): there's no box
+        # score, drives, win probability, or ESPN summary yet. Render a compact
+        # "upcoming" page with the kickoff instead of doing the (fruitless,
+        # multi-second) ESPN fetches the completed-game path relies on.
+        is_scheduled = not game_info[15]
 
-        records = {'home': _record(home_team), 'away': _record(away_team)}
-
-        cursor.execute('''
-            SELECT (first_name || ' ' || last_name), id
-            FROM players WHERE team IN (%s, %s)
-        ''', (home_team, away_team))
-        name_to_player_id = {row[0].lower(): row[1] for row in cursor.fetchall()}
-
-        # Stored ESPN summary (fetch_game_summaries.py) — completed games are
-        # immutable, so pages render from Postgres with no ESPN call
+        records = {}
+        name_to_player_id = {}
         summary_row = None
-        try:
-            cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
-            summary_row = cursor.fetchone()
-        except Exception:
-            conn.rollback()  # table not created yet — fall back to live fetch
+        if not is_scheduled:
+            def _record(team):
+                cursor.execute('''
+                    SELECT
+                        SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
+                    FROM games
+                    WHERE (home_team=%s OR away_team=%s) AND home_points IS NOT NULL AND away_points IS NOT NULL
+                      AND id <= %s
+                ''', (team, team, team, team, team, team, game_id))
+                row = cursor.fetchone()
+                return (row[0] or 0, row[1] or 0) if row else (0, 0)
+
+            records = {'home': _record(home_team), 'away': _record(away_team)}
+
+            cursor.execute('''
+                SELECT (first_name || ' ' || last_name), id
+                FROM players WHERE team IN (%s, %s)
+            ''', (home_team, away_team))
+            name_to_player_id = {row[0].lower(): row[1] for row in cursor.fetchall()}
+
+            # Stored ESPN summary (fetch_game_summaries.py) — completed games are
+            # immutable, so pages render from Postgres with no ESPN call
+            try:
+                cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
+                summary_row = cursor.fetchone()
+            except Exception:
+                conn.rollback()  # table not created yet — fall back to live fetch
     finally:
         release_db(conn)
+
+    if is_scheduled:
+        # Kickoff in Eastern; time is 'TBD' when CFBD hasn't set one yet.
+        kick_date, kick_time = format_kickoff(game_info[8], game_info[16])
+        season_type_raw = game_info[6] or ''
+        return render_template('game.html',
+            game=game_info, home_team=home_team, away_team=away_team,
+            # No AP ranks on 2026 games — the poll reflects the 2025 season.
+            ap_rankings={}, rivalry_name=rivalry_name,
+            is_scheduled=True,
+            kickoff_date=kick_date, kickoff_time=kick_time,
+            season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
+            season_year=game_info[17],
+            week_num=game_info[5], notes=game_info[7] or '',
+            game_date=kick_date, game_time=kick_time,
+            records={}, espn_game_id=None,
+            # Empty defaults so the shared template never references missing data
+            quarters={'home': [], 'away': []}, venue={}, attendance=None,
+            venue_name='', venue_location='', attendance_fmt='', tv_broadcast='',
+            plays=[], team_stats=[], home_stats={}, away_stats={},
+            player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
+            structured_leaders={}, win_prob=[], top_wpa=[])
 
     espn_game_id = None
     quarters = {'home': [], 'away': []}
@@ -2837,6 +3018,7 @@ def game_detail(game_id):
 
     return render_template('game.html',
         game=game_info,
+        is_scheduled=False,
         home_team=home_team,
         away_team=away_team,
         ap_rankings=ap_rankings,

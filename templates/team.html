@@ -82,30 +82,73 @@
     <!-- Schedule + Standings -->
     <div class="row g-4 mt-1">
         <div class="col-lg-7">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">2025 Schedule</h5>
-            {% set ns = namespace(last_type='') %}
-            {% for game in schedule %}
+            {# One row markup for both seasons: completed games show the score +
+               W/L, scheduled 2026 games show the kickoff date/time instead. #}
+            {% macro sched_row(game) %}
                 {% set is_post = 'POSTSEASON' in game[7] %}
-                {% set section = 'post' if is_post else 'reg' %}
-                {% if section != ns.last_type %}
-                    {% set ns.last_type = section %}
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.18em;text-transform:uppercase;padding:12px 0 8px;border-bottom: 1px solid var(--border);margin-bottom:4px">{{ 'POST SEASON' if is_post else 'REGULAR SEASON' }}</div>
-                {% endif %}
-                {% set won = game[4] > game[5] %}
-                {% set rc = 'var(--green)' if won else 'var(--red)' %}
+                {% set completed = game[10] %}
                 <a href="/game/{{ game[0] }}" style="text-decoration:none;display:flex;align-items:center;padding:9px 0;border-bottom: 1px solid var(--border);gap:10px;transition:background 0.1s;margin:0 -4px;padding-left:4px;padding-right:4px;border-radius: var(--r-sm)"
                    onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;min-width:48px">{% if is_post %}POST{% else %}WK {{ game[6] }}{% endif %}</div>
                     <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:18px;text-align:center">{{ 'vs' if game[1]=='home' else '@' }}</div>
-                    <div style="display:flex;align-items:center;gap:8px;flex:1">
+                    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
                         {% if game[9] %}<img src="{{ game[9] }}" alt="{{ game[2] }} logo" style="height:32px;width:32px;object-fit:contain">{% endif %}
                         <span style="color: var(--text-primary);font-weight:600;font-size: var(--text-base)">{{ game[2] }}</span>
                         {% if game[8] %}<span style="color: var(--text-dim);font-size: var(--text-xs)">{{ game[8] }}</span>{% endif %}
                     </div>
-                    <div style="color: var(--text-secondary);font-size: var(--text-sm);font-weight:600;min-width:55px;text-align:right">{{ game[4] }} - {{ game[5] }}</div>
-                    <div style="background:{{ rc }}22;border:1px solid {{ rc }}66;color:{{ rc }};font-size: var(--text-xs);font-weight:900;padding:2px 7px;border-radius: var(--r-sm);min-width:26px;text-align:center">{{ 'W' if won else 'L' }}</div>
+                    {% if completed %}
+                        {% set won = game[4] > game[5] %}
+                        {% set rc = 'var(--green)' if won else 'var(--red)' %}
+                        <div style="color: var(--text-secondary);font-size: var(--text-sm);font-weight:600;min-width:55px;text-align:right">{{ game[4] }} - {{ game[5] }}</div>
+                        <div style="background:{{ rc }}22;border:1px solid {{ rc }}66;color:{{ rc }};font-size: var(--text-xs);font-weight:900;padding:2px 7px;border-radius: var(--r-sm);min-width:26px;text-align:center">{{ 'W' if won else 'L' }}</div>
+                    {% else %}
+                        <div style="text-align:right;min-width:88px">
+                            <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700">{{ game[11] }}</div>
+                            <div style="color: var(--text-dim);font-size: var(--text-xs);font-variant-numeric:tabular-nums">{{ game[12] }}</div>
+                        </div>
+                    {% endif %}
                 </a>
-            {% endfor %}
+            {% endmacro %}
+
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+                <h5 class="section-label" id="sched-heading" style="margin:0;font-size: var(--text-sm)">2025 Schedule</h5>
+                {% if schedule_2026 %}
+                <div class="sched-toggle">
+                    <button type="button" class="sched-tab active" data-season="2025" onclick="showSchedule('2025')">2025</button>
+                    <button type="button" class="sched-tab" data-season="2026" onclick="showSchedule('2026')">2026</button>
+                </div>
+                {% endif %}
+            </div>
+
+            <div id="sched-list-2025">
+                {% set ns = namespace(last_type='') %}
+                {% for game in schedule %}
+                    {% set is_post = 'POSTSEASON' in game[7] %}
+                    {% set section = 'post' if is_post else 'reg' %}
+                    {% if section != ns.last_type %}
+                        {% set ns.last_type = section %}
+                        <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.18em;text-transform:uppercase;padding:12px 0 8px;border-bottom: 1px solid var(--border);margin-bottom:4px">{{ 'POST SEASON' if is_post else 'REGULAR SEASON' }}</div>
+                    {% endif %}
+                    {{ sched_row(game) }}
+                {% else %}
+                    <div style="color: var(--text-dim);font-size: var(--text-sm);padding:16px 0">No 2025 games.</div>
+                {% endfor %}
+            </div>
+
+            {% if schedule_2026 %}
+            <div id="sched-list-2026" style="display:none">
+                {% set ns2 = namespace(last_type='') %}
+                {% for game in schedule_2026 %}
+                    {% set is_post = 'POSTSEASON' in game[7] %}
+                    {% set section = 'post' if is_post else 'reg' %}
+                    {% if section != ns2.last_type %}
+                        {% set ns2.last_type = section %}
+                        <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.18em;text-transform:uppercase;padding:12px 0 8px;border-bottom: 1px solid var(--border);margin-bottom:4px">{{ 'POST SEASON' if is_post else 'REGULAR SEASON' }}</div>
+                    {% endif %}
+                    {{ sched_row(game) }}
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
         <div class="col-lg-5">
             <div style="display:flex;align-items:center;gap: var(--s2);margin-bottom: var(--s3)">
@@ -906,6 +949,20 @@
 
 {% block scripts %}
 <script>
+// Schedule season toggle — swaps the 2025 results list for the upcoming 2026
+// schedule and keeps the heading in sync with which season is shown.
+function showSchedule(season) {
+    var l25 = document.getElementById('sched-list-2025');
+    var l26 = document.getElementById('sched-list-2026');
+    if (l25) l25.style.display = (season === '2025') ? '' : 'none';
+    if (l26) l26.style.display = (season === '2026') ? '' : 'none';
+    var heading = document.getElementById('sched-heading');
+    if (heading) heading.textContent = season + ' Schedule';
+    document.querySelectorAll('.sched-tab').forEach(function (b) {
+        b.classList.toggle('active', b.dataset.season === season);
+    });
+}
+
 function lineupSide(side) {
     const off = side === 'offense';
     const o = document.getElementById('lf-offense');

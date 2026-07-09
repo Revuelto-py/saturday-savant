@@ -62,7 +62,8 @@ cursor.execute('''
         away_points INTEGER,
         completed INTEGER,
         start_date TEXT,
-        notes TEXT
+        notes TEXT,
+        start_time_tbd INTEGER DEFAULT 0
     )
 ''')
 
