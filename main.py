@@ -438,47 +438,80 @@ def compute_starter_scores(cursor, roster, use_ea=True):
     return scores
 
 
-def build_lineup(roster, starter_scores=None):
+def build_lineup(roster, starter_scores=None, ea_pos=None):
     """Slot the highest-scoring available player into each formation spot.
     `starter_scores` comes from compute_starter_scores(); absent, everyone
-    scores 0 and slots fall back to roster order."""
+    scores 0 and slots fall back to roster order.
+
+    `ea_pos` maps player_id(str) -> the player's specific EA Sports position
+    (LT/LG/C/RG/RT, LE/RE/DT, MLB/LOLB/ROLB, CB/FS/SS, HB, …). When present it
+    is preferred over the coarser roster position so, e.g., a rated left tackle
+    lands at LT rather than being poured into the first open interior slot."""
     if starter_scores is None:
         starter_scores = {}
-    # Slot -> eligible positions, most-specific first so dedicated players
-    # claim their natural spot before generic pools (DL, DB) fill the gaps.
-    slot_positions = {
-        'QB': ['QB'], 'RB': ['RB','HB','FB','APB','ATH'],
+    ea_pos = ea_pos or {}
+
+    # Each slot has its exact EA position(s) as PRIMARY, then broader fallbacks
+    # for rosters/players without a specific EA position. Two-phase fill below
+    # means a player only cross-fills another spot once every dedicated player
+    # has claimed his own — so a left tackle is never grabbed to play center.
+    slot_primary = {
+        'QB': ['QB'], 'RB': ['HB','RB','FB','APB','ATH'],
         'WR1': ['WR'], 'WR2': ['WR'], 'TE': ['TE'],
-        'LT': ['OT','LT','OL','OG','G'], 'LG': ['OG','G','LG','OL','OT'],
-        'C':  ['C','OL','OG','G'], 'RG': ['OG','G','RG','OL','OT'], 'RT': ['OT','RT','OL','OG','G'],
-        'DE1': ['DE','EDGE','DL'], 'DE2': ['DE','EDGE','DL'],
-        'DT1': ['DT','NT','DL'], 'DT2': ['DT','NT','DL'],
-        'LB1': ['LB','ILB','MLB','OLB'], 'LB2': ['LB','ILB','MLB','OLB'], 'LB3': ['LB','ILB','MLB','OLB'],
-        'CB1': ['CB','DB'], 'CB2': ['CB','DB'],
-        'S1': ['S','SS','FS','SAF','DB'], 'S2': ['S','SS','FS','SAF','DB'],
+        'LT': ['LT'], 'LG': ['LG'], 'C': ['C'], 'RG': ['RG'], 'RT': ['RT'],
+        'DE1': ['LE','DE','EDGE'], 'DE2': ['RE','DE','EDGE'],
+        'DT1': ['DT','NT'], 'DT2': ['DT','NT'],
+        'LB1': ['MLB','ILB'], 'LB2': ['LOLB','OLB','LB'], 'LB3': ['ROLB','OLB','LB'],
+        'CB1': ['CB'], 'CB2': ['CB'],
+        'S1': ['FS','S','SAF'], 'S2': ['SS','S','SAF'],
     }
+    slot_fallback = {
+        'QB': [], 'RB': [], 'WR1': ['ATH'], 'WR2': ['ATH'], 'TE': [],
+        'LT': ['OT','OL','OG','G','RT','LG','RG','C'],
+        'LG': ['OG','G','OL','OT','RG','C','LT','RT'],
+        'C':  ['OL','OG','G','LG','RG','LT','RT','OT'],
+        'RG': ['OG','G','OL','OT','LG','C','RT','LT'],
+        'RT': ['OT','OL','OG','G','LT','RG','LG','C'],
+        'DE1': ['DL','RE','DT'], 'DE2': ['DL','LE','DT'],
+        'DT1': ['DL','DE','EDGE'], 'DT2': ['DL','DE','EDGE'],
+        'LB1': ['LB','OLB','LOLB','ROLB'], 'LB2': ['ILB','MLB','ROLB'], 'LB3': ['ILB','MLB','LOLB'],
+        'CB1': ['DB','FS','SS','S'], 'CB2': ['DB','SS','FS','S'],
+        'S1': ['DB','SS','CB'], 'S2': ['DB','FS','CB'],
+    }
+
+    # Pool players by EFFECTIVE position: the specific EA position when known,
+    # otherwise the roster position.
     pos_pool = {}
     for player in roster:
         first, last, pos, jersey, pid, headshot = player[0], player[1], player[2], player[3], player[4], player[5]
         if not pos: continue
-        pos_pool.setdefault(pos.upper(), []).append({
+        eff = (ea_pos.get(str(pid)) or pos).upper()
+        pos_pool.setdefault(eff, []).append({
             'idx': pid, 'name': last, 'first': first, 'jersey': jersey or '',
             'pos': pos, 'headshot': headshot, 'score': starter_scores.get(str(pid), 0)})
     for pool in pos_pool.values():
         pool.sort(key=lambda x: x['score'], reverse=True)
 
-    lineup, used = {}, set()
-    # Explicit fill order: skill first, then OL, then dedicated D before generic pools
-    fill_order = ['QB','RB','WR1','WR2','TE','C','LT','RT','LG','RG',
+    fill_order = ['QB','RB','WR1','WR2','TE','LT','LG','C','RG','RT',
                   'DE1','DE2','DT1','DT2','LB1','LB2','LB3','CB1','CB2','S1','S2']
-    for slot in fill_order:
-        for pos_type in slot_positions[slot]:
+    lineup, used = {}, set()
+
+    def _try_fill(slot, pos_types):
+        for pos_type in pos_types:
             for player in pos_pool.get(pos_type, []):
                 if player['idx'] not in used:
                     lineup[slot] = player
                     used.add(player['idx'])
-                    break
-            if slot in lineup: break
+                    return True
+        return False
+
+    # Phase 1: every slot claims a player at its exact position first.
+    for slot in fill_order:
+        _try_fill(slot, slot_primary[slot])
+    # Phase 2: fill anything still open from the broader fallback pools.
+    for slot in fill_order:
+        if slot not in lineup:
+            _try_fill(slot, slot_primary[slot] + slot_fallback[slot])
     return lineup
 
 def pivot_stats(raw_stats):
@@ -1986,7 +2019,18 @@ def team(team_ref):
         # roster order. Pass the full roster tuples so OL seniority (the
         # year column) is available to the scorer and the slotter.
         starter_scores = compute_starter_scores(cursor, roster)
-        lineup = build_lineup(roster, starter_scores)
+        # Specific EA positions (LT/LG/C/RG/RT, LE/RE, MLB/LOLB/ROLB, CB/FS/SS…)
+        # so players slot into their actual spot, not just a generic OL/DL pool.
+        ea_pos = {}
+        roster_int_ids = [int(p[4]) for p in roster if p[4] is not None]
+        if roster_int_ids:
+            try:
+                cursor.execute('SELECT player_id, position FROM ea_ratings '
+                               'WHERE player_id = ANY(%s) AND position IS NOT NULL', (roster_int_ids,))
+                ea_pos = {str(pid): pos.upper() for pid, pos in cursor.fetchall()}
+            except Exception:
+                cursor.connection.rollback()  # ea_ratings not populated yet
+        lineup = build_lineup(roster, starter_scores, ea_pos)
 
         cursor.execute('SELECT player_name, category, stat_type, stat FROM player_stats WHERE team=%s', (team_name,))
         all_stats = pivot_stats(cursor.fetchall())

@@ -2242,6 +2242,14 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     display: flex; flex-direction: column;
     gap: clamp(14px, 2.6vw, 28px);
 }
+/* Offense and defense stacked in one grid cell so the field is the same height
+   on either toggle. The inactive side stays in layout (visibility:hidden) so it
+   still contributes to that shared height; content is vertically centered. */
+.lf-stage { display: grid; }
+.lf-stage > .lf-rows { grid-area: 1 / 1; justify-content: center; }
+.lf-rows.lf-hidden { visibility: hidden; }
+/* Condense the 3-row defense so it isn't taller than the 2-row offense. */
+#lf-defense { gap: clamp(8px, 1.7vw, 18px); }
 .lf-row { display: flex; justify-content: center; align-items: flex-start; gap: clamp(6px, 1.4vw, 16px); }
 .lf-row--spread { justify-content: space-between; width: 100%; max-width: 620px; margin: 0 auto; }
 /* Line row: WRs sit just outside the tackles (a small split off the ends of

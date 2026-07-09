@@ -837,6 +837,9 @@
     </div>
 
     <div class="lineup-field">
+        <!-- Both sides share one grid cell so the field is the same height on
+             either toggle (no jump), and each is vertically centered. -->
+        <div class="lf-stage">
         <!-- OFFENSE: receivers split just outside the tackles (extending the
              line), then a shotgun backfield with the RB set beside the QB. -->
         <div id="lf-offense" class="lf-rows">
@@ -849,7 +852,7 @@
         </div>
 
         <!-- DEFENSE -->
-        <div id="lf-defense" class="lf-rows" style="display:none">
+        <div id="lf-defense" class="lf-rows lf-hidden">
             <div class="lf-row">
                 {{ lf_card('DE1','dl') }}{{ lf_card('DT1','dl') }}{{ lf_card('DT2','dl') }}{{ lf_card('DE2','dl') }}
             </div>
@@ -859,6 +862,7 @@
             <div class="lf-row lf-row--spread">
                 {{ lf_card('CB1','db') }}{{ lf_card('S1','db') }}{{ lf_card('S2','db') }}{{ lf_card('CB2','db') }}
             </div>
+        </div>
         </div>
 
         <div class="lineup-legend">
@@ -966,8 +970,10 @@ function lineupSide(side) {
     const off = side === 'offense';
     const o = document.getElementById('lf-offense');
     const d = document.getElementById('lf-defense');
-    if (o) o.style.display = off ? 'flex' : 'none';
-    if (d) d.style.display = off ? 'none' : 'flex';
+    // Both stay in the grid (via .lf-hidden = visibility:hidden) so the field
+    // keeps one shared height and doesn't jump between offense and defense.
+    if (o) o.classList.toggle('lf-hidden', !off);
+    if (d) d.classList.toggle('lf-hidden', off);
     document.getElementById('lf-btn-off').classList.toggle('active', off);
     document.getElementById('lf-btn-def').classList.toggle('active', !off);
 }
