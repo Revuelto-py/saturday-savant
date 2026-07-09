@@ -321,11 +321,13 @@
 
 {% block scripts %}
 <script>
-const LB_MODE = {{ mode|tojson }};
-const lbCategory = {{ category|tojson }};
-
+// Base path (mode + category) for the page currently shown. Read it live from
+// the URL — pushState keeps it current after every AJAX swap, so sorting and
+// paging stay on the right leaderboard even after switching mode or category.
+// (A frozen server-rendered value would go stale and, e.g., send a team sort
+// to the player leaderboard.)
 function lbBasePath() {
-    return LB_MODE === 'team' ? '/leaderboards/teams/' + lbCategory : '/leaderboards/' + lbCategory;
+    return window.location.pathname;
 }
 
 /* Every control — sort headers, pagination, filters, category tabs, the
