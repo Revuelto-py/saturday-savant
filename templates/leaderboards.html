@@ -8,7 +8,7 @@
 <div class="page-wrapper" style="padding-top:32px">
 
 {% set PLAYER_CATS = [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense')] %}
-{% set TEAM_CATS = [('offense','Offense'),('defense','Defense'),('sp','SP+'),('savant','Savant Rating')] %}
+{% set TEAM_CATS = [('savant','Savant Rating'),('offense','Offense'),('defense','Defense'),('sp','SP+')] %}
 
 {% macro player_path(cat) %}/leaderboards/{{ cat }}{% endmacro %}
 {% macro team_path(cat) %}/leaderboards/teams/{{ cat }}{% endmacro %}
@@ -29,6 +29,10 @@
     {% endif %}
 {% endmacro %}
 
+<!-- #lb-content is swapped wholesale on any control change (tab/filter/sort/page)
+     so navigation is AJAX and scroll position is preserved. -->
+<div id="lb-content">
+
 <!-- Page header -->
 <div style="margin-bottom:20px">
     <div class="section-label" style="margin-bottom: var(--s2)">Leaderboards</div>
@@ -44,15 +48,15 @@
 
 <!-- Player | Team mode toggle -->
 <div class="lb-mode-toggle">
-    <a href="/leaderboards/passing" class="lb-mode-btn {{ 'active' if mode == 'player' else '' }}">Player</a>
-    <a href="/leaderboards/teams/offense" class="lb-mode-btn {{ 'active' if mode == 'team' else '' }}">Team</a>
+    <a href="/leaderboards/passing" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if mode == 'player' else '' }}">Player</a>
+    <a href="/leaderboards/teams/savant" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if mode == 'team' else '' }}">Team</a>
 </div>
 
 {% if mode == 'player' %}
 <!-- Category tabs (player) -->
 <div class="lb-team-tabs">
     {% for cat, label in PLAYER_CATS %}
-    <a href="{{ player_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='') | urlencode }}"
+    <a href="{{ player_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
        class="lb-team-tab {{ 'active' if category == cat else '' }}">{{ label }}</a>
     {% endfor %}
 </div>
@@ -68,7 +72,7 @@
         </div>
         <div class="lb-filter-group">
             <div class="lb-filter-label">Conference</div>
-            <select name="conf" class="lb-select" onchange="this.form.submit()">
+            <select name="conf" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
                 {% for conf in conferences %}
                 <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
@@ -77,7 +81,7 @@
         </div>
         <div class="lb-filter-group">
             <div class="lb-filter-label">Team</div>
-            <select name="team" class="lb-select" onchange="this.form.submit()">
+            <select name="team" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not team_filter }}>All Teams</option>
                 {% for conf, team_list in all_teams.items() %}
                 <optgroup label="{{ conf }}">
@@ -92,7 +96,7 @@
     <div class="lb-filter-row">
         <div class="lb-filter-group">
             <div class="lb-filter-label">Position Group</div>
-            <select name="pos" class="lb-select" onchange="this.form.submit()">
+            <select name="pos" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not pos_filter }}>All Positions</option>
                 {% for pg in position_groups %}
                 <option value="{{ pg }}" {{ 'selected' if pos_filter == pg }}>{{ pg }}</option>
@@ -108,16 +112,16 @@
 <!-- Stat View tabs + Qualified Only toggle -->
 <div class="lb-view-row">
     <div class="lb-view-tabs">
-        <a href="{{ player_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='') | urlencode }}"
+        <a href="{{ player_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
            class="lb-view-tab {{ 'active' if view == 'standard' else '' }}">Standard</a>
         {% if has_advanced %}
-        <a href="{{ player_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}"
+        <a href="{{ player_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
            class="lb-view-tab {{ 'active' if view == 'advanced' else '' }}">Advanced</a>
         {% endif %}
     </div>
     <div class="lb-mode-toggle lb-qualified-toggle">
-        <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='1') | urlencode }}" class="lb-mode-btn {{ 'active' if qualified else '' }}">Qualified Only</a>
-        <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='0') | urlencode }}" class="lb-mode-btn {{ 'active' if not qualified else '' }}">All Players</a>
+        <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='1') | urlencode }}" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if qualified else '' }}">Qualified Only</a>
+        <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='0') | urlencode }}" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if not qualified else '' }}">All Players</a>
     </div>
 </div>
 
@@ -179,7 +183,7 @@
 <!-- Category tabs (team) -->
 <div class="lb-team-tabs">
     {% for cat, label in TEAM_CATS %}
-    <a href="{{ team_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='') | urlencode }}"
+    <a href="{{ team_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
        class="lb-team-tab {{ 'active' if category == cat else '' }}">{{ label }}</a>
     {% endfor %}
 </div>
@@ -203,7 +207,7 @@
         </div>
         <div class="lb-filter-group">
             <div class="lb-filter-label">Conference</div>
-            <select name="conf" class="lb-select" onchange="this.form.submit()">
+            <select name="conf" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
                 {% for conf in conferences %}
                 <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
@@ -212,7 +216,7 @@
         </div>
         <div class="lb-filter-group">
             <div class="lb-filter-label">Team</div>
-            <select name="team" class="lb-select" onchange="this.form.submit()">
+            <select name="team" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not team_filter }}>All Teams</option>
                 {% for conf, team_list in all_teams.items() %}
                 <optgroup label="{{ conf }}">
@@ -232,10 +236,10 @@
 <!-- Stat View tabs -->
 <div class="lb-view-row">
     <div class="lb-view-tabs">
-        <a href="{{ team_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='') | urlencode }}"
+        <a href="{{ team_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
            class="lb-view-tab {{ 'active' if view == 'standard' else '' }}">Standard</a>
         {% if has_advanced %}
-        <a href="{{ team_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}"
+        <a href="{{ team_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
            class="lb-view-tab {{ 'active' if view == 'advanced' else '' }}">Advanced</a>
         {% endif %}
     </div>
@@ -310,6 +314,7 @@
 </div>
 {% endif %}
 </div>
+</div>{# /#lb-content #}
 
 </div>
 {% endblock %}
@@ -323,40 +328,62 @@ function lbBasePath() {
     return LB_MODE === 'team' ? '/leaderboards/teams/' + lbCategory : '/leaderboards/' + lbCategory;
 }
 
-/* Sorting and paging fetch the same server-rendered URL and swap only the
-   table, pagination, and result-count regions in place, so the user's
-   scroll position never jumps to the top of the page. Filters, category
-   tabs, and the Standard/Advanced toggle stay ordinary navigations — they
-   change the page's whole context. Any fetch failure falls back to a
-   normal full navigation. */
-const LB_SWAP_IDS = ['lb-table', 'lb-pagination', 'lb-count'];
+/* Every control — sort headers, pagination, filters, category tabs, the
+   Standard/Advanced toggle, and the Player/Team switch — fetches the same
+   server-rendered URL and swaps the whole #lb-content region in place, so the
+   user's scroll position is preserved instead of jumping to the top. Any fetch
+   failure falls back to a normal full navigation. */
+const LB_SWAP_IDS = ['lb-content'];
 let lbBusy = false;
 
+// Own scroll restoration ourselves — the browser must not re-scroll on our
+// pushState/popstate swaps (it would fight the manual pin in lbNavigate).
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
+// Route a control (tab, toggle, mode switch) through the AJAX swap so scroll
+// position is preserved instead of a full page load.
+function lbGo(a) { lbNavigate(a.href, false); return false; }
+// Filter dropdowns: rebuild the URL from the form and swap in place.
+function lbFilter(sel) {
+    var f = sel.form;
+    var params = new URLSearchParams(new FormData(f));
+    lbNavigate(f.action + '?' + params.toString(), false);
+    return false;
+}
 function lbNavigate(url, scrollToTable, pushHistory = true) {
     if (lbBusy) return;
     lbBusy = true;
+    // Capture the scroll position *now*, synchronously — clicking an anchor can
+    // reset scrollY to 0 before the async fetch resolves, so reading it later
+    // would pin us to the top.
+    const y = window.scrollY;
     const tbl = document.getElementById('lb-table');
     if (tbl) tbl.style.opacity = '0.5';
     fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
         .then(html => {
             const doc = new DOMParser().parseFromString(html, 'text/html');
-            // Replacing the table removes the browser's scroll anchor and
-            // Chrome yanks the viewport — pin scrollY across the swap.
-            const y = window.scrollY;
+            // Swapping the whole #lb-content removes the browser's scroll anchor
+            // and — because <html> uses scroll-behavior:smooth — the viewport
+            // otherwise drifts to the top. Pin scrollY *instantly* (bypassing
+            // smooth scroll) and re-pin across the next frames so post-swap
+            // reflow/anchoring can't win the race.
             for (const id of LB_SWAP_IDS) {
                 const cur = document.getElementById(id);
                 const next = doc.getElementById(id);
                 if (cur && next) cur.replaceWith(next);
             }
-            window.scrollTo(0, y);
+            const pin = () => window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+            pin();
+            requestAnimationFrame(pin);
+            requestAnimationFrame(() => requestAnimationFrame(pin));
             if (pushHistory) history.pushState({ lb: true }, '', url);
             if (scrollToTable) {
                 const t = document.getElementById('lb-table');
                 if (t) {
                     // land the table top just below the sticky navbar
                     const top = t.getBoundingClientRect().top + window.scrollY - 120;
-                    if (window.scrollY > top) window.scrollTo({ top: Math.max(0, top) });
+                    if (window.scrollY > top) window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
                 }
             }
             lbBusy = false;

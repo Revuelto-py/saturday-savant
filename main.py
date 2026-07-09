@@ -1471,7 +1471,7 @@ def clean_play_text(text):
 @app.route('/leaderboards/teams')
 @app.route('/leaderboards/teams/<category>')
 @cache.cached(timeout=3600, query_string=True)  # view/team are part of the query string, so each combo caches separately
-def leaderboards_teams(category='offense'):
+def leaderboards_teams(category='savant'):
     if category not in TEAM_CATEGORY_DEFAULTS:
         category = 'offense'
 

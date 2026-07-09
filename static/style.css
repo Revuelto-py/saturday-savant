@@ -2256,3 +2256,50 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 @media (max-width: 575.98px) {
     .site-footer-inner { flex-direction: column; align-items: flex-start; gap: var(--s2); }
 }
+
+/* ── Leaderboard control micro-interactions ─────────────────────────────────
+   Hover lift + accent tint, press feedback, select focus glow, and a subtle
+   fade as the AJAX-swapped #lb-content mounts. transform/opacity only. */
+.lb-mode-btn, .lb-view-tab, .lb-page-btn, .lb-team-tab {
+    transition: color .18s ease, background .18s ease, border-color .18s ease,
+                box-shadow .18s ease, transform .12s cubic-bezier(.34,1.56,.64,1);
+}
+.lb-mode-btn:not(.active):hover,
+.lb-view-tab:not(.active):hover,
+.lb-page-btn:not(.disabled):not(.active):hover {
+    color: var(--text-primary);
+    background: rgba(28,156,240,0.10);
+    border-color: rgba(28,156,240,0.38);
+    transform: translateY(-1px);
+}
+.lb-team-tab:hover { color: var(--text-primary); border-bottom-color: rgba(28,156,240,0.4); }
+.lb-mode-btn:active, .lb-view-tab:active, .lb-page-btn:not(.disabled):active,
+.lb-team-tab:active { transform: translateY(0) scale(.96); }
+.lb-mode-btn.active, .lb-view-tab.active { box-shadow: 0 2px 12px rgba(28,156,240,0.25); }
+
+.lb-select {
+    cursor: pointer;
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.lb-select:hover { border-color: rgba(28,156,240,0.4); }
+.lb-select:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(28,156,240,0.14);
+}
+
+.lb-th.stat-header { transition: color .15s ease, background .15s ease; }
+.lb-th.stat-header:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
+.lb-sort-arrow { display: inline-block; transition: transform .18s cubic-bezier(.34,1.56,.64,1); }
+.lb-row { transition: background .15s ease; }
+.lb-row:hover { background: rgba(28,156,240,0.06); }
+
+@keyframes lbContentFade { from { opacity: 0; } to { opacity: 1; } }
+#lb-content { animation: lbContentFade .2s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+    #lb-content { animation: none; }
+    .lb-mode-btn, .lb-view-tab, .lb-page-btn, .lb-team-tab, .lb-select, .lb-sort-arrow { transition: none; }
+    .lb-mode-btn:hover, .lb-view-tab:hover, .lb-page-btn:hover,
+    .lb-mode-btn:active, .lb-view-tab:active, .lb-page-btn:active, .lb-team-tab:active { transform: none; }
+}
