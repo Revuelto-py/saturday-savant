@@ -883,8 +883,11 @@ def get_cached_season_leaders():
         cursor = conn.cursor()
         return [
             ('Passing Yards',   '/leaderboards/passing',   leaders_query(cursor, 'passing',       'YDS')),
+            ('Passing TDs',     '/leaderboards/passing',   leaders_query(cursor, 'passing',       'TD')),
             ('Rushing Yards',   '/leaderboards/rushing',   leaders_query(cursor, 'rushing',       'YDS')),
+            ('Rushing TDs',     '/leaderboards/rushing',   leaders_query(cursor, 'rushing',       'TD')),
             ('Receiving Yards', '/leaderboards/receiving', leaders_query(cursor, 'receiving',     'YDS')),
+            ('Receiving TDs',   '/leaderboards/receiving', leaders_query(cursor, 'receiving',     'TD')),
             ('Tackles',         '/leaderboards/defense',   leaders_query(cursor, 'defensive',     'TOT')),
             ('Sacks',           '/leaderboards/defense',   leaders_query(cursor, 'defensive',     'SACKS')),
             ('Interceptions',   '/leaderboards/defense',   leaders_query(cursor, 'interceptions', 'INT')),
