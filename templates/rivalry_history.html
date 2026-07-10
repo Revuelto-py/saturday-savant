@@ -59,7 +59,7 @@
         {% if games %}
         <div style="margin-top:24px;padding-top:24px;border-top: 1px solid var(--border)">
             <div style="color: var(--text-dim);font-size: var(--text-sm)">
-                {{ games|length }} game{{ 's' if games|length != 1 else '' }} currently in database (2025 season)
+                {{ games|length }} game{{ 's' if games|length != 1 else '' }} currently in database ({{ current_season }} season)
             </div>
         </div>
         {% endif %}

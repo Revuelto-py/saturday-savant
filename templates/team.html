@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ team[0] }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ team[0] }}{% if team_rank %} (AP #{{ team_rank }}){% endif %} · Saturday Savant{% endblock %}
-{% block og_description %}{{ team[0] }} — {{ team[1] }}{% if record %} · {{ record[0] }}-{{ record[1] }} in 2025{% endif %}{% if svr %} · Net Savant {{ '%+.1f'|format(svr.net_rating) }}{% endif %}. Ratings, stats, and roster on Saturday Savant.{% endblock %}
+{% block og_description %}{{ team[0] }} — {{ team[1] }}{% if record %} · {{ record[0] }}-{{ record[1] }} in {{ season }}{% endif %}{% if svr %} · Net Savant {{ '%+.1f'|format(svr.net_rating) }}{% endif %}. Ratings, stats, and roster on Saturday Savant.{% endblock %}
 {% block og_image %}{{ team[3] or team[6] or (request.url_root ~ 'static/logo-512.png') }}{% endblock %}
 
 {% set c1 = team[4] if team[4] else '#1e3a5f' %}
@@ -64,12 +64,22 @@
                 {% endfor %}
             </div>
         </div>
-        <ul class="nav nav-tabs" id="teamTabs" style="margin-top:28px">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <ul class="nav nav-tabs" id="teamTabs" style="margin-top:28px;flex:1;min-width:0">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview">Overview</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#team-stats">Team Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#player-stats">Player Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#roster">Roster</button></li>
         </ul>
+        {% if available_seasons and available_seasons|length > 1 %}
+        <select class="lb-select season-select" style="min-width:110px;margin-bottom:6px" aria-label="Season"
+                onchange="location='?season='+this.value">
+            {% for s in available_seasons %}
+            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        </div>
     </div>
 </div>
 
@@ -111,16 +121,16 @@
             {% endmacro %}
 
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-                <h5 class="section-label" id="sched-heading" style="margin:0;font-size: var(--text-sm)">2025 Schedule</h5>
-                {% if schedule_2026 %}
+                <h5 class="section-label" id="sched-heading" style="margin:0;font-size: var(--text-sm)">{{ season }} Schedule</h5>
+                {% if schedule_next %}
                 <div class="sched-toggle">
-                    <button type="button" class="sched-tab active" data-season="2025" onclick="showSchedule('2025')">2025</button>
-                    <button type="button" class="sched-tab" data-season="2026" onclick="showSchedule('2026')">2026</button>
+                    <button type="button" class="sched-tab active" data-season="{{ season }}" onclick="showSchedule('{{ season }}')">{{ season }}</button>
+                    <button type="button" class="sched-tab" data-season="{{ next_season }}" onclick="showSchedule('{{ next_season }}')">{{ next_season }}</button>
                 </div>
                 {% endif %}
             </div>
 
-            <div id="sched-list-2025">
+            <div id="sched-list-{{ season }}">
                 {% set ns = namespace(last_type='') %}
                 {% for game in schedule %}
                     {% set is_post = 'POSTSEASON' in game[7] %}
@@ -131,14 +141,14 @@
                     {% endif %}
                     {{ sched_row(game) }}
                 {% else %}
-                    <div style="color: var(--text-dim);font-size: var(--text-sm);padding:16px 0">No 2025 games.</div>
+                    <div style="color: var(--text-dim);font-size: var(--text-sm);padding:16px 0">No {{ season }} games.</div>
                 {% endfor %}
             </div>
 
-            {% if schedule_2026 %}
-            <div id="sched-list-2026" style="display:none">
+            {% if schedule_next %}
+            <div id="sched-list-{{ next_season }}" style="display:none">
                 {% set ns2 = namespace(last_type='') %}
-                {% for game in schedule_2026 %}
+                {% for game in schedule_next %}
                     {% set is_post = 'POSTSEASON' in game[7] %}
                     {% set section = 'post' if is_post else 'reg' %}
                     {% if section != ns2.last_type %}
@@ -153,7 +163,7 @@
         <div class="col-lg-5">
             <div style="display:flex;align-items:center;gap: var(--s2);margin-bottom: var(--s3)">
                 {% if conf_logo %}<img src="{{ conf_logo }}" class="conf-logo-img conf-logo-img-sm" alt="{{ team[1] }} logo" loading="lazy">{% endif %}
-                <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">2025 {{ team[1] }} Standings</h5>
+                <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ season }} {{ team[1] }} Standings</h5>
             </div>
             <div class="dark-card" style="overflow:hidden">
                 <table class="data-table" style="width:100%">
@@ -230,8 +240,8 @@
 <div class="pt-4">
 
     <div style="margin-bottom:24px">
-        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">2025 Team Analytics</h5>
-        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the 2025 season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
+        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Team Analytics</h5>
+        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the {{ season }} season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
     </div>
 
     <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
@@ -240,7 +250,7 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
             <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h5>
             <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · 2025 ·
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · {{ season }} ·
                 <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
                    onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
             </span>
@@ -284,7 +294,7 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
             <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">SP+ Ratings</h5>
             <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Bill Connelly's SP+ model · 2025</span>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">Bill Connelly's SP+ model · {{ season }}</span>
         </div>
         <div class="row g-3">
             <div class="col-6 col-lg-3">
@@ -339,7 +349,7 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
             <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Offense</h5>
             <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">2025 · per game · national rank shown for scoring &amp; yardage</span>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · per game · national rank shown for scoring &amp; yardage</span>
         </div>
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table data-table--static" style="width:100%;min-width:760px">
@@ -377,7 +387,7 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
             <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Defense</h5>
             <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">2025 · yards allowed aren't tracked in our data source, so this is EPA/scoring-based</span>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · yards allowed aren't tracked in our data source, so this is EPA/scoring-based</span>
         </div>
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table data-table--static" style="width:100%;min-width:640px">
@@ -587,9 +597,9 @@
 {% endmacro %}
 
 <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
-    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">2025 Season Stats</h4>
+    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">{{ season }} Season Stats</h4>
     <span class="badge-pos" style="letter-spacing:0.04em">Final</span>
-    <span style="color: var(--text-dim);font-size: var(--text-xs)">Individual production from the completed 2025 season</span>
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Individual production from the {{ season }} season</span>
 </div>
 
 {% if passing_stats %}
@@ -796,7 +806,7 @@
 <div class="pt-4">
 
 <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
-    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">2026 Roster</h4>
+    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">{{ roster_season }} Roster</h4>
     <span class="badge-pos" style="letter-spacing:0.04em">Current</span>
     <span style="color: var(--text-dim);font-size: var(--text-xs)">Upcoming-season roster, including offseason transfers</span>
 </div>
@@ -828,7 +838,7 @@
 
 <div class="lineup-block">
     <div class="lineup-head">
-        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected 2026 Starters</h5>
+        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected {{ roster_season }} Starters</h5>
         <div class="lineup-head-rule"></div>
         <div class="lineup-toggle" role="tablist" aria-label="Lineup side">
             <button id="lf-btn-off" class="active" onclick="lineupSide('offense')">Offense</button>
@@ -873,7 +883,7 @@
             <span class="lg-item"><span class="lg-dot" style="background: var(--green)"></span>Secondary</span>
         </div>
     </div>
-    <div class="lineup-note" style="margin-top:8px">Projected from player talent grades and 2025 production, transfers included. Individual offensive-line snaps aren't tracked in the available data, so line spots are approximate.</div>
+    <div class="lineup-note" style="margin-top:8px">Projected from player talent grades and {{ current_season }} production, transfers included. Individual offensive-line snaps aren't tracked in the available data, so line spots are approximate.</div>
 </div>
 {% endif %}
 
@@ -952,13 +962,12 @@
 
 {% block scripts %}
 <script>
-// Schedule season toggle — swaps the 2025 results list for the upcoming 2026
-// schedule and keeps the heading in sync with which season is shown.
+// Schedule season toggle — swaps the viewed season's results for the
+// upcoming season's schedule and keeps the heading in sync.
 function showSchedule(season) {
-    var l25 = document.getElementById('sched-list-2025');
-    var l26 = document.getElementById('sched-list-2026');
-    if (l25) l25.style.display = (season === '2025') ? '' : 'none';
-    if (l26) l26.style.display = (season === '2026') ? '' : 'none';
+    document.querySelectorAll('[id^="sched-list-"]').forEach(function (el) {
+        el.style.display = (el.id === 'sched-list-' + season) ? '' : 'none';
+    });
     var heading = document.getElementById('sched-heading');
     if (heading) heading.textContent = season + ' Schedule';
     document.querySelectorAll('.sched-tab').forEach(function (b) {

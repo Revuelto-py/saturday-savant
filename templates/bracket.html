@@ -58,7 +58,7 @@
   <header class="bk-header">
     <img class="bk-watermark" src="/static/logo-128.png" alt="">
     <h1 class="bk-title">College Football Playoff</h1>
-    <div class="bk-subtitle">2025 Season · 12-Team Bracket</div>
+    <div class="bk-subtitle">{{ current_season }} Season · 12-Team Bracket</div>
   </header>
 
   {# ── Desktop / tablet: horizontal bracket ─────────────────────────── #}
@@ -104,7 +104,7 @@
           {% if champion %}
           <a class="bk-champion" href="/team/{{ champion.name | team_slug }}">
             {% if champion.logo %}<img src="{{ champion.logo }}" alt="{{ champion.name }} logo" width="40" height="40">{% endif %}
-            <span>{{ champion.name }} — 2025 CFP Champions</span>
+            <span>{{ champion.name }} — {{ current_season }} CFP Champions</span>
           </a>
           {% endif %}
         </div>
@@ -161,7 +161,7 @@
       {% if champion %}
       <a class="bk-champion" href="/team/{{ champion.name | team_slug }}">
         {% if champion.logo %}<img src="{{ champion.logo }}" alt="{{ champion.name }} logo" width="40" height="40">{% endif %}
-        <span>{{ champion.name }} — 2025 CFP Champions</span>
+        <span>{{ champion.name }} — {{ current_season }} CFP Champions</span>
       </a>
       {% endif %}
     </section>

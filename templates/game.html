@@ -61,7 +61,7 @@
                 <div class="week-label" style="font-weight:700;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ notes }}</div>
             {% else %}
                 <div class="week-label" style="font-weight:700;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,0.6)">
-                    {% if is_scheduled %}Week {{ week_num }} · {{ season_year }} Season{% elif is_post %}Postseason{% else %}Week {{ week_num }} · 2025 Regular Season{% endif %}
+                    {% if is_scheduled %}Week {{ week_num }} · {{ season_year }} Season{% elif is_post %}Postseason{% else %}Week {{ week_num }} · {{ game[17] or current_season }} Regular Season{% endif %}
                 </div>
             {% endif %}
             {% if game_date %}

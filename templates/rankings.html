@@ -20,6 +20,14 @@
         </div>
         {% endif %}
     </div>
+    {% if available_seasons and available_seasons|length > 1 %}
+    <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
+            onchange="location='?season='+this.value">
+        {% for s in available_seasons %}
+        <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
 </div>
 
 <!-- Column headers -->

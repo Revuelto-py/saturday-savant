@@ -71,7 +71,7 @@
             rescaled by the opponent's own adjusted rating — and since those ratings depend on
             <em>their</em> opponents too, the whole system is recalculated over and over until
             every rating is consistent with every other. Home-field advantage (worth about 20%
-            more points per drive in 2025) is measured from the data and removed, so every
+            more points per drive in {{ season }}) is measured from the data and removed, so every
             rating is expressed at a neutral site.</p>
 
             <div style="color: var(--text-primary);font-weight:700;margin:18px 0 6px">4 · Built to predict, not to reward</div>
@@ -89,7 +89,7 @@
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
         <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Current Top 10</h5>
         <div style="flex:1;height:1px;background: var(--border)"></div>
-        <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ n_teams }} FBS teams · {{ '{:,}'.format(n_drives) }} offensive drives rated · 2025</span>
+        <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ n_teams }} FBS teams · {{ '{:,}'.format(n_drives) }} offensive drives rated · {{ season }}</span>
     </div>
 
     <div class="dark-card" style="overflow:hidden;margin-bottom:24px"><div style="overflow-x:auto">

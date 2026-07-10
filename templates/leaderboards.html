@@ -2,7 +2,7 @@
 {% set _cat_label = {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) %}
 {% block title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} Leaderboards · {{ _cat_label }} · Saturday Savant{% endblock %}
 {% block og_title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} {{ _cat_label }} Leaders · Saturday Savant{% endblock %}
-{% block og_description %}2025 FBS {% if mode == 'team' %}team{% else %}player{% endif %} {{ _cat_label }} leaders, ranked on Saturday Savant.{% endblock %}
+{% block og_description %}{{ season }} FBS {% if mode == 'team' %}team{% else %}player{% endif %} {{ _cat_label }} leaders, ranked on Saturday Savant.{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <div class="page-wrapper" style="padding-top:32px">
@@ -42,7 +42,7 @@
         {% else %}
             {% for c, l in PLAYER_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
         {% endif %}
-        <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · 2025 Season</span>
+        <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} Season</span>
     </h1>
 </div>
 
@@ -68,7 +68,15 @@
     <div class="lb-filter-row">
         <div class="lb-filter-group">
             <div class="lb-filter-label">Season</div>
-            <select class="lb-select" disabled><option selected>2025</option></select>
+            {% if available_seasons and available_seasons|length > 1 %}
+            <select name="season" class="lb-select" onchange="lbFilter(this)">
+                {% for s in available_seasons %}
+                <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
+            <select class="lb-select" disabled><option selected>{{ season }}</option></select>
+            {% endif %}
         </div>
         <div class="lb-filter-group">
             <div class="lb-filter-label">Conference</div>
@@ -203,7 +211,15 @@
     <div class="lb-filter-row">
         <div class="lb-filter-group">
             <div class="lb-filter-label">Season</div>
-            <select class="lb-select" disabled><option selected>2025</option></select>
+            {% if available_seasons and available_seasons|length > 1 %}
+            <select name="season" class="lb-select" onchange="lbFilter(this)">
+                {% for s in available_seasons %}
+                <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
+            <select class="lb-select" disabled><option selected>{{ season }}</option></select>
+            {% endif %}
         </div>
         <div class="lb-filter-group">
             <div class="lb-filter-label">Conference</div>

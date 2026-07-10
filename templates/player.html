@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ player.first_name }} {{ player.last_name }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ player.first_name }} {{ player.last_name }} · {{ player.team }}{% if player.position %} {{ player.position }}{% endif %} · Saturday Savant{% endblock %}
-{% block og_description %}{{ player.first_name }} {{ player.last_name }} — {{ player.team }}{% if player.position %} · {{ player.position }}{% endif %}{% if player.jersey %} · #{{ player.jersey }}{% endif %}. 2025 stats, advanced metrics, and game log on Saturday Savant.{% endblock %}
+{% block og_description %}{{ player.first_name }} {{ player.last_name }} — {{ player.team }}{% if player.position %} · {{ player.position }}{% endif %}{% if player.jersey %} · #{{ player.jersey }}{% endif %}. {{ season }} stats, advanced metrics, and game log on Saturday Savant.{% endblock %}
 {% block og_image %}{{ player.headshot or (request.url_root ~ 'static/logo-512.png') }}{% endblock %}
 
 {% block content %}
@@ -79,7 +79,7 @@
                 <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;
                              letter-spacing:0.14em;text-transform:uppercase;margin-top:20px;margin-bottom:10px;
                              display:flex;align-items:center;gap:6px">
-                    2025 Season Stats
+                    {{ season }} Season Stats
                     {% if previous_stat_teams %}
                     {% set prev_team = previous_stat_teams[0] %}
                     {% set prev_logo = transfer_team_logos.get(prev_team) %}
@@ -293,7 +293,7 @@
         <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;height:100%">
 
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-                <h4 class="section-label" style="margin:0">2025 Season Stats</h4>
+                <h4 class="section-label" style="margin:0">{{ season }} Season Stats</h4>
                 {% if previous_stat_teams %}
                 {% set prev_team = previous_stat_teams[0] %}
                 {% set prev_logo = transfer_team_logos.get(prev_team) %}
@@ -304,6 +304,14 @@
                 </div>
                 {% endif %}
                 <div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>
+                {% if available_seasons and available_seasons|length > 1 %}
+                <select class="lb-select season-select" style="min-width:96px;padding:5px 10px" aria-label="Season"
+                        onchange="location='?season='+this.value">
+                    {% for s in available_seasons %}
+                    <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
                 {% if player.position %}
                 <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);
                              color:#93c5fd;font-size: var(--text-xs);font-weight:800;padding:2px 8px;border-radius: var(--r-sm)">{{ player.position }}</span>
@@ -474,7 +482,7 @@
 
             {% if not stats %}
             <div style="padding:40px;text-align:center">
-                <div style="color: var(--text-dim);font-size: var(--text-base)">No 2025 season stats available</div>
+                <div style="color: var(--text-dim);font-size: var(--text-base)">No {{ season }} season stats available</div>
             </div>
             {% endif %}
 
@@ -510,7 +518,7 @@
 
             <h5 class="section-label" style="margin:0 0 var(--s1)">Percentile Rankings</h5>
             <div style="color: var(--text-dim);font-size: var(--text-xs);margin-bottom:14px">
-                vs FBS {{ player_percentiles.get('group','') }}s · 2025
+                vs FBS {{ player_percentiles.get('group','') }}s · {{ season }}
             </div>
 
             <!-- Legend -->
@@ -578,7 +586,7 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
             <h5 class="section-label" style="margin:0">Usage Rate</h5>
             <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Share of team plays · 2025</span>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">Share of team plays · {{ season }}</span>
         </div>
         <div class="dark-card" style="padding:20px">
             <div class="row g-3">
@@ -631,7 +639,7 @@
     {% endif %}
 
     <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;margin-bottom:16px">
-        <h4 class="section-label" style="margin:0 0 var(--s4)">2025 Game Log</h4>
+        <h4 class="section-label" style="margin:0 0 var(--s4)">{{ season }} Game Log</h4>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
         <table class="data-table" style="width:100%;min-width:1000px">
             <thead>
