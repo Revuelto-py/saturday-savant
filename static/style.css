@@ -1296,7 +1296,6 @@ a.t-label:hover { color: #60a5fa; }
 .btn,
 .data-table tbody tr,
 tr.player-row,
-.percentile-row,
 .search-result-item {
     transition: all 0.18s ease;
 }
@@ -1322,6 +1321,9 @@ tr.player-row,
 .data-table tbody tr:hover {
     background: rgba(255,255,255,0.04);
 }
+/* Static, single-row stat tables (e.g. Team Offense/Defense summaries) never
+   navigate, so they opt out of the row highlight to avoid reading as clickable. */
+.data-table--static tbody tr:hover { background: transparent; }
 
 /* Player rows in roster / game log */
 tr.player-row:hover {
@@ -1358,11 +1360,8 @@ tr.player-row:hover {
     background: rgba(255,255,255,0.06);
 }
 
-/* Percentile bar rows (player page) */
-.percentile-row:hover {
-    background: rgba(255,255,255,0.03);
-    border-radius: var(--r-sm);
-}
+/* Percentile bar rows (team + player pages) are static stat visualizations,
+   not links — no hover highlight, so they don't read as clickable. */
 
 /* Drives Tab */
 .drive-card {
