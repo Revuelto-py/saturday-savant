@@ -3289,7 +3289,20 @@ def shorten_game_label(season_type, week, notes):
 
 @app.route('/player/<int:player_id>')
 def player_detail(player_id):
-    return _player_detail_cached(player_id, requested_season())
+    # No explicit ?season= defaults to the player's most recent recorded
+    # season — a departed player (e.g. 2016-19 career) lands on his final
+    # year instead of an empty current-season page.
+    s = request.args.get('season', type=int)
+    if s and s in get_available_seasons():
+        return _player_detail_cached(player_id, s)
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT MAX(season) FROM player_stats WHERE player_id = %s', (str(player_id),))
+        row = cur.fetchone()
+    finally:
+        release_db(conn)
+    return _player_detail_cached(player_id, row[0] if row and row[0] else CURRENT_SEASON)
 
 @cache.memoize(timeout=3600)  # memoize keys on (player_id, season)
 def _player_detail_cached(player_id, season):
@@ -3831,25 +3844,125 @@ def _player_detail_cached(player_id, season):
         print(f"ESPN game log error: {e}")
         import traceback; traceback.print_exc()
 
-    # The selector offers only seasons this player actually recorded stats in
-    # (falling back to the viewed season), not the sitewide list.
-    cursor2 = None
+    # ── Career log + season selector ─────────────────────────────────────
+    # One row per season the player recorded stats, newest first, with the
+    # team attributed from the rosters table (per-season truth) rather than
+    # players.team (current team only) — same principle as the transfer badge
+    # and game-log Team column. player_stats' own per-season team is the
+    # fallback for seasons with no roster row (e.g. pre-2019 partial rosters).
     conn2b = get_db()
     try:
         cursor2 = conn2b.cursor()
-        cursor2.execute('SELECT DISTINCT season FROM player_stats '
-                        'WHERE player_id = %s AND season IS NOT NULL ORDER BY season DESC',
-                        (str(player_id),))
-        player_seasons = [r[0] for r in cursor2.fetchall()] or [season]
+        cursor2.execute('''
+            SELECT season, category, stat_type, CAST(stat AS REAL), team
+            FROM player_stats WHERE player_id = %s AND season IS NOT NULL
+        ''', (str(player_id),))
+        career_by_season = {}
+        stat_team_by_season = {}
+        for ssn, cat, st, val, tm in cursor2.fetchall():
+            career_by_season.setdefault(ssn, {}).setdefault(cat, {})[st] = val
+            if tm and ssn not in stat_team_by_season:
+                stat_team_by_season[ssn] = tm
+        player_seasons = sorted(career_by_season, reverse=True) or [season]
+
+        cursor2.execute('SELECT season, team FROM rosters WHERE player_id = %s', (player_id,))
+        roster_team_by_season = dict(cursor2.fetchall())
+        cursor2.execute('SELECT season, avg_ppa_all FROM player_ppa WHERE player_id = %s', (str(player_id),))
+        ppa_by_season = dict(cursor2.fetchall())
+
+        career_teams = {roster_team_by_season.get(s) or stat_team_by_season.get(s)
+                        for s in career_by_season} - {None}
+        team_meta = {}
+        if career_teams:
+            cursor2.execute('SELECT name, logo_dark, slug, conference FROM teams WHERE name = ANY(%s)',
+                            (list(career_teams),))
+            team_meta = {r[0]: {'logo': r[1], 'slug': r[2], 'conf': r[3]} for r in cursor2.fetchall()}
     finally:
         release_db(conn2b)
     if season not in player_seasons:
         player_seasons = sorted(set(player_seasons) | {season}, reverse=True)
 
+    # Significant stats per position group — mirrors the leaderboards'
+    # standard column sets rather than inventing a new selection.
+    pos_group = POS_GROUP_MAP.get((player.get('position') or '').upper(), 'WR')
+    CAREER_COLS = {
+        'QB': [('PCT', 'Completion %', 'passing', 'PCT', 'pct'),
+               ('YDS', 'Passing yards', 'passing', 'YDS', 'int'),
+               ('TD', 'Passing touchdowns', 'passing', 'TD', 'int'),
+               ('INT', 'Interceptions thrown', 'passing', 'INT', 'int'),
+               ('YPA', 'Yards per attempt', 'passing', 'YPA', 'dec'),
+               ('RUSH YDS', 'Rushing yards', 'rushing', 'YDS', 'int'),
+               ('RUSH TD', 'Rushing touchdowns', 'rushing', 'TD', 'int'),
+               ('EPA', 'EPA per play', None, None, 'epa')],
+        'RB': [('CAR', 'Carries', 'rushing', 'CAR', 'int'),
+               ('YDS', 'Rushing yards', 'rushing', 'YDS', 'int'),
+               ('YPC', 'Yards per carry', 'rushing', 'YPC', 'dec'),
+               ('TD', 'Rushing touchdowns', 'rushing', 'TD', 'int'),
+               ('REC', 'Receptions', 'receiving', 'REC', 'int'),
+               ('REC YDS', 'Receiving yards', 'receiving', 'YDS', 'int'),
+               ('EPA', 'EPA per play', None, None, 'epa')],
+        'WR': [('REC', 'Receptions', 'receiving', 'REC', 'int'),
+               ('YDS', 'Receiving yards', 'receiving', 'YDS', 'int'),
+               ('YPR', 'Yards per reception', 'receiving', 'YPR', 'dec'),
+               ('TD', 'Receiving touchdowns', 'receiving', 'TD', 'int'),
+               ('LONG', 'Longest reception', 'receiving', 'LONG', 'int'),
+               ('EPA', 'EPA per play', None, None, 'epa')],
+        'DL': [('TOT', 'Total tackles', 'defensive', 'TOT', 'int'),
+               ('SOLO', 'Solo tackles', 'defensive', 'SOLO', 'int'),
+               ('TFL', 'Tackles for loss', 'defensive', 'TFL', 'dec'),
+               ('SACKS', 'Sacks', 'defensive', 'SACKS', 'dec'),
+               ('PD', 'Passes defended', 'defensive', 'PD', 'int'),
+               ('INT', 'Interceptions', 'interceptions', 'INT', 'int')],
+        'K':  [('FGM', 'Field goals made', 'kicking', 'FGM', 'int'),
+               ('FGA', 'Field goals attempted', 'kicking', 'FGA', 'int'),
+               ('PCT', 'Field goal %', 'kicking', 'PCT', 'pct'),
+               ('LONG', 'Longest field goal', 'kicking', 'LONG', 'int'),
+               ('PTS', 'Kicking points', 'kicking', 'PTS', 'int')],
+        'P':  [('NO', 'Punts', 'punting', 'NO', 'int'),
+               ('YDS', 'Punting yards', 'punting', 'YDS', 'int'),
+               ('YPP', 'Yards per punt', 'punting', 'YPP', 'dec'),
+               ('LONG', 'Longest punt', 'punting', 'LONG', 'int'),
+               ('IN 20', 'Punts inside the 20', 'punting', 'In 20', 'int')],
+    }
+    CAREER_COLS['TE'] = CAREER_COLS['WR']
+    CAREER_COLS['LB'] = CAREER_COLS['DL']
+    CAREER_COLS['DB'] = CAREER_COLS['DL']
+    cols = CAREER_COLS.get(pos_group, CAREER_COLS['WR'])
+
+    def _career_val(seas, cat, st, kind):
+        if kind == 'epa':
+            v = ppa_by_season.get(seas)
+            return f"{v:+.3f}" if v is not None else '—'
+        v = career_by_season.get(seas, {}).get(cat, {}).get(st)
+        if v is None:
+            return '—'
+        if kind == 'pct':
+            return f"{v * 100:.1f}%" if v <= 1.0 else f"{v:.1f}%"
+        if kind == 'dec':
+            return f"{v:.1f}"
+        return f"{int(round(v)):,}"
+
+    career_log = []
+    for s in sorted(career_by_season, reverse=True):
+        team_name = roster_team_by_season.get(s) or stat_team_by_season.get(s)
+        meta = team_meta.get(team_name, {})
+        career_log.append({
+            'season': s,
+            'team': team_name,
+            'logo': meta.get('logo'),
+            # FCS teams have no team page; unknown teams degrade to plain text
+            'team_slug': meta.get('slug') if meta.get('conf') not in FCS_CONFS else None,
+            'stat_values': [_career_val(s, cat, st, kind) for _lbl, _tt, cat, st, kind in cols],
+        })
+    career_cols = [(lbl, tt) for lbl, tt, _c, _s, _k in cols]
+    career_team_count = len({r['team'] for r in career_log if r['team']})
+
     return render_template('player.html',
         player=player, stats=stats, ppa=ppa,
         season=season, is_current_season=(season == CURRENT_SEASON),
         available_seasons=player_seasons,
+        career_log=career_log, career_cols=career_cols,
+        career_team_count=career_team_count,
         ap_rank=ap_rank, c1=c1, c2=c2,
         game_log=game_log,
         player_percentiles=player_percentiles,

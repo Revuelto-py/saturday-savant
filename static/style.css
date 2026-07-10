@@ -2426,3 +2426,9 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
     .lb-mode-btn:hover, .lb-view-tab:hover, .lb-page-btn:hover,
     .lb-mode-btn:active, .lb-view-tab:active, .lb-page-btn:active, .lb-team-tab:active { transform: none; }
 }
+
+/* ── Player page: career log ────────────────────────────────────────────── */
+/* Current viewed season's row gets a subtle accent tint so the career table
+   and the season selector visibly agree on what's being shown. */
+tr.career-row-current { background: rgba(28,156,240,0.07); }
+tr.career-row-current:hover { background: rgba(28,156,240,0.11); }

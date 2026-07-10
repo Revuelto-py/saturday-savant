@@ -618,6 +618,60 @@
     </div>
     {% endif %}
 
+    <!-- ROW 2: Career Log — one row per season, team attributed per year
+         from the rosters table (transfers show each season under the team
+         actually played for). Rows link to that season's player view; team
+         cells link to the team's page for that season. -->
+    {% if career_log and career_log|length > 1 %}
+    <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:var(--s4)">
+            <h4 class="section-label" style="margin:0">Career</h4>
+            <div style="flex:1;height:1px;background:rgba(255,255,255,0.08)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">
+                {{ career_log|length }} season{{ '' if career_log|length == 1 else 's' }}{% if career_team_count > 1 %} · {{ career_team_count }} teams{% endif %}
+            </span>
+        </div>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <table class="data-table" style="width:100%;min-width:640px">
+            <thead>
+                <tr style="background:rgba(255,255,255,0.06);border-bottom: 1px solid var(--border-strong)">
+                    <th style="text-align:left">SEASON</th>
+                    <th style="text-align:left">TEAM</th>
+                    {% for label, tooltip in career_cols %}
+                    <th class="stat-header" data-tooltip="{{ tooltip }}" style="text-align:center">{{ label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in career_log %}
+                <tr class="player-row{{ ' career-row-current' if row.season == season else '' }}" style="border-bottom: 1px solid var(--border);cursor:pointer"
+                    onclick="window.location.href='/player/{{ player.id }}?season={{ row.season }}'">
+                    <td style="padding:10px 14px">
+                        <span style="color: var(--text-primary);font-weight:{{ '800' if row.season == season else '600' }};font-size: var(--text-sm)">{{ row.season }}</span>
+                    </td>
+                    <td style="padding:10px 14px">
+                        <div style="display:flex;align-items:center;gap:8px">
+                            {% if row.logo %}<img src="{{ row.logo }}" alt="{{ row.team }} logo" style="width:22px;height:22px;object-fit:contain;flex-shrink:0" loading="lazy">
+                            {% else %}<div style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,0.06);border:1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size:0.55rem;font-weight:700;color:var(--text-secondary);flex-shrink:0">{{ row.team[0] if row.team else '?' }}</div>{% endif %}
+                            {% if row.team_slug %}
+                            <a href="/team/{{ row.team_slug }}?season={{ row.season }}" onclick="event.stopPropagation()"
+                               style="color: var(--text-primary);font-weight:600;font-size: var(--text-sm);text-decoration:none">{{ row.team }}</a>
+                            {% else %}
+                            <span style="color: var(--text-primary);font-weight:600;font-size: var(--text-sm)">{{ row.team or '—' }}</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    {% for v in row.stat_values %}
+                    <td style="text-align:center;padding:10px 8px;color:{{ 'var(--text-primary)' if v != '—' else 'var(--text-dim)' }};font-size: var(--text-sm);font-weight:600;font-variant-numeric:tabular-nums">{{ v }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ROW 2: Game Log (full width) -->
     {% if game_log %}
     {% if pos == 'QB' %}
