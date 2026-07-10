@@ -115,6 +115,15 @@ def ensure_indexes():
             CREATE INDEX IF NOT EXISTS idx_player_ppa_player_id ON player_ppa(player_id);
             CREATE INDEX IF NOT EXISTS idx_players_team ON players(team);
             CREATE INDEX IF NOT EXISTS idx_games_season_week ON games(season, week);
+            -- multi-season perf set (added with the 2016-2025 expansion):
+            -- the (id::text) expression index is what lets every
+            -- `ps.player_id = p.id::text` join probe players instead of
+            -- sorting all 52k rows per query.
+            CREATE INDEX IF NOT EXISTS idx_players_id_text ON players ((id::text));
+            CREATE INDEX IF NOT EXISTS idx_player_stats_season_cat_type ON player_stats (season, category, stat_type);
+            CREATE INDEX IF NOT EXISTS idx_player_stats_team_season ON player_stats (team, season);
+            CREATE INDEX IF NOT EXISTS idx_player_stats_pid_season ON player_stats (player_id, season);
+            CREATE INDEX IF NOT EXISTS idx_player_ppa_pid_season ON player_ppa (player_id, season);
         ''')
         conn.commit()
     except Exception as e:
@@ -140,7 +149,20 @@ def get_available_seasons():
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute('SELECT DISTINCT season FROM player_stats WHERE season IS NOT NULL ORDER BY season DESC')
+        # Loose index scan (recursive skip scan): ~one index probe per season
+        # instead of walking all 1M+ index entries with DISTINCT.
+        cursor.execute('''
+            WITH RECURSIVE t AS (
+                (SELECT season FROM player_stats WHERE season IS NOT NULL
+                 ORDER BY season DESC LIMIT 1)
+                UNION ALL
+                SELECT (SELECT season FROM player_stats
+                        WHERE season < t.season AND season IS NOT NULL
+                        ORDER BY season DESC LIMIT 1)
+                FROM t WHERE t.season IS NOT NULL
+            )
+            SELECT season FROM t WHERE season IS NOT NULL ORDER BY season DESC
+        ''')
         seasons = [r[0] for r in cursor.fetchall()]
         return seasons or [CURRENT_SEASON]
     finally:
@@ -171,33 +193,54 @@ def get_conference_logos(cursor):
 _VALID_PPA_COLS = {'avg_ppa_all', 'avg_ppa_pass', 'avg_ppa_rush', 'total_ppa'}
 
 def _fetch_stats_pool(cursor, category, positions, season=CURRENT_SEASON):
-    """One query: all stat_types for all players at these positions, scoped to
-    one season so percentiles always rank within a single year's peer pool."""
-    ph = ','.join(['%s'] * len(positions))
-    cursor.execute(f'''
-        SELECT ps.player_id, ps.stat_type, CAST(ps.stat AS REAL)
-        FROM player_stats ps
-        JOIN players pl ON ps.player_id = pl.id::text
-        WHERE ps.category=%s AND ps.season=%s AND pl.position IN ({ph}) AND ps.stat IS NOT NULL
-    ''', [category, season] + list(positions))
-    pool = {}
-    for pid, st, val in cursor.fetchall():
-        pool.setdefault(pid, {})[st] = val
-    return pool
+    """Peer pool for percentiles: all stat_types for all players at these
+    positions in one season. The pool is identical for every player in the
+    group, so it's memoized — a player page runs ~a dozen of these, and
+    without the cache each page paid all of them fresh. Treat the returned
+    dict as read-only (it's shared across requests)."""
+    return _stats_pool_cached(category, tuple(positions), season)
+
+@cache.memoize(timeout=1800)
+def _stats_pool_cached(category, positions_key, season):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        ph = ','.join(['%s'] * len(positions_key))
+        cursor.execute(f'''
+            SELECT ps.player_id, ps.stat_type, CAST(ps.stat AS REAL)
+            FROM player_stats ps
+            JOIN players pl ON ps.player_id = pl.id::text
+            WHERE ps.category=%s AND ps.season=%s AND pl.position IN ({ph}) AND ps.stat IS NOT NULL
+        ''', [category, season] + list(positions_key))
+        pool = {}
+        for pid, st, val in cursor.fetchall():
+            pool.setdefault(pid, {})[st] = val
+        return pool
+    finally:
+        release_db(conn)
 
 def _fetch_ppa_pool(cursor, positions, season=CURRENT_SEASON):
-    """One query: all PPA columns for all players at these positions (one season)."""
-    ph = ','.join(['%s'] * len(positions))
-    cursor.execute(f'''
-        SELECT pp.player_id, pp.avg_ppa_all, pp.avg_ppa_pass, pp.avg_ppa_rush, pp.total_ppa
-        FROM player_ppa pp
-        JOIN players pl ON pp.player_id = pl.id::text
-        WHERE pp.season=%s AND pl.position IN ({ph})
-    ''', [season] + list(positions))
-    pool = {}
-    for pid, *vals in cursor.fetchall():
-        pool[pid] = dict(zip(('avg_ppa_all','avg_ppa_pass','avg_ppa_rush','total_ppa'), vals))
-    return pool
+    """PPA peer pool (one season) — memoized like _fetch_stats_pool; read-only."""
+    return _ppa_pool_cached(tuple(positions), season)
+
+@cache.memoize(timeout=1800)
+def _ppa_pool_cached(positions_key, season):
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        ph = ','.join(['%s'] * len(positions_key))
+        cursor.execute(f'''
+            SELECT pp.player_id, pp.avg_ppa_all, pp.avg_ppa_pass, pp.avg_ppa_rush, pp.total_ppa
+            FROM player_ppa pp
+            JOIN players pl ON pp.player_id = pl.id::text
+            WHERE pp.season=%s AND pl.position IN ({ph})
+        ''', [season] + list(positions_key))
+        pool = {}
+        for pid, *vals in cursor.fetchall():
+            pool[pid] = dict(zip(('avg_ppa_all','avg_ppa_pass','avg_ppa_rush','total_ppa'), vals))
+        return pool
+    finally:
+        release_db(conn)
 
 def _rank_pct(player_id, pool, stat_key, higher_better=True):
     """Rank and percentile from pre-fetched pool dict — no DB call."""
@@ -918,21 +961,43 @@ def _pagination_ctx(page_raw, total_count):
     }
     return page, offset, ctx
 
-def leaders_query(cursor, category, stat_type, limit=5, season=CURRENT_SEASON):
+def leaders_query_all(cursor, season=CURRENT_SEASON):
+    """All home-page leader boards in one round trip. Ranks on the nine exact
+    (category, stat_type) index ranges first — a few thousand narrow rows —
+    and joins players/teams only for the ~45 winners, so no wide sort of the
+    whole season ever happens.
+    Returns {(category, stat_type): [(name, team, val, headshot, logo, pid)]}"""
     cursor.execute(f'''
-        SELECT ps.player_name, ps.team,
-            CAST(MAX(CASE WHEN ps.stat_type = '{stat_type}' THEN ps.stat END) AS INTEGER) as val,
-            MAX(p.headshot) as headshot, MAX(t.logo_dark) as logo_dark, MAX(p.id) as player_id
-        FROM player_stats ps
-        INNER JOIN teams t ON ps.team = t.name
-        LEFT JOIN players p ON ps.player_id = p.id::text
-        WHERE ps.category = '{category}' AND ps.season = %s
-        AND ps.conference NOT IN {FCS_CONFS}
-        GROUP BY ps.player_name, ps.team
-        ORDER BY val DESC
-        LIMIT {limit}
+        WITH ranked AS (
+            SELECT category, stat_type, player_name, team, val, pid FROM (
+                SELECT ps.category, ps.stat_type, ps.player_name, ps.team,
+                       MAX(CAST(ps.stat AS REAL)) AS val,
+                       MAX(ps.player_id) AS pid,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY ps.category, ps.stat_type
+                           ORDER BY MAX(CAST(ps.stat AS REAL)) DESC NULLS LAST) AS rn
+                FROM player_stats ps
+                WHERE ps.season = %s
+                  AND ((ps.category = 'passing'       AND ps.stat_type IN ('YDS','TD'))
+                    OR (ps.category = 'rushing'       AND ps.stat_type IN ('YDS','TD'))
+                    OR (ps.category = 'receiving'     AND ps.stat_type IN ('YDS','TD'))
+                    OR (ps.category = 'defensive'     AND ps.stat_type IN ('TOT','SACKS'))
+                    OR (ps.category = 'interceptions' AND ps.stat_type = 'INT'))
+                  AND ps.conference NOT IN {FCS_CONFS}
+                GROUP BY ps.category, ps.stat_type, ps.player_name, ps.team
+            ) x WHERE rn <= 5
+        )
+        SELECT r.category, r.stat_type, r.player_name, r.team,
+               CAST(r.val AS INTEGER), p.headshot, t.logo_dark, p.id
+        FROM ranked r
+        INNER JOIN teams t ON r.team = t.name
+        LEFT JOIN players p ON p.id::text = r.pid
+        ORDER BY r.category, r.stat_type, r.val DESC
     ''', (season,))
-    return cursor.fetchall()
+    out = {}
+    for cat, st, name, team, val, headshot, logo, pid in cursor.fetchall():
+        out.setdefault((cat, st), []).append((name, team, val, headshot, logo, pid))
+    return out
 
 @cache.memoize(timeout=3600)
 def get_cached_season_leaders():
@@ -947,16 +1012,17 @@ def get_cached_season_leaders():
     conn = get_db()
     try:
         cursor = conn.cursor()
+        boards = leaders_query_all(cursor)
         return [
-            ('Passing Yards',   '/leaderboards/passing',   leaders_query(cursor, 'passing',       'YDS')),
-            ('Passing TDs',     '/leaderboards/passing',   leaders_query(cursor, 'passing',       'TD')),
-            ('Rushing Yards',   '/leaderboards/rushing',   leaders_query(cursor, 'rushing',       'YDS')),
-            ('Rushing TDs',     '/leaderboards/rushing',   leaders_query(cursor, 'rushing',       'TD')),
-            ('Receiving Yards', '/leaderboards/receiving', leaders_query(cursor, 'receiving',     'YDS')),
-            ('Receiving TDs',   '/leaderboards/receiving', leaders_query(cursor, 'receiving',     'TD')),
-            ('Tackles',         '/leaderboards/defense',   leaders_query(cursor, 'defensive',     'TOT')),
-            ('Sacks',           '/leaderboards/defense',   leaders_query(cursor, 'defensive',     'SACKS')),
-            ('Interceptions',   '/leaderboards/defense',   leaders_query(cursor, 'interceptions', 'INT')),
+            ('Passing Yards',   '/leaderboards/passing',   boards.get(('passing', 'YDS'), [])),
+            ('Passing TDs',     '/leaderboards/passing',   boards.get(('passing', 'TD'), [])),
+            ('Rushing Yards',   '/leaderboards/rushing',   boards.get(('rushing', 'YDS'), [])),
+            ('Rushing TDs',     '/leaderboards/rushing',   boards.get(('rushing', 'TD'), [])),
+            ('Receiving Yards', '/leaderboards/receiving', boards.get(('receiving', 'YDS'), [])),
+            ('Receiving TDs',   '/leaderboards/receiving', boards.get(('receiving', 'TD'), [])),
+            ('Tackles',         '/leaderboards/defense',   boards.get(('defensive', 'TOT'), [])),
+            ('Sacks',           '/leaderboards/defense',   boards.get(('defensive', 'SACKS'), [])),
+            ('Interceptions',   '/leaderboards/defense',   boards.get(('interceptions', 'INT'), [])),
         ]
     finally:
         release_db(conn)
@@ -3710,11 +3776,14 @@ def _player_detail_cached(player_id, season):
                 pass
 
         if espn_athlete_id and espn_team_id_by_team:
-            for game_row in games_list:
+            # One ESPN request per game — fetched in parallel. Sequentially
+            # this was ~a dozen round trips and the single slowest part of a
+            # cold player-page load.
+            def _fetch_game_stats(game_row):
                 game_id, week, opp, my_pts, opp_pts, ha, opp_logo, my_team, season_type, notes = game_row
                 team_id = espn_team_id_by_team.get(my_team)
                 if not team_id:
-                    continue
+                    return None
                 try:
                     r = req.get(
                         f'https://sports.core.api.espn.com/v2/sports/football/leagues/'
@@ -3723,7 +3792,7 @@ def _player_detail_cached(player_id, season):
                         timeout=5
                     )
                     if r.status_code != 200:
-                        continue
+                        return None
                     gdata = r.json()
                     gstats = {}
                     for cat in gdata.get('splits', {}).get('categories', []):
@@ -3737,7 +3806,7 @@ def _player_detail_cached(player_id, season):
                     else:
                         result = ''
 
-                    game_log.append({
+                    return {
                         'week':         week,
                         'game_id':      game_id,
                         'opponent':     opp or '',
@@ -3748,9 +3817,15 @@ def _player_detail_cached(player_id, season):
                         'season_type':  season_type,
                         'game_label':   shorten_game_label(season_type, week, notes),
                         'stats':        gstats,
-                    })
+                    }
                 except Exception:
-                    pass
+                    return None
+
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=8) as ex:
+                for entry in ex.map(_fetch_game_stats, games_list):
+                    if entry:
+                        game_log.append(entry)
 
     except Exception as e:
         print(f"ESPN game log error: {e}")
