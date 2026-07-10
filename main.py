@@ -3325,6 +3325,46 @@ def _player_detail_cached(player_id, season):
         if not row:
             return render_template('404.html', message='Player not found.'), 404
 
+        # The players row is only the CURRENT snapshot — a departed player
+        # keeps his first-seen team there (e.g. Burrow's identity row says
+        # Ohio State). For a historical view, the hero must show the team,
+        # jersey, and measurables AS OF the viewed season, resolved from the
+        # rosters table (player_stats' per-season team as fallback). The
+        # current-season view keeps players.team so present-day transfer
+        # moves still display the player's new team.
+        if season != CURRENT_SEASON:
+            cursor.execute('''
+                SELECT r.team, r.position, r.jersey, r.height, r.weight, r.class_year,
+                       t.logo_dark, t.color, t.alt_color, t.conference
+                FROM rosters r LEFT JOIN teams t ON t.name = r.team
+                WHERE r.player_id = %s AND r.season = %s
+            ''', (player_id, season))
+            season_row = cursor.fetchone()
+            if not season_row:
+                # No roster row that year (pre-2019 gaps) — fall back to the
+                # team the season's stats were recorded under, keeping the
+                # identity row's position/jersey/measurables.
+                cursor.execute('''
+                    SELECT ps.team, NULL, NULL, NULL, NULL, NULL,
+                           t.logo_dark, t.color, t.alt_color, t.conference
+                    FROM player_stats ps LEFT JOIN teams t ON t.name = ps.team
+                    WHERE ps.player_id = %s AND ps.season = %s AND ps.team IS NOT NULL
+                    LIMIT 1
+                ''', (str(player_id), season))
+                season_row = cursor.fetchone()
+            if season_row and season_row[0]:
+                row = list(row)
+                row[3] = season_row[0]                              # team
+                if season_row[1]: row[4] = season_row[1]            # position
+                if season_row[2] is not None: row[5] = season_row[2]  # jersey
+                if season_row[3] is not None: row[7] = season_row[3]  # height
+                if season_row[4] is not None: row[8] = season_row[4]  # weight
+                if season_row[5]: row[9] = season_row[5]            # class year
+                row[10] = season_row[6]                             # logo_dark
+                row[11] = season_row[7]                             # color
+                row[12] = season_row[8]                             # alt_color
+                row[13] = season_row[9]                             # conference
+
         is_active_2026 = row[14] if row[14] is not None else 1
         draft_status   = row[15]
 
