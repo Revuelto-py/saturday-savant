@@ -140,7 +140,16 @@
         <div class="cmp-brand">
             <img src="/static/logo-mark-256.png" alt="">
             <span class="cmp-brand-text">Saturday Savant</span>
-            <span class="cmp-brand-sub">Head-to-Head · {{ current_season }}</span>
+            <span class="cmp-brand-sub">Head-to-Head ·
+                {% if available_seasons and available_seasons|length > 1 %}
+                <select class="lb-select season-select" style="min-width:88px;padding:3px 8px;font-size:var(--text-sm)" aria-label="Season"
+                        onchange="var q=new URLSearchParams(location.search); q.set('season', this.value); location.search=q.toString()">
+                    {% for s in available_seasons %}
+                    <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}{{ season }}{% endif %}
+            </span>
         </div>
 
         <div class="cmp-table cmp-cols-{{ cols }}">

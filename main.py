@@ -3756,10 +3756,25 @@ def _player_detail_cached(player_id, season):
         print(f"ESPN game log error: {e}")
         import traceback; traceback.print_exc()
 
+    # The selector offers only seasons this player actually recorded stats in
+    # (falling back to the viewed season), not the sitewide list.
+    cursor2 = None
+    conn2b = get_db()
+    try:
+        cursor2 = conn2b.cursor()
+        cursor2.execute('SELECT DISTINCT season FROM player_stats '
+                        'WHERE player_id = %s AND season IS NOT NULL ORDER BY season DESC',
+                        (str(player_id),))
+        player_seasons = [r[0] for r in cursor2.fetchall()] or [season]
+    finally:
+        release_db(conn2b)
+    if season not in player_seasons:
+        player_seasons = sorted(set(player_seasons) | {season}, reverse=True)
+
     return render_template('player.html',
         player=player, stats=stats, ppa=ppa,
         season=season, is_current_season=(season == CURRENT_SEASON),
-        available_seasons=get_available_seasons(),
+        available_seasons=player_seasons,
         ap_rank=ap_rank, c1=c1, c2=c2,
         game_log=game_log,
         player_percentiles=player_percentiles,
@@ -3969,17 +3984,17 @@ COMPARE_PEER_POSITIONS = {
 }
 COMPARE_WIDE_DEF_POSITIONS = ['DE', 'DT', 'NT', 'DL', 'EDGE', 'LB', 'ILB', 'OLB', 'MLB']
 
-def _cmp_games_played(cursor, team, cache):
-    """Completed team games this season, used as a per-game divisor.
-    player_stats has season totals only (no week/game_id column), so an
-    individual player's games-played can't be counted directly — team
+def _cmp_games_played(cursor, team, cache, season=CURRENT_SEASON):
+    """Completed team games in the compared season, used as a per-game
+    divisor. player_stats has season totals only (no week/game_id column), so
+    an individual player's games-played can't be counted directly — team
     games completed is the closest available proxy."""
     if team not in cache:
         cursor.execute('''
             SELECT COUNT(*) FROM games
-            WHERE completed=1 AND season_type='SeasonType.REGULAR'
+            WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
             AND (home_team=%s OR away_team=%s)
-        ''', (team, team))
+        ''', (season, team, team))
         cache[team] = max(cursor.fetchone()[0] or 0, 1)
     return cache[team]
 
@@ -3996,7 +4011,7 @@ def _cmp_row(label, player_ids, full_pool, qual_pool, stat_key, games_by_pid,
         values.append({'raw': raw, 'display': f'{shown:.{decimals}f}{suffix}', 'percentile': pct})
     return {'label': label, 'higher_better': higher_better, 'values': values}
 
-def _cmp_team_proxy_row(cursor, label, player_ids, player_teams, column, pct=False):
+def _cmp_team_proxy_row(cursor, label, player_ids, player_teams, column, pct=False, season=CURRENT_SEASON):
     """Row sourced from team_stats as a proxy for a player-level stat that
     isn't tracked individually. No percentile — the existing qualification
     system only covers player_stats/player_ppa pools."""
@@ -4004,7 +4019,7 @@ def _cmp_team_proxy_row(cursor, label, player_ids, player_teams, column, pct=Fal
     vals_by_team = {}
     if teams:
         ph = ','.join(['%s'] * len(teams))
-        cursor.execute(f'SELECT team, {column} FROM team_stats WHERE season={CURRENT_SEASON} AND team IN ({ph})', teams)
+        cursor.execute(f'SELECT team, {column} FROM team_stats WHERE season={season} AND team IN ({ph})', teams)
         vals_by_team = dict(cursor.fetchall())
     values = []
     for pid in player_ids:
@@ -4016,9 +4031,9 @@ def _cmp_team_proxy_row(cursor, label, player_ids, player_teams, column, pct=Fal
             values.append({'raw': v, 'display': f'{shown:.1f}{"%" if pct else ""}', 'percentile': None})
     return {'label': label, 'higher_better': True, 'values': values}
 
-def _cmp_usage_row(cursor, label, player_ids, column, pct=True):
+def _cmp_usage_row(cursor, label, player_ids, column, pct=True, season=CURRENT_SEASON):
     ph = ','.join(['%s'] * len(player_ids))
-    cursor.execute(f'SELECT player_id, {column} FROM player_usage WHERE season={CURRENT_SEASON} AND player_id IN ({ph})', player_ids)
+    cursor.execute(f'SELECT player_id, {column} FROM player_usage WHERE season={season} AND player_id IN ({ph})', player_ids)
     vals_by_pid = dict(cursor.fetchall())
     values = []
     for pid in player_ids:
@@ -4054,15 +4069,15 @@ def _cmp_assign_colors(row):
             v['color'] = 'gray'
     return row
 
-def _build_compare_group_rows(cursor, group_name, player_ids, player_teams):
+def _build_compare_group_rows(cursor, group_name, player_ids, player_teams, season=CURRENT_SEASON):
     games_cache = {}
-    games_by_pid = {pid: _cmp_games_played(cursor, player_teams.get(pid, ''), games_cache)
+    games_by_pid = {pid: _cmp_games_played(cursor, player_teams.get(pid, ''), games_cache, season)
                      for pid in player_ids}
     peer = COMPARE_PEER_POSITIONS[group_name]
     rows = []
 
     if group_name == 'QB':
-        sp = _fetch_stats_pool(cursor, 'passing', peer, CURRENT_SEASON)
+        sp = _fetch_stats_pool(cursor, 'passing', peer, season)
         pass_stat, pass_min = _qual_threshold('QB', 'passing')
         sp_q = _qualify_pool(sp, sp, pass_stat, pass_min)
         rows.append(_cmp_row('Comp %',     player_ids, sp, sp_q, 'PCT', games_by_pid, suffix='%', scale=100))
@@ -4071,35 +4086,35 @@ def _build_compare_group_rows(cursor, group_name, player_ids, player_teams):
         rows.append(_cmp_row('INT/G',      player_ids, sp, sp_q, 'INT', games_by_pid, per_game=True, higher_better=False))
         rows.append(_cmp_row('Yds/Att',    player_ids, sp, sp_q, 'YPA', games_by_pid))
 
-        rush_sp = _fetch_stats_pool(cursor, 'rushing', ['QB'], CURRENT_SEASON)
+        rush_sp = _fetch_stats_pool(cursor, 'rushing', ['QB'], season)
         rush_stat, rush_min = _qual_threshold('QB', 'rushing')
         rush_sp_q = _qualify_pool(rush_sp, rush_sp, rush_stat, rush_min)
         rows.append(_cmp_row('Rush Yds/G', player_ids, rush_sp, rush_sp_q, 'YDS', games_by_pid, per_game=True))
 
-        pp = _fetch_ppa_pool(cursor, peer, CURRENT_SEASON)
+        pp = _fetch_ppa_pool(cursor, peer, season)
         ppa_stat, ppa_min = _qual_threshold('QB', 'ppa')
         pp_q = _qualify_pool(pp, sp_q, ppa_stat, ppa_min)
         rows.append(_cmp_row('EPA / Pass Play', player_ids, pp, pp_q, 'avg_ppa_pass', games_by_pid, decimals=3))
 
     elif group_name == 'RB':
-        sp = _fetch_stats_pool(cursor, 'rushing', peer, CURRENT_SEASON)
+        sp = _fetch_stats_pool(cursor, 'rushing', peer, season)
         rush_stat, rush_min = _qual_threshold('RB', 'rushing')
         sp_q = _qualify_pool(sp, sp, rush_stat, rush_min)
         rows.append(_cmp_row('Rush Yds/G', player_ids, sp, sp_q, 'YDS', games_by_pid, per_game=True))
         rows.append(_cmp_row('Yds/Carry',  player_ids, sp, sp_q, 'YPC', games_by_pid))
         rows.append(_cmp_row('Rush TD/G',  player_ids, sp, sp_q, 'TD',  games_by_pid, per_game=True))
 
-        pp = _fetch_ppa_pool(cursor, peer, CURRENT_SEASON)
+        pp = _fetch_ppa_pool(cursor, peer, season)
         ppa_stat, ppa_min = _qual_threshold('RB', 'ppa')
         pp_q = _qualify_pool(pp, sp_q, ppa_stat, ppa_min)
         rows.append(_cmp_row('EPA / Rush', player_ids, pp, pp_q, 'avg_ppa_rush', games_by_pid, decimals=3))
 
         rows.append(_cmp_team_proxy_row(cursor, 'Rush Success Rate (Team)', player_ids, player_teams,
-                                         'off_rushing_success_rate', pct=True))
-        rows.append(_cmp_usage_row(cursor, 'Rush Usage', player_ids, 'rush', pct=True))
+                                         'off_rushing_success_rate', pct=True, season=season))
+        rows.append(_cmp_usage_row(cursor, 'Rush Usage', player_ids, 'rush', pct=True, season=season))
 
     elif group_name in ('WR', 'TE'):
-        sp = _fetch_stats_pool(cursor, 'receiving', peer, CURRENT_SEASON)
+        sp = _fetch_stats_pool(cursor, 'receiving', peer, season)
         rec_stat, rec_min = _qual_threshold(group_name, 'receiving')
         sp_q = _qualify_pool(sp, sp, rec_stat, rec_min)
         rows.append(_cmp_row('Rec/G',     player_ids, sp, sp_q, 'REC', games_by_pid, per_game=True))
@@ -4107,14 +4122,14 @@ def _build_compare_group_rows(cursor, group_name, player_ids, player_teams):
         rows.append(_cmp_row('Rec TD/G',  player_ids, sp, sp_q, 'TD',  games_by_pid, per_game=True))
         rows.append(_cmp_row('Yds/Rec',   player_ids, sp, sp_q, 'YPR', games_by_pid))
 
-        pp = _fetch_ppa_pool(cursor, peer, CURRENT_SEASON)
+        pp = _fetch_ppa_pool(cursor, peer, season)
         ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
         pp_q = _qualify_pool(pp, sp_q, ppa_stat, ppa_min)
         rows.append(_cmp_row('EPA / Play', player_ids, pp, pp_q, 'avg_ppa_all', games_by_pid, decimals=3))
 
     elif group_name in ('DL', 'LB'):
-        sp_wide = _fetch_stats_pool(cursor, 'defensive', COMPARE_WIDE_DEF_POSITIONS, CURRENT_SEASON)
-        sp_narrow = _fetch_stats_pool(cursor, 'defensive', peer, CURRENT_SEASON)
+        sp_wide = _fetch_stats_pool(cursor, 'defensive', COMPARE_WIDE_DEF_POSITIONS, season)
+        sp_narrow = _fetch_stats_pool(cursor, 'defensive', peer, season)
         def_stat, def_min = _qual_threshold(group_name, 'defensive')
         sp_wide_q = _qualify_pool(sp_wide, sp_wide, def_stat, def_min)
         sp_narrow_q = _qualify_pool(sp_narrow, sp_narrow, def_stat, def_min)
@@ -4126,7 +4141,7 @@ def _build_compare_group_rows(cursor, group_name, player_ids, player_teams):
         # (QB/RB/FB/TE/WR) in this dataset, so it would always be empty for DL/LB.
 
     elif group_name == 'DB':
-        sp = _fetch_stats_pool(cursor, 'defensive', peer, CURRENT_SEASON)
+        sp = _fetch_stats_pool(cursor, 'defensive', peer, season)
         def_stat, def_min = _qual_threshold('DB', 'defensive')
         sp_q = _qualify_pool(sp, sp, def_stat, def_min)
         rows.append(_cmp_row('Tackles/G', player_ids, sp, sp_q, 'TOT',   games_by_pid, per_game=True))
@@ -4149,17 +4164,17 @@ COMPARE_TEAM_STAT_DEFS = [
     ('Def. Success Rate',  'def_success_rate',         False, 1, '%'),
 ]
 
-def _build_compare_team_rows(cursor, team_names):
+def _build_compare_team_rows(cursor, team_names, season=CURRENT_SEASON):
     ph = ','.join(['%s'] * len(team_names))
-    cursor.execute(f'SELECT * FROM team_stats WHERE season={CURRENT_SEASON} AND team IN ({ph})', team_names)
+    cursor.execute(f'SELECT * FROM team_stats WHERE season={season} AND team IN ({ph})', team_names)
     cols = [d[0] for d in cursor.description]
     ts_by_team = {r[0]: dict(zip(cols, r)) for r in cursor.fetchall()}
-    cursor.execute(f'SELECT team, rating, ranking FROM sp_ratings WHERE season={CURRENT_SEASON} AND team IN ({ph})', team_names)
+    cursor.execute(f'SELECT team, rating, ranking FROM sp_ratings WHERE season={season} AND team IN ({ph})', team_names)
     sp_by_team = {r[0]: {'rating': r[1], 'ranking': r[2]} for r in cursor.fetchall()}
 
     # Savant Rating — the site's signature metric leads the team comparison.
     cursor.execute(f'''SELECT team, net_rating, net_ranking, off_rating, off_ranking, def_rating, def_ranking
-                       FROM savant_ratings WHERE season={CURRENT_SEASON} AND team IN ({ph})''', team_names)
+                       FROM savant_ratings WHERE season={season} AND team IN ({ph})''', team_names)
     svr_by_team = {r[0]: {'net': r[1], 'net_rk': r[2], 'off': r[3], 'off_rk': r[4],
                           'def': r[5], 'def_rk': r[6]} for r in cursor.fetchall()}
 
@@ -4229,6 +4244,7 @@ def img_proxy():
 
 @app.route('/compare')
 def compare():
+    season = requested_season()
     mode = request.args.get('type', 'player')
     if mode not in ('player', 'team'):
         mode = 'player'
@@ -4253,7 +4269,7 @@ def compare():
                     FROM teams WHERE name IN ({ph})
                 ''', valid_names)
                 info_by_name = {r[0]: r for r in cursor.fetchall()}
-                cursor.execute(f'SELECT team, rank FROM ap_rankings WHERE season={CURRENT_SEASON} AND team IN ({ph})', valid_names)
+                cursor.execute(f'SELECT team, rank FROM ap_rankings WHERE season={season} AND team IN ({ph})', valid_names)
                 rank_by_team = dict(cursor.fetchall())
 
             for i, name in enumerate(slot_names):
@@ -4266,7 +4282,7 @@ def compare():
 
             active = [s for s in slots if s]
             if len(active) >= 2:
-                rows = _build_compare_team_rows(cursor, [t['name'] for t in active])
+                rows = _build_compare_team_rows(cursor, [t['name'] for t in active], season)
 
         else:
             slot_ids = [int(raw) if raw and raw.isdigit() else None
@@ -4285,7 +4301,7 @@ def compare():
                 teams_involved = sorted({r[3] for r in info_by_id.values() if r[3]})
                 if teams_involved:
                     ph2 = ','.join(['%s'] * len(teams_involved))
-                    cursor.execute(f'SELECT team, rank FROM ap_rankings WHERE season={CURRENT_SEASON} AND team IN ({ph2})', teams_involved)
+                    cursor.execute(f'SELECT team, rank FROM ap_rankings WHERE season={season} AND team IN ({ph2})', teams_involved)
                     rank_by_team = dict(cursor.fetchall())
 
             for i, pid in enumerate(slot_ids):
@@ -4308,7 +4324,7 @@ def compare():
             if len(active) >= 2:
                 player_ids_ordered = [p['id'] for p in active]
                 player_teams = {p['id']: p['team'] for p in active}
-                rows = _build_compare_group_rows(cursor, group_name, player_ids_ordered, player_teams)
+                rows = _build_compare_group_rows(cursor, group_name, player_ids_ordered, player_teams, season)
     finally:
         release_db(conn)
 
@@ -4330,6 +4346,7 @@ def compare():
 
     return render_template('compare.html',
         mode=mode, players=players, teams=teams_out, active_entities=active_entities, rows=rows,
+        season=season, available_seasons=get_available_seasons(),
         group_name=group_name, pos_filter=pos_filter, tab_urls=tab_urls,
     )
 
@@ -4429,9 +4446,20 @@ def _cfp_seed_teams(poll, fr_games, qf_games):
     return {t: r for t, r in poll[:12]}
 
 
+FIRST_12_TEAM_SEASON = 2024  # the CFP expanded to 12 teams in 2024
+
 @app.route('/bracket')
-@cache.cached(timeout=3600)
+@cache.cached(timeout=3600, query_string=True)
 def bracket_page():
+    season = requested_season()
+    # The bracket layout models the 12-team format; earlier seasons used the
+    # 4-team CFP (2014-23), which this page doesn't draw — offer that
+    # season's postseason results instead of a wrong bracket.
+    bracket_seasons = [s for s in get_available_seasons() if s >= FIRST_12_TEAM_SEASON]
+    if season < FIRST_12_TEAM_SEASON:
+        return render_template('bracket.html', unsupported_season=season,
+                               season=season, bracket_seasons=bracket_seasons,
+                               bracket=None, champion=None)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -4440,7 +4468,7 @@ def bracket_page():
             WHERE season = %s
             ORDER BY (season_type = 'postseason') DESC, week DESC, rank ASC
             LIMIT 25
-        ''', (CURRENT_SEASON,))
+        ''', (season,))
         poll = cursor.fetchall()
 
         cursor.execute('''
@@ -4451,7 +4479,7 @@ def bracket_page():
               AND UPPER(season_type) LIKE '%%POSTSEASON%%'
               AND notes ILIKE '%%college football playoff%%'
             ORDER BY start_date ASC
-        ''', (CURRENT_SEASON,))
+        ''', (season,))
         cfp_games = [{
             'id': r[0], 'home_team': r[1], 'away_team': r[2],
             'home_points': r[3], 'away_points': r[4], 'completed': r[5],
@@ -4574,6 +4602,7 @@ def bracket_page():
                  for s in range(1, 13) if team_by_seed.get(s)]
 
     return render_template('bracket.html', bracket=bracket,
+                           season=season, bracket_seasons=bracket_seasons,
                            cfp_teams=cfp_teams, champion=champion)
 
 

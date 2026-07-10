@@ -95,9 +95,14 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
 
-SEASON = 2025
+# Season comes from the CLI (first numeric arg); 2025 remains the default.
+# 2025 is computed from the stored ESPN game summaries (the original,
+# validated path). Historical seasons have no ESPN summaries — they are
+# computed from CFBD's drives feed (one API call per season), mapped into
+# the exact same per-game aggregates with the same exclusion rules.
+SEASON = next((int(a) for a in sys.argv[1:] if a.isdigit()), 2025)
 
 # FCS conferences — mirrors FCS_CONFS in main.py
 FCS_CONFS = ('CAA', 'Big Sky', 'MVFC', 'SWAC', 'MEAC', 'Southland', 'Big South',
@@ -231,6 +236,79 @@ def load_game_samples(cur):
     return games, fbs, hfa_ratio
 
 
+def load_game_samples_cfbd(cur, season):
+    """Same output as load_game_samples, sourced from CFBD's drives feed —
+    used for historical seasons, which have no stored ESPN summaries. The
+    exclusion rules mirror parse_game_drives: no OT, no zero-play
+    administrative drives, no kneel-outs, no garbage time (same margins)."""
+    import cfbd
+    fcs_in = "','".join(FCS_CONFS)
+    cur.execute(f"SELECT name FROM teams WHERE conference NOT IN ('{fcs_in}')")
+    fbs = {r[0] for r in cur.fetchall()}
+
+    cur.execute('''
+        SELECT id, week, season_type, home_team, away_team, notes
+        FROM games WHERE completed = 1 AND season = %s
+    ''', (season,))
+    meta = {r[0]: r[1:] for r in cur.fetchall()}
+
+    cfg = cfbd.Configuration(access_token=os.getenv('CFBD_API_KEY'))
+    with cfbd.ApiClient(cfg) as api:
+        drives = cfbd.DrivesApi(api).get_drives(year=season)
+    by_game = {}
+    for d in drives:
+        by_game.setdefault(d.game_id, []).append(d)
+
+    games = []
+    home_pts = home_drv = away_pts = away_drv = 0
+    skipped_non_fbs = skipped_no_drives = 0
+    for gid, (week, stype, home, away, notes) in meta.items():
+        if home not in fbs or away not in fbs:
+            skipped_non_fbs += 1
+            continue
+        ds = by_game.get(gid)
+        if not ds:
+            skipped_no_drives += 1
+            continue
+        is_post = 'postseason' in (stype or '').lower()
+        neutral = bool(notes) or is_post
+        g = {'home': home, 'away': away, 'neutral': neutral,
+             'order': (1 if is_post else 0, week or 0),
+             'h_pts': 0, 'h_drv': 0, 'a_pts': 0, 'a_drv': 0}
+        for d in ds:
+            period = d.start_period or 1
+            if period > 4:                                   # overtime
+                continue
+            n_plays = d.plays or 0
+            if n_plays == 0:                                 # administrative
+                continue
+            result = (str(d.drive_result) or '').lower()
+            if 'end of' in result and n_plays <= 3 and (d.yards or 0) <= 5:
+                continue                                     # kneel-out
+            limit = GARBAGE_MARGIN.get(period)
+            margin = abs((d.start_offense_score or 0) - (d.start_defense_score or 0))
+            if limit is not None and margin > limit:
+                continue                                     # garbage time
+            pts = max(0, min(8, (d.end_offense_score or 0) - (d.start_offense_score or 0)))
+            if d.offense == home:
+                g['h_pts'] += pts; g['h_drv'] += 1
+            elif d.offense == away:
+                g['a_pts'] += pts; g['a_drv'] += 1
+        if g['h_drv'] == 0 or g['a_drv'] == 0:
+            skipped_no_drives += 1
+            continue
+        games.append(g)
+        if not neutral:
+            home_pts += g['h_pts']; home_drv += g['h_drv']
+            away_pts += g['a_pts']; away_drv += g['a_drv']
+
+    hfa_ratio = (home_pts / home_drv) / (away_pts / away_drv) if home_drv and away_drv else 1.0
+    print(f"games used: {len(games)}  (skipped: {skipped_non_fbs} non-FBS opponent, "
+          f"{skipped_no_drives} without drive data)")
+    print(f"home-field PPD ratio: {hfa_ratio:.4f}")
+    return games, fbs, hfa_ratio
+
+
 def compute_ratings(games, hfa_ratio):
     """Iterative opponent adjustment. Returns {team: dict} of ratings."""
     hfa = hfa_ratio ** 0.5
@@ -318,7 +396,7 @@ def compute_ratings(games, hfa_ratio):
 
 def validate(cur, ratings):
     """Smell test: how do the Net Rating top 25 line up with the AP poll?"""
-    cur.execute('SELECT team, rank FROM ap_rankings ORDER BY rank')
+    cur.execute('SELECT team, rank FROM ap_rankings WHERE season = %s ORDER BY rank', (SEASON,))
     ap = dict(cur.fetchall())
     top = sorted(ratings, key=lambda t: ratings[t]['net_ranking'])[:25]
     print(f"\n{'NET':>4} {'TEAM':<22} {'NET RTG':>8} {'OFF':>6} {'DEF':>6} {'SOS':>6}  AP")
@@ -332,10 +410,10 @@ def validate(cur, ratings):
 
 
 def write_table(cur, ratings):
-    cur.execute('DROP TABLE IF EXISTS savant_ratings')
+    # Multi-season table (PK (team, season)) — refresh only this season's rows.
     cur.execute('''
-        CREATE TABLE savant_ratings (
-            team          TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS savant_ratings (
+            team          TEXT,
             season        INTEGER,
             games         INTEGER,
             drives_off    INTEGER,
@@ -349,9 +427,11 @@ def write_table(cur, ratings):
             net_rating    REAL,
             net_ranking   INTEGER,
             sos           REAL,
-            updated_at    TIMESTAMPTZ DEFAULT now()
+            updated_at    TIMESTAMPTZ DEFAULT now(),
+            PRIMARY KEY (team, season)
         )
     ''')
+    cur.execute('DELETE FROM savant_ratings WHERE season = %s', (SEASON,))
     for t, r in ratings.items():
         cur.execute('''
             INSERT INTO savant_ratings
@@ -372,7 +452,11 @@ def main():
     conn = psycopg2.connect(dsn=os.getenv('DATABASE_URL'))
     try:
         cur = conn.cursor()
-        games, _fbs, hfa_ratio = load_game_samples(cur)
+        print(f"season: {SEASON}")
+        if SEASON == 2025:
+            games, _fbs, hfa_ratio = load_game_samples(cur)   # stored ESPN summaries
+        else:
+            games, _fbs, hfa_ratio = load_game_samples_cfbd(cur, SEASON)
         ratings = compute_ratings(games, hfa_ratio)
         validate(cur, ratings)
         if write:
