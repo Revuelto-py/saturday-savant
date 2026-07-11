@@ -124,6 +124,16 @@ def ensure_indexes():
             CREATE INDEX IF NOT EXISTS idx_player_stats_team_season ON player_stats (team, season);
             CREATE INDEX IF NOT EXISTS idx_player_stats_pid_season ON player_stats (player_id, season);
             CREATE INDEX IF NOT EXISTS idx_player_ppa_pid_season ON player_ppa (player_id, season);
+            CREATE INDEX IF NOT EXISTS idx_team_stats_team_season ON team_stats (team, season);
+            CREATE INDEX IF NOT EXISTS idx_team_stats_season ON team_stats (season);
+            CREATE INDEX IF NOT EXISTS idx_team_advanced_team_season ON team_advanced (team, season);
+            CREATE INDEX IF NOT EXISTS idx_team_advanced_season ON team_advanced (season);
+            CREATE INDEX IF NOT EXISTS idx_sp_ratings_team_season ON sp_ratings (team, season);
+            CREATE INDEX IF NOT EXISTS idx_sp_ratings_season ON sp_ratings (season);
+            CREATE INDEX IF NOT EXISTS idx_ap_rankings_season ON ap_rankings (season);
+            CREATE INDEX IF NOT EXISTS idx_ap_rankings_team_season ON ap_rankings (team, season);
+            CREATE INDEX IF NOT EXISTS idx_games_home_season ON games (home_team, season);
+            CREATE INDEX IF NOT EXISTS idx_games_away_season ON games (away_team, season);
         ''')
         conn.commit()
     except Exception as e:
@@ -200,8 +210,51 @@ def _fetch_stats_pool(cursor, category, positions, season=CURRENT_SEASON):
     dict as read-only (it's shared across requests)."""
     return _stats_pool_cached(category, tuple(positions), season)
 
+def _pool_store_get(key):
+    """Second cache layer under the memoize: pools persisted in Postgres
+    (gzipped JSON), so a cache-pruned/restarted worker pays a ~30ms read
+    instead of recomputing a ~400ms 15k-row aggregate."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT payload FROM pool_store WHERE key = %s', (key,))
+        row = cur.fetchone()
+        if row and row[0]:
+            return json.loads(gzip.decompress(bytes(row[0])))
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+    return None
+
+def _pool_store_put(key, season, pool):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS pool_store (
+                key        TEXT PRIMARY KEY,
+                season     INTEGER,
+                payload    BYTEA,
+                updated_at TIMESTAMPTZ DEFAULT now()
+            )
+        ''')
+        cur.execute('''
+            INSERT INTO pool_store (key, season, payload) VALUES (%s, %s, %s)
+            ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, updated_at = now()
+        ''', (key, season, gzip.compress(json.dumps(pool).encode())))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+
 @cache.memoize(timeout=21600)
 def _stats_pool_cached(category, positions_key, season):
+    key = f"stats:{category}:{','.join(positions_key)}:{season}"
+    stored = _pool_store_get(key)
+    if stored is not None:
+        return stored
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -215,9 +268,10 @@ def _stats_pool_cached(category, positions_key, season):
         pool = {}
         for pid, st, val in cursor.fetchall():
             pool.setdefault(pid, {})[st] = val
-        return pool
     finally:
         release_db(conn)
+    _pool_store_put(key, season, pool)
+    return pool
 
 def _fetch_ppa_pool(cursor, positions, season=CURRENT_SEASON):
     """PPA peer pool (one season) — memoized like _fetch_stats_pool; read-only."""
@@ -225,6 +279,10 @@ def _fetch_ppa_pool(cursor, positions, season=CURRENT_SEASON):
 
 @cache.memoize(timeout=21600)
 def _ppa_pool_cached(positions_key, season):
+    key = f"ppa:{','.join(positions_key)}:{season}"
+    stored = _pool_store_get(key)
+    if stored is not None:
+        return stored
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -238,9 +296,10 @@ def _ppa_pool_cached(positions_key, season):
         pool = {}
         for pid, *vals in cursor.fetchall():
             pool[pid] = dict(zip(('avg_ppa_all','avg_ppa_pass','avg_ppa_rush','total_ppa'), vals))
-        return pool
     finally:
         release_db(conn)
+    _pool_store_put(key, season, pool)
+    return pool
 
 def _rank_pct(player_id, pool, stat_key, higher_better=True):
     """Rank and percentile from pre-fetched pool dict — no DB call."""
@@ -4552,6 +4611,7 @@ def img_proxy():
 
 
 @app.route('/compare')
+@cache.cached(timeout=21600, query_string=True)  # players/teams + season are all in the query string
 def compare():
     season = requested_season()
     mode = request.args.get('type', 'player')
