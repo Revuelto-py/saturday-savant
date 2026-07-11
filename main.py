@@ -74,6 +74,11 @@ app = Flask(__name__)
 cache = Cache(app, config={
     'CACHE_TYPE': 'SimpleCache',       # in-memory, no Redis needed
     'CACHE_DEFAULT_TIMEOUT': 3600,     # 1 hour default TTL
+    # Cap entries well below the default 500: entries include fully rendered
+    # player pages (~100-400KB each), and an uncapped cache under heavy
+    # player-page traffic can push a small instance into swap — which
+    # presents as EVERYTHING (even static files) taking seconds.
+    'CACHE_THRESHOLD': 250,
 })
 
 configuration = cfbd.Configuration(
