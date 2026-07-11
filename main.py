@@ -3867,6 +3867,14 @@ def _player_detail_cached(player_id, season):
     try:
         if _log_cached is not None:
             raise _SkipGameLog()   # already loaded from Postgres
+        # The live ESPN scan (~13 blocking HTTP calls) is the only long
+        # socket-wait in the app — under crawler traffic it can occupy every
+        # worker thread and stall the whole site. Historical seasons are
+        # fully covered by backfill_game_logs.py (empty rows included), so
+        # live scanning is reserved for the current season, and only for
+        # players who actually recorded stats that season.
+        if season != CURRENT_SEASON or not stats:
+            raise _SkipGameLog()
         # Get completed games for this team from DB (includes opponent/result info)
         conn2 = get_db()
         try:
