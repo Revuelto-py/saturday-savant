@@ -4243,61 +4243,128 @@ def _player_detail_cached(player_id, season):
     )
 
 
+TRANSFER_SORTS = {
+    'rating': 't.rating DESC NULLS LAST, t.stars DESC NULLS LAST, t.last_name, t.first_name',
+    'date':   't.transfer_date DESC NULLS LAST, t.last_name, t.first_name',
+    'name':   't.last_name, t.first_name',
+    'team':   't.destination NULLS LAST, t.last_name, t.first_name',
+}
+
+
 @app.route('/transfers')
+@cache.cached(timeout=21600, query_string=True)
 def transfers():
     conn = get_db()
     try:
         cursor = conn.cursor()
 
-        year        = request.args.get('year', '2026')
+        cursor.execute('SELECT DISTINCT year FROM transfers ORDER BY year DESC')
+        years = [r[0] for r in cursor.fetchall()] or [CURRENT_SEASON]
+        try:
+            year = int(request.args.get('year', years[0]))
+        except (TypeError, ValueError):
+            year = years[0]
+        if year not in years:
+            year = years[0]
+        derived = year < 2021   # pre-portal era rows come from roster diffs
+
         pos_filter  = request.args.get('pos', '')
         conf_filter = request.args.get('conf', '')
-        page        = max(1, int(request.args.get('page', 1)))
-        per_page    = 50
+        q           = request.args.get('q', '').strip()
+        sort        = request.args.get('sort', '')
+        if sort not in TRANSFER_SORTS:
+            sort = 'name' if derived else 'rating'
+        elif derived and sort in ('rating', 'date'):
+            sort = 'name'
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        per_page = 50
 
-        pos_sql  = f"AND t.position='{pos_filter}'"        if pos_filter  else ""
-        conf_sql = f"AND t_dest.conference='{conf_filter}'" if conf_filter else ""
-
-        where = f"WHERE t.year=%s {pos_sql} {conf_sql}"
+        where, params = ['t.year = %s'], [year]
+        if pos_filter:
+            where.append('t.position = %s')
+            params.append(pos_filter)
+        if conf_filter:
+            where.append('t_dest.conference = %s')
+            params.append(conf_filter)
+        if q:
+            where.append("(t.first_name || ' ' || t.last_name) ILIKE %s")
+            params.append(f'%{q}%')
+        where_sql = 'WHERE ' + ' AND '.join(where)
 
         cursor.execute(f'''
             SELECT COUNT(*) FROM transfers t
-            LEFT JOIN teams t_dest ON t_dest.name=t.destination
-            {where}
-        ''', (year,))
+            LEFT JOIN teams t_dest ON t_dest.name = t.destination
+            {where_sql}
+        ''', params)
         total_count = cursor.fetchone()[0]
         total_pages = max(1, (total_count + per_page - 1) // per_page)
         page = min(page, total_pages)
-        offset = (page - 1) * per_page
 
         cursor.execute(f'''
             SELECT t.first_name, t.last_name, t.position, t.origin, t.destination,
                    t.transfer_date, t.rating, t.stars, t.eligibility,
-                   p.id as player_id, p.headshot,
-                   t_dest.logo_dark as dest_logo,
-                   t_orig.logo_dark as orig_logo,
-                   t_dest.conference as dest_conf
+                   t.player_id, p.headshot,
+                   t_dest.logo_dark, t_orig.logo_dark
             FROM transfers t
-            LEFT JOIN players p ON p.first_name=t.first_name AND p.last_name=t.last_name
-            LEFT JOIN teams t_dest ON t_dest.name=t.destination
-            LEFT JOIN teams t_orig ON t_orig.name=t.origin
-            {where}
-            ORDER BY t.rating DESC NULLS LAST, t.stars DESC NULLS LAST
+            LEFT JOIN players p ON p.id = t.player_id
+            LEFT JOIN teams t_dest ON t_dest.name = t.destination
+            LEFT JOIN teams t_orig ON t_orig.name = t.origin
+            {where_sql}
+            ORDER BY {TRANSFER_SORTS[sort]}
             LIMIT %s OFFSET %s
-        ''', (year, per_page, offset))
-        portal = cursor.fetchall()
+        ''', params + [per_page, (page - 1) * per_page])
+        def _fmt_date(iso):
+            try:
+                return datetime.datetime.strptime(iso[:10], '%Y-%m-%d').strftime('%b %d').replace(' 0', ' ')
+            except (TypeError, ValueError):
+                return None
+        portal = [{
+            'name': f"{r[0] or ''} {r[1] or ''}".strip(), 'pos': r[2],
+            'origin': r[3], 'destination': r[4], 'date': _fmt_date(r[5]), 'rating': r[6],
+            'stars': r[7], 'eligibility': r[8], 'player_id': r[9],
+            'headshot': r[10], 'dest_logo': r[11], 'orig_logo': r[12],
+            'initials': f"{(r[0] or '?')[0]}{(r[1] or ' ')[0]}".strip(),
+        } for r in cursor.fetchall()]
+
+        # Year-scoped movement summary: biggest gainers / biggest losers
+        cursor.execute('''
+            SELECT t.destination, tm.logo_dark, COUNT(*) AS c
+            FROM transfers t JOIN teams tm ON tm.name = t.destination
+            WHERE t.year = %s
+            GROUP BY 1, 2 ORDER BY c DESC, t.destination LIMIT 5
+        ''', (year,))
+        top_in = cursor.fetchall()
+        cursor.execute('''
+            SELECT t.origin, tm.logo_dark, COUNT(*) AS c
+            FROM transfers t JOIN teams tm ON tm.name = t.origin
+            WHERE t.year = %s
+            GROUP BY 1, 2 ORDER BY c DESC, t.origin LIMIT 5
+        ''', (year,))
+        top_out = cursor.fetchall()
+
+        cursor.execute('''
+            SELECT COUNT(*),
+                   COUNT(*) FILTER (WHERE destination IS NOT NULL AND destination != ''),
+                   COUNT(*) FILTER (WHERE rating IS NOT NULL)
+            FROM transfers WHERE year = %s
+        ''', (year,))
+        year_total, committed_count, rated_count = cursor.fetchone()
 
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall()]
-
-        cursor.execute('SELECT DISTINCT position FROM transfers WHERE year=%s AND position IS NOT NULL ORDER BY position', (year,))
+        cursor.execute('SELECT DISTINCT position FROM transfers WHERE year = %s AND position IS NOT NULL ORDER BY position', (year,))
         positions = [r[0] for r in cursor.fetchall()]
-
     finally:
         release_db(conn)
-    return render_template('transfers.html', portal=portal, year=year,
-                           conferences=conferences, positions=positions,
-                           pos_filter=pos_filter, conf_filter=conf_filter,
+
+    return render_template('transfers.html', portal=portal, year=year, years=years,
+                           derived=derived, conferences=conferences, positions=positions,
+                           pos_filter=pos_filter, conf_filter=conf_filter, q=q, sort=sort,
+                           top_in=top_in, top_out=top_out, year_total=year_total,
+                           committed_count=committed_count, rated_count=rated_count,
                            page=page, total_pages=total_pages, total_count=total_count,
                            per_page=per_page)
 
