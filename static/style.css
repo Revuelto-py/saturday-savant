@@ -1244,14 +1244,27 @@ a.t-label:hover { color: #60a5fa; }
 }
 .game-hero .team-record {
     font-size: clamp(0.85rem, 0.75rem + 0.3vw, 1rem);
-    color: var(--text-secondary);
-    font-weight: 400;
+    /* brighter than --text-secondary (which sank into the blooms) but still
+       clearly subordinate to the team name; shadow holds it on light colors */
+    color: #dbe4ee;
+    font-weight: 500;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.65);
 }
 .game-hero .ap-rank-badge {
+    /* Frosted chip: bare accent text vanished into saturated team-color
+       blooms — a dark chip keeps the rank legible over ANY team color. */
+    display: inline-block;
     font-size: clamp(0.72rem, 0.64rem + 0.25vw, 0.85rem);
     font-weight: 800;
     letter-spacing: 0.1em;
-    color: var(--gold);
+    color: #fff;
+    background: rgba(6,6,7,0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.28);
+    border-radius: var(--r-pill);
+    padding: 2px 9px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 .game-hero .team-logo {
     height: clamp(120px, 5vw + 90px, 180px);
@@ -2605,3 +2618,24 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
    12-team layout's full-height space-around distribution */
 .bk-board-four .bk-col-body { justify-content: center; min-height: 340px; }
 .bk-board-four { height: auto; min-height: 420px; }
+
+
+/* Game-hero status pills (FINAL / SCHEDULED) — frosted like the rivalry badge
+   so they read as one family and stay legible over any team-color bloom. */
+.gh-status-pill {
+    display: inline-block;
+    background: rgba(6,6,7,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.28);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.35);
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    font-size: var(--text-xs);
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    padding: 4px 16px;
+    border-radius: 20px;
+    text-transform: uppercase;
+}
+.gh-status-pill--scheduled { color: #7cc4f5; border-color: rgba(124,196,245,0.45); }

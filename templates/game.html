@@ -118,9 +118,9 @@
 
         <div style="text-align:center;margin-top:24px">
             {% if is_scheduled %}
-            <span style="background:rgba(28,156,240,0.14);border: 1px solid rgba(28,156,240,0.4);color: var(--accent);font-size: var(--text-xs);font-weight:900;letter-spacing:0.18em;padding:4px 16px;border-radius: 20px;text-transform:uppercase">Scheduled</span>
+            <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
             {% else %}
-            <span style="background:rgba(255,255,255,0.08);border: 1px solid var(--border-strong);color: var(--text-secondary);font-size: var(--text-xs);font-weight:900;letter-spacing:0.18em;padding:4px 16px;border-radius: 20px;text-transform:uppercase">Final</span>
+            <span class="gh-status-pill">Final</span>
             {% endif %}
             {% if rivalry_name %}
             <div>
