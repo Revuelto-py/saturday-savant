@@ -1351,15 +1351,21 @@ def search():
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT p.id, p.first_name, p.last_name, p.team, p.position,
-                       p.jersey, p.headshot, t.conference, t.logo_dark
+                       p.jersey, p.headshot, t.conference, t.logo_dark,
+                       p.active_2026, p.year
                 FROM players p
                 INNER JOIN teams t ON p.team = t.name
                 WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
                    OR p.last_name ILIKE %s
                    OR p.first_name ILIKE %s
-                ORDER BY p.last_name, p.first_name
+                ORDER BY
+                    -- exact/prefix name matches first, then current players
+                    ((p.first_name || ' ' || p.last_name) ILIKE %s) DESC,
+                    (p.last_name ILIKE %s) DESC,
+                    COALESCE(p.active_2026, 0) DESC,
+                    p.last_name, p.first_name
                 LIMIT 50
-            ''', (f'%{q}%', f'%{q}%', f'%{q}%'))
+            ''', (f'%{q}%', f'%{q}%', f'%{q}%', f'{q}%', f'{q}%'))
             player_results = cursor.fetchall()
             cursor.execute('''
                 SELECT name, conference, logo_dark, color
