@@ -144,23 +144,75 @@
         .search-empty { padding: 20px 16px; color: var(--text-dim); font-size: var(--text-sm); text-align: center; }
         .search-loading { padding: 16px; text-align: center; color: var(--text-dim); font-size: var(--text-sm); }
 
-        /* Mobile navbar: logo + search on the first row, nav links become a
-           horizontally scrollable strip below them */
+        /* Hamburger — hidden on desktop, replaces the horizontal nav on mobile */
+        .nav-burger {
+            display: none;
+            background: transparent;
+            border: 1px solid var(--border-strong);
+            border-radius: var(--r-sm, 6px);
+            color: var(--text-primary);
+            width: 44px; height: 44px;
+            align-items: center; justify-content: center;
+            cursor: pointer; flex-shrink: 0;
+            transition: background 0.15s;
+        }
+        .nav-burger:active { background: rgba(255,255,255,0.1); }
+        .nav-burger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .nav-burger .burger-close { display: none; }
+        .navbar.nav-open .nav-burger .burger-open { display: none; }
+        .navbar.nav-open .nav-burger .burger-close { display: block; }
+
+        /* Mobile header — Baseball Savant pattern: logo left + burger right,
+           full-width search on its own row below, nav collapsed into a
+           tap-friendly dropdown panel */
         @media (max-width: 767.98px) {
-            .navbar { height: auto; padding: 0 12px; }
-            .navbar-inner { height: auto; flex-wrap: wrap; padding-top: 8px; column-gap: 10px; }
+            .navbar { height: auto; padding: 0 12px 10px; }
+            .navbar-inner { height: auto; flex-wrap: wrap; padding-top: 8px; row-gap: 8px; column-gap: 10px; }
             .brand-logo { height: 42px; }
-            .search-wrapper { flex: 1 1 auto; margin-left: auto; width: auto; max-width: 260px; }
+            .nav-burger { display: inline-flex; order: 1; margin-left: auto; }
+            .search-wrapper { order: 2; flex: 1 1 100%; width: 100%; }
+            .nav-search-input { padding-top: 10px; padding-bottom: 10px; }
             .nav-links {
+                display: none;
                 order: 3; width: 100%; margin-left: 0;
-                overflow-x: auto; scrollbar-width: none;
-                padding: 6px 0 8px; margin-top: 2px;
+                flex-direction: column; gap: 0;
+                padding: 2px 0 4px;
             }
-            .nav-links::-webkit-scrollbar { display: none; }
-            .nav-links a { padding: 6px 11px; font-size: var(--text-sm); flex-shrink: 0; }
+            .navbar.nav-open .nav-links { display: flex; animation: navdrop 0.18s ease-out; }
+            .nav-links a {
+                display: flex; align-items: center;
+                min-height: 44px; padding: 10px 10px;
+                font-size: var(--text-base); border-radius: var(--r-sm);
+                border-bottom: 1px solid var(--border);
+            }
+            .nav-links a:last-child { border-bottom: none; }
             .search-dropdown { max-height: 60vh; }
             /* 16px inputs stop iOS Safari from auto-zooming on focus */
             input, select, textarea { font-size: 16px !important; }
+        }
+        @keyframes navdrop {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .navbar.nav-open .nav-links { animation: none; }
+        }
+
+        /* Mobile tab strips — ESPN pattern: one scrollable row, never wraps */
+        @media (max-width: 767.98px) {
+            .nav-tabs {
+                flex-wrap: nowrap !important;
+                overflow-x: auto;
+                scrollbar-width: none;
+                -webkit-overflow-scrolling: touch;
+            }
+            .nav-tabs::-webkit-scrollbar { display: none; }
+            .nav-tabs .nav-link { white-space: nowrap; flex-shrink: 0; padding: 11px 14px !important; }
+            /* Tab row + season selector: selector gets its own row above the
+               tabs, right-aligned — consistent placement on every page */
+            .tabs-bar { flex-direction: column-reverse; align-items: stretch !important; }
+            .tabs-bar .season-select { align-self: flex-end; margin-bottom: 0 !important; width: auto; }
+            .tabs-bar .nav-tabs { margin-top: 10px !important; width: 100%; }
         }
 
         /* Page — fluid padding tokens so gutters grow with the viewport */
@@ -321,7 +373,7 @@
             </a>
 
             {% set path = request.path %}
-            <div class="nav-links">
+            <div class="nav-links" id="navLinks">
                 <a href="/games" {% if path.startswith('/games') or path.startswith('/game/') %}class="active"{% endif %}>Games</a>
                 <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active"{% endif %}>Teams</a>
                 <a href="/rankings" {% if path.startswith('/rankings') %}class="active"{% endif %}>Rankings</a>
@@ -341,6 +393,18 @@
                        placeholder="Search players or teams..." autocomplete="off">
                 <div class="search-dropdown" id="searchDropdown"></div>
             </div>
+
+            <button class="nav-burger" id="navBurger" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
+                <svg class="burger-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+                <svg class="burger-close" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                    <line x1="5" y1="5" x2="19" y2="19"></line>
+                    <line x1="19" y1="5" x2="5" y2="19"></line>
+                </svg>
+            </button>
         </div>
     </nav>
 
@@ -388,6 +452,25 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+    // Mobile hamburger menu
+    (function () {
+        var nav = document.querySelector('.navbar');
+        var btn = document.getElementById('navBurger');
+        if (!nav || !btn) return;
+        function close() { nav.classList.remove('nav-open'); btn.setAttribute('aria-expanded', 'false'); }
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = nav.classList.toggle('nav-open');
+            btn.setAttribute('aria-expanded', open);
+        });
+        document.addEventListener('click', function (e) {
+            if (nav.classList.contains('nav-open') && !nav.contains(e.target)) close();
+        });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    })();
+    </script>
 
     <script>
     (function() {

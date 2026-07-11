@@ -40,6 +40,7 @@
 
             <!-- Player info -->
             <div class="ph-info" style="flex:1;min-width:0;padding:32px 0 0">
+                <div class="ph-identity">
                 {% if player.logo_dark %}
                 <div style="margin-bottom:12px">
                     <a href="/team/{{ player.team | team_slug }}" style="display:inline-block;transition:opacity 0.15s"
@@ -75,8 +76,9 @@
                     {% if player.height_fmt %}<span style="color: var(--text-dim);font-size: var(--text-sm)">·</span><span style="color: var(--text-secondary);font-size: var(--text-base)">{{ player.height_fmt }}</span>{% endif %}
                     {% if player.weight %}<span style="color: var(--text-dim);font-size: var(--text-sm)">·</span><span style="color: var(--text-secondary);font-size: var(--text-base)">{{ player.weight }} lbs</span>{% endif %}
                 </div>
+                </div>
 
-                <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;
+                <div class="ph-statlabel" style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;
                              letter-spacing:0.14em;text-transform:uppercase;margin-top:20px;margin-bottom:10px;
                              display:flex;align-items:center;gap:6px">
                     {{ season }} Season Stats
@@ -90,7 +92,7 @@
                 </div>
 
                 <!-- Hero stat cards -->
-                <div style="display:flex;flex-wrap:wrap;gap:10px;padding-bottom:20px">
+                <div class="ph-statcards" style="display:flex;flex-wrap:wrap;gap:10px;padding-bottom:20px">
                     {% set pos = player.position | upper if player.position else '' %}
                     {% if pos == 'QB' %}
                         {% set cards = [

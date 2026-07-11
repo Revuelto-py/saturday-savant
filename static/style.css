@@ -584,15 +584,39 @@ a.leader-row:hover .leader-name { color: var(--gold); }
 
 /* Player Page */
 
-/* Hero — phone layout: info stacks on top, headshot centers underneath
-   anchored to the hero's bottom edge; !important overrides inline styles */
+/* Hero — phone layout follows the ESPN player-page pattern: identity block
+   left with the headshot beside it on the right, then the season-stats banner
+   full-width beneath. display:contents on .ph-info promotes its identity /
+   label / cards children to grid items without touching the desktop layout. */
 @media (max-width: 767.98px) {
-    .ph-hero-row { flex-direction: column; align-items: stretch !important; min-height: 0 !important; }
-    .ph-info { padding-top: 24px !important; }
-    .ph-headshot { order: 2; align-self: center !important; margin: 8px 0 0 !important; }
-    .ph-headshot img { height: 160px !important; }
-    .ph-fallback { width: 120px !important; height: 160px !important; font-size: 2rem !important; }
+    .ph-hero-row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "identity headshot"
+            "label    label"
+            "cards    cards";
+        column-gap: 14px;
+        min-height: 0 !important;
+    }
+    .ph-info { display: contents; }
+    .ph-identity { grid-area: identity; padding-top: 20px; min-width: 0; }
+    .ph-headshot {
+        grid-area: headshot;
+        align-self: end !important;
+        margin: 16px 0 0 !important;
+    }
+    .ph-headshot img { height: 130px !important; }
+    .ph-fallback { width: 96px !important; height: 130px !important; font-size: 2rem !important; }
     .ph-name { font-size: var(--text-xl) !important; }
+    .ph-statlabel { grid-area: label; margin-top: 8px !important; }
+    .ph-statcards {
+        grid-area: cards;
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .ph-statcards .stat-card { min-width: 0 !important; padding: 10px 8px !important; }
 }
 
 /* Player hero status badges — transfer history + NFL draft status share one
@@ -618,9 +642,24 @@ a.leader-row:hover .leader-name { color: var(--gold); }
 @media (max-width: 767.98px) {
     .ph-hero-badges {
         position: static;
-        margin: 12px 0 0 32px;
+        margin: 12px 0 0;
         align-items: flex-start;
     }
+}
+
+/* Team hero — phone: shrink the logo and lay the stat cards on a strict
+   two-column grid (the headline Net Savant card spans the full first row
+   when the count is odd) so no card overflows or leaves dead space. */
+@media (max-width: 767.98px) {
+    .team-hero-logo { height: 76px !important; }
+    .team-hero-stats {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px !important;
+        width: 100%;
+    }
+    .team-hero-stats .stat-card { min-width: 0 !important; }
+    .team-hero-stats .stat-card:first-child:nth-last-child(odd) { grid-column: 1 / -1; }
 }
 
 .transfer-badge {
@@ -883,7 +922,15 @@ tr.postseason-row:hover {
     padding: 3px;
     margin-bottom: 20px;
     gap: 2px;
+    /* Long toggles (the /games 11-season row) scroll instead of widening
+       the page on phones */
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
 }
+.lb-mode-toggle::-webkit-scrollbar { display: none; }
+.lb-mode-btn { flex-shrink: 0; }
 .lb-mode-btn {
     padding: 7px 20px;
     border-radius: var(--r-sm);

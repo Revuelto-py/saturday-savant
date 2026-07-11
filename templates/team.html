@@ -24,7 +24,7 @@
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-4">
             <div class="d-flex align-items-center gap-4">
                 {% if team[6] %}
-                <img src="{{ team[6] }}" alt="{{ team[0] }} logo" style="height:120px;object-fit:contain">
+                <img src="{{ team[6] }}" alt="{{ team[0] }} logo" class="team-hero-logo" style="height:120px;object-fit:contain">
                 {% endif %}
                 <div>
                     <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,0.5)">
@@ -41,7 +41,7 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="d-flex flex-wrap gap-3">
+            <div class="d-flex flex-wrap gap-3 team-hero-stats">
                 {# Headline evaluative metric — the site's proprietary Net Savant
                    Rating, with its national rank beneath (gold-accented). #}
                 {% if svr %}
@@ -76,7 +76,7 @@
             {% endfor %}
         </div>
         {% endif %}
-        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div class="tabs-bar" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <ul class="nav nav-tabs" id="teamTabs" style="margin-top:28px;flex:1;min-width:0">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview">Overview</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#team-stats">Team Stats</button></li>
