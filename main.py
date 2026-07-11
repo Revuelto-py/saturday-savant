@@ -4914,9 +4914,14 @@ def sitemap():
         cur = conn.cursor()
         cur.execute('SELECT slug FROM teams WHERE slug IS NOT NULL ORDER BY slug')
         paths += [f'/team/{r[0]}' for r in cur.fetchall()]
-        cur.execute('SELECT id FROM games WHERE completed = 1')
+        # Current season's games and current-roster players only. The
+        # historical expansion made every past player/game a real page, but
+        # advertising all ~60k of them sent crawlers into a sustained frenzy
+        # that saturated the instance — historical pages stay reachable
+        # through internal links; the sitemap sticks to the fresh content.
+        cur.execute('SELECT id FROM games WHERE completed = 1 AND season = %s', (CURRENT_SEASON,))
         paths += [f'/game/{r[0]}' for r in cur.fetchall()]
-        cur.execute('SELECT id FROM players ORDER BY id')
+        cur.execute('SELECT id FROM players WHERE active_2026 = 1 ORDER BY id')
         paths += [f'/player/{r[0]}' for r in cur.fetchall()]
     finally:
         release_db(conn)
@@ -4930,9 +4935,20 @@ def sitemap():
 
 @app.route('/robots.txt')
 def robots():
+    # Disallow: /*? keeps crawlers off the query-string URL space (season
+    # variants, leaderboard sorts/filters multiply every page ~10-50x) —
+    # canonical paths stay fully crawlable.
     base = f"https://{request.host}"
     return Response(
-        f"User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: {base}/sitemap.xml\n",
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin/\n"
+        "Disallow: /*?\n"
+        "Disallow: /img-proxy\n"
+        "Disallow: /api/\n"
+        "Disallow: /search\n"
+        "Crawl-delay: 5\n"
+        f"Sitemap: {base}/sitemap.xml\n",
         mimetype='text/plain')
 
 
