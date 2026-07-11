@@ -52,8 +52,14 @@
 {% block content %}
 
 {# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
-<div class="game-hero" style="background:linear-gradient(135deg,{{ away_color }}bb 0%,#0a0b0d 42%,#0a0b0d 58%,{{ home_color }}bb 100%);border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
-    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.48);pointer-events:none"></div>
+<div class="game-hero" style="background:
+        radial-gradient(ellipse 85% 130% at 8% 50%, {{ away_color }}f2 0%, transparent 62%),
+        radial-gradient(ellipse 85% 130% at 92% 50%, {{ home_color }}f2 0%, transparent 62%),
+        radial-gradient(ellipse 60% 90% at 50% 118%, rgba(28,156,240,0.16) 0%, transparent 65%),
+        #060607;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
+    {# shaped scrim: darkest where the score/text column sits, lighter at the
+       color blooms so the matchup keeps its energy #}
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 60% 140% at 50% 50%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.32) 55%, rgba(0,0,0,0.14) 100%);pointer-events:none"></div>
     <div class="page-wrapper" style="position:relative;z-index:1;padding-top:0;padding-bottom:0">
 
         <div style="display:flex;flex-direction:column;align-items:center;flex-wrap:wrap;text-align:center;margin-bottom:28px">

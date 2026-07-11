@@ -17,9 +17,13 @@
         </div>
     </div>
 
-    <!-- Series record -->
-    <div style="background:var(--bg-card);border: 1px solid var(--border);
-                border-radius: var(--r-lg);padding:28px;margin-bottom:24px">
+    <!-- Series record — each program's color blooms behind its side -->
+    <div style="background:
+                    radial-gradient(ellipse 55% 160% at 0% 50%, {{ ta_color }}4d 0%, transparent 60%),
+                    radial-gradient(ellipse 55% 160% at 100% 50%, {{ tb_color }}4d 0%, transparent 60%),
+                    var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: var(--r-lg);padding:28px;margin-bottom:24px;overflow:hidden">
         <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:24px">
 
             <div style="text-align:center">

@@ -4360,8 +4360,8 @@ def rivalry_history(team_a, team_b):
         team_b_wins=team_b_wins,
         ta_logo=ta_info[0] if ta_info else None,
         tb_logo=tb_info[0] if tb_info else None,
-        ta_color=ta_info[1] if ta_info else '#1e3a5f',
-        tb_color=tb_info[1] if tb_info else '#0f1e3a',
+        ta_color=ta_info[1] if ta_info else '#1c9cf0',
+        tb_color=tb_info[1] if tb_info else '#17181c',
     )
 
 

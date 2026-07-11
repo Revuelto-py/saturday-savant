@@ -12,8 +12,8 @@
 
 <div class="row g-3">
 {% for r in rivalries %}
-{% set c1 = r.color_a or '#1e3a5f' %}
-{% set c2 = r.color_b or '#0f1e3a' %}
+{% set c1 = r.color_a or '#1c9cf0' %}
+{% set c2 = r.color_b or '#17181c' %}
 {% set rid = loop.index %}
 
 <div class="col-md-6 col-lg-4">
@@ -21,7 +21,10 @@
          onclick="toggleRivalry({{ rid }})">
 
         <!-- Main card -->
-        <div style="background:linear-gradient(135deg,{{ c1 }}22 0%,#0d1628 60%,{{ c2 }}18 100%);
+        <div style="background:
+                        radial-gradient(ellipse 95% 125% at 0% 0%, {{ c1 }}59 0%, transparent 58%),
+                        radial-gradient(ellipse 95% 125% at 100% 100%, {{ c2 }}59 0%, transparent 58%),
+                        var(--bg-card);
                     padding:20px 20px">
 
             <!-- Rivalry name + chevron -->
