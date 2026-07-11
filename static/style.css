@@ -2932,3 +2932,12 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     box-shadow: 0 0 14px rgba(232,176,75,0.25);
     color: #ffd98a;
 }
+/* Team hero: awards get their own full-width row so their variable width can
+   never force the hero stat cards to wrap onto a second line. */
+.team-hero-awards {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+}
