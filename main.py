@@ -4258,8 +4258,11 @@ def rivalries_page():
                 CASE WHEN r.team1 < r.team2 THEN r.team1 ELSE r.team2 END as ta,
                 CASE WHEN r.team1 < r.team2 THEN r.team2 ELSE r.team1 END as tb,
                 r.rivalry_name,
-                t1.logo_dark, t2.logo_dark,
-                t1.color, t2.color, t1.conference
+                CASE WHEN r.team1 < r.team2 THEN t1.logo_dark ELSE t2.logo_dark END,
+                CASE WHEN r.team1 < r.team2 THEN t2.logo_dark ELSE t1.logo_dark END,
+                CASE WHEN r.team1 < r.team2 THEN t1.color ELSE t2.color END,
+                CASE WHEN r.team1 < r.team2 THEN t2.color ELSE t1.color END,
+                t1.conference
             FROM rivalries r
             LEFT JOIN teams t1 ON t1.name = r.team1
             LEFT JOIN teams t2 ON t2.name = r.team2

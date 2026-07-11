@@ -1151,14 +1151,19 @@ tr.postseason-row:hover {
 
 /* ── Game page: rivalry badge ─────────────────────────────────────────── */
 .rivalry-badge {
+    /* Frosted dark pill: stays readable over any team-color hero bloom and
+       pairs with the FINAL pill instead of fighting it. */
     display: inline-block;
     margin-top: 12px;
-    background: linear-gradient(135deg, #7a5c00, #b8860b);
-    border: 1px solid var(--gold);
-    box-shadow: 0 0 10px rgba(28, 156, 240,0.35);
-    color: var(--gold);
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    background: rgba(6,6,7,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.25);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.35);
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    font-weight: 800;
+    letter-spacing: 0.1em;
     font-size: var(--text-sm);
     text-transform: uppercase;
     border-radius: var(--r-sm);
@@ -1838,13 +1843,14 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     border: 1px solid var(--border-gold);
     color: var(--gold);
 }
-.badge-rivalry, .gc-rivalry, .rivalry-badge {
+.badge-rivalry, .gc-rivalry {
     background: linear-gradient(135deg, rgba(28, 156, 240,0.22), rgba(184,134,11,0.12));
     border: 1px solid var(--border-gold);
     box-shadow: none;
     color: var(--gold);
 }
 .badge-rivalry::before, .gc-rivalry::before, .rivalry-badge::before { content: '⚔ '; }
+.rivalry-badge::before { color: var(--gold); }
 .badge-pos, .lb-pos-pill, .compare-pos-badge, .search-result-pos {
     background: rgba(59,130,246,0.12);
     border: 1px solid rgba(59,130,246,0.3);
