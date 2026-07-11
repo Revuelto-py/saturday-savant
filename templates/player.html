@@ -7,7 +7,7 @@
 {% block content %}
 <!-- HERO -->
 <div style="
-    background: linear-gradient(135deg, {{ c1 }} 0%, #0a1220 50%, {{ c2 }}88 100%);
+    background: linear-gradient(135deg, {{ c1 }} 0%, #0a0b0d 50%, {{ c2 }}88 100%);
     position: relative; overflow: hidden; min-height: 200px;
     border-bottom: 1px solid var(--border);">
 
@@ -62,10 +62,10 @@
                     <span style="color: var(--text-primary);font-size: var(--text-md);font-weight:600">{{ player.position or '—' }}</span>
                     <span style="color: var(--text-secondary)">·</span>
                     <span style="color: var(--text-primary);font-size: var(--text-md);font-weight:600">#{{ player.jersey or '—' }}</span>
-                    {% if not is_active_2026 and not player.nfl_status %}
+                    {% if not is_active_2026 %}
                     <span style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);
                                  color:#f87171;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-md)">
-                        {% if draft_status %}{{ draft_status }}{% else %}No longer with team{% endif %}
+                        No longer with team
                     </span>
                     {% endif %}
                 </div>
@@ -272,7 +272,7 @@
 </div>
 
 <!-- MAIN CONTENT -->
-<div style="background:linear-gradient(180deg, #060d1f 0%, #080f1e 100%);min-height:100vh;padding:32px 0">
+<div style="background:transparent;min-height:100vh;padding:32px 0">
 <div class="page-wrapper">
 
 {% set pos = player.position | upper if player.position else '' %}

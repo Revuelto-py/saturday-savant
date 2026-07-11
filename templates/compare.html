@@ -340,7 +340,7 @@
                 new Promise(function(r) { setTimeout(r, 5000); }),
             ]);
 
-            const bg = getComputedStyle(card).backgroundColor || '#0d1e35';
+            const bg = getComputedStyle(card).backgroundColor || '#0a0b0d';
             html2canvas(card, { backgroundColor: bg, scale: 2, useCORS: true }).then(function(canvas) {
                 const link = document.createElement('a');
                 link.download = 'saturday-savant-compare.png';

@@ -481,7 +481,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     background:
         radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--c1) 22%, transparent) 0%, transparent 55%),
         radial-gradient(ellipse at 100% 50%, color-mix(in srgb, var(--c2) 15%, transparent) 0%, transparent 55%),
-        linear-gradient(135deg, color-mix(in srgb, var(--c1) 30%, #0a1220) 0%, #0c1729 48%, color-mix(in srgb, var(--c2) 20%, #0a1220) 100%);
+        linear-gradient(135deg, color-mix(in srgb, var(--c1) 30%, #0a0b0d) 0%, #101114 48%, color-mix(in srgb, var(--c2) 20%, #0a0b0d) 100%);
     text-decoration: none;
     position: relative;
     overflow: hidden;
@@ -678,7 +678,7 @@ tr.postseason-row:hover {
 .cmp-hero {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(135deg, #14273f 0%, #0a1220 52%, #0d1e35 100%);
+    background: linear-gradient(135deg, #17181c 0%, #0a0b0d 52%, #121316 100%);
     border-bottom: 1px solid var(--border);
 }
 .cmp-hero::before {
