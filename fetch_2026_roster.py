@@ -124,3 +124,12 @@ for name in [('Drew', 'Allar'), ('Rocco', 'Becht'), ('Carson', 'Beck'), ('Nico',
 
 conn.close()
 print("\nDone!")
+
+
+# Data changed — tell the live site to drop its in-memory page cache so the
+# update is visible immediately instead of after the cache TTL.
+try:
+    from cache_notify import notify_cache_clear
+    notify_cache_clear()
+except Exception:
+    pass

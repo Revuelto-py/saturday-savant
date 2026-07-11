@@ -69,3 +69,12 @@ cursor.execute("SELECT team, off_ppa, def_ppa, off_success_rate, def_success_rat
 for r in cursor.fetchall():
     print(r)
 conn.close()
+
+
+# Data changed — tell the live site to drop its in-memory page cache so the
+# update is visible immediately instead of after the cache TTL.
+try:
+    from cache_notify import notify_cache_clear
+    notify_cache_clear()
+except Exception:
+    pass

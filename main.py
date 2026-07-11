@@ -1163,8 +1163,15 @@ def get_ticker_data():
     finally:
         release_db(conn)
 
+# Process start time, surfaced as an X-Boot response header. Two jobs:
+# (1) externally PROVES that a deploy restarted the process — and since the
+# page cache is in-process SimpleCache, a new boot time means a fresh, empty
+# cache with zero manual steps; (2) makes deploy state visible when debugging.
+BOOT_TIME = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
 @app.after_request
 def add_cache_headers(resp):
+    resp.headers['X-Boot'] = BOOT_TIME
     # Fully public site — let browsers (and hover-prefetch) reuse HTML briefly
     # so back/forward and prefetched clicks render instantly. Data updates are
     # hourly at most, so 3 minutes of staleness is invisible.
