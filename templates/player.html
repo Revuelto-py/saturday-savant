@@ -213,10 +213,23 @@
         </div>
     </div>
 
-    {% if player.nfl_status or transfers_history %}
-    {# Compact status badges — transfer history and NFL draft status share the
-       same bottom-right band so neither pushes the hero content around #}
+    {% if player.nfl_status or transfers_history or player_awards %}
+    {# Compact status badges — awards, transfer history, and NFL draft status
+       share the same bottom-right band so none pushes the hero content around #}
     <div class="ph-hero-badges">
+        {% if player_awards %}
+        {# Wrapping cluster, not one chip per row — award sweeps (6-7 trophies
+           in a season) must not push the badge band above the hero. #}
+        <div class="award-badge-cluster">
+            {% for aw in player_awards %}
+            <div class="award-badge" title="{{ aw.award }} · {{ aw.season }}">
+                <svg class="ab-trophy" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
+                <span>{{ aw.award }}</span>
+                <span class="ab-year">{{ aw.season }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% for t in transfers_history %}
         <div class="transfer-badge" title="{{ t.origin }} → {{ t.destination }} · {{ t.year }}">
             <span class="tb-label">Transfer</span>

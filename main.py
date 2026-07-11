@@ -2054,6 +2054,14 @@ def team(team_ref):
         ap_rankings = get_ap_rankings(cursor, season)
         team_rank = ap_rankings.get(team_name)
 
+        # Championships won in the viewed season (national title first)
+        cursor.execute('''
+            SELECT award FROM awards
+            WHERE team = %s AND season = %s AND kind = 'team'
+            ORDER BY (award = 'National Champions') DESC, award
+        ''', (team_name, season))
+        team_awards = [r[0] for r in cursor.fetchall()]
+
         cursor.execute('SELECT name, conference, abbreviation, logo, color, alt_color, logo_dark FROM teams WHERE name = %s', (team_name,))
         team_info = cursor.fetchone()
         if not team_info:
@@ -2488,6 +2496,7 @@ def team(team_ref):
                 kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
                 team_adv=team_adv, percentiles=percentiles, sp=sp, svr=svr,
                 ap_rankings=ap_rankings, team_rank=team_rank,
+                team_awards=team_awards,
                 recruiting=recruiting, havoc=havoc, conf_logo=conf_logo)
     finally:
         release_db(conn)
@@ -3558,13 +3567,15 @@ def _player_detail_cached(player_id, season):
         }
 
         # ── Transfer history + stats/current-team mismatch detection ──────────
-        # Matched by name since transfers has no player_id foreign key.
+        # player_id resolved at ingest; name match kept for unresolved rows.
         cursor.execute('''
             SELECT origin, destination, transfer_date, year, stars, rating
             FROM transfers
-            WHERE LOWER(first_name) = LOWER(%s) AND LOWER(last_name) = LOWER(%s)
+            WHERE player_id = %s
+               OR (player_id IS NULL AND LOWER(first_name) = LOWER(%s)
+                                     AND LOWER(last_name) = LOWER(%s))
             ORDER BY year ASC, transfer_date ASC
-        ''', (player['first_name'], player['last_name']))
+        ''', (player_id, player['first_name'], player['last_name']))
         transfers_history = []
         for origin, destination, transfer_date, t_year, stars, rating in cursor.fetchall():
             if not origin or not destination:
@@ -3575,6 +3586,14 @@ def _player_detail_cached(player_id, season):
                 'year': t_year,
                 'stars': stars or 0,
             })
+
+        # ── Career hardware (Heisman, Biletnikoff, …) for the hero band ──────
+        cursor.execute('''
+            SELECT award, season FROM awards
+            WHERE player_id = %s AND kind = 'player'
+            ORDER BY season, award
+        ''', (player_id,))
+        player_awards = [{'award': a, 'season': s} for a, s in cursor.fetchall()]
 
         # Every team this player has recorded player_stats under — may differ
         # from players.team (their current/latest team) if they transferred.
@@ -4237,6 +4256,7 @@ def _player_detail_cached(player_id, season):
         is_active_2026=is_active_2026,
         draft_status=draft_status,
         transfers_history=transfers_history,
+        player_awards=player_awards,
         previous_stat_teams=previous_stat_teams,
         transfer_team_logos=transfer_team_logos,
         team_abbrevs=team_abbrevs,
