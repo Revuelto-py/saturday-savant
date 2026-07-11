@@ -4069,6 +4069,15 @@ def _player_detail_cached(player_id, season):
     career_cols = [(lbl, tt) for lbl, tt, _c, _s, _k in cols]
     career_team_count = len({r['team'] for r in career_log if r['team']})
 
+    # Re-scope the transfer chip to the viewed season (see hero note above):
+    # only meaningful when this season's stats were recorded for a team other
+    # than the one in the hero (e.g. new-team roster, last season's stats).
+    _season_stat_team = stat_team_by_season.get(season)
+    if _season_stat_team and _season_stat_team != player['team']:
+        previous_stat_teams = [_season_stat_team]
+    else:
+        previous_stat_teams = []
+
     return render_template('player.html',
         player=player, stats=stats, ppa=ppa,
         season=season, is_current_season=(season == CURRENT_SEASON),
@@ -4752,24 +4761,34 @@ FIRST_12_TEAM_SEASON = 2024  # the CFP expanded to 12 teams in 2024
 @cache.cached(timeout=21600, query_string=True)
 def bracket_page():
     season = requested_season()
-    # The bracket layout models the 12-team format; earlier seasons used the
-    # 4-team CFP (2014-23), which this page doesn't draw — offer that
-    # season's postseason results instead of a wrong bracket.
-    bracket_seasons = [s for s in get_available_seasons() if s >= FIRST_12_TEAM_SEASON]
-    if season < FIRST_12_TEAM_SEASON:
-        return render_template('bracket.html', unsupported_season=season,
-                               season=season, bracket_seasons=bracket_seasons,
-                               bracket=None, champion=None)
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT team, rank FROM ap_rankings
-            WHERE season = %s
-            ORDER BY (season_type = 'postseason') DESC, week DESC, rank ASC
-            LIMIT 25
-        ''', (season,))
-        poll = cursor.fetchall()
+
+        # Seasons with stored committee seeds (backfill_cfp.py) drive the
+        # selector — the CFP itself predates our data, which starts 2016.
+        try:
+            cursor.execute('SELECT DISTINCT season FROM cfp_seeds ORDER BY season DESC')
+            bracket_seasons = [r[0] for r in cursor.fetchall()]
+        except Exception:
+            conn.rollback()
+            bracket_seasons = [s for s in get_available_seasons() if s >= FIRST_12_TEAM_SEASON]
+        if bracket_seasons and season not in bracket_seasons:
+            return render_template('bracket.html', unsupported_season=season,
+                                   season=season, bracket_seasons=bracket_seasons,
+                                   four_team=False, bracket=None, champion=None)
+
+        four_team = season < FIRST_12_TEAM_SEASON
+
+        # Seeds come from the stored selection-day committee ranking — the
+        # final AP poll can't seed a bracket (it re-ranks after the playoff,
+        # which is exactly how the 2024 bracket ended up scrambled).
+        seeds = {}
+        try:
+            cursor.execute('SELECT team, seed FROM cfp_seeds WHERE season = %s', (season,))
+            seeds = {r[0]: r[1] for r in cursor.fetchall()}
+        except Exception:
+            conn.rollback()
 
         cursor.execute('''
             SELECT id, home_team, away_team, home_points, away_points,
@@ -4777,21 +4796,43 @@ def bracket_page():
             FROM games
             WHERE season = %s
               AND UPPER(season_type) LIKE '%%POSTSEASON%%'
-              AND notes ILIKE '%%college football playoff%%'
             ORDER BY start_date ASC
         ''', (season,))
-        cfp_games = [{
+        post_games = [{
             'id': r[0], 'home_team': r[1], 'away_team': r[2],
             'home_points': r[3], 'away_points': r[4], 'completed': r[5],
             'notes': r[6] or '', 'start_date': r[7] or '',
         } for r in cursor.fetchall()]
+        cfp_games = [g for g in post_games
+                     if 'college football playoff' in g['notes'].lower()
+                     or 'cfp' in g['notes'].lower()]
 
         fr_games = [g for g in cfp_games if 'first round' in g['notes'].lower()]
         qf_games = [g for g in cfp_games if 'quarterfinal' in g['notes'].lower()]
         sf_games = [g for g in cfp_games if 'semifinal' in g['notes'].lower()]
         nc_games = [g for g in cfp_games if 'national championship' in g['notes'].lower()]
 
-        seeds = _cfp_seed_teams(poll, fr_games, qf_games)
+        # Some early seasons (2016) carry no notes on the semifinal games —
+        # recover them structurally: a postseason game between two seeded
+        # teams that isn't the championship is a semifinal.
+        if four_team and len(sf_games) < 2 and seeds:
+            nc_ids = {g['id'] for g in nc_games}
+            for g in post_games:
+                if g['id'] in nc_ids or g in sf_games:
+                    continue
+                if g['home_team'] in seeds and g['away_team'] in seeds:
+                    sf_games.append(g)
+
+        if not seeds:
+            # Fallback: derive from the playoff structure + final AP poll
+            cursor.execute('''
+                SELECT team, rank FROM ap_rankings
+                WHERE season = %s
+                ORDER BY (season_type = 'postseason') DESC, week DESC, rank ASC
+                LIMIT 25
+            ''', (season,))
+            poll = cursor.fetchall()
+            seeds = _cfp_seed_teams(poll, fr_games, qf_games)
         team_by_seed = {s: t for t, s in seeds.items()}
 
         cursor.execute('''
@@ -4849,6 +4890,33 @@ def bracket_page():
             'bowl': _cfp_bowl_label(game['notes']) if game else None,
         }
 
+    if four_team:
+        # 4-team era (2016-23): two semifinals (1v4, 2v3) and the championship.
+        semifinals = []
+        for slot, hi, lo in (('SF1', 1, 4), ('SF2', 2, 3)):
+            t_hi, t_lo = team_by_seed.get(hi), team_by_seed.get(lo)
+            game = _cfp_find_game(sf_games, t_hi, t_lo) or _cfp_find_game(sf_games, t_hi)
+            semifinals.append(matchup(slot, t_hi, hi, t_lo, lo, game))
+        t_left = semifinals[0]['winner']
+        t_right = semifinals[1]['winner']
+        nc_game = _cfp_find_game(nc_games, t_left, t_right) or \
+            (nc_games[0] if nc_games else None)
+        championship = matchup('NC', t_left, seeds.get(t_left),
+                               t_right, seeds.get(t_right), nc_game)
+        champion = None
+        if championship['winner']:
+            champion = team_side(championship['winner'],
+                                 seeds.get(championship['winner']), nc_game)
+        bracket = {'round1': [], 'quarterfinals': [],
+                   'semifinals': semifinals, 'championship': championship}
+        cfp_teams = [dict(teams_map.get(team_by_seed.get(s), {}) or {},
+                          seed=s, name=team_by_seed.get(s))
+                     for s in range(1, 5) if team_by_seed.get(s)]
+        return render_template('bracket.html', bracket=bracket,
+                               season=season, bracket_seasons=bracket_seasons,
+                               four_team=True,
+                               cfp_teams=cfp_teams, champion=champion)
+
     # First round — slot letter, high seed, low seed
     round1 = []
     for slot, hi, lo in (('A', 8, 9), ('B', 5, 12), ('C', 6, 11), ('D', 7, 10)):
@@ -4903,6 +4971,7 @@ def bracket_page():
 
     return render_template('bracket.html', bracket=bracket,
                            season=season, bracket_seasons=bracket_seasons,
+                           four_team=False,
                            cfp_teams=cfp_teams, champion=champion)
 
 

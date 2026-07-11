@@ -2585,3 +2585,17 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
     .sp-team-card, .sp-submit { transition: none; }
     .sp-team-card:hover, .sp-submit:hover { transform: none; }
 }
+
+/* 4-team era bracket: the board is a 7-track grid for the 12-team layout —
+   collapse it to three generous, centered tracks and let the cards breathe. */
+.bk-board-four {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+    max-width: 940px;
+    margin: 0 auto;
+}
+.bk-board-four .bk-slot-sf { max-width: 300px; margin: 0 auto; }
+.bk-board-four .bk-slot-nc { max-width: 320px; }
+/* one card per column — center vertically in a compact board instead of the
+   12-team layout's full-height space-around distribution */
+.bk-board-four .bk-col-body { justify-content: center; min-height: 340px; }
+.bk-board-four { height: auto; min-height: 420px; }
