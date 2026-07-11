@@ -2639,3 +2639,8 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
     text-transform: uppercase;
 }
 .gh-status-pill--scheduled { color: #7cc4f5; border-color: rgba(124,196,245,0.45); }
+
+/* ── Team page: Trends tab ──────────────────────────────────────────────── */
+.trend-card { margin-bottom: 28px; }
+.trend-chart { width: 100%; height: 300px; }
+@media (max-width: 575.98px) { .trend-chart { height: 240px; } }

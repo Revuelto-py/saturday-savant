@@ -69,6 +69,7 @@
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview">Overview</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#team-stats">Team Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#player-stats">Player Stats</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#trends" id="trends-tab-btn">Trends</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#roster">Roster</button></li>
         </ul>
         {% if available_seasons and available_seasons|length > 1 %}
@@ -801,6 +802,42 @@
 </div>
 <!-- ===== END PLAYER STATS ===== -->
 
+<!-- ===== TRENDS ===== -->
+<div class="tab-pane fade" id="trends">
+<div class="pt-4">
+
+    <div style="margin-bottom:24px">
+        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Program Trends · {{ trends.seasons[0] }}–{{ trends.seasons[-1] }}</h5>
+        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
+            How {{ team[0] }} has moved year over year. Hover any point for that season's
+            full context; click legend entries to toggle lines. Gaps mean the metric
+            wasn't available for that season.</p>
+        <div id="trend-conf-note" style="color: var(--text-dim);font-size: var(--text-xs);margin-top:8px"></div>
+    </div>
+
+    {% macro trend_card(id, title, note='') %}
+    <div class="trend-card" id="card-{{ id }}">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h5>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            {% if note %}<span style="color: var(--text-dim);font-size: var(--text-xs)">{{ note }}</span>{% endif %}
+        </div>
+        <div class="dark-card" style="padding:16px 8px 8px">
+            <div id="{{ id }}" class="trend-chart"></div>
+        </div>
+    </div>
+    {% endmacro %}
+
+    {{ trend_card('tr-savant', 'Savant Rating', "Saturday Savant's opponent-adjusted model · defense: lower is better") }}
+    {{ trend_card('tr-record', 'Season Records', 'wins and losses per season, postseason included') }}
+    {{ trend_card('tr-sp', 'SP+ Rating', "Bill Connelly's predictive model") }}
+    {{ trend_card('tr-epa', 'EPA per Play', 'offense higher is better · defense lower is better · garbage time excluded') }}
+    {{ trend_card('tr-recruiting', 'Recruiting Class Rank', 'national class ranking · lower is better') }}
+    {{ trend_card('tr-ap', 'Final AP Ranking', 'final poll each season · unranked years shown as gaps') }}
+
+</div>
+</div>
+
 <!-- ===== ROSTER ===== -->
 <div class="tab-pane fade" id="roster">
 <div class="pt-4">
@@ -961,6 +998,131 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
+<script>
+// ── Trends tab charts ───────────────────────────────────────────────────────
+// Site-themed Plotly (same library as the game page's win-probability chart).
+// Charts init lazily the first time the tab is shown (Plotly renders 0-wide
+// inside hidden tabs), values of null render as honest gaps, and every hover
+// carries that season's record + conference for realignment context.
+(function () {
+    var T = {{ trends|tojson }};
+    var built = false;
+
+    var C = { net: '#1c9cf0', off: '#34d399', def: '#60a5fa',
+              red: '#f87171', line: '#e7e9ea', dim: '#8da4be' };
+
+    // per-season hover context: "10-3 · SEC"
+    var ctx = T.seasons.map(function (s, i) {
+        var w = T.record.wins[i], l = T.record.losses[i];
+        var rec = (w === null || l === null) ? '—' : (w + '-' + l);
+        return rec + ' · ' + (T.conference[i] || '—');
+    });
+
+    function layout(extra) {
+        var base = {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'DM Sans, sans-serif', color: C.dim, size: 12 },
+            margin: { l: 46, r: 12, t: 10, b: 34 },
+            hovermode: 'x unified',
+            hoverlabel: { bgcolor: '#17181c', bordercolor: 'rgba(255,255,255,0.15)',
+                          font: { family: 'DM Sans, sans-serif', color: '#e7e9ea', size: 12 } },
+            dragmode: false,
+            xaxis: { gridcolor: 'rgba(255,255,255,0.05)', dtick: 1, fixedrange: true,
+                     tickfont: { size: 11 } },
+            yaxis: { gridcolor: 'rgba(255,255,255,0.05)', zerolinecolor: 'rgba(255,255,255,0.12)',
+                     fixedrange: true },
+            legend: { orientation: 'h', y: 1.16, x: 0, font: { size: 11 } },
+            showlegend: true
+        };
+        for (var k in (extra || {})) {
+            if (extra[k] && typeof extra[k] === 'object' && base[k]) {
+                for (var k2 in extra[k]) base[k][k2] = extra[k][k2];
+            } else base[k] = extra[k];
+        }
+        return base;
+    }
+
+    function line(name, ys, color, opts) {
+        var t = {
+            name: name, x: T.seasons, y: ys, type: 'scatter', mode: 'lines+markers',
+            connectgaps: false,
+            line: { color: color, width: 2.5, shape: 'spline', smoothing: 0.25 },
+            marker: { size: 7, color: color, line: { color: '#0a0b0d', width: 1.5 } },
+            customdata: ctx,
+            hovertemplate: name + ': <b>%{y}</b> · %{customdata}<extra></extra>'
+        };
+        for (var k in (opts || {})) t[k] = opts[k];
+        return t;
+    }
+
+    function allNull(arr) { return arr.every(function (v) { return v === null; }); }
+
+    function plot(id, traces, lay) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var live = traces.filter(function (t) { return !allNull(t.y); });
+        if (!live.length) { document.getElementById('card-' + id).style.display = 'none'; return; }
+        Plotly.newPlot(id, live, lay, { displayModeBar: false, responsive: true });
+    }
+
+    function build() {
+        if (built || typeof Plotly === 'undefined') return;
+        built = true;
+
+        plot('tr-savant', [
+            line('Net', T.savant.net, C.net, { line: { color: C.net, width: 3.5, shape: 'spline', smoothing: 0.25 } }),
+            line('Offense', T.savant.off, C.off),
+            line('Defense', T.savant.def, C.def)
+        ], layout());
+
+        plot('tr-record', [
+            { name: 'Wins', x: T.seasons, y: T.record.wins, type: 'bar',
+              marker: { color: C.net }, customdata: ctx,
+              hovertemplate: 'Wins: <b>%{y}</b> · %{customdata}<extra></extra>' },
+            { name: 'Losses', x: T.seasons, y: T.record.losses, type: 'bar',
+              marker: { color: 'rgba(244,33,46,0.65)' }, customdata: ctx,
+              hovertemplate: 'Losses: <b>%{y}</b> · %{customdata}<extra></extra>' }
+        ], layout({ barmode: 'group', yaxis: { rangemode: 'tozero' } }));
+
+        plot('tr-sp', [
+            line('Overall', T.sp.rating, C.line, { line: { color: C.line, width: 3, shape: 'spline', smoothing: 0.25 } }),
+            line('Offense', T.sp.off, C.off),
+            line('Defense', T.sp.def, C.def)
+        ], layout());
+
+        plot('tr-epa', [
+            line('Offense', T.epa.off, C.off),
+            line('Defense', T.epa.def, C.red)
+        ], layout({ yaxis: { tickformat: '.2f' } }));
+
+        plot('tr-recruiting', [
+            line('Class rank', T.recruiting.rank, C.net)
+        ], layout({ yaxis: { autorange: 'reversed', dtick: 25, rangemode: 'tozero' }, showlegend: false }));
+
+        plot('tr-ap', [
+            line('Final AP rank', T.ap, C.net)
+        ], layout({ yaxis: { autorange: 'reversed', range: [26, 0], dtick: 5 }, showlegend: false }));
+
+        // Realignment note: list conference changes across the window
+        var seen = [], changes = [];
+        T.conference.forEach(function (c, i) {
+            if (!c) return;
+            if (seen.length && seen[seen.length - 1] !== c) changes.push(c + ' (' + T.seasons[i] + ')');
+            if (!seen.length || seen[seen.length - 1] !== c) seen.push(c);
+        });
+        if (changes.length) {
+            document.getElementById('trend-conf-note').textContent =
+                'Conference: ' + seen[0] + ' → ' + changes.join(' → ');
+        }
+    }
+
+    var btn = document.getElementById('trends-tab-btn');
+    if (btn) btn.addEventListener('shown.bs.tab', build);
+    // if the tab is somehow already visible (e.g. anchored), build immediately
+    if (document.querySelector('#trends.active')) build();
+})();
+</script>
 <script>
 // Schedule season toggle — swaps the viewed season's results for the
 // upcoming season's schedule and keeps the heading in sync.

@@ -2418,12 +2418,61 @@ def team(team_ref):
 
         conf_logo = get_conference_logos(cursor).get(team_info[1])
 
+        # ── Trends tab: this program's full multi-season history ──────────
+        # One row per loaded season per metric; missing seasons stay None so
+        # the charts render honest gaps instead of misleading zeros.
+        all_seasons = sorted(get_available_seasons())
+
+        def _series(query, params, cols):
+            cursor.execute(query, params)
+            by = {r[0]: r[1:] for r in cursor.fetchall()}
+            return [[(by[s][i] if s in by and by[s][i] is not None else None)
+                     for s in all_seasons] for i in range(cols)]
+
+        sv_off, sv_def, sv_net, sv_rank = _series(
+            'SELECT season, off_rating, def_rating, net_rating, net_ranking '
+            'FROM savant_ratings WHERE team=%s', (team_name,), 4)
+        sp_rt, sp_off, sp_def, sp_rank = _series(
+            'SELECT season, rating, offense_rating, defense_rating, ranking '
+            'FROM sp_ratings WHERE team=%s', (team_name,), 4)
+        rec_rank, rec_pts = _series(
+            'SELECT year, rank, points FROM team_recruiting WHERE team=%s', (team_name,), 2)
+        ap_rank, = _series(
+            'SELECT season, rank FROM ap_rankings WHERE team=%s', (team_name,), 1)
+        epa_off, epa_def = _series(
+            'SELECT season, off_ppa, def_ppa FROM team_stats WHERE team=%s', (team_name,), 2)
+        t_wins, t_losses = _series('''
+            SELECT season,
+                SUM(CASE WHEN (home_team=%s AND home_points>away_points)
+                          OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
+                SUM(CASE WHEN (home_team=%s AND home_points<away_points)
+                          OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
+            FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1
+            GROUP BY season''', (team_name,)*6, 2)
+        # Conference per season (from that season's stat rows) — realignment
+        # context for hover tooltips and the header note.
+        confs, = _series(
+            'SELECT season, MIN(conference) FROM player_stats '
+            'WHERE team=%s AND conference IS NOT NULL GROUP BY season', (team_name,), 1)
+
+        trends = {
+            'seasons': all_seasons,
+            'savant': {'off': sv_off, 'def': sv_def, 'net': sv_net, 'rank': sv_rank},
+            'sp': {'rating': sp_rt, 'off': sp_off, 'def': sp_def, 'rank': sp_rank},
+            'recruiting': {'rank': rec_rank, 'points': rec_pts},
+            'ap': ap_rank,
+            'epa': {'off': epa_off, 'def': epa_def},
+            'record': {'wins': t_wins, 'losses': t_losses},
+            'conference': confs,
+        }
+
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
                 roster_season=roster_season, next_season=UPCOMING_SEASON,
                 available_seasons=get_available_seasons(),
+                trends=trends,
                 standings=standings, schedule=schedule, schedule_next=schedule_next,
                 roster=roster, lineup=lineup,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
