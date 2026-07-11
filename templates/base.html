@@ -482,6 +482,31 @@
     })();
     </script>
 
+    <script>
+    // Hover prefetch — start loading an internal page the moment the cursor
+    // shows intent, so the actual click feels instant (pages send
+    // Cache-Control, so the prefetched copy is reused). Skips query-string
+    // controls (leaderboard sorts etc.), repeat hovers, and touch devices
+    // (no hover intent there), and respects Save-Data.
+    (function () {
+        if (navigator.connection && navigator.connection.saveData) return;
+        if (!window.matchMedia('(hover: hover)').matches) return;
+        var seen = new Set();
+        document.addEventListener('mouseover', function (e) {
+            var a = e.target.closest && e.target.closest('a[href]');
+            if (!a || a.origin !== location.origin) return;
+            var href = a.pathname + a.search;
+            if (a.search || href === location.pathname + location.search) return;
+            if (seen.has(href) || seen.size > 60) return;
+            seen.add(href);
+            var l = document.createElement('link');
+            l.rel = 'prefetch';
+            l.href = href;
+            document.head.appendChild(l);
+        }, { passive: true });
+    })();
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

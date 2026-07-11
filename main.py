@@ -142,7 +142,7 @@ ensure_indexes()
 CURRENT_SEASON = 2025
 UPCOMING_SEASON = 2026
 
-@cache.memoize(timeout=3600)
+@cache.memoize(timeout=21600)
 def get_available_seasons():
     """Seasons that actually have stats loaded, newest first — drives the
     season selector so it only offers years the backfill has populated."""
@@ -200,7 +200,7 @@ def _fetch_stats_pool(cursor, category, positions, season=CURRENT_SEASON):
     dict as read-only (it's shared across requests)."""
     return _stats_pool_cached(category, tuple(positions), season)
 
-@cache.memoize(timeout=1800)
+@cache.memoize(timeout=21600)
 def _stats_pool_cached(category, positions_key, season):
     conn = get_db()
     try:
@@ -223,7 +223,7 @@ def _fetch_ppa_pool(cursor, positions, season=CURRENT_SEASON):
     """PPA peer pool (one season) — memoized like _fetch_stats_pool; read-only."""
     return _ppa_pool_cached(tuple(positions), season)
 
-@cache.memoize(timeout=1800)
+@cache.memoize(timeout=21600)
 def _ppa_pool_cached(positions_key, season):
     conn = get_db()
     try:
@@ -999,7 +999,7 @@ def leaders_query_all(cursor, season=CURRENT_SEASON):
         out.setdefault((cat, st), []).append((name, team, val, headshot, logo, pid))
     return out
 
-@cache.memoize(timeout=3600)
+@cache.memoize(timeout=21600)
 def get_cached_season_leaders():
     """Season-wide leaders are identical no matter which week the home page
     is showing, so this is memoized independently of the /week/<n>/<type>
@@ -1038,7 +1038,7 @@ def _ticker_game_label(notes):
         if 'Conference Championship' in notes: return 'Conf Championship'
     return 'Final'
 
-@cache.memoize(timeout=3600)
+@cache.memoize(timeout=21600)
 def get_ticker_data():
     """Sitewide scores ticker under the navbar: the most recent completed
     week, with postseason outranking regular season so the offseason shows
@@ -1098,6 +1098,17 @@ def get_ticker_data():
         return {'label': label, 'games': games}
     finally:
         release_db(conn)
+
+@app.after_request
+def add_cache_headers(resp):
+    # Fully public site — let browsers (and hover-prefetch) reuse HTML briefly
+    # so back/forward and prefetched clicks render instantly. Data updates are
+    # hourly at most, so 3 minutes of staleness is invisible.
+    if request.method == 'GET' and resp.status_code == 200 \
+            and resp.mimetype == 'text/html' and not request.path.startswith('/admin'):
+        resp.cache_control.public = True
+        resp.cache_control.max_age = 180
+    return resp
 
 @app.context_processor
 def inject_seasons():
@@ -1239,7 +1250,7 @@ def home(week=None, season_type='regular'):
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
 
 @app.route('/games')
-@cache.cached(timeout=3600, query_string=True)
+@cache.cached(timeout=21600, query_string=True)
 def games_hub():
     """Full-season games hub: browse every game (completed 2025 + upcoming
     2026) by season and week, with a conference filter and a team filter that
@@ -1362,7 +1373,7 @@ def search():
 
 @app.route('/leaderboards')
 @app.route('/leaderboards/<category>')
-@cache.cached(timeout=3600, query_string=True)  # 1 hour — view/team/qualified are part of the query string, so each combo caches separately
+@cache.cached(timeout=21600, query_string=True)  # 1 hour — view/team/qualified are part of the query string, so each combo caches separately
 def leaderboards(category='passing'):
     if category not in PLAYER_COLUMNS:
         category = 'passing'
@@ -1743,7 +1754,7 @@ def clean_play_text(text):
 
 @app.route('/leaderboards/teams')
 @app.route('/leaderboards/teams/<category>')
-@cache.cached(timeout=3600, query_string=True)  # view/team are part of the query string, so each combo caches separately
+@cache.cached(timeout=21600, query_string=True)  # view/team are part of the query string, so each combo caches separately
 def leaderboards_teams(category='savant'):
     if category not in TEAM_CATEGORY_DEFAULTS:
         category = 'offense'
@@ -1942,7 +1953,7 @@ def savant_rating_methodology():
                            n_teams=n_teams, n_drives=n_drives, n_games=n_games)
 
 @app.route('/team/<path:team_ref>')
-@cache.cached(timeout=3600, query_string=True)  # 1 hour; season is in the query string
+@cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
     season = requested_season()
     is_current = season == CURRENT_SEASON
@@ -2414,7 +2425,7 @@ def api_players():
     return jsonify(results)
 
 @app.route('/rankings')
-@cache.cached(timeout=3600, query_string=True)  # 1 hour; season is in the query string
+@cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def rankings():
     season = requested_season()
     conn = get_db()
@@ -3287,6 +3298,9 @@ def shorten_game_label(season_type, week, notes):
     return label
 
 
+class _SkipGameLog(Exception):
+    """Control-flow: game log already loaded from the Postgres store."""
+
 @app.route('/player/<int:player_id>')
 def player_detail(player_id):
     # No explicit ?season= defaults to the player's most recent recorded
@@ -3304,7 +3318,7 @@ def player_detail(player_id):
         release_db(conn)
     return _player_detail_cached(player_id, row[0] if row and row[0] else CURRENT_SEASON)
 
-@cache.memoize(timeout=3600)  # memoize keys on (player_id, season)
+@cache.memoize(timeout=21600)  # memoize keys on (player_id, season)
 def _player_detail_cached(player_id, season):
     conn = get_db()
     try:
@@ -3750,7 +3764,39 @@ def _player_detail_cached(player_id, season):
         release_db(conn)
 
     game_log = []
+    # Persisted game logs: the ESPN scan below is the single most expensive
+    # part of a cold player page (~a dozen HTTP calls). Completed seasons are
+    # immutable, so the result is stored in Postgres and reused forever —
+    # surviving restarts, unlike the in-memory page cache.
+    _log_cached = None
+    connG = get_db()
     try:
+        curG = connG.cursor()
+        curG.execute('''
+            CREATE TABLE IF NOT EXISTS player_game_logs (
+                player_id INTEGER NOT NULL,
+                season    INTEGER NOT NULL,
+                log       TEXT,
+                updated_at TIMESTAMPTZ DEFAULT now(),
+                PRIMARY KEY (player_id, season)
+            )
+        ''')
+        connG.commit()
+        curG.execute('SELECT log FROM player_game_logs WHERE player_id=%s AND season=%s',
+                     (player_id, season))
+        rowG = curG.fetchone()
+        if rowG and rowG[0]:
+            _log_cached = json.loads(rowG[0])
+    except Exception:
+        connG.rollback()
+    finally:
+        release_db(connG)
+    if _log_cached is not None:
+        game_log = _log_cached
+
+    try:
+        if _log_cached is not None:
+            raise _SkipGameLog()   # already loaded from Postgres
         # Get completed games for this team from DB (includes opponent/result info)
         conn2 = get_db()
         try:
@@ -3880,6 +3926,26 @@ def _player_detail_cached(player_id, season):
                     if entry:
                         game_log.append(entry)
 
+        # Store for next time — completed seasons never change. An empty log
+        # is stored too (ESPN has nothing for this player/season), so we don't
+        # re-scan on every view.
+        connG = get_db()
+        try:
+            curG = connG.cursor()
+            curG.execute('''
+                INSERT INTO player_game_logs (player_id, season, log)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (player_id, season) DO UPDATE SET
+                    log = EXCLUDED.log, updated_at = now()
+            ''', (player_id, season, json.dumps(game_log)))
+            connG.commit()
+        except Exception:
+            connG.rollback()
+        finally:
+            release_db(connG)
+
+    except _SkipGameLog:
+        pass
     except Exception as e:
         print(f"ESPN game log error: {e}")
         import traceback; traceback.print_exc()
@@ -4677,7 +4743,7 @@ def _cfp_seed_teams(poll, fr_games, qf_games):
 FIRST_12_TEAM_SEASON = 2024  # the CFP expanded to 12 teams in 2024
 
 @app.route('/bracket')
-@cache.cached(timeout=3600, query_string=True)
+@cache.cached(timeout=21600, query_string=True)
 def bracket_page():
     season = requested_season()
     # The bracket layout models the 12-team format; earlier seasons used the
@@ -4885,6 +4951,27 @@ def clear_cache():
     cache.clear()
     return 'Cache cleared', 200
 
+
+def _warm_cache():
+    import threading, time as _t
+    def run():
+        _t.sleep(3)   # let the worker finish booting
+        paths = ['/', '/games', '/leaderboards/passing', '/leaderboards/rushing',
+                 '/leaderboards/receiving', '/leaderboards/defense',
+                 '/leaderboards/teams', '/rankings', '/teams', '/savant-rating', '/bracket']
+        try:
+            with app.test_client() as c:
+                for p in paths:
+                    try:
+                        c.get(p)
+                    except Exception:
+                        pass
+            print('cache warmup complete', flush=True)
+        except Exception as e:
+            print(f'cache warmup skipped: {e}', flush=True)
+    threading.Thread(target=run, daemon=True).start()
+
+_warm_cache()
 
 if __name__ == '__main__':
     import os
