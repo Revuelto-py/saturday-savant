@@ -11,10 +11,15 @@ mirrored files are never re-downloaded or re-uploaded.
 Stages (each resumable — skip-existing at every step):
     1. download   ESPN CDN -> static/headshots/   (~10-15 concurrent, 404s expected:
                   ESPN purged many pre-2017 players)
-    2. upload     new local files -> R2
-    3. db         players.headshot = R2 URL for every id with a mirrored file
+    2. nfl        NFL-CDN fallback for players ESPN purged from the college CDN but
+                  who went pro (drafted/UDFA): ESPN's NFL headshots live at
+                  /i/headshots/nfl/players/full/{id}.png under the SAME athlete id
+                  (the college->NFL id continuity backfill_nfl.py relies on).
+                  Covers the notable names — McCaffrey, Barkley, etc.
+    3. upload     new local files -> R2
+    4. db         players.headshot = R2 URL for every id with a mirrored file
 
-Run:  python3 backfill_headshots.py            # all three stages
+Run:  python3 backfill_headshots.py            # all stages
       python3 backfill_headshots.py download   # a single stage
 """
 import os
@@ -31,6 +36,7 @@ load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 HEADSHOTS_DIR = os.path.join(BASE_DIR, 'static', 'headshots')
 os.makedirs(HEADSHOTS_DIR, exist_ok=True)
 CDN = "https://a.espncdn.com/i/headshots/college-football/players/full/{}.png"
+NFL_CDN = "https://a.espncdn.com/i/headshots/nfl/players/full/{}.png"
 WORKERS = 12   # polite to ESPN's CDN; ~37k requests ≈ 60-90 min
 
 
@@ -44,15 +50,29 @@ def target_ids():
     return ids
 
 
-def stage_download():
-    ids = target_ids()
+def nfl_target_ids():
+    """Headshot-less players who went pro — the NFL CDN has these under the
+    same athlete id even after ESPN purged their college headshot."""
+    conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+    cur = conn.cursor()
+    cur.execute('''SELECT id FROM players WHERE headshot IS NULL
+                   AND (nfl_status IS NOT NULL OR draft_status IS NOT NULL)
+                   ORDER BY id''')
+    ids = [r[0] for r in cur.fetchall()]
+    conn.close()
+    return ids
+
+
+def stage_download(cdn=CDN, ids=None, label='download'):
+    if ids is None:
+        ids = target_ids()
     todo = [i for i in ids if not os.path.exists(os.path.join(HEADSHOTS_DIR, f"{i}.png"))]
-    print(f"download: {len(ids)} candidates, {len(todo)} not yet on disk", flush=True)
+    print(f"{label}: {len(ids)} candidates, {len(todo)} not yet on disk", flush=True)
 
     session = requests.Session()
 
     def fetch(pid):
-        url = CDN.format(pid)
+        url = cdn.format(pid)
         for attempt in (1, 2):
             try:
                 r = session.get(url, timeout=8)
@@ -76,7 +96,11 @@ def stage_download():
             else: errors += 1
             if n % 2000 == 0:
                 print(f"  {n}/{len(todo)}  saved={saved} missing={missing} errors={errors}", flush=True)
-    print(f"download done: saved={saved} missing={missing} errors={errors}", flush=True)
+    print(f"{label} done: saved={saved} missing={missing} errors={errors}", flush=True)
+
+
+def stage_nfl():
+    stage_download(cdn=NFL_CDN, ids=nfl_target_ids(), label='nfl')
 
 
 def _r2_client():
@@ -140,6 +164,15 @@ def stage_db():
 
 
 if __name__ == '__main__':
-    stages = sys.argv[1:] or ['download', 'upload', 'db']
+    stages = sys.argv[1:] or ['download', 'nfl', 'upload', 'db']
     for s in stages:
-        {'download': stage_download, 'upload': stage_upload, 'db': stage_db}[s]()
+        {'download': stage_download, 'nfl': stage_nfl,
+         'upload': stage_upload, 'db': stage_db}[s]()
+
+    # Data changed — tell the live site to drop its in-memory page cache so the
+    # update is visible immediately instead of after the cache TTL.
+    try:
+        from cache_notify import notify_cache_clear
+        notify_cache_clear()
+    except Exception:
+        pass
