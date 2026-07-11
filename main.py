@@ -2593,6 +2593,7 @@ def _classify_drive_result(display_result):
 
 
 @app.route('/game/<int:game_id>')
+@cache.cached(timeout=3600)
 def game_detail(game_id):
     conn = get_db()
     try:
@@ -2722,6 +2723,22 @@ def game_detail(game_id):
             )
             if s.ok:
                 data = s.json()
+                # Store it (completed games are immutable) so no future
+                # request ever repeats this fetch — the live ESPN call was
+                # the game page's thread-blocking cost under crawler load.
+                if game_info[15] and data.get('header', {}).get('competitions'):
+                    connS = get_db()
+                    try:
+                        curS = connS.cursor()
+                        curS.execute('''
+                            INSERT INTO game_summaries (game_id, summary_gz)
+                            VALUES (%s, %s) ON CONFLICT (game_id) DO NOTHING
+                        ''', (game_id, gzip.compress(json.dumps(data).encode())))
+                        connS.commit()
+                    except Exception:
+                        connS.rollback()
+                    finally:
+                        release_db(connS)
         if data.get('header', {}).get('competitions'):
             espn_game_id = str(game_id)
         else:
@@ -4613,7 +4630,7 @@ def img_proxy():
     if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
         return 'Forbidden', 403
     try:
-        r = req.get(url, timeout=8)
+        r = req.get(url, timeout=3)
         ctype = r.headers.get('Content-Type', 'image/png')
         if r.status_code != 200 or not ctype.startswith('image/'):
             return '', 502
