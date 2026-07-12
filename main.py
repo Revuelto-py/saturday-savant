@@ -5253,13 +5253,256 @@ def bracket_page():
                            cfp_teams=cfp_teams, champion=champion)
 
 
+# Player Explorer — per position-group scatter axes. Values are raw stats
+# read from the same pools used for percentiles; categories match the hero
+# cards. (key, label, category, stat_type, invert, decimals, unit)
+EXPLORER_PLAYER_SPEC = {
+    'QB': {'label': 'Quarterbacks', 'peer': ['QB'], 'axes': [
+        ('pass_yds', 'Passing Yards',   'passing',  'YDS', False, 0, ''),
+        ('pass_td',  'Passing TDs',     'passing',  'TD',  False, 0, ''),
+        ('comp_pct', 'Completion %',    'passing',  'PCT', False, 1, '%'),
+        ('ypa',      'Yards / Attempt', 'passing',  'YPA', False, 1, ''),
+        ('interceptions', 'Interceptions', 'passing', 'INT', True, 0, ''),
+        ('rush_yds', 'Rushing Yards',   'rushing',  'YDS', False, 0, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+    'RB': {'label': 'Running Backs', 'peer': ['RB', 'HB', 'FB'], 'axes': [
+        ('rush_yds', 'Rushing Yards',   'rushing',  'YDS', False, 0, ''),
+        ('rush_td',  'Rushing TDs',     'rushing',  'TD',  False, 0, ''),
+        ('carries',  'Carries',         'rushing',  'CAR', False, 0, ''),
+        ('ypc',      'Yards / Carry',   'rushing',  'YPC', False, 1, ''),
+        ('rec_yds',  'Receiving Yards', 'receiving','YDS', False, 0, ''),
+        ('receptions','Receptions',     'receiving','REC', False, 0, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+    'WR': {'label': 'Receivers (WR)', 'peer': ['WR'], 'axes': [
+        ('rec_yds',  'Receiving Yards', 'receiving','YDS', False, 0, ''),
+        ('rec_td',   'Receiving TDs',   'receiving','TD',  False, 0, ''),
+        ('receptions','Receptions',     'receiving','REC', False, 0, ''),
+        ('ypr',      'Yards / Reception','receiving','AVG',False, 1, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+    'TE': {'label': 'Tight Ends', 'peer': ['TE'], 'axes': [
+        ('rec_yds',  'Receiving Yards', 'receiving','YDS', False, 0, ''),
+        ('rec_td',   'Receiving TDs',   'receiving','TD',  False, 0, ''),
+        ('receptions','Receptions',     'receiving','REC', False, 0, ''),
+        ('ypr',      'Yards / Reception','receiving','AVG',False, 1, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+    'DL': {'label': 'Defensive Line', 'peer': ['DE','DT','NT','DL','EDGE'], 'axes': [
+        ('tackles',  'Total Tackles',   'defensive','TOT', False, 0, ''),
+        ('sacks',    'Sacks',           'defensive','SACKS',False,1, ''),
+        ('tfl',      'Tackles for Loss','defensive','TFL', False, 1, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+    'LB': {'label': 'Linebackers', 'peer': ['LB','ILB','OLB','MLB'], 'axes': [
+        ('tackles',  'Total Tackles',   'defensive','TOT', False, 0, ''),
+        ('sacks',    'Sacks',           'defensive','SACKS',False,1, ''),
+        ('tfl',      'Tackles for Loss','defensive','TFL', False, 1, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+    'DB': {'label': 'Defensive Backs', 'peer': ['CB','S','SS','FS','SAF','DB'], 'axes': [
+        ('tackles',  'Total Tackles',   'defensive','TOT', False, 0, ''),
+        ('interceptions','Interceptions','defensive','INT',False, 0, ''),
+        ('pd',       'Passes Defended', 'defensive','PD',  False, 0, ''),
+        ('tfl',      'Tackles for Loss','defensive','TFL', False, 1, ''),
+        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+    ]},
+}
+
+# Radar/percentile profile axes per position group — a curated subset of the
+# hero-card percentiles (all higher-is-better so the shape reads cleanly).
+# (label, kind, stat_key)  kind: 'stat' category / 'ppa'
+EXPLORER_RADAR_SPEC = {
+    'QB': [('Pass Yds','passing','YDS'), ('Pass TD','passing','TD'),
+           ('Comp %','passing','PCT'), ('Yds/Att','passing','YPA'),
+           ('EPA/Play','ppa','avg_ppa_all')],
+    'RB': [('Rush Yds','rushing','YDS'), ('Rush TD','rushing','TD'),
+           ('Yds/Carry','rushing','YPC'), ('Rec Yds','receiving_wide','YDS'),
+           ('EPA/Play','ppa','avg_ppa_all')],
+    'WR': [('Rec Yds','receiving','YDS'), ('Rec TD','receiving','TD'),
+           ('Receptions','receiving','REC'), ('Yds/Rec','receiving','AVG'),
+           ('EPA/Play','ppa','avg_ppa_all')],
+    'TE': [('Rec Yds','receiving','YDS'), ('Rec TD','receiving','TD'),
+           ('Receptions','receiving','REC'), ('Yds/Rec','receiving','AVG'),
+           ('EPA/Play','ppa','avg_ppa_all')],
+    'DL': [('Tackles','def_wide','TOT'), ('Sacks','def_wide','SACKS'),
+           ('TFL','defensive','TFL'), ('EPA/Play','ppa','avg_ppa_all')],
+    'LB': [('Tackles','def_wide','TOT'), ('Sacks','def_wide','SACKS'),
+           ('TFL','defensive','TFL'), ('EPA/Play','ppa','avg_ppa_all')],
+    'DB': [('Tackles','defensive','TOT'), ('Interceptions','defensive','INT'),
+           ('Pass Defended','defensive','PD'), ('EPA/Play','ppa','avg_ppa_all')],
+}
+_DEF_WIDE = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB']
+_RB_REC_WIDE = ['WR','TE','RB','HB','FB']
+
+
+def _explorer_player_scope(cursor, group, season, qualified_only=True):
+    """Every player in a position group with their raw values for the group's
+    scatter axes. Defaults to the leaderboards' qualified pool (min attempts/
+    carries/etc.) to keep the plot readable; qualified_only=False ships the
+    whole group. Reuses the persisted percentile pools, so this is cheap."""
+    spec = EXPLORER_PLAYER_SPEC[group]
+    peer = spec['peer']
+    cat_pools, need_ppa = {}, False
+    for _k, _l, cat, _st, _inv, _dp, _u in spec['axes']:
+        if cat == 'ppa':
+            need_ppa = True
+        elif cat not in cat_pools:
+            cat_pools[cat] = _fetch_stats_pool(cursor, cat, peer, season)
+    ppa_pool = _fetch_ppa_pool(cursor, peer, season) if need_ppa else {}
+
+    qcat = QUAL_SOURCE_CATEGORY[group]
+    qstat, qmin = _qual_threshold(group, qcat)
+    qpool = cat_pools.get(qcat) or _fetch_stats_pool(cursor, qcat, peer, season)
+    qualified = {pid for pid, d in qpool.items() if (d.get(qstat) or 0) >= qmin}
+
+    pids = set(ppa_pool)
+    for cp in cat_pools.values():
+        pids |= set(cp)
+    if qualified_only:
+        pids &= qualified
+    if not pids:
+        return []
+    int_pids = [int(p) for p in pids if str(p).lstrip('-').isdigit()]
+    cursor.execute('''
+        SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
+               t.logo_dark, t.color, t.conference
+        FROM players p LEFT JOIN teams t ON t.name = p.team
+        WHERE p.id = ANY(%s)
+    ''', (int_pids,))
+    meta = {str(r[0]): r for r in cursor.fetchall()}
+
+    from urllib.parse import quote
+    out = []
+    for pid in pids:
+        m = meta.get(str(pid))
+        if not m or not (m[1] or m[2]):
+            continue
+        stats = {}
+        for key, _l, cat, st, _inv, dp, _u in spec['axes']:
+            src = ppa_pool if cat == 'ppa' else cat_pools[cat]
+            v = src.get(pid, {}).get(st)
+            stats[key] = round(v, dp) if v is not None else None
+        # Headshots are R2-hosted (no CORS headers); Plotly draws marker images
+        # to a canvas, which taints on cross-origin sources — so route them
+        # through the same-origin image proxy (browser-cached a week).
+        headshot = f'/img-proxy?url={quote(m[4], safe="")}' if m[4] else None
+        out.append({
+            'id': int(pid), 'name': f'{m[1] or ""} {m[2] or ""}'.strip(),
+            'team': m[3] or '', 'headshot': headshot, 'logo': m[5],
+            'color': m[6] or '#888', 'conf': m[7] or '',
+            'qualified': pid in qualified,
+            'url': player_url(int(pid), season), 'stats': stats,
+        })
+    return out
+
+
+def _radar_pool(cursor, kind, group, season):
+    """Resolve a radar axis's peer pool by its `kind` marker."""
+    if kind == 'ppa':
+        return _fetch_ppa_pool(cursor, COMPARE_PEER_POSITIONS[group], season)
+    if kind == 'def_wide':
+        return _fetch_stats_pool(cursor, 'defensive', _DEF_WIDE, season)
+    if kind == 'receiving_wide':
+        return _fetch_stats_pool(cursor, 'receiving', _RB_REC_WIDE, season)
+    return _fetch_stats_pool(cursor, kind, COMPARE_PEER_POSITIONS[group], season)
+
+
+def _explorer_radar(cursor, player_id, season):
+    """Percentile profile for one player: same pools, qualification, and
+    percentile math as the player hero cards, reduced to the radar axes."""
+    cursor.execute('SELECT first_name, last_name, team, position, headshot FROM players WHERE id=%s',
+                   (player_id,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    first, last, team, pos, headshot = row
+    group = POS_GROUP_MAP.get((pos or '').upper())
+    if not group or group not in EXPLORER_RADAR_SPEC:
+        return None
+    peer = COMPARE_PEER_POSITIONS[group]
+
+    # Qualified peer set for this group (from the group's counting-stat pool),
+    # applied to every stat pool so percentiles match the hero exactly.
+    qcat = QUAL_SOURCE_CATEGORY[group]
+    qstat, qmin = _qual_threshold(group, qcat)
+    qsource = _fetch_stats_pool(cursor, qcat, peer, season)
+    qualified_ids = {pid for pid, d in qsource.items() if (d.get(qstat) or 0) >= qmin}
+
+    def _q(pool):
+        return {pid: d for pid, d in pool.items() if pid in qualified_ids}
+
+    axes = []
+    for label, kind, st in EXPLORER_RADAR_SPEC[group]:
+        pool = _radar_pool(cursor, kind, group, season)
+        # EPA/ppa pools qualify against the same counting-stat set
+        qpool = _q(pool)
+        _, pct, _n = _rank_pct(player_id, qpool, st, higher_better=True)
+        axes.append({'label': label, 'pct': pct})
+    if all(a['pct'] is None for a in axes):
+        return None
+    return {
+        'id': player_id, 'name': f'{first or ""} {last or ""}'.strip(),
+        'team': team or '', 'pos': pos or '', 'group': group,
+        'headshot': headshot, 'axes': axes,
+    }
+
+
+@app.route('/api/explorer/radar')
+@cache.cached(timeout=21600, query_string=True)
+def api_explorer_radar():
+    """Percentile radar profile for a player in a given season (JSON)."""
+    pid = request.args.get('pid', type=int)
+    if not pid:
+        return jsonify({'error': 'missing pid'}), 400
+    s = request.args.get('season', type=int)
+    season = s if (s and s in get_available_seasons()) else CURRENT_SEASON
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        profile = _explorer_radar(cursor, pid, season)
+    finally:
+        release_db(conn)
+    if not profile:
+        return jsonify({'error': 'no profile'}), 404
+    return jsonify(profile)
+
+
 @app.route('/explorer')
 @cache.cached(timeout=21600, query_string=True)
 def explorer():
-    """Stat Explorer: every FBS team plotted as its logo on an X/Y scatter of
-    two selectable team stats. All stat values ship with the page so axis
-    switching is instant client-side; only the season changes the query."""
+    """Stat Explorer: teams or players plotted by two selectable stats, with
+    each team logo / player headshot as the marker. Team mode adds an optional
+    bubble-size dimension; player mode adds a percentile radar. All values ship
+    with the page so axis switching is instant; season/scope/position reload."""
     season = requested_season()
+    scope = request.args.get('scope', 'team')
+    if scope not in ('team', 'player'):
+        scope = 'team'
+
+    if scope == 'player':
+        group = request.args.get('pos', 'QB').upper()
+        if group not in EXPLORER_PLAYER_SPEC:
+            group = 'QB'
+        qualified_only = request.args.get('qual', '1') != '0'
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
+            players_data = _explorer_player_scope(cursor, group, season, qualified_only)
+        finally:
+            release_db(conn)
+        axes_meta = [{'key': k, 'label': l, 'invert': inv, 'dp': dp, 'unit': u}
+                     for k, l, _c, _s, inv, dp, u in EXPLORER_PLAYER_SPEC[group]['axes']]
+        groups_meta = [{'key': g, 'label': EXPLORER_PLAYER_SPEC[g]['label']}
+                       for g in EXPLORER_PLAYER_SPEC]
+        confs = sorted({p['conf'] for p in players_data if p['conf']})
+        return render_template('explorer.html', scope='player',
+                               players_data=players_data, player_axes=axes_meta,
+                               player_group=group, player_groups=groups_meta,
+                               player_confs=confs, qualified_only=qualified_only,
+                               season=season, available_seasons=get_available_seasons())
+
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -5271,11 +5514,13 @@ def explorer():
                    sp.rating, sp.offense_rating, sp.defense_rating, sp.special_teams_rating,
                    ta.off_ppa, ta.def_ppa, ta.off_success_rate, ta.def_success_rate,
                    ta.off_explosiveness, ta.def_havoc_total,
-                   pg.ppg_for, pg.ppg_against
+                   pg.ppg_for, pg.ppg_against,
+                   sv.sos, ta.off_scoring_opps, tst.off_plays
             FROM savant_ratings sv
             JOIN teams t ON t.name = sv.team
             LEFT JOIN sp_ratings sp ON sp.team = sv.team AND sp.season = sv.season
             LEFT JOIN team_advanced ta ON ta.team = sv.team AND ta.season = sv.season
+            LEFT JOIN team_stats tst ON tst.team = sv.team AND tst.season = sv.season
             LEFT JOIN (
                 SELECT tm, AVG(pf)::float AS ppg_for, AVG(pa)::float AS ppg_against
                 FROM (
@@ -5300,7 +5545,7 @@ def explorer():
         for (name, logo, conf, net_sv, off_sv, def_sv,
              sp_all, sp_off, sp_def, sp_st,
              off_ppa, def_ppa, off_sr, def_sr, off_expl, havoc,
-             ppg_for, ppg_against) in cursor.fetchall():
+             ppg_for, ppg_against, sos, scoring_opps, plays) in cursor.fetchall():
             teams_data.append({
                 'name': name, 'slug': slugify_team(name),
                 'url': team_url(name, season),
@@ -5316,10 +5561,15 @@ def explorer():
                     'def_havoc': _r(havoc * 100, 1) if havoc is not None else None,
                     'ppg_for': _r(ppg_for, 1), 'ppg_against': _r(ppg_against, 1),
                 },
+                # Bubble-size dimensions (optional third axis)
+                'size': {
+                    'sos': _r(sos, 2), 'scoring_opps': _r(scoring_opps, 1),
+                    'plays': _r(plays, 0),
+                },
             })
     finally:
         release_db(conn)
-    return render_template('explorer.html', teams_data=teams_data, season=season,
+    return render_template('explorer.html', scope='team', teams_data=teams_data, season=season,
                            available_seasons=get_available_seasons())
 
 

@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Stat Explorer · {{ season }} · Saturday Savant{% endblock %}
 {% block og_title %}Stat Explorer · Saturday Savant{% endblock %}
-{% block og_description %}Plot any two team stats against each other — every FBS team as its logo, with a trend line. Savant ratings, SP+, EPA, success rate, and more, 2016–{{ season }}.{% endblock %}
+{% block og_description %}Plot any two stats against each other — teams as logos, players as headshots, with trend lines and percentile radars. Savant ratings, SP+, EPA, and more, 2016–{{ season }}.{% endblock %}
 {% block content %}
 <div class="page-wrapper" style="padding-top:32px">
 
 <div class="xp-head">
     <div>
         <div class="section-label">Stat Explorer</div>
-        <h1 class="xp-title">{{ season }} Team Landscape</h1>
-        <p class="xp-sub">Pick any two stats — every FBS team plots as its logo. Axes always point the good way: up and right is better, whatever the stat.</p>
+        <h1 class="xp-title">{{ season }} {{ 'Player' if scope == 'player' else 'Team' }} Landscape</h1>
+        <p class="xp-sub">Pick any two stats — {{ 'players plot as their headshot' if scope == 'player' else 'every FBS team plots as its logo' }}. Axes always point the good way: up and right is better, whatever the stat.</p>
     </div>
     {% if available_seasons and available_seasons|length > 1 %}
-    <select class="lb-select season-select" aria-label="Season" onchange="location='/explorer?season='+this.value">
+    <select class="lb-select season-select" id="xp-season" aria-label="Season">
         {% for s in available_seasons %}
         <option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>
         {% endfor %}
@@ -20,6 +20,14 @@
     {% endif %}
 </div>
 
+<!-- Team | Player scope -->
+<div class="lb-mode-toggle" style="margin-bottom: var(--s4)">
+    <a class="lb-mode-btn {{ 'active' if scope == 'team' }}" href="/explorer?scope=team&season={{ season }}">Teams</a>
+    <a class="lb-mode-btn {{ 'active' if scope == 'player' }}" href="/explorer?scope=player&season={{ season }}">Players</a>
+</div>
+
+{% if scope == 'team' %}
+<!-- ===================== TEAM SCATTER ===================== -->
 <div class="xp-controls">
     <div class="lb-filter-group">
         <label class="lb-filter-label" for="xp-x">X-Axis</label>
@@ -34,6 +42,15 @@
         <label class="lb-filter-label" for="xp-y">Y-Axis</label>
         <select id="xp-y" class="lb-select"></select>
     </div>
+    <div class="lb-filter-group">
+        <label class="lb-filter-label" for="xp-size">Bubble Size</label>
+        <select id="xp-size" class="lb-select">
+            <option value="">None (fixed)</option>
+            <option value="sos">Strength of Schedule</option>
+            <option value="scoring_opps">Scoring Opportunities</option>
+            <option value="plays">Total Plays (Off)</option>
+        </select>
+    </div>
     <div class="xp-hint">Hover a logo for exact values · click to open the team page</div>
 </div>
 
@@ -42,9 +59,105 @@
     <div class="xp-legend">
         <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
         <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
-        <span class="xp-legend-note">{{ teams_data|length }} teams · {{ season }}</span>
+        <span class="xp-legend-note" id="xp-count">{{ teams_data|length }} teams · {{ season }}</span>
     </div>
 </div>
+
+{% else %}
+<!-- ===================== PLAYER SCOPE ===================== -->
+<!-- Position applies to both views (defines the peer group) -->
+<div class="xp-controls" style="margin-bottom: var(--s3)">
+    <div class="lb-filter-group">
+        <label class="lb-filter-label" for="xp-pos">Position</label>
+        <select id="xp-pos" class="lb-select">
+            {% for g in player_groups %}
+            <option value="{{ g.key }}" {{ 'selected' if g.key == player_group }}>{{ g.label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<!-- Scatter | Radar view -->
+<div class="lb-mode-toggle xp-subtoggle" style="margin-bottom: var(--s4)">
+    <button type="button" class="lb-mode-btn active" data-view="scatter">Scatter</button>
+    <button type="button" class="lb-mode-btn" data-view="radar">Percentile Radar</button>
+</div>
+
+<!-- ---- Player scatter ---- -->
+<div id="xp-scatter-view">
+    <div class="xp-controls">
+        <div class="lb-filter-group">
+            <label class="lb-filter-label" for="xp-x">X-Axis</label>
+            <select id="xp-x" class="lb-select"></select>
+        </div>
+        <button class="xp-swap" id="xp-swap" title="Swap axes" aria-label="Swap axes">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
+            </svg>
+        </button>
+        <div class="lb-filter-group">
+            <label class="lb-filter-label" for="xp-y">Y-Axis</label>
+            <select id="xp-y" class="lb-select"></select>
+        </div>
+        {% if player_confs %}
+        <div class="lb-filter-group">
+            <label class="lb-filter-label" for="xp-conf">Conference</label>
+            <select id="xp-conf" class="lb-select">
+                <option value="">All conferences</option>
+                {% for c in player_confs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <label class="xp-check">
+            <input type="checkbox" id="xp-qual" {{ 'checked' if qualified_only }}>
+            <span>Qualified only</span>
+        </label>
+    </div>
+
+    <div class="xp-card">
+        <div id="xp-plot" class="xp-plot"></div>
+        <div class="xp-legend">
+            <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
+            <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>Group average</span>
+            <span class="xp-legend-note" id="xp-count">{{ players_data|length }} players · {{ season }}</span>
+        </div>
+    </div>
+</div>
+
+<!-- ---- Percentile radar ---- -->
+<div id="xp-radar-view" hidden>
+    <div class="xp-radar-search">
+        {% for slot in ['a', 'b'] %}
+        <div class="xp-rsearch" data-slot="{{ slot }}">
+            <div class="xp-rslot" data-slot="{{ slot }}" hidden>
+                <span class="xp-rslot-dot" data-slot="{{ slot }}"></span>
+                <img class="xp-rslot-photo" data-slot="{{ slot }}" alt="">
+                <div class="xp-rslot-id">
+                    <div class="xp-rslot-name" data-slot="{{ slot }}"></div>
+                    <div class="xp-rslot-meta" data-slot="{{ slot }}"></div>
+                </div>
+                <button type="button" class="xp-rslot-x" data-slot="{{ slot }}" aria-label="Remove">✕</button>
+            </div>
+            <div class="cmp-search xp-rsearchbox" data-slot="{{ slot }}">
+                <span class="cmp-search-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+                </span>
+                <input type="text" class="cmp-search-input xp-rinput" data-slot="{{ slot }}"
+                       placeholder="{{ 'Search a player…' if slot == 'a' else 'Add a second player (optional)…' }}" autocomplete="off">
+                <div class="cmp-dropdown xp-rdrop" data-slot="{{ slot }}"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="xp-card">
+        <div id="xp-radar" class="xp-plot"></div>
+        <div class="xp-legend">
+            <span class="xp-legend-note" id="xp-radar-note">Search a player to see their percentile profile vs qualified peers · {{ season }}</span>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 </div>
 {% endblock %}
@@ -53,10 +166,43 @@
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    var TEAMS = {{ teams_data | tojson }};
     var SEASON = {{ season }};
+    var SCOPE = "{{ scope }}";
 
-    // invert: lower is better — the axis is reversed so "good" reads up/right
+    var css = getComputedStyle(document.documentElement);
+    var COL = {
+        text:   (css.getPropertyValue('--text-secondary') || '#9aa0a6').trim(),
+        dim:    (css.getPropertyValue('--text-dim') || '#72767a').trim(),
+        border: 'rgba(255,255,255,0.08)',
+        accent: (css.getPropertyValue('--accent') || '#1c9cf0').trim(),
+        card:   (css.getPropertyValue('--bg-card') || '#17181c').trim()
+    };
+    var HOVER = { bgcolor: COL.card, bordercolor: 'rgba(255,255,255,0.15)',
+                  font: { family: 'DM Sans, sans-serif', size: 13, color: '#e7e9ea' } };
+
+    var seasonSel = document.getElementById('xp-season');
+    function reloadWith(params) {
+        var qs = new URLSearchParams(location.search);
+        Object.keys(params).forEach(function (k) { qs.set(k, params[k]); });
+        qs.set('season', seasonSel ? seasonSel.value : SEASON);
+        location.href = '/explorer?' + qs.toString();
+    }
+    if (seasonSel) seasonSel.addEventListener('change', function () { reloadWith({}); });
+
+    // OLS trend line + mean crosshair shared by both scatter modes
+    function fit(xs, ys) {
+        var n = xs.length;
+        var mx = xs.reduce(function (a, b) { return a + b; }, 0) / n;
+        var my = ys.reduce(function (a, b) { return a + b; }, 0) / n;
+        var num = 0, den = 0;
+        for (var i = 0; i < n; i++) { num += (xs[i]-mx)*(ys[i]-my); den += (xs[i]-mx)*(xs[i]-mx); }
+        var slope = den ? num/den : 0;
+        return { mx: mx, my: my, slope: slope, icept: my - slope*mx };
+    }
+
+{% if scope == 'team' %}
+    // ===================== TEAM SCATTER =====================
+    var TEAMS = {{ teams_data | tojson }};
     var STATS = {
         net_savant: { label: 'Net Savant Rating',        group: 'Savant',     invert: false, dp: 1 },
         off_savant: { label: 'Offensive Rating',         group: 'Savant',     invert: false, dp: 1 },
@@ -74,148 +220,342 @@ document.addEventListener('DOMContentLoaded', function () {
         ppg_for:    { label: 'Points Scored / Game',     group: 'Scoring',    invert: false, dp: 1 },
         ppg_against:{ label: 'Points Allowed / Game',    group: 'Scoring',    invert: true,  dp: 1 }
     };
+    var SIZE_LABELS = { sos: 'Strength of Schedule', scoring_opps: 'Scoring Opportunities', plays: 'Total Plays' };
 
-    var selX = document.getElementById('xp-x');
-    var selY = document.getElementById('xp-y');
-    ['x', 'y'].forEach(function (axis) {
-        var sel = axis === 'x' ? selX : selY;
-        var groups = {};
-        Object.keys(STATS).forEach(function (k) {
-            var g = STATS[k].group;
-            if (!groups[g]) {
-                groups[g] = document.createElement('optgroup');
-                groups[g].label = g;
-                sel.appendChild(groups[g]);
-            }
-            var o = document.createElement('option');
-            o.value = k;
-            o.textContent = STATS[k].label;
-            groups[g].appendChild(o);
-        });
-    });
-
-    // Deep-linkable: ?x=&y= restore the view (fall back to the signature
-    // Offensive vs Defensive Rating quadrant)
+    var selX = document.getElementById('xp-x'), selY = document.getElementById('xp-y');
+    var selSize = document.getElementById('xp-size');
+    fillStatOptions([selX, selY], STATS);
     var params = new URLSearchParams(location.search);
     selX.value = STATS[params.get('x')] ? params.get('x') : 'off_savant';
     selY.value = STATS[params.get('y')] ? params.get('y') : 'def_savant';
+    if (params.get('size')) selSize.value = params.get('size');
 
-    var css = getComputedStyle(document.documentElement);
-    var COL = {
-        text:   (css.getPropertyValue('--text-secondary') || '#9aa0a6').trim(),
-        dim:    (css.getPropertyValue('--text-dim') || '#72767a').trim(),
-        border: 'rgba(255,255,255,0.08)',
-        accent: (css.getPropertyValue('--accent') || '#1c9cf0').trim(),
-        card:   (css.getPropertyValue('--bg-card') || '#17181c').trim()
-    };
+    function fmt(k, v) { return (v==null) ? '—' : v.toFixed(STATS[k].dp) + (STATS[k].unit||''); }
 
-    function fmt(k, v) {
-        if (v === null || v === undefined) return '—';
-        return v.toFixed(STATS[k].dp) + (STATS[k].unit || '');
-    }
-
-    function build() {
-        var xk = selX.value, yk = selY.value;
+    function buildTeam() {
+        var xk = selX.value, yk = selY.value, sk = selSize.value;
         var pts = TEAMS.filter(function (t) {
-            return t.stats[xk] !== null && t.stats[xk] !== undefined &&
-                   t.stats[yk] !== null && t.stats[yk] !== undefined && t.logo;
+            return t.stats[xk]!=null && t.stats[yk]!=null && t.logo;
         });
-        var xs = pts.map(function (t) { return t.stats[xk]; });
-        var ys = pts.map(function (t) { return t.stats[yk]; });
+        var xs = pts.map(function (t){return t.stats[xk];});
+        var ys = pts.map(function (t){return t.stats[yk];});
+        var xmin=Math.min.apply(null,xs), xmax=Math.max.apply(null,xs);
+        var ymin=Math.min.apply(null,ys), ymax=Math.max.apply(null,ys);
+        var xpad=(xmax-xmin)*0.06||1, ypad=(ymax-ymin)*0.08||1;
+        var xr=[xmin-xpad,xmax+xpad], yr=[ymin-ypad,ymax+ypad];
+        if (STATS[xk].invert) xr=[xr[1],xr[0]];
+        if (STATS[yk].invert) yr=[yr[1],yr[0]];
+        var baseX=Math.abs(xr[1]-xr[0])*0.042, baseY=Math.abs(yr[1]-yr[0])*0.058;
 
-        var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
-        var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
-        var xpad = (xmax - xmin) * 0.06 || 1, ypad = (ymax - ymin) * 0.08 || 1;
-        var xr = [xmin - xpad, xmax + xpad], yr = [ymin - ypad, ymax + ypad];
-        if (STATS[xk].invert) xr = [xr[1], xr[0]];
-        if (STATS[yk].invert) yr = [yr[1], yr[0]];
-
-        // Logo size in data units (~4% of the axis span)
-        var sx = Math.abs(xr[1] - xr[0]) * 0.042;
-        var sy = Math.abs(yr[1] - yr[0]) * 0.058;
-
-        // OLS trend line on the raw values
-        var n = xs.length;
-        var mx = xs.reduce(function (a, b) { return a + b; }, 0) / n;
-        var my = ys.reduce(function (a, b) { return a + b; }, 0) / n;
-        var num = 0, den = 0;
-        for (var i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) * (xs[i] - mx); }
-        var slope = den ? num / den : 0, icept = my - slope * mx;
-
-        var traces = [
-            { // trend line
-                x: [xmin, xmax], y: [icept + slope * xmin, icept + slope * xmax],
-                mode: 'lines', hoverinfo: 'skip',
-                line: { color: COL.accent, width: 2, dash: 'dash' }
-            },
-            { // invisible hover/click layer under the logos
-                x: xs, y: ys, mode: 'markers',
-                marker: { size: 24, color: 'rgba(0,0,0,0)' },
-                customdata: pts.map(function (t) {
-                    return [t.name, fmt(xk, t.stats[xk]), fmt(yk, t.stats[yk]), t.url, t.conf || ''];
-                }),
-                hovertemplate: '<b>%{customdata[0]}</b>  ·  %{customdata[4]}<br>' +
-                               STATS[xk].label + ': <b>%{customdata[1]}</b><br>' +
-                               STATS[yk].label + ': <b>%{customdata[2]}</b><extra></extra>'
+        // Bubble size — scale each logo 0.62x–1.55x by the chosen size stat
+        var sizeScale = pts.map(function(){ return 1; });
+        if (sk) {
+            var sv = pts.map(function(t){ return t.size ? t.size[sk] : null; });
+            var valid = sv.filter(function(v){ return v!=null; });
+            if (valid.length) {
+                var lo=Math.min.apply(null,valid), hi=Math.max.apply(null,valid);
+                sizeScale = sv.map(function(v){
+                    if (v==null || hi===lo) return 1;
+                    return 0.62 + ((v-lo)/(hi-lo))*(1.55-0.62);
+                });
             }
+        }
+
+        var f = fit(xs, ys);
+        var traces = [
+            { x:[xmin,xmax], y:[f.icept+f.slope*xmin, f.icept+f.slope*xmax],
+              mode:'lines', hoverinfo:'skip', line:{color:COL.accent,width:2,dash:'dash'} },
+            { x:xs, y:ys, mode:'markers', marker:{size:24,color:'rgba(0,0,0,0)'},
+              customdata: pts.map(function(t,i){ return [t.name, fmt(xk,t.stats[xk]), fmt(yk,t.stats[yk]), t.url, t.conf||'',
+                  sk && t.size && t.size[sk]!=null ? (SIZE_LABELS[sk]+': '+t.size[sk]) : '']; }),
+              hovertemplate:'<b>%{customdata[0]}</b>  ·  %{customdata[4]}<br>'+
+                  STATS[xk].label+': <b>%{customdata[1]}</b><br>'+
+                  STATS[yk].label+': <b>%{customdata[2]}</b>%{customdata[5]}<extra></extra>' }
         ];
-
-        var layout = {
-            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { family: 'DM Sans, sans-serif', color: COL.text, size: 12 },
-            margin: { l: 58, r: 18, t: 12, b: 52 },
-            showlegend: false, dragmode: false,
-            xaxis: {
-                title: { text: STATS[xk].label + (STATS[xk].invert ? '  (axis reversed — right is better)' : ''), font: { size: 12, color: COL.text } },
-                range: xr, gridcolor: COL.border, zeroline: false, fixedrange: true
-            },
-            yaxis: {
-                title: { text: STATS[yk].label + (STATS[yk].invert ? '  (axis reversed — up is better)' : ''), font: { size: 12, color: COL.text } },
-                range: yr, gridcolor: COL.border, zeroline: false, fixedrange: true
-            },
-            shapes: [ // FBS-average crosshair -> the four quadrants
-                { type: 'line', x0: mx, x1: mx, y0: yr[0], y1: yr[1], line: { color: COL.dim, width: 1, dash: 'dot' }, opacity: 0.55 },
-                { type: 'line', y0: my, y1: my, x0: xr[0], x1: xr[1], line: { color: COL.dim, width: 1, dash: 'dot' }, opacity: 0.55 }
-            ],
-            images: pts.map(function (t) {
-                return { source: t.logo, x: t.stats[xk], y: t.stats[yk],
-                         xref: 'x', yref: 'y', sizex: sx, sizey: sy,
-                         xanchor: 'center', yanchor: 'middle',
-                         sizing: 'contain', layer: 'above' };
-            }),
-            hoverlabel: { bgcolor: COL.card, bordercolor: 'rgba(255,255,255,0.15)',
-                          font: { family: 'DM Sans, sans-serif', size: 13, color: '#e7e9ea' } }
-        };
-
-        Plotly.react('xp-plot', traces, layout, { displayModeBar: false, responsive: true });
-
-        var qs = new URLSearchParams(location.search);
-        qs.set('x', xk); qs.set('y', yk);
-        if (SEASON) qs.set('season', SEASON);
-        history.replaceState(null, '', location.pathname + '?' + qs.toString());
-    }
-
-    function wireClicks() {
-        var plot = document.getElementById('xp-plot');
-        plot.on('plotly_click', function (d) {
-            var p = d.points && d.points[0];
-            if (p && p.customdata && p.customdata[3]) location.href = p.customdata[3];
+        var layout = baseLayout(xk, yk, xr, yr, f, STATS);
+        layout.images = pts.map(function(t,i){
+            return { source:t.logo, x:t.stats[xk], y:t.stats[yk], xref:'x', yref:'y',
+                     sizex:baseX*sizeScale[i], sizey:baseY*sizeScale[i],
+                     xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
         });
-        plot.on('plotly_hover', function () { plot.style.cursor = 'pointer'; });
-        plot.on('plotly_unhover', function () { plot.style.cursor = ''; });
+        Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true});
+        syncUrl({x:xk, y:yk, size:sk});
     }
 
-    function init() {
-        if (typeof Plotly === 'undefined') { setTimeout(init, 60); return; }
-        build();
-        wireClicks();
-    }
-    selX.addEventListener('change', build);
-    selY.addEventListener('change', build);
-    document.getElementById('xp-swap').addEventListener('click', function () {
-        var x = selX.value; selX.value = selY.value; selY.value = x; build();
+    selX.addEventListener('change', buildTeam);
+    selY.addEventListener('change', buildTeam);
+    selSize.addEventListener('change', buildTeam);
+    document.getElementById('xp-swap').addEventListener('click', function(){
+        var x=selX.value; selX.value=selY.value; selY.value=x; buildTeam();
     });
-    init();
+    whenPlotly(function(){ buildTeam(); wireClicks('xp-plot', 3); });
+{% endif %}
+
+{% if scope == 'player' %}
+    // ===================== PLAYER SCATTER =====================
+    var PLAYERS = {{ players_data | tojson }};
+    var AXES = {{ player_axes | tojson }};
+    var GROUP = "{{ player_group }}";
+    var AXMAP = {}; AXES.forEach(function(a){ AXMAP[a.key]=a; });
+
+    var selX = document.getElementById('xp-x'), selY = document.getElementById('xp-y');
+    var selPos = document.getElementById('xp-pos'), selConf = document.getElementById('xp-conf');
+    var chkQual = document.getElementById('xp-qual');
+    var axStats = {}; AXES.forEach(function(a){ axStats[a.key]={label:a.label, invert:a.invert, dp:a.dp, unit:a.unit||''}; });
+    fillStatOptions([selX, selY], axStats);
+    var params = new URLSearchParams(location.search);
+    selX.value = axStats[params.get('x')] ? params.get('x') : AXES[0].key;
+    selY.value = axStats[params.get('y')] ? params.get('y') : AXES[AXES.length-1].key;
+
+    function fmt(k, v) { return (v==null) ? '—' : v.toFixed(axStats[k].dp) + (axStats[k].unit||''); }
+
+    function buildPlayer() {
+        var xk = selX.value, yk = selY.value;
+        var conf = selConf ? selConf.value : '';
+        var pts = PLAYERS.filter(function (p) {
+            return p.stats[xk]!=null && p.stats[yk]!=null && (!conf || p.conf===conf);
+        });
+        document.getElementById('xp-count').textContent = pts.length + ' players · ' + SEASON;
+        if (!pts.length) { Plotly.react('xp-plot', [], {}, {displayModeBar:false}); return; }
+        var xs = pts.map(function(p){return p.stats[xk];});
+        var ys = pts.map(function(p){return p.stats[yk];});
+        var xmin=Math.min.apply(null,xs), xmax=Math.max.apply(null,xs);
+        var ymin=Math.min.apply(null,ys), ymax=Math.max.apply(null,ys);
+        var xpad=(xmax-xmin)*0.06||1, ypad=(ymax-ymin)*0.08||1;
+        var xr=[xmin-xpad,xmax+xpad], yr=[ymin-ypad,ymax+ypad];
+        if (axStats[xk].invert) xr=[xr[1],xr[0]];
+        if (axStats[yk].invert) yr=[yr[1],yr[0]];
+        // headshots smaller than logos given higher density
+        var sx=Math.abs(xr[1]-xr[0])*0.030, sy=Math.abs(yr[1]-yr[0])*0.042;
+
+        var f = fit(xs, ys);
+        var traces = [
+            { x:[xmin,xmax], y:[f.icept+f.slope*xmin, f.icept+f.slope*xmax],
+              mode:'lines', hoverinfo:'skip', line:{color:COL.accent,width:2,dash:'dash'} },
+            // visible dot layer: a faint team-colored point so headshot-less
+            // players still appear, and every point stays hoverable/clickable
+            { x:xs, y:ys, mode:'markers',
+              marker:{ size:9, color: pts.map(function(p){return p.color;}), opacity:0.5,
+                       line:{color:'rgba(0,0,0,0.4)', width:0.5} },
+              customdata: pts.map(function(p){ return [p.name, fmt(xk,p.stats[xk]), fmt(yk,p.stats[yk]), p.url, p.team]; }),
+              hovertemplate:'<b>%{customdata[0]}</b>  ·  %{customdata[4]}<br>'+
+                  axStats[xk].label+': <b>%{customdata[1]}</b><br>'+
+                  axStats[yk].label+': <b>%{customdata[2]}</b><extra></extra>' }
+        ];
+        var layout = baseLayout(xk, yk, xr, yr, f, axStats);
+        layout.images = pts.filter(function(p){return p.headshot;}).map(function(p){
+            return { source:p.headshot, x:p.stats[xk], y:p.stats[yk], xref:'x', yref:'y',
+                     sizex:sx, sizey:sy, xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
+        });
+        Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true});
+        syncUrl({x:xk, y:yk});
+    }
+
+    selX.addEventListener('change', buildPlayer);
+    selY.addEventListener('change', buildPlayer);
+    if (selConf) selConf.addEventListener('change', buildPlayer);
+    document.getElementById('xp-swap').addEventListener('click', function(){
+        var x=selX.value; selX.value=selY.value; selY.value=x; buildPlayer();
+    });
+    // Position + qualified change the plotted pool -> reload (preserving the
+    // current view via reloadWith merging into the existing query string)
+    selPos.addEventListener('change', function(){ reloadWith({scope:'player', pos:selPos.value}); });
+    chkQual.addEventListener('change', function(){ reloadWith({scope:'player', pos:GROUP, qual: chkQual.checked?'1':'0'}); });
+
+    // ---- View toggle (Scatter | Radar) ----
+    var scatterView = document.getElementById('xp-scatter-view');
+    var radarView = document.getElementById('xp-radar-view');
+    var viewBtns = document.querySelectorAll('.xp-subtoggle .lb-mode-btn');
+    var radarInit = false;
+    function setView(v) {
+        viewBtns.forEach(function(b){ b.classList.toggle('active', b.dataset.view===v); });
+        scatterView.hidden = (v!=='scatter');
+        radarView.hidden = (v!=='radar');
+        var qs = new URLSearchParams(location.search); qs.set('view', v); qs.set('scope','player');
+        history.replaceState(null, '', location.pathname+'?'+qs.toString());
+        whenPlotly(function(){
+            if (v==='scatter') { Plotly.Plots.resize('xp-plot'); }
+            else { if (!radarInit) { radarInit = true; drawRadar(); } else Plotly.Plots.resize('xp-radar'); }
+        });
+    }
+    viewBtns.forEach(function(b){ b.addEventListener('click', function(){ setView(b.dataset.view); }); });
+
+    // ===================== PERCENTILE RADAR =====================
+    var RADAR = { a: null, b: null };
+    var RCOL = { a: COL.accent, b: '#f0a63a' };
+
+    function drawRadar() {
+        var traces = [];
+        ['a','b'].forEach(function(slot){
+            var p = RADAR[slot];
+            if (!p) return;
+            var labels = p.axes.map(function(a){return a.label;});
+            var vals = p.axes.map(function(a){return a.pct==null?0:a.pct;});
+            // close the loop
+            labels.push(labels[0]); vals.push(vals[0]);
+            traces.push({
+                type:'scatterpolar', mode:'lines+markers', r:vals, theta:labels,
+                name: p.name, fill:'toself',
+                fillcolor: hexA(RCOL[slot], 0.16),
+                line:{color:RCOL[slot], width:2}, marker:{size:6, color:RCOL[slot]},
+                hovertemplate:'<b>'+p.name+'</b><br>%{theta}: <b>%{r}</b> pct<extra></extra>'
+            });
+        });
+        var any = traces.length > 0;
+        var layout = {
+            paper_bgcolor:'rgba(0,0,0,0)',
+            font:{family:'DM Sans, sans-serif', color:COL.text, size:12},
+            margin:{l:60, r:60, t:40, b:40},
+            showlegend: traces.length > 1,
+            legend:{orientation:'h', y:-0.08, x:0.5, xanchor:'center', font:{color:COL.text}},
+            polar:{
+                bgcolor:'rgba(255,255,255,0.02)',
+                radialaxis:{range:[0,100], tickvals:[25,50,75,100], gridcolor:COL.border,
+                            angle:90, tickfont:{color:COL.dim, size:10}, linecolor:COL.border},
+                angularaxis:{gridcolor:COL.border, linecolor:COL.border, tickfont:{color:COL.text, size:12}}
+            },
+            hoverlabel: HOVER
+        };
+        Plotly.react('xp-radar', any ? traces : [], layout, {displayModeBar:false, responsive:true});
+        var note = document.getElementById('xp-radar-note');
+        if (!any) note.textContent = 'Search a player to see their percentile profile vs qualified peers · ' + SEASON;
+        else {
+            var names = ['a','b'].filter(function(s){return RADAR[s];}).map(function(s){return RADAR[s].name;});
+            note.textContent = names.join('  vs  ') + '  ·  percentile vs qualified ' + (RADAR.a?RADAR.a.group:'') + 's · ' + SEASON;
+        }
+    }
+
+    function loadRadar(slot, pid) {
+        fetch('/api/explorer/radar?pid='+pid+'&season='+SEASON)
+            .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
+            .then(function(prof){ RADAR[slot] = prof; fillSlot(slot, prof); drawRadar(); })
+            .catch(function(){
+                var note = document.getElementById('xp-radar-note');
+                note.textContent = 'No qualified percentile profile for that player in ' + SEASON + '.';
+            });
+    }
+
+    function fillSlot(slot, prof) {
+        var box = document.querySelector('.xp-rslot[data-slot="'+slot+'"]');
+        var searchbox = document.querySelector('.xp-rsearchbox[data-slot="'+slot+'"]');
+        document.querySelector('.xp-rslot-name[data-slot="'+slot+'"]').textContent = prof.name;
+        document.querySelector('.xp-rslot-meta[data-slot="'+slot+'"]').textContent = (prof.pos||'') + ' · ' + prof.team;
+        var photo = document.querySelector('.xp-rslot-photo[data-slot="'+slot+'"]');
+        var dot = document.querySelector('.xp-rslot-dot[data-slot="'+slot+'"]');
+        dot.style.background = RCOL[slot];
+        if (prof.headshot) { photo.src = prof.headshot; photo.hidden = false; } else { photo.hidden = true; }
+        box.hidden = false; searchbox.hidden = true;
+    }
+
+    document.querySelectorAll('.xp-rslot-x').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var slot = btn.dataset.slot;
+            RADAR[slot] = null;
+            document.querySelector('.xp-rslot[data-slot="'+slot+'"]').hidden = true;
+            document.querySelector('.xp-rsearchbox[data-slot="'+slot+'"]').hidden = false;
+            var input = document.querySelector('.xp-rinput[data-slot="'+slot+'"]');
+            input.value = '';
+            drawRadar();
+        });
+    });
+
+    // player search per slot (reuses /api/players with the position filter)
+    document.querySelectorAll('.xp-rinput').forEach(function(input){
+        var slot = input.dataset.slot;
+        var drop = document.querySelector('.xp-rdrop[data-slot="'+slot+'"]');
+        var timer;
+        input.addEventListener('input', function(){
+            var q = input.value.trim();
+            clearTimeout(timer);
+            if (q.length < 2) { drop.classList.remove('active'); drop.innerHTML=''; return; }
+            timer = setTimeout(function(){
+                // Constrain to the current position group so both overlaid
+                // players share the same radar axes.
+                fetch('/api/players?q='+encodeURIComponent(q)+'&pos='+GROUP)
+                    .then(function(r){return r.json();})
+                    .then(function(rows){
+                        var players = rows.filter(function(r){return r.type==='player';});
+                        if (!players.length){ drop.innerHTML='<div class="xp-dd-empty">No players found</div>'; drop.classList.add('active'); return; }
+                        drop.innerHTML = players.map(function(r){
+                            var av = r.headshot ? '<img src="'+r.headshot+'" class="xp-dd-av">'
+                                : '<span class="xp-dd-av xp-dd-av-ph">'+((r.first||'?')[0])+((r.last||'')[0])+'</span>';
+                            return '<div class="xp-dd-row" data-pid="'+r.id+'">'+av+
+                                '<div class="xp-dd-id"><div class="xp-dd-name">'+r.first+' '+r.last+'</div>'+
+                                '<div class="xp-dd-meta">'+(r.pos||'')+' · '+r.team+'</div></div></div>';
+                        }).join('');
+                        drop.classList.add('active');
+                        drop.querySelectorAll('.xp-dd-row').forEach(function(row){
+                            row.addEventListener('click', function(){
+                                loadRadar(slot, row.dataset.pid);
+                                drop.classList.remove('active'); input.value='';
+                            });
+                        });
+                    });
+            }, 200);
+        });
+        document.addEventListener('click', function(e){
+            if (!drop.parentElement.contains(e.target)) drop.classList.remove('active');
+        });
+    });
+
+    // Init view from ?view
+    whenPlotly(function(){ buildPlayer(); wireClicks('xp-plot', 3); });
+    var initView = (new URLSearchParams(location.search)).get('view');
+    if (initView === 'radar') setView('radar');
+{% endif %}
+
+    // ---------- shared helpers ----------
+    function fillStatOptions(selects, statsObj) {
+        selects.forEach(function (sel) {
+            var groups = {};
+            Object.keys(statsObj).forEach(function (k) {
+                var g = statsObj[k].group || '';
+                var parent = sel;
+                if (g) {
+                    if (!groups[g]) { groups[g]=document.createElement('optgroup'); groups[g].label=g; sel.appendChild(groups[g]); }
+                    parent = groups[g];
+                }
+                var o = document.createElement('option'); o.value=k; o.textContent=statsObj[k].label; parent.appendChild(o);
+            });
+        });
+    }
+    function baseLayout(xk, yk, xr, yr, f, statsObj) {
+        return {
+            paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+            font:{family:'DM Sans, sans-serif', color:COL.text, size:12},
+            margin:{l:58, r:18, t:12, b:52}, showlegend:false, dragmode:false,
+            xaxis:{ title:{text: statsObj[xk].label + (statsObj[xk].invert?'  (reversed — right is better)':''), font:{size:12,color:COL.text}},
+                    range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true },
+            yaxis:{ title:{text: statsObj[yk].label + (statsObj[yk].invert?'  (reversed — up is better)':''), font:{size:12,color:COL.text}},
+                    range:yr, gridcolor:COL.border, zeroline:false, fixedrange:true },
+            shapes:[
+                {type:'line', x0:f.mx, x1:f.mx, y0:yr[0], y1:yr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5},
+                {type:'line', y0:f.my, y1:f.my, x0:xr[0], x1:xr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5}
+            ],
+            hoverlabel: HOVER
+        };
+    }
+    function wireClicks(id, urlIdx) {
+        var plot = document.getElementById(id);
+        plot.on('plotly_click', function(d){
+            var p = d.points && d.points[0];
+            if (p && p.customdata && p.customdata[urlIdx]) location.href = p.customdata[urlIdx];
+        });
+        plot.on('plotly_hover', function(){ plot.style.cursor='pointer'; });
+        plot.on('plotly_unhover', function(){ plot.style.cursor=''; });
+    }
+    function syncUrl(extra) {
+        var qs = new URLSearchParams(location.search);
+        qs.set('scope', SCOPE);
+        Object.keys(extra).forEach(function(k){ if (extra[k]) qs.set(k, extra[k]); else qs.delete(k); });
+        if (SEASON) qs.set('season', SEASON);
+        history.replaceState(null, '', location.pathname+'?'+qs.toString());
+    }
+    function hexA(hex, a) {
+        var h = hex.replace('#',''); if (h.length===3) h=h.split('').map(function(c){return c+c;}).join('');
+        var n = parseInt(h,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+    }
+    function whenPlotly(fn) { if (typeof Plotly==='undefined') { setTimeout(function(){whenPlotly(fn);}, 60); return; } fn(); }
 });
 </script>
 {% endblock %}
