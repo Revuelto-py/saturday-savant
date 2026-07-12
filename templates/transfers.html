@@ -39,7 +39,7 @@
         <div class="tp-flow-head"><span class="tp-flow-key tp-flow-key--in"></span>Top Destinations</div>
         {% set max_in = top_in[0][2] if top_in else 1 %}
         {% for team, logo, c in top_in %}
-        <a class="tp-flow-row" href="/team/{{ team | team_slug }}">
+        <a class="tp-flow-row" href="{{ team_url(team, year) }}">
             {% if logo %}<img src="{{ logo }}" alt="" loading="lazy">{% endif %}
             <span class="tp-flow-team">{{ team }}</span>
             <span class="tp-flow-bar"><span class="tp-flow-bar-fill tp-flow-bar-fill--in" style="width:{{ (c / max_in * 100) | round(0, 'ceil') }}%"></span></span>
@@ -51,7 +51,7 @@
         <div class="tp-flow-head"><span class="tp-flow-key tp-flow-key--out"></span>Most Departures</div>
         {% set max_out = top_out[0][2] if top_out else 1 %}
         {% for team, logo, c in top_out %}
-        <a class="tp-flow-row" href="/team/{{ team | team_slug }}">
+        <a class="tp-flow-row" href="{{ team_url(team, year) }}">
             {% if logo %}<img src="{{ logo }}" alt="" loading="lazy">{% endif %}
             <span class="tp-flow-team">{{ team }}</span>
             <span class="tp-flow-bar"><span class="tp-flow-bar-fill tp-flow-bar-fill--out" style="width:{{ (c / max_out * 100) | round(0, 'ceil') }}%"></span></span>
@@ -149,7 +149,7 @@
                     {% if t.eligibility == 'Withdrawn' %}
                     <span class="tp-move-status tp-move-status--withdrawn">Withdrew</span>
                     {% elif t.destination %}
-                    <a class="tp-move-to" href="/team/{{ t.destination | team_slug }}">
+                    <a class="tp-move-to" href="{{ team_url(t.destination, year) }}">
                         {% if t.dest_logo %}<img src="{{ t.dest_logo }}" alt="" loading="lazy">{% endif %}
                         {{ t.destination }}
                     </a>

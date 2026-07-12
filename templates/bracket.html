@@ -11,7 +11,7 @@
   {% if side %}
   <div class="bk-team{{ ' bk-won' if side.is_winner }}{{ ' bk-lost' if side.is_loser }}"
        style="--tc:{{ side.color }}">
-    <a class="bk-team-link" href="/team/{{ side.name | team_slug }}" title="{{ side.name }}">
+    <a class="bk-team-link" href="{{ team_url(side.name, season) }}" title="{{ side.name }}">
       <span class="bk-seed {{ seed_class(side.seed) }}">{{ side.seed or '–' }}</span>
       {% if side.logo %}
         <img class="bk-logo" src="{{ side.logo }}" alt="" loading="lazy" width="28" height="28">
@@ -110,7 +110,7 @@
           </div>
           {{ match_card(bracket.championship, 'nc', dom_id='m-nc', gold=True) }}
           {% if champion %}
-          <a class="bk-champion" href="/team/{{ champion.name | team_slug }}">
+          <a class="bk-champion" href="{{ team_url(champion.name, season) }}">
             {% if champion.logo %}<img src="{{ champion.logo }}" alt="{{ champion.name }} logo" width="40" height="40">{% endif %}
             <span>{{ champion.name }} — {{ season }} CFP Champions</span>
           </a>
@@ -139,7 +139,7 @@
       <h2 class="bk-m-head bk-m-head-gold">National Championship</h2>
       {{ match_card(bracket.championship, 'm', gold=True) }}
       {% if champion %}
-      <a class="bk-champion" href="/team/{{ champion.name | team_slug }}">
+      <a class="bk-champion" href="{{ team_url(champion.name, season) }}">
         {% if champion.logo %}<img src="{{ champion.logo }}" alt="{{ champion.name }} logo" width="40" height="40">{% endif %}
         <span>{{ champion.name }} — {{ season }} CFP Champions</span>
       </a>
@@ -189,7 +189,7 @@
           </div>
           {{ match_card(bracket.championship, 'nc', dom_id='m-nc', gold=True) }}
           {% if champion %}
-          <a class="bk-champion" href="/team/{{ champion.name | team_slug }}">
+          <a class="bk-champion" href="{{ team_url(champion.name, season) }}">
             {% if champion.logo %}<img src="{{ champion.logo }}" alt="{{ champion.name }} logo" width="40" height="40">{% endif %}
             <span>{{ champion.name }} — {{ season }} CFP Champions</span>
           </a>
@@ -246,7 +246,7 @@
       <h2 class="bk-m-head bk-m-head-gold">National Championship</h2>
       {{ match_card(bracket.championship, 'm', gold=True) }}
       {% if champion %}
-      <a class="bk-champion" href="/team/{{ champion.name | team_slug }}">
+      <a class="bk-champion" href="{{ team_url(champion.name, season) }}">
         {% if champion.logo %}<img src="{{ champion.logo }}" alt="{{ champion.name }} logo" width="40" height="40">{% endif %}
         <span>{{ champion.name }} — {{ season }} CFP Champions</span>
       </a>

@@ -105,7 +105,7 @@
         </tr></thead>
         <tbody>
             {% for t in top10 %}
-            <tr class="player-row" style="cursor:pointer" onclick="window.location.href='/team/{{ t.team | team_slug }}'">
+            <tr class="player-row" style="cursor:pointer" onclick="window.location.href='{{ team_url(t.team, season) }}'">
                 <td style="text-align:center;color: var(--text-dim);font-weight:700">{{ t.rank }}</td>
                 <td>
                     <div style="display:flex;align-items:center;gap:10px">

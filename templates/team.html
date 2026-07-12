@@ -193,13 +193,13 @@
                     <tbody>
                         {% for s in standings %}
                         {% set ic = s[0]==team[0] %}
-                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(59,130,246,0.1)' if ic else 'transparent' }};cursor:pointer" onclick="window.location.href='/team/{{ s[0] | team_slug }}'">
+                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(59,130,246,0.1)' if ic else 'transparent' }};cursor:pointer" onclick="window.location.href='{{ team_url(s[0], season) }}'">
                             <td style="padding:9px 14px">
                                 <div style="display:flex;align-items:center;gap:8px">
                                     {% if s[6] %}
                                     <img src="{{ s[6] }}" alt="{{ s[0] }} logo" style="width:26px;height:26px;object-fit:contain;flex-shrink:0">
                                     {% endif %}
-                                    <a href="/team/{{ s[0] | team_slug }}" style="color:{{ 'var(--text-primary)' if ic else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '700' if ic else '500' }};font-size: var(--text-sm)">
+                                    <a href="{{ team_url(s[0], season) }}" style="color:{{ 'var(--text-primary)' if ic else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '700' if ic else '500' }};font-size: var(--text-sm)">
                                         {% set srank = ap_rankings.get(s[0]) %}
                                         {% if srank %}<span style="color:var(--gold);font-size: var(--text-xs);font-weight:800;margin-right:4px">{{ srank }}</span>{% endif %}
                                         {{ s[0] }}

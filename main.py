@@ -1808,6 +1808,26 @@ def slugify_team(name):
 app.jinja_env.filters['team_slug'] = slugify_team
 
 
+def team_url(name, season=None):
+    """Build a team-page URL, season-aware. In a historical context (a page
+    scoped to a past season), clicking a team should land on that same
+    season's team page — so a season other than the current one is carried
+    through as ?season=YYYY. The current season is left as a bare URL to keep
+    links clean (the team page already defaults to it). Registered as the
+    `team_url` Jinja global for use anywhere a team link is rendered."""
+    slug = slugify_team(name)
+    try:
+        s = int(season) if season is not None else None
+    except (TypeError, ValueError):
+        s = None
+    if s and s != CURRENT_SEASON:
+        return f'/team/{slug}?season={s}'
+    return f'/team/{slug}'
+
+
+app.jinja_env.globals['team_url'] = team_url
+
+
 def clean_play_text(text):
     """Normalize raw play-by-play descriptions for consistent display.
 
@@ -2742,7 +2762,7 @@ def game_detail(game_id):
             is_scheduled=True,
             kickoff_date=kick_date, kickoff_time=kick_time,
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
-            season_year=game_info[17],
+            season_year=game_info[17], game_season=game_season,
             week_num=game_info[5], notes=game_info[7] or '',
             game_date=kick_date, game_time=kick_time,
             records={}, espn_game_id=None,
@@ -3398,6 +3418,7 @@ def game_detail(game_id):
         week_num=week_num,
         notes=notes,
         rivalry_name=rivalry_name,
+        game_season=game_season,
     )
 
 
@@ -5261,6 +5282,7 @@ def explorer():
              ppg_for, ppg_against) in cursor.fetchall():
             teams_data.append({
                 'name': name, 'slug': slugify_team(name),
+                'url': team_url(name, season),
                 'logo': logo, 'conf': conf,
                 'stats': {
                     'net_savant': _r(net_sv), 'off_savant': _r(off_sv), 'def_savant': _r(def_sv),

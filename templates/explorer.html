@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 x: xs, y: ys, mode: 'markers',
                 marker: { size: 24, color: 'rgba(0,0,0,0)' },
                 customdata: pts.map(function (t) {
-                    return [t.name, fmt(xk, t.stats[xk]), fmt(yk, t.stats[yk]), t.slug, t.conf || ''];
+                    return [t.name, fmt(xk, t.stats[xk]), fmt(yk, t.stats[yk]), t.url, t.conf || ''];
                 }),
                 hovertemplate: '<b>%{customdata[0]}</b>  ·  %{customdata[4]}<br>' +
                                STATS[xk].label + ': <b>%{customdata[1]}</b><br>' +
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var plot = document.getElementById('xp-plot');
         plot.on('plotly_click', function (d) {
             var p = d.points && d.points[0];
-            if (p && p.customdata && p.customdata[3]) location.href = '/team/' + p.customdata[3];
+            if (p && p.customdata && p.customdata[3]) location.href = p.customdata[3];
         });
         plot.on('plotly_hover', function () { plot.style.cursor = 'pointer'; });
         plot.on('plotly_unhover', function () { plot.style.cursor = ''; });

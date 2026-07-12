@@ -80,12 +80,12 @@
             <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
                 {% if game[10] %}
                 <div class="team-logo-glow" style="--glow-rgb:{{ away_rgb }}">
-                    {% if away_is_fbs %}<a href="/team/{{ away_team | team_slug }}"><img src="{{ game[10] }}" alt="{{ away_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% else %}<img src="{{ game[10] }}" alt="{{ away_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain">{% endif %}
+                    {% if away_is_fbs %}<a href="{{ team_url(away_team, game_season) }}"><img src="{{ game[10] }}" alt="{{ away_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% else %}<img src="{{ game[10] }}" alt="{{ away_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain">{% endif %}
                 </div>
                 {% endif %}
                 <div style="text-align:right">
                     {% if away_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
-                    <div class="gh-team-name team-name">{% if away_is_fbs %}<a href="/team/{{ away_team | team_slug }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ away_team }}</a>{% else %}<span class="{{ away_name_class }}">{{ away_team }}</span>{% endif %}</div>
+                    <div class="gh-team-name team-name">{% if away_is_fbs %}<a href="{{ team_url(away_team, game_season) }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ away_team }}</a>{% else %}<span class="{{ away_name_class }}">{{ away_team }}</span>{% endif %}</div>
                     {% if records.away %}<div class="team-record" style="margin-top:4px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
                 </div>
             </div>
@@ -105,12 +105,12 @@
             <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding-left:36px">
                 {% if game[9] %}
                 <div class="team-logo-glow" style="--glow-rgb:{{ home_rgb }}">
-                    {% if home_is_fbs %}<a href="/team/{{ home_team | team_slug }}"><img src="{{ game[9] }}" alt="{{ home_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% else %}<img src="{{ game[9] }}" alt="{{ home_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain">{% endif %}
+                    {% if home_is_fbs %}<a href="{{ team_url(home_team, game_season) }}"><img src="{{ game[9] }}" alt="{{ home_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain;cursor:pointer;transition:opacity 0.15s" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"></a>{% else %}<img src="{{ game[9] }}" alt="{{ home_team }} logo" class="gh-logo-img team-logo" style="object-fit:contain">{% endif %}
                 </div>
                 {% endif %}
                 <div style="text-align:left">
                     {% if home_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
-                    <div class="gh-team-name team-name">{% if home_is_fbs %}<a href="/team/{{ home_team | team_slug }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ home_team }}</a>{% else %}<span class="{{ home_name_class }}">{{ home_team }}</span>{% endif %}</div>
+                    <div class="gh-team-name team-name">{% if home_is_fbs %}<a href="{{ team_url(home_team, game_season) }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ home_team }}</a>{% else %}<span class="{{ home_name_class }}">{{ home_team }}</span>{% endif %}</div>
                     {% if records.home %}<div class="team-record" style="margin-top:4px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
                 </div>
             </div>

@@ -168,7 +168,7 @@
             </td>
             <td class="lb-td-pos"><span class="lb-pos-pill">{{ p.pos or '—' }}</span></td>
             <td class="lb-td-team">
-                <a href="/team/{{ p.team | team_slug }}" onclick="event.stopPropagation()" class="lb-team-link">
+                <a href="{{ team_url(p.team, season) }}" onclick="event.stopPropagation()" class="lb-team-link">
                     {% if p.logo %}<img src="{{ p.logo }}" alt="{{ p.team }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-team-name">{{ p.team }}</span>
                 </a>
@@ -282,10 +282,10 @@
     </thead>
     <tbody>
         {% for t in teams %}
-        <tr class="lb-row" onclick="window.location.href='/team/{{ t.name | team_slug }}'">
+        <tr class="lb-row" onclick="window.location.href='{{ team_url(t.name, season) }}'">
             <td class="lb-td-rank">{{ t.rank }}</td>
             <td class="lb-td-player">
-                <a href="/team/{{ t.name | team_slug }}" onclick="event.stopPropagation()" class="lb-player-link">
+                <a href="{{ team_url(t.name, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
                     {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-player-name">{{ t.name }}</span>
                 </a>
