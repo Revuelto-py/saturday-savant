@@ -154,10 +154,10 @@
     </thead>
     <tbody>
         {% for p in players %}
-        <tr class="lb-row" onclick="window.location.href='/player/{{ p.id }}'">
+        <tr class="lb-row" onclick="window.location.href='{{ player_url(p.id, season) }}'">
             <td class="lb-td-rank">{{ p.rank }}</td>
             <td class="lb-td-player">
-                <a href="/player/{{ p.id }}" onclick="event.stopPropagation()" class="lb-player-link">
+                <a href="{{ player_url(p.id, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
                     {% if p.headshot %}
                     <img src="{{ p.headshot }}" alt="{{ p.name }} headshot" class="lb-headshot">
                     {% else %}

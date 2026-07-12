@@ -1828,6 +1828,27 @@ def team_url(name, season=None):
 app.jinja_env.globals['team_url'] = team_url
 
 
+def player_url(player_id, season=None):
+    """Build a player-page URL, season-aware. Clicking a player from a page
+    scoped to a past season should land on that same season's stats — so a
+    season other than the current one is carried through as ?season=YYYY. The
+    current season is left as a bare URL (the player page then defaults to the
+    player's most recent recorded season, which for a current-season context
+    is the current season). A season the player has no data for is handled by
+    the route, which falls back to the default season. Registered as the
+    `player_url` Jinja global."""
+    try:
+        s = int(season) if season is not None else None
+    except (TypeError, ValueError):
+        s = None
+    if s and s != CURRENT_SEASON:
+        return f'/player/{player_id}?season={s}'
+    return f'/player/{player_id}'
+
+
+app.jinja_env.globals['player_url'] = player_url
+
+
 def clean_play_text(text):
     """Normalize raw play-by-play descriptions for consistent display.
 

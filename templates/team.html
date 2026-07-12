@@ -593,7 +593,7 @@
         {% if p.headshot %}<img src="{{ p.headshot }}" alt="{{ p.name }} headshot" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;border: 1px solid var(--border-strong);flex-shrink:0">
         {% else %}<div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary);flex-shrink:0">{{ p.name[0] if p.name else '?' }}</div>{% endif %}
         {% if p.player_id %}
-        <a href="/player/{{ p.player_id }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);white-space:nowrap;text-decoration:none"
+        <a href="{{ player_url(p.player_id, season) }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);white-space:nowrap;text-decoration:none"
            onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ p.name }}</a>
         {% else %}
         <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);white-space:nowrap">{{ p.name }}</span>
@@ -633,7 +633,7 @@
         </tr></thead>
         <tbody>
             {% for p in passing_stats %}
-            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('COMPLETIONS')) }}</td>
@@ -667,7 +667,7 @@
         </tr></thead>
         <tbody>
             {% for p in rushing_stats %}
-            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('CAR')) }}</td>
@@ -699,7 +699,7 @@
         </tr></thead>
         <tbody>
             {% for p in receiving_stats %}
-            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('REC')) }}</td>
@@ -734,7 +734,7 @@
         </tr></thead>
         <tbody>
             {% for p in defensive_stats %}
-            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('SOLO')|int if p.get('SOLO') is not none else '—' }}</td>
@@ -768,7 +768,7 @@
             </tr></thead>
             <tbody>
                 {% for p in kicking_stats %}
-                <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
+                <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                     {{ player_cell(p) }}
                     <td style="padding:10px 10px;text-align:center;background:rgba(52,211,153,0.04)"><span style="color:#34d399;font-weight:800">{{ p.get('FGM')|int if p.get('FGM') else '—' }}</span></td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('FGA')|int if p.get('FGA') else '—' }}</td>
@@ -795,7 +795,7 @@
             </tr></thead>
             <tbody>
                 {% for p in punting_stats %}
-                <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='/player/{{ p.player_id }}'"{% endif %}>
+                <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                     {{ player_cell(p) }}
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('NO')|int if p.get('NO') else '—' }}</td>
                     <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
@@ -866,7 +866,7 @@
 {% set p = lineup.get(slot) %}
 {% set label = slot | replace('1','') | replace('2','') | replace('3','') %}
 {% if p %}
-<a class="lf-card lf-unit-{{ unit }}" href="/player/{{ p.idx }}" title="{{ p.first }} {{ p.name }}">
+<a class="lf-card lf-unit-{{ unit }}" href="{{ player_url(p.idx, season) }}" title="{{ p.first }} {{ p.name }}">
     <div class="lf-card-inner">
         {% if p.headshot %}<img src="{{ p.headshot }}" class="lf-photo" alt="{{ p.first }} {{ p.name }} headshot" loading="lazy">
         {% else %}<div class="lf-photo-fallback">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</div>{% endif %}
@@ -965,14 +965,14 @@
                 {% set feet = (player[6] // 12) if player[6] else none %}
                 {% set inches = (player[6] % 12) if player[6] else none %}
                 {% set year_map = {'1':'Fr','2':'So','3':'Jr','4':'Sr','5':'Gr'} %}
-                <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if player[4] else '' }}" {% if player[4] %}onclick="window.location.href='/player/{{ player[4] }}'"{% endif %}>
+                <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if player[4] else '' }}" {% if player[4] %}onclick="window.location.href='{{ player_url(player[4], season) }}'"{% endif %}>
                     <td style="padding:10px 16px">
                         <div style="display:flex;align-items:center;gap:12px">
                             {% if player[5] %}<img src="{{ player[5] }}" alt="{{ player[0] }} {{ player[1] }} headshot" style="width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:top;border: 1px solid var(--border-strong);flex-shrink:0">
                             {% else %}<div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary);flex-shrink:0">{{ player[0][0] if player[0] else '' }}{{ player[1][0] if player[1] else '' }}</div>{% endif %}
                             <div>
                                 {% if player[4] %}
-                                <a href="/player/{{ player[4] }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);text-decoration:none"
+                                <a href="{{ player_url(player[4], season) }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);text-decoration:none"
                                    onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ player[0] }} {{ player[1] }}</a>
                                 {% else %}
                                 <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">{{ player[0] }} {{ player[1] }}</span>

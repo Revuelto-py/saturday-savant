@@ -262,7 +262,7 @@
             <div>
                 <div class="t-value" style="font-size: var(--text-lg);line-height:1">{{ cat.away.stat }}</div>
                 {% if cat.away.player_id %}
-                <a href="/player/{{ cat.away.player_id }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.away.name }}</a>
+                <a href="{{ player_url(cat.away.player_id, game_season) }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.away.name }}</a>
                 {% else %}
                 <div class="t-label" style="font-size: var(--text-sm);margin-top:3px">{{ cat.away.name }}</div>
                 {% endif %}
@@ -290,7 +290,7 @@
             <div>
                 <div class="t-value" style="font-size: var(--text-lg);line-height:1">{{ cat.home.stat }}</div>
                 {% if cat.home.player_id %}
-                <a href="/player/{{ cat.home.player_id }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.home.name }}</a>
+                <a href="{{ player_url(cat.home.player_id, game_season) }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.home.name }}</a>
                 {% else %}
                 <div class="t-label" style="font-size: var(--text-sm);margin-top:3px">{{ cat.home.name }}</div>
                 {% endif %}
@@ -810,7 +810,7 @@ if (typeof Plotly !== 'undefined') {
                         {% endif %}
                         {% endif %}
                         {% if not is_team and ath.player_id %}
-                        <a href="/player/{{ ath.player_id }}" style="color: var(--text-primary);font-weight:600;font-size: var(--text-base);white-space:nowrap;text-decoration:none;transition:color 0.15s"
+                        <a href="{{ player_url(ath.player_id, game_season) }}" style="color: var(--text-primary);font-weight:600;font-size: var(--text-base);white-space:nowrap;text-decoration:none;transition:color 0.15s"
                            onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-primary)'">{{ ath.name }}</a>
                         {% else %}
                         <span style="color:{{ 'var(--text-secondary)' if is_team else 'var(--text-primary)' }};font-weight:{{ '800' if is_team else '600' }};font-size: var(--text-base);white-space:nowrap">{{ ath.name }}</span>

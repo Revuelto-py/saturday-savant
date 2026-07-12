@@ -129,7 +129,7 @@
         {% for t in portal %}
         <tr>
             <td class="tp-cell-player">
-                {% if t.player_id %}<a href="/player/{{ t.player_id }}" class="tp-player">{% else %}<span class="tp-player">{% endif %}
+                {% if t.player_id %}<a href="{{ player_url(t.player_id, year) }}" class="tp-player">{% else %}<span class="tp-player">{% endif %}
                     {% if t.headshot %}
                     <img class="tp-headshot" src="{{ t.headshot }}" alt="" loading="lazy">
                     {% else %}
