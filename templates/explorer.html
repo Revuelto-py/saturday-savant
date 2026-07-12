@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}Stat Explorer · {{ season }} · Saturday Savant{% endblock %}
+{% block og_title %}Stat Explorer · Saturday Savant{% endblock %}
+{% block og_description %}Plot any two team stats against each other — every FBS team as its logo, with a trend line. Savant ratings, SP+, EPA, success rate, and more, 2016–{{ season }}.{% endblock %}
+{% block content %}
+<div class="page-wrapper" style="padding-top:32px">
+
+<div class="xp-head">
+    <div>
+        <div class="section-label">Stat Explorer</div>
+        <h1 class="xp-title">{{ season }} Team Landscape</h1>
+        <p class="xp-sub">Pick any two stats — every FBS team plots as its logo. Axes always point the good way: up and right is better, whatever the stat.</p>
+    </div>
+    {% if available_seasons and available_seasons|length > 1 %}
+    <select class="lb-select season-select" aria-label="Season" onchange="location='/explorer?season='+this.value">
+        {% for s in available_seasons %}
+        <option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    {% endif %}
+</div>
+
+<div class="xp-controls">
+    <div class="lb-filter-group">
+        <label class="lb-filter-label" for="xp-x">X-Axis</label>
+        <select id="xp-x" class="lb-select"></select>
+    </div>
+    <button class="xp-swap" id="xp-swap" title="Swap axes" aria-label="Swap axes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
+        </svg>
+    </button>
+    <div class="lb-filter-group">
+        <label class="lb-filter-label" for="xp-y">Y-Axis</label>
+        <select id="xp-y" class="lb-select"></select>
+    </div>
+    <div class="xp-hint">Hover a logo for exact values · click to open the team page</div>
+</div>
+
+<div class="xp-card">
+    <div id="xp-plot" class="xp-plot"></div>
+    <div class="xp-legend">
+        <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
+        <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
+        <span class="xp-legend-note">{{ teams_data|length }} teams · {{ season }}</span>
+    </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var TEAMS = {{ teams_data | tojson }};
+    var SEASON = {{ season }};
+
+    // invert: lower is better — the axis is reversed so "good" reads up/right
+    var STATS = {
+        net_savant: { label: 'Net Savant Rating',        group: 'Savant',     invert: false, dp: 1 },
+        off_savant: { label: 'Offensive Rating',         group: 'Savant',     invert: false, dp: 1 },
+        def_savant: { label: 'Defensive Rating',         group: 'Savant',     invert: true,  dp: 1 },
+        sp_overall: { label: 'SP+ Overall',              group: 'SP+',        invert: false, dp: 1 },
+        sp_off:     { label: 'SP+ Offense',              group: 'SP+',        invert: false, dp: 1 },
+        sp_def:     { label: 'SP+ Defense',              group: 'SP+',        invert: true,  dp: 1 },
+        sp_st:      { label: 'SP+ Special Teams',        group: 'SP+',        invert: false, dp: 1 },
+        off_ppa:    { label: 'EPA/Play · Offense',       group: 'Efficiency', invert: false, dp: 3 },
+        def_ppa:    { label: 'EPA/Play · Defense',       group: 'Efficiency', invert: true,  dp: 3 },
+        off_sr:     { label: 'Success Rate · Offense',   group: 'Efficiency', invert: false, dp: 1, unit: '%' },
+        def_sr:     { label: 'Success Rate · Defense',   group: 'Efficiency', invert: true,  dp: 1, unit: '%' },
+        off_expl:   { label: 'Explosiveness · Offense',  group: 'Efficiency', invert: false, dp: 3 },
+        def_havoc:  { label: 'Havoc Rate · Defense',     group: 'Efficiency', invert: false, dp: 1, unit: '%' },
+        ppg_for:    { label: 'Points Scored / Game',     group: 'Scoring',    invert: false, dp: 1 },
+        ppg_against:{ label: 'Points Allowed / Game',    group: 'Scoring',    invert: true,  dp: 1 }
+    };
+
+    var selX = document.getElementById('xp-x');
+    var selY = document.getElementById('xp-y');
+    ['x', 'y'].forEach(function (axis) {
+        var sel = axis === 'x' ? selX : selY;
+        var groups = {};
+        Object.keys(STATS).forEach(function (k) {
+            var g = STATS[k].group;
+            if (!groups[g]) {
+                groups[g] = document.createElement('optgroup');
+                groups[g].label = g;
+                sel.appendChild(groups[g]);
+            }
+            var o = document.createElement('option');
+            o.value = k;
+            o.textContent = STATS[k].label;
+            groups[g].appendChild(o);
+        });
+    });
+
+    // Deep-linkable: ?x=&y= restore the view (fall back to the signature
+    // Offensive vs Defensive Rating quadrant)
+    var params = new URLSearchParams(location.search);
+    selX.value = STATS[params.get('x')] ? params.get('x') : 'off_savant';
+    selY.value = STATS[params.get('y')] ? params.get('y') : 'def_savant';
+
+    var css = getComputedStyle(document.documentElement);
+    var COL = {
+        text:   (css.getPropertyValue('--text-secondary') || '#9aa0a6').trim(),
+        dim:    (css.getPropertyValue('--text-dim') || '#72767a').trim(),
+        border: 'rgba(255,255,255,0.08)',
+        accent: (css.getPropertyValue('--accent') || '#1c9cf0').trim(),
+        card:   (css.getPropertyValue('--bg-card') || '#17181c').trim()
+    };
+
+    function fmt(k, v) {
+        if (v === null || v === undefined) return '—';
+        return v.toFixed(STATS[k].dp) + (STATS[k].unit || '');
+    }
+
+    function build() {
+        var xk = selX.value, yk = selY.value;
+        var pts = TEAMS.filter(function (t) {
+            return t.stats[xk] !== null && t.stats[xk] !== undefined &&
+                   t.stats[yk] !== null && t.stats[yk] !== undefined && t.logo;
+        });
+        var xs = pts.map(function (t) { return t.stats[xk]; });
+        var ys = pts.map(function (t) { return t.stats[yk]; });
+
+        var xmin = Math.min.apply(null, xs), xmax = Math.max.apply(null, xs);
+        var ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+        var xpad = (xmax - xmin) * 0.06 || 1, ypad = (ymax - ymin) * 0.08 || 1;
+        var xr = [xmin - xpad, xmax + xpad], yr = [ymin - ypad, ymax + ypad];
+        if (STATS[xk].invert) xr = [xr[1], xr[0]];
+        if (STATS[yk].invert) yr = [yr[1], yr[0]];
+
+        // Logo size in data units (~4% of the axis span)
+        var sx = Math.abs(xr[1] - xr[0]) * 0.042;
+        var sy = Math.abs(yr[1] - yr[0]) * 0.058;
+
+        // OLS trend line on the raw values
+        var n = xs.length;
+        var mx = xs.reduce(function (a, b) { return a + b; }, 0) / n;
+        var my = ys.reduce(function (a, b) { return a + b; }, 0) / n;
+        var num = 0, den = 0;
+        for (var i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) * (xs[i] - mx); }
+        var slope = den ? num / den : 0, icept = my - slope * mx;
+
+        var traces = [
+            { // trend line
+                x: [xmin, xmax], y: [icept + slope * xmin, icept + slope * xmax],
+                mode: 'lines', hoverinfo: 'skip',
+                line: { color: COL.accent, width: 2, dash: 'dash' }
+            },
+            { // invisible hover/click layer under the logos
+                x: xs, y: ys, mode: 'markers',
+                marker: { size: 24, color: 'rgba(0,0,0,0)' },
+                customdata: pts.map(function (t) {
+                    return [t.name, fmt(xk, t.stats[xk]), fmt(yk, t.stats[yk]), t.slug, t.conf || ''];
+                }),
+                hovertemplate: '<b>%{customdata[0]}</b>  ·  %{customdata[4]}<br>' +
+                               STATS[xk].label + ': <b>%{customdata[1]}</b><br>' +
+                               STATS[yk].label + ': <b>%{customdata[2]}</b><extra></extra>'
+            }
+        ];
+
+        var layout = {
+            paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { family: 'DM Sans, sans-serif', color: COL.text, size: 12 },
+            margin: { l: 58, r: 18, t: 12, b: 52 },
+            showlegend: false, dragmode: false,
+            xaxis: {
+                title: { text: STATS[xk].label + (STATS[xk].invert ? '  (axis reversed — right is better)' : ''), font: { size: 12, color: COL.text } },
+                range: xr, gridcolor: COL.border, zeroline: false, fixedrange: true
+            },
+            yaxis: {
+                title: { text: STATS[yk].label + (STATS[yk].invert ? '  (axis reversed — up is better)' : ''), font: { size: 12, color: COL.text } },
+                range: yr, gridcolor: COL.border, zeroline: false, fixedrange: true
+            },
+            shapes: [ // FBS-average crosshair -> the four quadrants
+                { type: 'line', x0: mx, x1: mx, y0: yr[0], y1: yr[1], line: { color: COL.dim, width: 1, dash: 'dot' }, opacity: 0.55 },
+                { type: 'line', y0: my, y1: my, x0: xr[0], x1: xr[1], line: { color: COL.dim, width: 1, dash: 'dot' }, opacity: 0.55 }
+            ],
+            images: pts.map(function (t) {
+                return { source: t.logo, x: t.stats[xk], y: t.stats[yk],
+                         xref: 'x', yref: 'y', sizex: sx, sizey: sy,
+                         xanchor: 'center', yanchor: 'middle',
+                         sizing: 'contain', layer: 'above' };
+            }),
+            hoverlabel: { bgcolor: COL.card, bordercolor: 'rgba(255,255,255,0.15)',
+                          font: { family: 'DM Sans, sans-serif', size: 13, color: '#e7e9ea' } }
+        };
+
+        Plotly.react('xp-plot', traces, layout, { displayModeBar: false, responsive: true });
+
+        var qs = new URLSearchParams(location.search);
+        qs.set('x', xk); qs.set('y', yk);
+        if (SEASON) qs.set('season', SEASON);
+        history.replaceState(null, '', location.pathname + '?' + qs.toString());
+    }
+
+    function wireClicks() {
+        var plot = document.getElementById('xp-plot');
+        plot.on('plotly_click', function (d) {
+            var p = d.points && d.points[0];
+            if (p && p.customdata && p.customdata[3]) location.href = '/team/' + p.customdata[3];
+        });
+        plot.on('plotly_hover', function () { plot.style.cursor = 'pointer'; });
+        plot.on('plotly_unhover', function () { plot.style.cursor = ''; });
+    }
+
+    function init() {
+        if (typeof Plotly === 'undefined') { setTimeout(init, 60); return; }
+        build();
+        wireClicks();
+    }
+    selX.addEventListener('change', build);
+    selY.addEventListener('change', build);
+    document.getElementById('xp-swap').addEventListener('click', function () {
+        var x = selX.value; selX.value = selY.value; selY.value = x; build();
+    });
+    init();
+});
+</script>
+{% endblock %}

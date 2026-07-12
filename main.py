@@ -5211,13 +5211,83 @@ def bracket_page():
                            cfp_teams=cfp_teams, champion=champion)
 
 
+@app.route('/explorer')
+@cache.cached(timeout=21600, query_string=True)
+def explorer():
+    """Stat Explorer: every FBS team plotted as its logo on an X/Y scatter of
+    two selectable team stats. All stat values ship with the page so axis
+    switching is instant client-side; only the season changes the query."""
+    season = requested_season()
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        # savant_ratings is the FBS roll call for a season (computed for every
+        # team, every loaded year), so it anchors the join.
+        cursor.execute('''
+            SELECT sv.team, t.logo_dark, t.conference,
+                   sv.net_rating, sv.off_rating, sv.def_rating,
+                   sp.rating, sp.offense_rating, sp.defense_rating, sp.special_teams_rating,
+                   ta.off_ppa, ta.def_ppa, ta.off_success_rate, ta.def_success_rate,
+                   ta.off_explosiveness, ta.def_havoc_total,
+                   pg.ppg_for, pg.ppg_against
+            FROM savant_ratings sv
+            JOIN teams t ON t.name = sv.team
+            LEFT JOIN sp_ratings sp ON sp.team = sv.team AND sp.season = sv.season
+            LEFT JOIN team_advanced ta ON ta.team = sv.team AND ta.season = sv.season
+            LEFT JOIN (
+                SELECT tm, AVG(pf)::float AS ppg_for, AVG(pa)::float AS ppg_against
+                FROM (
+                    SELECT home_team AS tm, home_points AS pf, away_points AS pa
+                    FROM games WHERE season = %s AND completed = 1
+                    UNION ALL
+                    SELECT away_team, away_points, home_points
+                    FROM games WHERE season = %s AND completed = 1
+                ) g GROUP BY tm
+            ) pg ON pg.tm = sv.team
+            WHERE sv.season = %s
+              -- savant covers FCS opponents that show up in drives data;
+              -- SP+ is FBS-only per season, so it is the realignment-correct
+              -- FBS filter (an FCS-era Sam Houston stays out of 2019)
+              AND sp.rating IS NOT NULL
+        ''', (season, season, season))
+
+        def _r(v, nd=2):
+            return round(v, nd) if v is not None else None
+
+        teams_data = []
+        for (name, logo, conf, net_sv, off_sv, def_sv,
+             sp_all, sp_off, sp_def, sp_st,
+             off_ppa, def_ppa, off_sr, def_sr, off_expl, havoc,
+             ppg_for, ppg_against) in cursor.fetchall():
+            teams_data.append({
+                'name': name, 'slug': slugify_team(name),
+                'logo': logo, 'conf': conf,
+                'stats': {
+                    'net_savant': _r(net_sv), 'off_savant': _r(off_sv), 'def_savant': _r(def_sv),
+                    'sp_overall': _r(sp_all), 'sp_off': _r(sp_off),
+                    'sp_def': _r(sp_def), 'sp_st': _r(sp_st),
+                    'off_ppa': _r(off_ppa, 3), 'def_ppa': _r(def_ppa, 3),
+                    'off_sr': _r(off_sr * 100, 1) if off_sr is not None else None,
+                    'def_sr': _r(def_sr * 100, 1) if def_sr is not None else None,
+                    'off_expl': _r(off_expl, 3),
+                    'def_havoc': _r(havoc * 100, 1) if havoc is not None else None,
+                    'ppg_for': _r(ppg_for, 1), 'ppg_against': _r(ppg_against, 1),
+                },
+            })
+    finally:
+        release_db(conn)
+    return render_template('explorer.html', teams_data=teams_data, season=season,
+                           available_seasons=get_available_seasons())
+
+
 @app.route('/sitemap.xml')
 @cache.cached(timeout=86400)  # regenerated daily
 def sitemap():
     """XML sitemap of every indexable page, for search-engine discovery."""
     base = f"https://{request.host}"
     paths = ['/', '/teams', '/rankings', '/leaderboards', '/leaderboards/teams',
-             '/bracket', '/compare', '/transfers', '/rivalries', '/savant-rating']
+             '/bracket', '/compare', '/transfers', '/rivalries', '/savant-rating',
+             '/explorer']
     for cat in ('passing', 'rushing', 'receiving', 'defense'):
         paths.append(f'/leaderboards/{cat}')
     conn = get_db()

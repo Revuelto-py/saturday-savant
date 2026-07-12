@@ -2988,3 +2988,58 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     gap: 8px;
     margin-top: 18px;
 }
+
+/* ── Stat Explorer ──────────────────────────────────────────────────────── */
+.xp-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: var(--s4); margin-bottom: var(--s5);
+}
+.xp-title {
+    font-family: var(--font-display);
+    font-size: var(--text-2xl); font-weight: 700;
+    letter-spacing: -0.01em; margin: 0 0 var(--s2);
+}
+.xp-sub { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.7; max-width: 560px; margin: 0; }
+.xp-controls {
+    display: flex; align-items: flex-end; flex-wrap: wrap;
+    gap: var(--s3); margin-bottom: var(--s4);
+}
+.xp-controls .lb-select { min-width: 210px; }
+.xp-swap {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; flex-shrink: 0;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.15s, background-color 0.15s;
+}
+.xp-swap:hover { color: var(--text-primary); background: rgba(255,255,255,0.1); }
+.xp-swap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xp-swap:active { transform: translateY(1px); }
+.xp-hint { color: var(--text-dim); font-size: var(--text-xs); margin-left: auto; align-self: center; }
+.xp-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: var(--s4) var(--s3) var(--s2);
+}
+.xp-plot { width: 100%; height: 640px; }
+.xp-legend {
+    display: flex; align-items: center; gap: var(--s4);
+    padding: var(--s2) var(--s3) var(--s2);
+    color: var(--text-secondary); font-size: var(--text-xs);
+}
+.xp-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.xp-key { display: inline-block; width: 18px; height: 0; border-top: 2px dashed var(--accent); }
+.xp-key--avg { border-top: 1px dotted var(--text-dim); }
+.xp-legend-note { margin-left: auto; color: var(--text-dim); }
+@media (max-width: 767.98px) {
+    .xp-head { flex-direction: column; }
+    .xp-head .season-select { align-self: flex-end; }
+    .xp-controls .lb-filter-group { flex: 1 1 40%; }
+    .xp-controls .lb-select { min-width: 0; width: 100%; }
+    .xp-hint { display: none; }
+    .xp-plot { height: 440px; }
+}
