@@ -59,11 +59,15 @@
         padding-left: 16px;
         padding-right: 16px;
     }
+    /* Compact resting width (fills up to 280px), expanding to 360px only
+       while focused — keeps the now-shorter nav row balanced. */
     .search-wrapper {
         flex: 1 1 auto;
         width: auto;
-        max-width: 360px;
+        max-width: 280px;
+        transition: max-width var(--t-base, 0.2s) ease;
     }
+    .search-wrapper:focus-within { max-width: 360px; }
 }
 @media (min-width: 1200px) {
     /* fluid ceiling: the column keeps growing with the viewport (up to
