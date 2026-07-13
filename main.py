@@ -4571,45 +4571,53 @@ COMPARE_PEER_POSITIONS = {
 COMPARE_WIDE_DEF_POSITIONS = ['DE', 'DT', 'NT', 'DL', 'EDGE', 'LB', 'ILB', 'OLB', 'MLB']
 
 def _cmp_games_played(cursor, team, cache, season=CURRENT_SEASON):
-    """Completed team games in the compared season, used as a per-game
-    divisor. player_stats has season totals only (no week/game_id column), so
-    an individual player's games-played can't be counted directly — team
-    games completed is the closest available proxy."""
-    if team not in cache:
+    """Completed team games in a slot's own season, used as a per-game divisor.
+    player_stats has season totals only (no week/game_id column), so an
+    individual player's games-played can't be counted directly — team games
+    completed is the closest available proxy. Cached by (team, season) so the
+    same team in two different seasons stays distinct."""
+    key = (team, season)
+    if key not in cache:
         cursor.execute('''
             SELECT COUNT(*) FROM games
             WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
             AND (home_team=%s OR away_team=%s)
         ''', (season, team, team))
-        cache[team] = max(cursor.fetchone()[0] or 0, 1)
-    return cache[team]
+        cache[key] = max(cursor.fetchone()[0] or 0, 1)
+    return cache[key]
 
-def _cmp_row(label, player_ids, full_pool, qual_pool, stat_key, games_by_pid,
+# Each compare slot carries its own season, so values and percentiles come from
+# that slot's season pool — a 2021 player is ranked against 2021 peers even when
+# compared against a 2023 player. `slots` is an ordered list of dicts with keys
+# 'id'/'team'/'season' (players) or 'name'/'season' (teams); pools are dicts
+# keyed by season.
+def _cmp_row(label, slots, full_pools, qual_pools, stat_key, games_by_slot,
              higher_better=True, per_game=False, decimals=1, suffix='', scale=1):
     values = []
-    for pid in player_ids:
-        raw = full_pool.get(str(pid), {}).get(stat_key)
+    for idx, s in enumerate(slots):
+        pid, yr = s['id'], s['season']
+        raw = full_pools.get(yr, {}).get(str(pid), {}).get(stat_key)
         if raw is None:
             values.append({'raw': None, 'display': '—', 'percentile': None})
             continue
-        shown = (raw / games_by_pid[pid] if per_game else raw) * scale
-        _, pct, _ = _rank_pct(pid, qual_pool, stat_key, higher_better)
+        shown = (raw / games_by_slot[idx] if per_game else raw) * scale
+        _, pct, _ = _rank_pct(pid, qual_pools.get(yr, {}), stat_key, higher_better)
         values.append({'raw': raw, 'display': f'{shown:.{decimals}f}{suffix}', 'percentile': pct})
     return {'label': label, 'higher_better': higher_better, 'values': values}
 
-def _cmp_team_proxy_row(cursor, label, player_ids, player_teams, column, pct=False, season=CURRENT_SEASON):
+def _cmp_team_proxy_row(cursor, label, slots, column, pct=False):
     """Row sourced from team_stats as a proxy for a player-level stat that
     isn't tracked individually. No percentile — the existing qualification
-    system only covers player_stats/player_ppa pools."""
-    teams = sorted({player_teams[pid] for pid in player_ids if player_teams.get(pid)})
-    vals_by_team = {}
-    if teams:
-        ph = ','.join(['%s'] * len(teams))
-        cursor.execute(f'SELECT team, {column} FROM team_stats WHERE season={season} AND team IN ({ph})', teams)
-        vals_by_team = dict(cursor.fetchall())
+    system only covers player_stats/player_ppa pools. Each slot reads its own
+    (team, season)."""
+    valmap = {}
+    for team, yr in {(s['team'], s['season']) for s in slots if s.get('team')}:
+        cursor.execute(f'SELECT {column} FROM team_stats WHERE season=%s AND team=%s', (yr, team))
+        r = cursor.fetchone()
+        valmap[(team, yr)] = r[0] if r else None
     values = []
-    for pid in player_ids:
-        v = vals_by_team.get(player_teams.get(pid))
+    for s in slots:
+        v = valmap.get((s.get('team'), s['season']))
         if v is None:
             values.append({'raw': None, 'display': '—', 'percentile': None})
         else:
@@ -4617,13 +4625,15 @@ def _cmp_team_proxy_row(cursor, label, player_ids, player_teams, column, pct=Fal
             values.append({'raw': v, 'display': f'{shown:.1f}{"%" if pct else ""}', 'percentile': None})
     return {'label': label, 'higher_better': True, 'values': values}
 
-def _cmp_usage_row(cursor, label, player_ids, column, pct=True, season=CURRENT_SEASON):
-    ph = ','.join(['%s'] * len(player_ids))
-    cursor.execute(f'SELECT player_id, {column} FROM player_usage WHERE season={season} AND player_id IN ({ph})', player_ids)
-    vals_by_pid = dict(cursor.fetchall())
+def _cmp_usage_row(cursor, label, slots, column, pct=True):
+    valmap = {}
+    for s in slots:
+        cursor.execute(f'SELECT {column} FROM player_usage WHERE season=%s AND player_id=%s', (s['season'], s['id']))
+        r = cursor.fetchone()
+        valmap[(s['id'], s['season'])] = r[0] if r else None
     values = []
-    for pid in player_ids:
-        v = vals_by_pid.get(pid)
+    for s in slots:
+        v = valmap.get((s['id'], s['season']))
         if v is None:
             values.append({'raw': None, 'display': '—', 'percentile': None})
         else:
@@ -4655,85 +4665,97 @@ def _cmp_assign_colors(row):
             v['color'] = 'gray'
     return row
 
-def _build_compare_group_rows(cursor, group_name, player_ids, player_teams, season=CURRENT_SEASON):
+def _build_compare_group_rows(cursor, group_name, slots):
+    """slots: ordered list of {'id','team','season'} — each carries its own
+    season, so pools are fetched per distinct season and every value/percentile
+    is drawn from that slot's season."""
     games_cache = {}
-    games_by_pid = {pid: _cmp_games_played(cursor, player_teams.get(pid, ''), games_cache, season)
-                     for pid in player_ids}
+    games_by_slot = [_cmp_games_played(cursor, s.get('team', ''), games_cache, s['season']) for s in slots]
     peer = COMPARE_PEER_POSITIONS[group_name]
+    seasons = {s['season'] for s in slots}
     rows = []
 
+    def full_pools(cat, positions):
+        return {yr: _fetch_stats_pool(cursor, cat, positions, yr) for yr in seasons}
+
+    def ppa_pools(positions):
+        return {yr: _fetch_ppa_pool(cursor, positions, yr) for yr in seasons}
+
+    def qual_pools(full_by_yr, source_by_yr, qstat, qmin):
+        return {yr: _qualify_pool(full_by_yr[yr], source_by_yr[yr], qstat, qmin) for yr in seasons}
+
     if group_name == 'QB':
-        sp = _fetch_stats_pool(cursor, 'passing', peer, season)
+        sp = full_pools('passing', peer)
         pass_stat, pass_min = _qual_threshold('QB', 'passing')
-        sp_q = _qualify_pool(sp, sp, pass_stat, pass_min)
-        rows.append(_cmp_row('Comp %',     player_ids, sp, sp_q, 'PCT', games_by_pid, suffix='%', scale=100))
-        rows.append(_cmp_row('Pass Yds/G', player_ids, sp, sp_q, 'YDS', games_by_pid, per_game=True))
-        rows.append(_cmp_row('Pass TD/G',  player_ids, sp, sp_q, 'TD',  games_by_pid, per_game=True))
-        rows.append(_cmp_row('INT/G',      player_ids, sp, sp_q, 'INT', games_by_pid, per_game=True, higher_better=False))
-        rows.append(_cmp_row('Yds/Att',    player_ids, sp, sp_q, 'YPA', games_by_pid))
+        sp_q = qual_pools(sp, sp, pass_stat, pass_min)
+        rows.append(_cmp_row('Comp %',     slots, sp, sp_q, 'PCT', games_by_slot, suffix='%', scale=100))
+        rows.append(_cmp_row('Pass Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True))
+        rows.append(_cmp_row('Pass TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
+        rows.append(_cmp_row('INT/G',      slots, sp, sp_q, 'INT', games_by_slot, per_game=True, higher_better=False))
+        rows.append(_cmp_row('Yds/Att',    slots, sp, sp_q, 'YPA', games_by_slot))
 
-        rush_sp = _fetch_stats_pool(cursor, 'rushing', ['QB'], season)
+        rush_sp = full_pools('rushing', ['QB'])
         rush_stat, rush_min = _qual_threshold('QB', 'rushing')
-        rush_sp_q = _qualify_pool(rush_sp, rush_sp, rush_stat, rush_min)
-        rows.append(_cmp_row('Rush Yds/G', player_ids, rush_sp, rush_sp_q, 'YDS', games_by_pid, per_game=True))
+        rush_sp_q = qual_pools(rush_sp, rush_sp, rush_stat, rush_min)
+        rows.append(_cmp_row('Rush Yds/G', slots, rush_sp, rush_sp_q, 'YDS', games_by_slot, per_game=True))
 
-        pp = _fetch_ppa_pool(cursor, peer, season)
+        pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold('QB', 'ppa')
-        pp_q = _qualify_pool(pp, sp_q, ppa_stat, ppa_min)
-        rows.append(_cmp_row('EPA / Pass Play', player_ids, pp, pp_q, 'avg_ppa_pass', games_by_pid, decimals=3))
+        pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
+        rows.append(_cmp_row('EPA / Pass Play', slots, pp, pp_q, 'avg_ppa_pass', games_by_slot, decimals=3))
 
     elif group_name == 'RB':
-        sp = _fetch_stats_pool(cursor, 'rushing', peer, season)
+        sp = full_pools('rushing', peer)
         rush_stat, rush_min = _qual_threshold('RB', 'rushing')
-        sp_q = _qualify_pool(sp, sp, rush_stat, rush_min)
-        rows.append(_cmp_row('Rush Yds/G', player_ids, sp, sp_q, 'YDS', games_by_pid, per_game=True))
-        rows.append(_cmp_row('Yds/Carry',  player_ids, sp, sp_q, 'YPC', games_by_pid))
-        rows.append(_cmp_row('Rush TD/G',  player_ids, sp, sp_q, 'TD',  games_by_pid, per_game=True))
+        sp_q = qual_pools(sp, sp, rush_stat, rush_min)
+        rows.append(_cmp_row('Rush Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True))
+        rows.append(_cmp_row('Yds/Carry',  slots, sp, sp_q, 'YPC', games_by_slot))
+        rows.append(_cmp_row('Rush TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
 
-        pp = _fetch_ppa_pool(cursor, peer, season)
+        pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold('RB', 'ppa')
-        pp_q = _qualify_pool(pp, sp_q, ppa_stat, ppa_min)
-        rows.append(_cmp_row('EPA / Rush', player_ids, pp, pp_q, 'avg_ppa_rush', games_by_pid, decimals=3))
+        pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
+        rows.append(_cmp_row('EPA / Rush', slots, pp, pp_q, 'avg_ppa_rush', games_by_slot, decimals=3))
 
-        rows.append(_cmp_team_proxy_row(cursor, 'Rush Success Rate (Team)', player_ids, player_teams,
-                                         'off_rushing_success_rate', pct=True, season=season))
-        rows.append(_cmp_usage_row(cursor, 'Rush Usage', player_ids, 'rush', pct=True, season=season))
+        rows.append(_cmp_team_proxy_row(cursor, 'Rush Success Rate (Team)', slots,
+                                         'off_rushing_success_rate', pct=True))
+        rows.append(_cmp_usage_row(cursor, 'Rush Usage', slots, 'rush', pct=True))
 
     elif group_name in ('WR', 'TE'):
-        sp = _fetch_stats_pool(cursor, 'receiving', peer, season)
+        sp = full_pools('receiving', peer)
         rec_stat, rec_min = _qual_threshold(group_name, 'receiving')
-        sp_q = _qualify_pool(sp, sp, rec_stat, rec_min)
-        rows.append(_cmp_row('Rec/G',     player_ids, sp, sp_q, 'REC', games_by_pid, per_game=True))
-        rows.append(_cmp_row('Rec Yds/G', player_ids, sp, sp_q, 'YDS', games_by_pid, per_game=True))
-        rows.append(_cmp_row('Rec TD/G',  player_ids, sp, sp_q, 'TD',  games_by_pid, per_game=True))
-        rows.append(_cmp_row('Yds/Rec',   player_ids, sp, sp_q, 'YPR', games_by_pid))
+        sp_q = qual_pools(sp, sp, rec_stat, rec_min)
+        rows.append(_cmp_row('Rec/G',     slots, sp, sp_q, 'REC', games_by_slot, per_game=True))
+        rows.append(_cmp_row('Rec Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True))
+        rows.append(_cmp_row('Rec TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
+        rows.append(_cmp_row('Yds/Rec',   slots, sp, sp_q, 'YPR', games_by_slot))
 
-        pp = _fetch_ppa_pool(cursor, peer, season)
+        pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
-        pp_q = _qualify_pool(pp, sp_q, ppa_stat, ppa_min)
-        rows.append(_cmp_row('EPA / Play', player_ids, pp, pp_q, 'avg_ppa_all', games_by_pid, decimals=3))
+        pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
+        rows.append(_cmp_row('EPA / Play', slots, pp, pp_q, 'avg_ppa_all', games_by_slot, decimals=3))
 
     elif group_name in ('DL', 'LB'):
-        sp_wide = _fetch_stats_pool(cursor, 'defensive', COMPARE_WIDE_DEF_POSITIONS, season)
-        sp_narrow = _fetch_stats_pool(cursor, 'defensive', peer, season)
+        sp_wide = full_pools('defensive', COMPARE_WIDE_DEF_POSITIONS)
+        sp_narrow = full_pools('defensive', peer)
         def_stat, def_min = _qual_threshold(group_name, 'defensive')
-        sp_wide_q = _qualify_pool(sp_wide, sp_wide, def_stat, def_min)
-        sp_narrow_q = _qualify_pool(sp_narrow, sp_narrow, def_stat, def_min)
-        rows.append(_cmp_row('Tackles/G', player_ids, sp_wide, sp_wide_q, 'TOT',   games_by_pid, per_game=True))
-        rows.append(_cmp_row('Sacks/G',   player_ids, sp_wide, sp_wide_q, 'SACKS', games_by_pid, per_game=True))
-        rows.append(_cmp_row('TFL/G',     player_ids, sp_narrow, sp_narrow_q, 'TFL', games_by_pid, per_game=True))
-        rows.append(_cmp_row('PBU/G',     player_ids, sp_narrow, sp_narrow_q, 'PD',  games_by_pid, per_game=True))
+        sp_wide_q = qual_pools(sp_wide, sp_wide, def_stat, def_min)
+        sp_narrow_q = qual_pools(sp_narrow, sp_narrow, def_stat, def_min)
+        rows.append(_cmp_row('Tackles/G', slots, sp_wide, sp_wide_q, 'TOT',   games_by_slot, per_game=True))
+        rows.append(_cmp_row('Sacks/G',   slots, sp_wide, sp_wide_q, 'SACKS', games_by_slot, per_game=True))
+        rows.append(_cmp_row('TFL/G',     slots, sp_narrow, sp_narrow_q, 'TFL', games_by_slot, per_game=True))
+        rows.append(_cmp_row('PBU/G',     slots, sp_narrow, sp_narrow_q, 'PD',  games_by_slot, per_game=True))
         # No EPA/Play row here — player_ppa only covers offensive skill positions
         # (QB/RB/FB/TE/WR) in this dataset, so it would always be empty for DL/LB.
 
     elif group_name == 'DB':
-        sp = _fetch_stats_pool(cursor, 'defensive', peer, season)
+        sp = full_pools('defensive', peer)
         def_stat, def_min = _qual_threshold('DB', 'defensive')
-        sp_q = _qualify_pool(sp, sp, def_stat, def_min)
-        rows.append(_cmp_row('Tackles/G', player_ids, sp, sp_q, 'TOT',   games_by_pid, per_game=True))
-        rows.append(_cmp_row('Sacks/G',   player_ids, sp, sp_q, 'SACKS', games_by_pid, per_game=True))
-        rows.append(_cmp_row('TFL/G',     player_ids, sp, sp_q, 'TFL',   games_by_pid, per_game=True))
-        rows.append(_cmp_row('PBU/G',     player_ids, sp, sp_q, 'PD',    games_by_pid, per_game=True))
+        sp_q = qual_pools(sp, sp, def_stat, def_min)
+        rows.append(_cmp_row('Tackles/G', slots, sp, sp_q, 'TOT',   games_by_slot, per_game=True))
+        rows.append(_cmp_row('Sacks/G',   slots, sp, sp_q, 'SACKS', games_by_slot, per_game=True))
+        rows.append(_cmp_row('TFL/G',     slots, sp, sp_q, 'TFL',   games_by_slot, per_game=True))
+        rows.append(_cmp_row('PBU/G',     slots, sp, sp_q, 'PD',    games_by_slot, per_game=True))
         # No EPA/Play row — player_ppa has no DB rows in this dataset either.
 
     for row in rows:
@@ -4750,27 +4772,37 @@ COMPARE_TEAM_STAT_DEFS = [
     ('Def. Success Rate',  'def_success_rate',         False, 1, '%'),
 ]
 
-def _build_compare_team_rows(cursor, team_names, season=CURRENT_SEASON):
-    ph = ','.join(['%s'] * len(team_names))
-    cursor.execute(f'SELECT * FROM team_stats WHERE season={season} AND team IN ({ph})', team_names)
-    cols = [d[0] for d in cursor.description]
-    ts_by_team = {r[0]: dict(zip(cols, r)) for r in cursor.fetchall()}
-    cursor.execute(f'SELECT team, rating, ranking FROM sp_ratings WHERE season={season} AND team IN ({ph})', team_names)
-    sp_by_team = {r[0]: {'rating': r[1], 'ranking': r[2]} for r in cursor.fetchall()}
+def _build_compare_team_rows(cursor, slots):
+    """slots: ordered list of {'name','season'} — each column reads its own
+    (team, season), so the same program in two years compares cleanly."""
+    pairs = {(s['name'], s['season']) for s in slots}
+    ts_by_key, sp_by_key, svr_by_key = {}, {}, {}
+    for team, yr in pairs:
+        cursor.execute('SELECT * FROM team_stats WHERE season=%s AND team=%s', (yr, team))
+        r = cursor.fetchone()
+        if r:
+            ts_by_key[(team, yr)] = dict(zip([d[0] for d in cursor.description], r))
+        cursor.execute('SELECT rating, ranking FROM sp_ratings WHERE season=%s AND team=%s', (yr, team))
+        r = cursor.fetchone()
+        if r:
+            sp_by_key[(team, yr)] = {'rating': r[0], 'ranking': r[1]}
+        cursor.execute('''SELECT net_rating, net_ranking, off_rating, off_ranking, def_rating, def_ranking
+                          FROM savant_ratings WHERE season=%s AND team=%s''', (yr, team))
+        r = cursor.fetchone()
+        if r:
+            svr_by_key[(team, yr)] = {'net': r[0], 'net_rk': r[1], 'off': r[2], 'off_rk': r[3],
+                                      'def': r[4], 'def_rk': r[5]}
 
-    # Savant Rating — the site's signature metric leads the team comparison.
-    cursor.execute(f'''SELECT team, net_rating, net_ranking, off_rating, off_ranking, def_rating, def_ranking
-                       FROM savant_ratings WHERE season={season} AND team IN ({ph})''', team_names)
-    svr_by_team = {r[0]: {'net': r[1], 'net_rk': r[2], 'off': r[3], 'off_rk': r[4],
-                          'def': r[5], 'def_rk': r[6]} for r in cursor.fetchall()}
+    def _key(s):
+        return (s['name'], s['season'])
 
     def _svr_row(label, key, rk_key, higher_better, signed=False):
         values = []
-        for team in team_names:
-            s = svr_by_team.get(team)
-            if s and s.get(key) is not None:
-                num = f'{s[key]:+.1f}' if signed else f'{s[key]:.1f}'
-                values.append({'raw': s[key], 'display': f'{num} (#{s[rk_key]})', 'percentile': None})
+        for s in slots:
+            sv = svr_by_key.get(_key(s))
+            if sv and sv.get(key) is not None:
+                num = f'{sv[key]:+.1f}' if signed else f'{sv[key]:.1f}'
+                values.append({'raw': sv[key], 'display': f'{num} (#{sv[rk_key]})', 'percentile': None})
             else:
                 values.append({'raw': None, 'display': '—', 'percentile': None})
         return {'label': label, 'higher_better': higher_better, 'values': values}
@@ -4782,8 +4814,8 @@ def _build_compare_team_rows(cursor, team_names, season=CURRENT_SEASON):
     ]
     for label, col, higher_better, decimals, suffix in COMPARE_TEAM_STAT_DEFS:
         values = []
-        for team in team_names:
-            v = ts_by_team.get(team, {}).get(col)
+        for s in slots:
+            v = ts_by_key.get(_key(s), {}).get(col)
             if v is None:
                 values.append({'raw': None, 'display': '—', 'percentile': None})
             else:
@@ -4792,10 +4824,10 @@ def _build_compare_team_rows(cursor, team_names, season=CURRENT_SEASON):
         rows.append({'label': label, 'higher_better': higher_better, 'values': values})
 
     sp_values = []
-    for team in team_names:
-        s = sp_by_team.get(team)
-        if s and s.get('rating') is not None:
-            sp_values.append({'raw': s['rating'], 'display': f"{s['rating']:.1f} (#{s['ranking']})", 'percentile': None})
+    for s in slots:
+        sp = sp_by_key.get(_key(s))
+        if sp and sp.get('rating') is not None:
+            sp_values.append({'raw': sp['rating'], 'display': f"{sp['rating']:.1f} (#{sp['ranking']})", 'percentile': None})
         else:
             sp_values.append({'raw': None, 'display': '—', 'percentile': None})
     rows.append({'label': 'SP+ Rating', 'higher_better': True, 'values': sp_values})
@@ -4831,11 +4863,19 @@ def img_proxy():
 @app.route('/compare')
 @cache.cached(timeout=21600, query_string=True)  # players/teams + season are all in the query string
 def compare():
-    season = requested_season()
+    season = requested_season()   # default season for slots without an explicit year
+    avail = get_available_seasons()
     mode = request.args.get('type', 'player')
     if mode not in ('player', 'team'):
         mode = 'player'
     pos_filter = request.args.get('pos', '')
+
+    def slot_season(i):
+        """Per-slot season from ?y{i}=, falling back to the page default so old
+        single-season links keep working."""
+        raw = request.args.get(f'y{i}', type=int)
+        return raw if (raw and raw in avail) else season
+    slot_seasons = [slot_season(i) for i in (1, 2, 3)]
 
     conn = get_db()
     try:
@@ -4845,10 +4885,17 @@ def compare():
         # compacted (2 or 3 long) list actually used for the card + stat rows.
         slots, rows, group_name = [None, None, None], [], None
 
+        def ap_rank(team, yr):
+            if not team:
+                return None
+            cursor.execute('SELECT rank FROM ap_rankings WHERE season=%s AND team=%s', (yr, team))
+            r = cursor.fetchone()
+            return r[0] if r else None
+
         if mode == 'team':
             slot_names = [request.args.get(f't{i}') for i in (1, 2, 3)]
             valid_names = [n for n in slot_names if n]
-            info_by_name, rank_by_team = {}, {}
+            info_by_name = {}
             if valid_names:
                 ph = ','.join(['%s'] * len(valid_names))
                 cursor.execute(f'''
@@ -4856,26 +4903,25 @@ def compare():
                     FROM teams WHERE name IN ({ph})
                 ''', valid_names)
                 info_by_name = {r[0]: r for r in cursor.fetchall()}
-                cursor.execute(f'SELECT team, rank FROM ap_rankings WHERE season={season} AND team IN ({ph})', valid_names)
-                rank_by_team = dict(cursor.fetchall())
 
             for i, name in enumerate(slot_names):
                 info = info_by_name.get(name) if name else None
                 if info:
                     slots[i] = {
                         'name': info[0], 'conference': info[1], 'logo_dark': info[2],
-                        'color': info[3], 'alt_color': info[4], 'ap_rank': rank_by_team.get(name),
+                        'color': info[3], 'alt_color': info[4], 'season': slot_seasons[i],
+                        'ap_rank': ap_rank(name, slot_seasons[i]),
                     }
 
             active = [s for s in slots if s]
             if len(active) >= 2:
-                rows = _build_compare_team_rows(cursor, [t['name'] for t in active], season)
+                rows = _build_compare_team_rows(cursor, active)
 
         else:
             slot_ids = [int(raw) if raw and raw.isdigit() else None
                         for raw in (request.args.get(f'p{i}') for i in (1, 2, 3))]
             valid_ids = [pid for pid in slot_ids if pid is not None]
-            info_by_id, rank_by_team = {}, {}
+            info_by_id = {}
             if valid_ids:
                 ph = ','.join(['%s'] * len(valid_ids))
                 cursor.execute(f'''
@@ -4885,11 +4931,6 @@ def compare():
                     WHERE p.id IN ({ph})
                 ''', valid_ids)
                 info_by_id = {r[0]: r for r in cursor.fetchall()}
-                teams_involved = sorted({r[3] for r in info_by_id.values() if r[3]})
-                if teams_involved:
-                    ph2 = ','.join(['%s'] * len(teams_involved))
-                    cursor.execute(f'SELECT team, rank FROM ap_rankings WHERE season={season} AND team IN ({ph2})', teams_involved)
-                    rank_by_team = dict(cursor.fetchall())
 
             for i, pid in enumerate(slot_ids):
                 info = info_by_id.get(pid) if pid is not None else None
@@ -4898,8 +4939,8 @@ def compare():
                         'id': info[0], 'first_name': info[1], 'last_name': info[2],
                         'team': info[3], 'position': info[4], 'jersey': info[5],
                         'headshot': info[6], 'logo_dark': info[7], 'color': info[8],
-                        'alt_color': info[9], 'conference': info[10],
-                        'ap_rank': rank_by_team.get(info[3]),
+                        'alt_color': info[9], 'conference': info[10], 'season': slot_seasons[i],
+                        'ap_rank': ap_rank(info[3], slot_seasons[i]),
                     }
 
             active = [s for s in slots if s]
@@ -4909,9 +4950,7 @@ def compare():
             group_name = pos_filter if pos_filter in COMPARE_PEER_POSITIONS else 'QB'
 
             if len(active) >= 2:
-                player_ids_ordered = [p['id'] for p in active]
-                player_teams = {p['id']: p['team'] for p in active}
-                rows = _build_compare_group_rows(cursor, group_name, player_ids_ordered, player_teams, season)
+                rows = _build_compare_group_rows(cursor, group_name, active)
     finally:
         release_db(conn)
 

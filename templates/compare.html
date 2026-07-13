@@ -69,6 +69,14 @@
                             <div class="cmp-slot-meta">{{ entity.conference or '' }}</div>
                         </div>
                     {% endif %}
+                    {% if available_seasons and available_seasons|length > 1 %}
+                    <select class="lb-select cmp-slot-season" aria-label="Season for this slot"
+                            onchange="compareSetSeason({{ slot_num }}, this.value)">
+                        {% for s in available_seasons %}
+                        <option value="{{ s }}" {{ 'selected' if s == entity.season else '' }}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
                     <div class="cmp-slot-actions">
                         {% if i < 2 %}
                         <button type="button" class="cmp-slot-btn" title="Swap with next slot" aria-label="Swap with next slot"
@@ -115,6 +123,7 @@
                 <span>{{ e.team }}</span>
                 {% if e.ap_rank %}<span class="compare-ap-badge">AP #{{ e.ap_rank }}</span>{% endif %}
             </div>
+            <div class="cmp-hseason">{{ e.season }} season</div>
         {% else %}
             {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo" alt="{{ e.team or e.name }} logo">{% endif %}
             <div class="cmp-hname">{{ e.name }}</div>
@@ -122,6 +131,7 @@
                 <span>{{ e.conference or '' }}</span>
                 {% if e.ap_rank %}<span class="compare-ap-badge">AP #{{ e.ap_rank }}</span>{% endif %}
             </div>
+            <div class="cmp-hseason">{{ e.season }} season</div>
         {% endif %}
     </div>
     {% endmacro %}
@@ -140,16 +150,8 @@
         <div class="cmp-brand">
             <img src="/static/logo-mark-256.png" alt="">
             <span class="cmp-brand-text">Saturday Savant</span>
-            <span class="cmp-brand-sub">Head-to-Head ·
-                {% if available_seasons and available_seasons|length > 1 %}
-                <select class="lb-select season-select" style="min-width:88px;padding:3px 8px;font-size:var(--text-sm)" aria-label="Season"
-                        onchange="var q=new URLSearchParams(location.search); q.set('season', this.value); location.search=q.toString()">
-                    {% for s in available_seasons %}
-                    <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
-                    {% endfor %}
-                </select>
-                {% else %}{{ season }}{% endif %}
-            </span>
+            {% set distinct_seasons = active_entities | map(attribute='season') | list | unique | list %}
+            <span class="cmp-brand-sub">Head-to-Head{% if distinct_seasons %} · {{ distinct_seasons | sort | join(' vs ') }}{% endif %}</span>
         </div>
 
         <div class="cmp-table cmp-cols-{{ cols }}">
@@ -213,11 +215,19 @@
         const a = params.get(keyA), b = params.get(keyB);
         if (a !== null) params.set(keyB, a); else params.delete(keyB);
         if (b !== null) params.set(keyA, b); else params.delete(keyA);
+        // Keep each entity's season attached to it as it moves between slots.
+        const yA = 'y' + keyA.slice(-1), yB = 'y' + keyB.slice(-1);
+        const sa = params.get(yA), sb = params.get(yB);
+        if (sa !== null) params.set(yB, sa); else params.delete(yB);
+        if (sb !== null) params.set(yA, sb); else params.delete(yA);
         navigate(params);
     };
     function selectEntity(paramKey, value) {
         const params = currentParams(); params.set(paramKey, value); navigate(params);
     }
+    window.compareSetSeason = function(slotNum, year) {
+        const params = currentParams(); params.set('y' + slotNum, year); navigate(params);
+    };
 
     // Per-slot live search
     document.querySelectorAll('[data-slot-input]').forEach(function(input) {
