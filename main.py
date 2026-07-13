@@ -3016,7 +3016,11 @@ def game_detail(game_id):
                 time_el_raw = drive.get('timeElapsed') or {}
                 time_el = time_el_raw.get('displayValue', '') if isinstance(time_el_raw, dict) else ''
 
-                is_scoring_drive = drive_result in ['TD', 'FG']
+                # displayResult is the long form ("Touchdown"/"Field Goal"),
+                # so classify it the same way the header badge does; a drive is
+                # "scoring" when it ends in the possessing team's own points.
+                badge_label, badge_bg, badge_color = _classify_drive_result(drive_result)
+                is_scoring_drive = badge_label in ('TOUCHDOWN', 'FIELD GOAL', 'SAFETY')
                 yl = min(max(start_yl, 1), 99)
 
                 for play in (drive.get('plays') or []):
@@ -3131,8 +3135,6 @@ def game_detail(game_id):
                         'tooltip':     f"{drive_result} · {drive_yards} yds",
                     })
 
-                badge_label, badge_bg, badge_color = _classify_drive_result(drive_result)
-
                 drives.append({
                     'team': team_name,
                     'is_home': play_side == 'home',
@@ -3149,6 +3151,11 @@ def game_detail(game_id):
                     'plays': drive_play_list,
                     'start_yardline': start_yl_abs,
                 })
+
+            # Drives tab shows scoring drives only (TD / FG / safety), matching
+            # the Play-by-Play section that was likewise narrowed to scoring
+            # plays — punts, turnovers, and end-of-half drives are dropped.
+            drives = [d for d in drives if d['is_scoring']]
 
             # Team stats — build normalized dicts + normalize sacks
             for tb in ((data.get('boxscore') or {}).get('teams') or []):

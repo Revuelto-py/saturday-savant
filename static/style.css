@@ -3114,3 +3114,43 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     font-size: var(--text-xs); font-weight: 700;
     letter-spacing: 0.08em; text-transform: uppercase;
 }
+
+/* ── Print / PDF ────────────────────────────────────────────────────────────
+   Chromium's print rasteriser double-paints any subtree that owns a
+   compositing layer (backdrop-filter / filter / blend modes) and can float it
+   out of source order. On the game page that turned the hero into overlapping,
+   letter-spaced duplicates ("FF II NN A LL" for FINAL) and dropped it below
+   the drives. Flattening those effects for print keeps every element single,
+   legible, and in DOM order (hero first). Also strips the on-screen chrome. */
+@media print {
+    .navbar, .score-ticker, .site-footer,
+    .search-wrapper, #searchWrapper, .game-tabs { display: none !important; }
+
+    * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        filter: none !important;
+        mix-blend-mode: normal !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    html, body { background: #060607 !important; }
+
+    /* Flatten the score hero into a plain static block: its stacking context
+       (position:relative + overflow:hidden + stacked radial gradients + an
+       absolute scrim) is what let the print engine reorder it below the
+       drives. A solid background and static positioning pin it first, in flow. */
+    .game-hero {
+        position: static !important;
+        overflow: visible !important;
+        background: #140c22 !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+    .game-hero > div[style*="absolute"] { display: none !important; }
+    .game-hero .page-wrapper { position: static !important; z-index: auto !important; }
+
+    /* Let long drive lists break across pages without clipping a card */
+    .drive-card { break-inside: avoid; }
+}
