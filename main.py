@@ -4910,6 +4910,7 @@ def compare():
                     slots[i] = {
                         'name': info[0], 'conference': info[1], 'logo_dark': info[2],
                         'color': info[3], 'alt_color': info[4], 'season': slot_seasons[i],
+                        'years': avail,  # teams exist every loaded season
                         'ap_rank': ap_rank(name, slot_seasons[i]),
                     }
 
@@ -4921,7 +4922,7 @@ def compare():
             slot_ids = [int(raw) if raw and raw.isdigit() else None
                         for raw in (request.args.get(f'p{i}') for i in (1, 2, 3))]
             valid_ids = [pid for pid in slot_ids if pid is not None]
-            info_by_id = {}
+            info_by_id, seasons_by_pid = {}, {}
             if valid_ids:
                 ph = ','.join(['%s'] * len(valid_ids))
                 cursor.execute(f'''
@@ -4931,16 +4932,32 @@ def compare():
                     WHERE p.id IN ({ph})
                 ''', valid_ids)
                 info_by_id = {r[0]: r for r in cursor.fetchall()}
+                # Seasons each player actually recorded stats — the only years
+                # worth offering in that slot's dropdown.
+                cursor.execute(f'''
+                    SELECT player_id, season FROM player_stats
+                    WHERE player_id IN ({ph}) AND season IS NOT NULL
+                    GROUP BY player_id, season
+                ''', [str(v) for v in valid_ids])
+                for pid_s, ssn in cursor.fetchall():
+                    seasons_by_pid.setdefault(int(pid_s), []).append(ssn)
+                for pid in seasons_by_pid:
+                    seasons_by_pid[pid].sort(reverse=True)
 
             for i, pid in enumerate(slot_ids):
                 info = info_by_id.get(pid) if pid is not None else None
                 if info:
+                    years = seasons_by_pid.get(pid, [])
+                    # Clamp to a season the player actually played: honor the
+                    # requested year if valid, else default to their most recent.
+                    eff = slot_seasons[i] if slot_seasons[i] in years else (years[0] if years else slot_seasons[i])
                     slots[i] = {
                         'id': info[0], 'first_name': info[1], 'last_name': info[2],
                         'team': info[3], 'position': info[4], 'jersey': info[5],
                         'headshot': info[6], 'logo_dark': info[7], 'color': info[8],
-                        'alt_color': info[9], 'conference': info[10], 'season': slot_seasons[i],
-                        'ap_rank': ap_rank(info[3], slot_seasons[i]),
+                        'alt_color': info[9], 'conference': info[10], 'season': eff,
+                        'years': years or [eff],
+                        'ap_rank': ap_rank(info[3], eff),
                     }
 
             active = [s for s in slots if s]

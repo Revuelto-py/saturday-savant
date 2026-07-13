@@ -69,10 +69,11 @@
                             <div class="cmp-slot-meta">{{ entity.conference or '' }}</div>
                         </div>
                     {% endif %}
-                    {% if available_seasons and available_seasons|length > 1 %}
+                    {% set slot_years = entity.years or available_seasons %}
+                    {% if slot_years and slot_years|length > 1 %}
                     <select class="lb-select cmp-slot-season" aria-label="Season for this slot"
                             onchange="compareSetSeason({{ slot_num }}, this.value)">
-                        {% for s in available_seasons %}
+                        {% for s in slot_years %}
                         <option value="{{ s }}" {{ 'selected' if s == entity.season else '' }}>{{ s }}</option>
                         {% endfor %}
                     </select>
