@@ -3057,53 +3057,76 @@ def game_detail(game_id):
                     })
 
                 # ── Drives tab: per-play stacked-bar data ───────────────────────
-                # start_yl_abs / pos use a single 0-100 scale across the WHOLE
-                # field where 0 = the away team's own goal line (left endzone)
-                # and 100 = the home team's own goal line (right endzone) —
-                # matching the away=left/home=right convention already used in
-                # the score hero and quarter table elsewhere on this page.
-                # Whichever team is on offense drives toward the OPPONENT's
-                # side: away moves toward 100, home moves toward 0.
-                start_yl_abs = yl if play_side == 'away' else (100 - yl)
+                # Position every play by its OWN scrimmage spot, taken straight
+                # from ESPN's per-play start.yardLine (= yards from the HOME
+                # team's goal), mapped onto the display scale where 0 = the away
+                # team's own goal (left) and 100 = the home team's own goal
+                # (right):   abs = 100 - yardLine.
+                #   away (drives left→right): abs increases as yardLine falls
+                #   home (drives right→left): abs decreases as yardLine rises
+                # Each bar spans from this play's spot to the NEXT scrimmage
+                # play's spot — its true net field movement. This replaces an
+                # earlier statYardage accumulator that started from a
+                # mis-mapped position and ran off the goal line after a few
+                # plays, collapsing the rest of the drive into zero-width
+                # slivers stacked at one yard line.
                 direction = 1 if play_side == 'away' else -1
-                pos = float(start_yl_abs)
+                start_yl_abs = max(0.0, min(100.0, 100.0 - yl))
 
-                drive_play_list = []
+                def _abs_from_yl(v):
+                    try:
+                        return max(0.0, min(100.0, 100.0 - int(v)))
+                    except (TypeError, ValueError):
+                        return None
+
+                # Scrimmage snaps only (drop kickoff/timeout/period markers),
+                # keeping each play's classification + its start yardLine.
+                scrimmage = []
                 for p in (drive.get('plays') or []):
-                    ptype = (p.get('type') or {}).get('text', '')
-                    classified = _classify_play(ptype)
+                    classified = _classify_play((p.get('type') or {}).get('text', ''))
                     if classified is None:
-                        continue  # kickoff/timeout/period marker — not a scrimmage snap
+                        continue
+                    scrimmage.append((p, classified, _abs_from_yl((p.get('start') or {}).get('yardLine'))))
+
+                down_map = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th'}
+                drive_play_list = []
+                prev_abs = start_yl_abs
+                for idx, (p, classified, a0) in enumerate(scrimmage):
                     label, color, is_turnover = classified
+                    ptype = (p.get('type') or {}).get('text', '')
+                    stat_yards = int(p.get('statYardage', 0) or 0)
+                    if a0 is None:
+                        a0 = prev_abs
+                    prev_abs = a0
 
-                    # Bug fix: the field that actually holds yards gained on
-                    # THIS play is statYardage. statYards (what this route
-                    # used to read) is always null in the live ESPN response,
-                    # which is why every play used to collapse to a 0-yard
-                    # bar stacked at the same starting position instead of
-                    # progressing across the field.
-                    yards = int(p.get('statYardage', 0) or 0)
+                    # End position = where the next scrimmage play began (the
+                    # spot this play left the ball). For the last play, a
+                    # rush/pass touchdown ends in the end zone; a field goal or
+                    # anything else is a marker at the spot (a FG's statYardage
+                    # is the kick distance, not field advancement).
+                    a1 = None
+                    if idx + 1 < len(scrimmage):
+                        a1 = scrimmage[idx + 1][2]
+                    if a1 is None:
+                        if bool(p.get('scoringPlay')) and 'field goal' not in ptype.lower():
+                            a1 = 100.0 if direction == 1 else 0.0
+                        elif 'field goal' in ptype.lower():
+                            a1 = a0
+                        else:
+                            a1 = max(0.0, min(100.0, a0 + direction * stat_yards))
 
-                    new_pos = pos + direction * yards
-                    start_pct = max(0.0, min(100.0, min(pos, new_pos)))
-                    end_pct   = max(0.0, min(100.0, max(pos, new_pos)))
-                    # Clamp the running tracker itself (not just the display
-                    # values) — ESPN occasionally attributes extra yardage to
-                    # a play right at the goal line (e.g. a two-point try
-                    # folded into the same drive's play list), which would
-                    # otherwise push every later play in this drive out of
-                    # [0, 100] too.
-                    pos = max(0.0, min(100.0, new_pos))
+                    start_pct = min(a0, a1)
+                    end_pct = max(a0, a1)
+                    net_yards = int(round((a1 - a0) * direction))
 
                     p_start = p.get('start') or {}
                     down, distance = p_start.get('down'), p_start.get('distance')
-                    down_map = {1: '1st', 2: '2nd', 3: '3rd', 4: '4th'}
                     down_dist = f"{down_map.get(down, '')} & {distance}" if down and distance is not None else ''
                     play_clock = (p.get('clock') or {}).get('displayValue', '')
                     play_period = (p.get('period') or {}).get('number') or quarter
                     tooltip_bits = [b for b in [
                         down_dist,
-                        f"{label} — {yards:+d} yds" if yards else f"{label} — 0 yds",
+                        f"{label} — {net_yards:+d} yds" if net_yards else f"{label} — 0 yds",
                         f"Q{play_period} · {play_clock}" if play_clock else f"Q{play_period}",
                     ] if b]
 
@@ -3112,7 +3135,7 @@ def game_detail(game_id):
                         'color':       color,
                         'start_pct':   round(start_pct, 2),
                         'width_pct':   round(end_pct - start_pct, 2),
-                        'yards':       yards,
+                        'yards':       net_yards,
                         'is_turnover': is_turnover,
                         'is_scoring':  bool(p.get('scoringPlay', False)),
                         'tooltip':     ' | '.join(tooltip_bits),
