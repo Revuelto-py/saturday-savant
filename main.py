@@ -2070,6 +2070,125 @@ def savant_rating_methodology():
     return render_template('savant_rating.html', top10=top10, season=CURRENT_SEASON,
                            n_teams=n_teams, n_drives=n_drives, n_games=n_games)
 
+# ── Returning Production ────────────────────────────────────────────────────
+# Bill Connelly–style metric: what share of a team's PRIOR-season statistical
+# production is retained on THIS season's roster (same school only — a player
+# who transferred in produced nothing here last year, so he can't be
+# "returning"). Split into offense and defense and ranked nationally.
+#   Offense weight  = passing + rushing + receiving yards (the passer and the
+#                     catcher are both credited, per the standard definition).
+#   Defense weight  = tackles + 2·TFL + 3·sacks + 3·INT + passes-defended,
+#                     a volume base with impact-play bonuses (no defensive
+#                     "yards" exist to weight by).
+def _rp_def_value(tot, tfl, sacks, ints, pd):
+    return (tot or 0) + 2 * (tfl or 0) + 3 * (sacks or 0) + 3 * (ints or 0) + (pd or 0)
+
+
+@cache.memoize(timeout=21600)
+def _returning_production_ranks(season):
+    """Every FBS team's offense/defense/overall returning-production percentage
+    for `season` (vs season-1), plus national ranks. Memoized per season."""
+    prior = season - 1
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT ps.team, ps.player_id,
+              SUM(CASE WHEN ps.category IN ('passing','rushing','receiving') AND ps.stat_type='YDS' THEN CAST(ps.stat AS REAL) ELSE 0 END) AS off_yds,
+              SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='TOT'   THEN CAST(ps.stat AS REAL) ELSE 0 END) AS tot,
+              SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='TFL'   THEN CAST(ps.stat AS REAL) ELSE 0 END) AS tfl,
+              SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='SACKS' THEN CAST(ps.stat AS REAL) ELSE 0 END) AS sacks,
+              SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='PD'    THEN CAST(ps.stat AS REAL) ELSE 0 END) AS pd,
+              SUM(CASE WHEN ps.category='interceptions' AND ps.stat_type='INT'   THEN CAST(ps.stat AS REAL) ELSE 0 END) AS ints
+            FROM player_stats ps
+            WHERE ps.season = %s
+            GROUP BY ps.team, ps.player_id
+        ''', (prior,))
+        prod = cur.fetchall()
+        cur.execute('SELECT team, player_id FROM rosters WHERE season = %s', (season,))
+        ret_set = {(t, str(pid)) for t, pid in cur.fetchall()}
+        cur.execute('SELECT name FROM teams WHERE conference IS NOT NULL AND conference <> ALL(%s)',
+                    (list(FCS_CONFS),))
+        fbs = {r[0] for r in cur.fetchall()}
+    finally:
+        release_db(conn)
+
+    teams = {}
+    for team_name, pid, off_yds, tot, tfl, sacks, pd, ints in prod:
+        d = teams.setdefault(team_name, {'off_tot': 0.0, 'off_ret': 0.0, 'def_tot': 0.0, 'def_ret': 0.0})
+        ov = off_yds or 0.0
+        dv = _rp_def_value(tot, tfl, sacks, ints, pd)
+        d['off_tot'] += ov
+        d['def_tot'] += dv
+        if (team_name, str(pid)) in ret_set:
+            d['off_ret'] += ov
+            d['def_ret'] += dv
+
+    for d in teams.values():
+        d['off_pct'] = round(d['off_ret'] / d['off_tot'] * 100, 1) if d['off_tot'] > 0 else None
+        d['def_pct'] = round(d['def_ret'] / d['def_tot'] * 100, 1) if d['def_tot'] > 0 else None
+        tot_pool = d['off_tot'] + d['def_tot']
+        d['overall_pct'] = round((d['off_ret'] + d['def_ret']) / tot_pool * 100, 1) if tot_pool > 0 else None
+
+    fbs_teams = [t for t in teams if t in fbs]
+    counts = {}
+    for pct_key, rank_key in (('off_pct', 'off_rank'), ('def_pct', 'def_rank'), ('overall_pct', 'overall_rank')):
+        ranked = sorted((t for t in fbs_teams if teams[t][pct_key] is not None),
+                        key=lambda t: teams[t][pct_key], reverse=True)
+        for i, t in enumerate(ranked, 1):
+            teams[t][rank_key] = i
+        counts[rank_key] = len(ranked)
+    return {'teams': teams, 'counts': counts}
+
+
+def _returning_breakdown(cursor, team, prior, season, limit=4):
+    """Top returning and departed prior-season contributors for one team,
+    ranked by their share of the team's total production (offense + defense)."""
+    cursor.execute('''
+        SELECT ps.player_id, p.first_name, p.last_name, p.position,
+          SUM(CASE WHEN ps.category IN ('passing','rushing','receiving') AND ps.stat_type='YDS' THEN CAST(ps.stat AS REAL) ELSE 0 END) AS off_yds,
+          SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='TOT'   THEN CAST(ps.stat AS REAL) ELSE 0 END) AS tot,
+          SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='TFL'   THEN CAST(ps.stat AS REAL) ELSE 0 END) AS tfl,
+          SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='SACKS' THEN CAST(ps.stat AS REAL) ELSE 0 END) AS sacks,
+          SUM(CASE WHEN ps.category='defensive'     AND ps.stat_type='PD'    THEN CAST(ps.stat AS REAL) ELSE 0 END) AS pd,
+          SUM(CASE WHEN ps.category='interceptions' AND ps.stat_type='INT'   THEN CAST(ps.stat AS REAL) ELSE 0 END) AS ints
+        FROM player_stats ps
+        LEFT JOIN players p ON p.id = ps.player_id::int
+        WHERE ps.team = %s AND ps.season = %s
+        GROUP BY ps.player_id, p.first_name, p.last_name, p.position
+    ''', (team, prior))
+    rows = cursor.fetchall()
+    if not rows:
+        return [], []
+    off_tot = sum((r[4] or 0) for r in rows) or 1
+    def_tot = sum(_rp_def_value(r[5], r[6], r[7], r[9], r[8]) for r in rows) or 1
+
+    cursor.execute('SELECT player_id FROM rosters WHERE season = %s AND team = %s', (season, team))
+    returning_ids = {str(r[0]) for r in cursor.fetchall()}
+
+    players = []
+    for pid, fn, ln, pos, off_yds, tot, tfl, sacks, pd, ints in rows:
+        dv = _rp_def_value(tot, tfl, sacks, ints, pd)
+        share = (off_yds or 0) / off_tot + dv / def_tot
+        if share <= 0:
+            continue
+        # Show whichever side the player mostly contributed on.
+        if (off_yds or 0) / off_tot >= dv / def_tot:
+            stat = f"{int(off_yds):,} yds"
+        else:
+            stat = f"{int(tot or 0)} tkl" + (f", {sacks:g} sk" if sacks else '')
+        players.append({
+            'id': int(pid) if str(pid).isdigit() else None,
+            'name': f"{fn or ''} {ln or ''}".strip() or 'Unknown',
+            'pos': pos or '', 'stat': stat, 'share': share,
+            'returning': str(pid) in returning_ids,
+        })
+    players.sort(key=lambda p: p['share'], reverse=True)
+    returning = [p for p in players if p['returning']][:limit]
+    departed = [p for p in players if not p['returning']][:limit]
+    return returning, departed
+
+
 @app.route('/team/<path:team_ref>')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
@@ -2522,8 +2641,26 @@ def team(team_ref):
             'conference': confs,
         }
 
+        # Returning production — only when the prior season's data exists
+        # (e.g. not computable for 2016, the earliest loaded year).
+        returning = None
+        if (season - 1) in get_available_seasons():
+            rp = _returning_production_ranks(season)
+            td = rp['teams'].get(team_name)
+            if td and (td.get('off_pct') is not None or td.get('def_pct') is not None):
+                ret_list, dep_list = _returning_breakdown(cursor, team_name, season - 1, season)
+                returning = {
+                    'prior': season - 1, 'n': rp['counts'].get('off_rank'),
+                    'off_pct': td.get('off_pct'), 'def_pct': td.get('def_pct'),
+                    'overall_pct': td.get('overall_pct'),
+                    'off_rank': td.get('off_rank'), 'def_rank': td.get('def_rank'),
+                    'overall_rank': td.get('overall_rank'),
+                    'returning_list': ret_list, 'departed_list': dep_list,
+                }
+
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
+                returning=returning,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
                 roster_season=roster_season, next_season=UPCOMING_SEASON,

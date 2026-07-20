@@ -301,6 +301,53 @@
     </div>
     {% endif %}
 
+    <!-- Returning Production — share of last season's output back on this roster -->
+    {% if returning %}
+    <div class="mt-4">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Returning Production</h5>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">Share of {{ returning.prior }} production back on the {{ season }} roster (same school)</span>
+        </div>
+        <div class="row g-3">
+            {% set rp_cards = [
+                ('Offense',  returning.off_pct,     returning.off_rank,     '#34d399', 'rgba(52,211,153,0.1)',  'rgba(52,211,153,0.25)'),
+                ('Defense',  returning.def_pct,     returning.def_rank,     '#60a5fa', 'rgba(96,165,250,0.1)',  'rgba(96,165,250,0.25)'),
+                ('Overall',  returning.overall_pct, returning.overall_rank, 'var(--gold)', 'rgba(28,156,240,0.1)', 'rgba(28,156,240,0.3)') ] %}
+            {% for label, pct, rank, color, chip_bg, chip_bd in rp_cards %}
+            <div class="col-6 col-lg-4">
+                <div class="dark-card p-4 text-center">
+                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">{{ label }}</div>
+                    <div style="color:{{ color }};font-size: var(--text-2xl);font-weight:900;line-height:1">{% if pct is not none %}{{ pct }}%{% else %}—{% endif %}</div>
+                    <div style="margin-top:8px">
+                        {% if rank %}<span style="background:{{ chip_bg }};border:1px solid {{ chip_bd }};color:{{ color }};font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ rank }} of {{ returning.n }}</span>
+                        {% else %}<span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-strong);color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">—</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if returning.returning_list or returning.departed_list %}
+        <div class="rp-breakdown">
+            {% for title, items, accent in [('Key Returners', returning.returning_list, 'var(--green)'), ('Notable Departures', returning.departed_list, 'var(--red)')] %}
+            {% if items %}
+            <div class="rp-col">
+                <div class="rp-col-head"><span class="rp-dot" style="background:{{ accent }}"></span>{{ title }}</div>
+                {% for pl in items %}
+                {% if pl.id %}<a class="rp-item" href="{{ player_url(pl.id, returning.prior) }}">{% else %}<span class="rp-item">{% endif %}
+                    <span class="rp-name">{{ pl.name }}</span>
+                    <span class="rp-meta">{% if pl.pos %}{{ pl.pos }} · {% endif %}{{ pl.stat }}</span>
+                {% if pl.id %}</a>{% else %}</span>{% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- SP+ Ratings -->
     {% if sp %}
     <div class="mt-4">
