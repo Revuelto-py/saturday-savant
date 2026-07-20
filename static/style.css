@@ -3261,3 +3261,111 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .nfl-dest { grid-column: 2 / -1; justify-content: flex-start; }
     .nfl-badge { justify-self: end; }
 }
+
+/* ── Team Stats tab: information hierarchy ──────────────────────────────────
+   Three tiers with real vertical rhythm: Ratings (headline) → Returning
+   Production → Statistical Profile (detail, with the densest content behind
+   progressive disclosure). Top-level sections get a big gap; sub-blocks a
+   small one. */
+.ts-section { margin-top: var(--s10); }
+.ts-section:first-of-type { margin-top: 0; }
+.ts-section-head { margin-bottom: var(--s4); }
+.ts-section-title {
+    font-family: var(--font-display); font-size: var(--text-lg); font-weight: 700;
+    color: var(--text-primary); letter-spacing: -0.01em; margin: 0 0 2px;
+}
+.ts-section-sub { color: var(--text-secondary); font-size: var(--text-sm); }
+
+/* Savant hero — the signature metric gets the most visual weight */
+.ts-savant {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr);
+    gap: var(--s4);
+}
+@media (max-width: 767.98px) { .ts-savant { grid-template-columns: 1fr; } }
+.ts-savant-net {
+    background: linear-gradient(140deg, rgba(28,156,240,0.12), var(--bg-card) 60%);
+    border: 1px solid var(--border-gold);
+    border-radius: var(--r-lg); padding: var(--s6);
+    display: flex; flex-direction: column; justify-content: center;
+}
+.ts-eyebrow {
+    color: var(--text-dim); font-size: var(--text-xs); font-weight: 800;
+    letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.ts-howto { color: var(--accent); text-transform: none; letter-spacing: 0; font-weight: 700; text-decoration: none; }
+.ts-howto:hover { text-decoration: underline; }
+.ts-savant-big {
+    font-family: var(--font-display); font-weight: 900; line-height: 0.9;
+    font-size: clamp(3rem, 1.8rem + 5vw, 4.4rem); color: var(--gold);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.35);
+}
+.ts-rankchip {
+    display: inline-block; margin-top: 10px;
+    font-size: var(--text-sm); font-weight: 800;
+    padding: 4px 12px; border-radius: var(--r-pill);
+}
+.ts-rankchip--gold { background: rgba(28,156,240,0.12); border: 1px solid var(--border-gold); color: var(--gold); }
+.ts-savant-desc { color: var(--text-secondary); font-size: var(--text-xs); margin-top: 12px; line-height: 1.5; max-width: 40ch; }
+.ts-savant-sub { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3); }
+.ts-metric {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: var(--s5) var(--s3);
+    display: flex; flex-direction: column; justify-content: center; text-align: center;
+}
+.ts-metric-label { color: var(--text-dim); font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+.ts-metric-val { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 900; line-height: 1; }
+.ts-metric-rank { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 600; margin-top: 6px; }
+
+/* SP+ — a subordinate comparison strip, deliberately lighter than Savant */
+.ts-sp {
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4);
+    margin-top: var(--s3);
+    padding: var(--s4) var(--s5);
+    background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--r-lg);
+}
+.ts-sp-label { display: flex; flex-direction: column; }
+.ts-sp-name { font-family: var(--font-display); font-weight: 800; font-size: var(--text-md); color: var(--text-primary); letter-spacing: 0.02em; }
+.ts-sp-src { color: var(--text-dim); font-size: var(--text-xs); }
+.ts-sp-metrics { display: flex; flex-wrap: wrap; gap: var(--s6); margin-left: auto; }
+.ts-sp-metric { display: flex; flex-direction: column; align-items: flex-start; }
+.ts-sp-metric > span { color: var(--text-dim); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.ts-sp-metric > b { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 900; color: var(--text-primary); line-height: 1.15; }
+.ts-sp-metric > em { color: var(--text-dim); font-size: var(--text-xs); font-style: normal; }
+
+/* Sub-block (tables) within the detail tier */
+.ts-block { margin-top: var(--s5); }
+.ts-block-head {
+    display: flex; align-items: baseline; gap: var(--s3); margin-bottom: var(--s3);
+    font-family: var(--font-display); font-weight: 700; font-size: var(--text-md); color: var(--text-primary);
+}
+.ts-block-head span {
+    color: var(--text-dim); font-size: var(--text-xs); font-weight: 400;
+    font-family: var(--font-body); margin-left: auto; text-align: right;
+}
+
+/* Progressive disclosure — <details> for the densest content */
+.ts-collapse {
+    margin-top: var(--s5);
+    border: 1px solid var(--border-strong); border-radius: var(--r-lg);
+}
+.ts-collapse-head {
+    display: flex; align-items: center; gap: var(--s3);
+    padding: var(--s4) var(--s5); cursor: pointer;
+    list-style: none; -webkit-tap-highlight-color: transparent;
+}
+.ts-collapse-head::-webkit-details-marker { display: none; }
+.ts-collapse-head:hover { background: rgba(255,255,255,0.03); border-radius: var(--r-lg); }
+.ts-collapse-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-lg); }
+.ts-collapse[open] > .ts-collapse-head { border-bottom: 1px solid var(--border); border-radius: 0; }
+.ts-collapse-title { font-family: var(--font-display); font-weight: 700; font-size: var(--text-md); color: var(--text-primary); }
+.ts-collapse-hint { color: var(--text-dim); font-size: var(--text-xs); }
+.ts-chev { color: var(--text-secondary); margin-left: auto; flex-shrink: 0; transition: transform var(--t-base, 0.2s); }
+.ts-collapse[open] > .ts-collapse-head .ts-chev { transform: rotate(180deg); }
+.ts-collapse-body { padding: var(--s4) var(--s5) var(--s5); }
+@media (max-width: 575.98px) {
+    .ts-collapse-hint { display: none; }
+    .ts-collapse-body { padding: var(--s3) var(--s3) var(--s4); }
+    .ts-savant-net { padding: var(--s5); }
+}
+@media (prefers-reduced-motion: reduce) { .ts-chev { transition: none; } }

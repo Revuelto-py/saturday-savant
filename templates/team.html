@@ -258,57 +258,69 @@
         <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the {{ season }} season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
     </div>
 
-    <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
-    {% if svr %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · {{ season }} ·
-                <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
-                   onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
-            </span>
+    <!-- ══ TIER 1 · RATINGS (the headline read) ══ -->
+    {% if svr or sp %}
+    <div class="ts-section">
+        <div class="ts-section-head">
+            <h4 class="ts-section-title">Efficiency Ratings</h4>
+            <span class="ts-section-sub">How good is {{ team[0] }} — the headline read</span>
         </div>
-        <div class="row g-3">
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Net Rating</div>
-                    <div style="color: var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.net_rating) }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(28, 156, 240,0.1);border:1px solid rgba(28, 156, 240,0.3);color: var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.net_ranking }} Nationally</span></div>
+
+        {% if svr %}
+        <!-- Savant Rating — the signature metric, given the most weight -->
+        <div class="ts-savant">
+            <div class="ts-savant-net">
+                <div class="ts-eyebrow">Net Savant Rating
+                    <a href="/savant-rating" class="ts-howto">How it works →</a>
                 </div>
+                <div class="ts-savant-big">{{ '%+.1f'|format(svr.net_rating) }}</div>
+                <div><span class="ts-rankchip ts-rankchip--gold">#{{ svr.net_ranking }} Nationally</span></div>
+                <div class="ts-savant-desc">Expected scoring margin vs an average FBS team on a neutral field · {{ season }}</div>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offense</div>
-                    <div style="color:#34d399;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.off_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.off_ranking }} Nationally</span></div>
+            <div class="ts-savant-sub">
+                <div class="ts-metric">
+                    <div class="ts-metric-label">Offense</div>
+                    <div class="ts-metric-val" style="color:#34d399">{{ svr.off_rating }}</div>
+                    <div class="ts-metric-rank">{{ ordinal(svr.off_ranking) }} nationally</div>
                 </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#60a5fa;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.def_ranking }} Nationally</span></div>
+                <div class="ts-metric">
+                    <div class="ts-metric-label">Defense</div>
+                    <div class="ts-metric-val" style="color:#60a5fa">{{ svr.def_rating }}</div>
+                    <div class="ts-metric-rank">{{ ordinal(svr.def_ranking) }} nationally</div>
                 </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Schedule</div>
-                    <div style="color: var(--text-primary);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.sos) }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-strong);color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">Avg Opponent Net</span></div>
+                <div class="ts-metric">
+                    <div class="ts-metric-label">Schedule</div>
+                    <div class="ts-metric-val">{{ '%+.1f'|format(svr.sos) }}</div>
+                    <div class="ts-metric-rank">Avg opponent Net</div>
                 </div>
             </div>
         </div>
+        {% endif %}
+
+        {% if sp %}
+        <!-- SP+ — an external rating shown compactly for comparison -->
+        <div class="ts-sp">
+            <div class="ts-sp-label">
+                <span class="ts-sp-name">SP+</span>
+                <span class="ts-sp-src">Bill Connelly's model · for comparison</span>
+            </div>
+            <div class="ts-sp-metrics">
+                <div class="ts-sp-metric"><span>Overall</span><b>{{ sp.rating }}</b><em>#{{ sp.ranking }}</em></div>
+                <div class="ts-sp-metric"><span>Offense</span><b style="color:#34d399">{{ sp.off_rating }}</b><em>#{{ sp.off_ranking }}</em></div>
+                <div class="ts-sp-metric"><span>Defense</span><b style="color:#60a5fa">{{ sp.def_rating }}</b><em>#{{ sp.def_ranking }}</em></div>
+                <div class="ts-sp-metric"><span>Special Teams</span><b style="color:#f7b928">{{ sp.st_rating }}</b><em>rating</em></div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 
-    <!-- Returning Production — share of last season's output back on this roster -->
+    <!-- ══ TIER 2 · RETURNING PRODUCTION ══ -->
     {% if returning %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Returning Production</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Share of {{ returning.prior }} production back on the {{ season }} roster (same school)</span>
+    <div class="ts-section">
+        <div class="ts-section-head">
+            <h4 class="ts-section-title">Returning Production</h4>
+            <span class="ts-section-sub">Share of {{ returning.prior }} production back on the {{ season }} roster (same school)</span>
         </div>
         <div class="row g-3">
             {% set rp_cards = [
@@ -349,48 +361,7 @@
     </div>
     {% endif %}
 
-    <!-- SP+ Ratings -->
-    {% if sp %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">SP+ Ratings</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Bill Connelly's SP+ model · {{ season }}</span>
-        </div>
-        <div class="row g-3">
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Overall</div>
-                    <div style="color: var(--text-primary);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.rating }}</div>
-                    <div style="margin-top:8px"><span style="background:{{ c1 }}33;border:1px solid {{ c1 }}55;color: var(--text-primary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.ranking }} Nationally</span></div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offense</div>
-                    <div style="color:#34d399;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.off_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.off_ranking }} Nationally</span></div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#60a5fa;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.def_ranking }} Nationally</span></div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Special Teams</div>
-                    <div style="color:#f7b928;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.st_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#f7b928;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">SP+ Rating</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Team Offense / Team Defense summary tables -->
+    <!-- ══ TIER 3 · STATISTICAL PROFILE (supporting detail) ══ -->
     {% if team_adv and season_stats %}
     {% set gp = season_stats.games or 1 %}
     {% set tot_ypg = (season_stats.pass_yds_pg + season_stats.rush_yds_pg) %}
@@ -406,11 +377,15 @@
     {% endmacro %}
     {% macro epa_fmt(v) %}{{ '%+.2f'|format(v) if v is not none else '—' }}{% endmacro %}
 
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Offense</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · per game · national rank shown for scoring &amp; yardage</span>
+    <div class="ts-section">
+        <div class="ts-section-head">
+            <h4 class="ts-section-title">Statistical Profile</h4>
+            <span class="ts-section-sub">{{ season }} · per-game splits and advanced efficiency detail</span>
+        </div>
+
+    <div class="ts-block">
+        <div class="ts-block-head">Team Offense
+            <span>{{ season }} · per game · national rank on scoring &amp; yardage</span>
         </div>
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table data-table--static" style="width:100%;min-width:760px">
@@ -444,11 +419,9 @@
         </div></div>
     </div>
 
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Defense</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · yards allowed aren't tracked in our data source, so this is EPA/scoring-based</span>
+    <div class="ts-block">
+        <div class="ts-block-head">Team Defense
+            <span>{{ season }} · EPA/scoring-based — yards allowed aren't in our data source</span>
         </div>
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table data-table--static" style="width:100%;min-width:640px">
@@ -476,16 +449,14 @@
         </table>
         </div></div>
     </div>
-    {% endif %}
-
-    <!-- Advanced Stats Percentile Rankings -->
-    {% if team_adv %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Advanced Stats — Percentile Rankings</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">vs all 136 FBS teams · Garbage time excluded</span>
-        </div>
+        <!-- Advanced Stats — the densest content, collapsed by default -->
+        <details class="ts-collapse">
+            <summary class="ts-collapse-head">
+                <span class="ts-collapse-title">Advanced Stats — Percentile Rankings</span>
+                <span class="ts-collapse-hint">33 efficiency metrics vs all 136 FBS teams · garbage time excluded</span>
+                <svg class="ts-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </summary>
+            <div class="ts-collapse-body">
 
         <!-- Legend -->
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:16px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius: var(--r-md);border: 1px solid var(--border)">
@@ -583,15 +554,20 @@
                 </div>
             </div>
         </div>
+            </div>
+        </details>
     </div>
     {% endif %}
 
-    <!-- Glossary -->
-    <div class="mt-5 mb-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Stats Glossary</h5>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-        </div>
+    <!-- Glossary — collapsed reference (definitions for the metrics above) -->
+    <div class="ts-section">
+    <details class="ts-collapse">
+        <summary class="ts-collapse-head">
+            <span class="ts-collapse-title">Stats Glossary</span>
+            <span class="ts-collapse-hint">Definitions for every metric above</span>
+            <svg class="ts-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="ts-collapse-body">
         {% set glossary = [
             ('Savant Rating (SVR)', 'Saturday Savant\'s proprietary efficiency model. Offense = opponent-adjusted points scored per 10 drives; Defense = points allowed per 10 drives (lower is better); Net = the difference, i.e. the expected margin against an average FBS team on a neutral field. Garbage time, kneel-downs, and overtime are excluded, and every number is adjusted for schedule strength.'),
             ('SP+', 'Bill Connelly\'s tempo- and opponent-adjusted efficiency metric. Combines offense, defense, and special teams into a single predictive rating. Higher is better.'),
@@ -619,6 +595,8 @@
             </div>
             {% endfor %}
         </div>
+        </div>
+    </details>
     </div>
 
 </div>
