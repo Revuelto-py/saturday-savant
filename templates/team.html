@@ -986,7 +986,7 @@
                     </td>
                     <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-base)">{% if feet is not none %}{{ feet }}'{{ inches }}"{% else %}—{% endif %}</td>
                     <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-base)">{% if player[7] %}{{ player[7] }} lbs{% else %}—{% endif %}</td>
-                    <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm);font-weight:600">{{ year_map.get(player[8], player[8] or '—') }}</td>
+                    <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm);font-weight:600">{% if player[9] and player[8] in year_map %}<span title="Redshirt" style="color: var(--gold)">RS </span>{% endif %}{{ year_map.get(player[8], player[8] or '—') }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

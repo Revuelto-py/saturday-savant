@@ -2248,7 +2248,7 @@ def team(team_ref):
         roster_season = UPCOMING_SEASON if is_current else season
         cursor.execute('''
             SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot,
-                   r.height, r.weight, r.class_year
+                   r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0)
             FROM rosters r
             JOIN players p ON p.id = r.player_id
             WHERE r.team=%s AND r.season=%s
@@ -3554,7 +3554,8 @@ def _player_detail_cached(player_id, season):
                    t.logo_dark, t.color, t.alt_color, t.conference,
                    p.active_2026, p.draft_status,
                    p.nfl_status, p.nfl_team, p.nfl_team_logo,
-                   p.draft_year, p.draft_round, p.draft_pick
+                   p.draft_year, p.draft_round, p.draft_pick,
+                   COALESCE(p.redshirt, 0)
             FROM players p
             LEFT JOIN teams t ON p.team = t.name
             WHERE p.id = %s
@@ -3614,6 +3615,10 @@ def _player_detail_cached(player_id, season):
             '1': 'Freshman',  '2': 'Sophomore', '3': 'Junior', '4': 'Senior', '5': 'Graduate',
             'Fr': 'Freshman', 'So': 'Sophomore', 'Jr': 'Junior', 'Sr': 'Senior', 'Gr': 'Graduate',
         }
+        # Redshirt is a career trait — prefix the class label when set.
+        is_redshirt = bool(row[22])
+        _year_base = year_map.get(year_raw, '')
+        year_display = f'Redshirt {_year_base}' if (is_redshirt and _year_base) else _year_base
         player = {
             'id':         row[0],
             'first_name': row[1],
@@ -3629,7 +3634,8 @@ def _player_detail_cached(player_id, season):
             'logo_dark':  row[10],
             'conference': row[13],
             'height_fmt': f"{h // 12}'{h % 12}\"" if h else '',
-            'year_fmt':   year_map.get(year_raw, ''),
+            'year_fmt':   year_display,
+            'redshirt':   is_redshirt,
             'nfl_status':    row[16],
             'nfl_team':      row[17],
             'nfl_team_logo': row[18],
