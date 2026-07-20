@@ -2193,20 +2193,27 @@ def _returning_breakdown(cursor, team, prior, season, limit=4):
 # ── NFL Talent ──────────────────────────────────────────────────────────────
 @cache.memoize(timeout=86400)
 def _team_nfl_talent(team):
-    """Every player who was on this program's roster in any loaded season and
-    went on to the NFL (drafted or UDFA). All-time — not season-scoped. Drafted
-    players are grouped into draft classes (newest first, earliest picks first
-    within a class); UDFAs (which carry no draft year) are listed separately."""
+    """Every player who finished their college career at this program and went
+    on to the NFL (drafted or UDFA). All-time — not season-scoped. A player is
+    attributed to his LAST college team (the program he was drafted from), so a
+    transfer counts only for the school he left for the NFL, not every school he
+    passed through. Drafted players are grouped into draft classes (newest
+    first, earliest picks first within a class); UDFAs (which carry no draft
+    year) are listed separately."""
     conn = get_db()
     try:
         cur = conn.cursor()
         cur.execute('''
-            SELECT DISTINCT p.id, p.first_name, p.last_name, p.position,
+            SELECT p.id, p.first_name, p.last_name, p.position,
                    p.nfl_status, p.nfl_team, p.nfl_team_logo,
                    p.draft_year, p.draft_round, p.draft_pick, p.headshot
             FROM players p
-            JOIN rosters r ON r.player_id = p.id
-            WHERE r.team = %s AND p.nfl_status IN ('drafted', 'udfa')
+            JOIN (
+                SELECT DISTINCT ON (player_id) player_id, team
+                FROM rosters
+                ORDER BY player_id, season DESC
+            ) last ON last.player_id = p.id
+            WHERE last.team = %s AND p.nfl_status IN ('drafted', 'udfa')
         ''', (team,))
         rows = cur.fetchall()
     finally:
