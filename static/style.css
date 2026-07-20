@@ -1377,11 +1377,21 @@ tr.player-row,
     cursor: pointer;
 }
 
-/* Team cards (/teams page) */
+/* Team cards (/teams page) — box styling; the vibrant team-color gradient +
+   border are set inline per team (same hex+alpha logic as the hero). */
+.team-card {
+    border-radius: var(--r-lg);
+    padding: 20px 12px 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+}
 .team-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--text-dim) !important; /* overrides inline per-team border color */
-    box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+    transform: translateY(-3px);
+    /* brighten the team's OWN colour on hover, not a generic gray */
+    border-color: color-mix(in srgb, var(--tc, #2b3a55) 85%, transparent) !important;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.45);
     cursor: pointer;
 }
 
