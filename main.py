@@ -66,6 +66,7 @@ from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, Response, redirect
 from flask_caching import Cache
 from collections import OrderedDict
+from itertools import groupby
 
 load_dotenv()
 
@@ -2189,6 +2190,52 @@ def _returning_breakdown(cursor, team, prior, season, limit=4):
     return returning, departed
 
 
+# ── NFL Talent ──────────────────────────────────────────────────────────────
+@cache.memoize(timeout=86400)
+def _team_nfl_talent(team):
+    """Every player who was on this program's roster in any loaded season and
+    went on to the NFL (drafted or UDFA). All-time — not season-scoped. Drafted
+    players are grouped into draft classes (newest first, earliest picks first
+    within a class); UDFAs (which carry no draft year) are listed separately."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('''
+            SELECT DISTINCT p.id, p.first_name, p.last_name, p.position,
+                   p.nfl_status, p.nfl_team, p.nfl_team_logo,
+                   p.draft_year, p.draft_round, p.draft_pick, p.headshot
+            FROM players p
+            JOIN rosters r ON r.player_id = p.id
+            WHERE r.team = %s AND p.nfl_status IN ('drafted', 'udfa')
+        ''', (team,))
+        rows = cur.fetchall()
+    finally:
+        release_db(conn)
+
+    drafted, udfa = [], []
+    for pid, fn, ln, pos, status, nfl_team, logo, yr, rnd, pick, headshot in rows:
+        rec = {'id': pid, 'name': f"{fn or ''} {ln or ''}".strip(), 'pos': pos or '',
+               'nfl_team': nfl_team, 'logo': logo, 'year': yr, 'round': rnd,
+               'pick': pick, 'headshot': headshot}
+        (drafted if status == 'drafted' else udfa).append(rec)
+
+    drafted.sort(key=lambda d: (-(d['year'] or 0), d['round'] or 99, d['pick'] or 999))
+    classes = []
+    for yr, grp in groupby(drafted, key=lambda d: d['year']):
+        classes.append({'year': yr, 'players': list(grp)})
+    udfa.sort(key=lambda d: d['name'])
+
+    return {
+        'classes': classes, 'udfa': udfa,
+        'summary': {
+            'draft_picks': len(drafted),
+            'first_round': sum(1 for d in drafted if d['round'] == 1),
+            'udfa': len(udfa),
+            'total': len(drafted) + len(udfa),
+        },
+    }
+
+
 @app.route('/team/<path:team_ref>')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
@@ -2658,9 +2705,12 @@ def team(team_ref):
                     'returning_list': ret_list, 'departed_list': dep_list,
                 }
 
+        # NFL Talent — all-time draft/UDFA alumni (not season-scoped)
+        nfl_talent = _team_nfl_talent(team_name)
+
         return render_template('team.html',
                 team=team_info, record=record, season_stats=season_stats,
-                returning=returning,
+                returning=returning, nfl_talent=nfl_talent,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
                 roster_season=roster_season, next_season=UPCOMING_SEASON,

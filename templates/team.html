@@ -83,6 +83,7 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#player-stats">Player Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#trends" id="trends-tab-btn">Trends</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#roster">Roster</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nfl-talent">NFL Talent</button></li>
         </ul>
         {% if available_seasons and available_seasons|length > 1 %}
         <select class="lb-select season-select" style="min-width:110px;margin-bottom:6px" aria-label="Season"
@@ -1050,6 +1051,88 @@
 </div>
 </div>
 <!-- ===== END ROSTER ===== -->
+
+<!-- ===== NFL TALENT ===== -->
+<div class="tab-pane fade" id="nfl-talent">
+<div class="pt-4">
+
+    <div style="margin-bottom:24px">
+        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-base)">NFL Talent</h5>
+        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Every {{ team[0] }} player who was drafted or signed as an undrafted free agent, across the 2016–2026 data range.</p>
+    </div>
+
+    {% if nfl_talent.summary.total > 0 %}
+    <div class="row g-3" style="margin-bottom:8px">
+        {% set nfl_cards = [
+            ('Draft Picks',     nfl_talent.summary.draft_picks, 'var(--gold)',  'rgba(28,156,240,0.1)',  'rgba(28,156,240,0.3)'),
+            ('1st-Round Picks', nfl_talent.summary.first_round, '#f0c66a',      'rgba(232,176,75,0.12)', 'rgba(232,176,75,0.4)'),
+            ('UDFA Signings',   nfl_talent.summary.udfa,        'var(--text-primary)', 'rgba(255,255,255,0.06)', 'var(--border-strong)') ] %}
+        {% for label, val, color, chip_bg, chip_bd in nfl_cards %}
+        <div class="col-6 col-lg-4">
+            <div class="dark-card p-4 text-center">
+                <div style="color:{{ color }};font-size: var(--text-2xl);font-weight:900;line-height:1">{{ val }}</div>
+                <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-top:8px">{{ label }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% macro nfl_row(pl, badge_label, badge_class) %}
+    <a class="nfl-row" href="/player/{{ pl.id }}">
+        {% if pl.headshot %}
+        <img class="nfl-headshot" src="{{ pl.headshot }}" alt="" loading="lazy">
+        {% else %}
+        <span class="nfl-headshot nfl-headshot--ph">{{ pl.name[:1] }}</span>
+        {% endif %}
+        <span class="nfl-player">
+            <span class="nfl-name">{{ pl.name }}</span>
+            <span class="nfl-pos">{{ pl.pos or '—' }}</span>
+        </span>
+        <span class="nfl-badge {{ badge_class }}">{{ badge_label }}</span>
+        <span class="nfl-dest">
+            {% if pl.logo %}<img src="{{ pl.logo }}" alt="" loading="lazy">{% endif %}
+            <span>{{ pl.nfl_team or '' }}</span>
+        </span>
+    </a>
+    {% endmacro %}
+
+    {% for cls in nfl_talent.classes %}
+    <div class="nfl-class">
+        <div class="nfl-class-head">
+            <span>{{ cls.year }} NFL Draft</span>
+            <span class="nfl-class-count">{{ cls.players|length }} pick{{ '' if cls.players|length == 1 else 's' }}</span>
+        </div>
+        <div class="nfl-list">
+            {% for pl in cls.players %}
+            {{ nfl_row(pl, ('Round ' ~ pl.round ~ ' · Pick ' ~ pl.pick) if pl.round else 'Drafted', 'nfl-badge--r1' if pl.round == 1 else '') }}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if nfl_talent.udfa %}
+    <div class="nfl-class">
+        <div class="nfl-class-head">
+            <span>Undrafted Free Agents</span>
+            <span class="nfl-class-count">{{ nfl_talent.udfa|length }} signing{{ '' if nfl_talent.udfa|length == 1 else 's' }}</span>
+        </div>
+        <div class="nfl-list">
+            {% for pl in nfl_talent.udfa %}
+            {{ nfl_row(pl, 'UDFA', 'nfl-badge--udfa') }}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="dark-card" style="padding:48px 24px;text-align:center;color: var(--text-dim);font-size: var(--text-base)">
+        No NFL draft picks or UDFA signings for {{ team[0] }} in the available data range (2016–2026).
+    </div>
+    {% endif %}
+
+</div>
+</div>
+<!-- ===== END NFL TALENT ===== -->
 
 </div>
 </div>
