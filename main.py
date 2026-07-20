@@ -5575,24 +5575,23 @@ EXPLORER_PLAYER_SPEC = {
         ('ypr',      'Yards / Reception','receiving','AVG',False, 1, ''),
         ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
     ]},
+    # No EPA/Play axis for defensive groups — player_ppa only covers offensive
+    # skill positions, so it would be an always-empty axis (and a blank default).
     'DL': {'label': 'Defensive Line', 'peer': ['DE','DT','NT','DL','EDGE'], 'axes': [
         ('tackles',  'Total Tackles',   'defensive','TOT', False, 0, ''),
-        ('sacks',    'Sacks',           'defensive','SACKS',False,1, ''),
         ('tfl',      'Tackles for Loss','defensive','TFL', False, 1, ''),
-        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+        ('sacks',    'Sacks',           'defensive','SACKS',False,1, ''),
     ]},
     'LB': {'label': 'Linebackers', 'peer': ['LB','ILB','OLB','MLB'], 'axes': [
         ('tackles',  'Total Tackles',   'defensive','TOT', False, 0, ''),
-        ('sacks',    'Sacks',           'defensive','SACKS',False,1, ''),
         ('tfl',      'Tackles for Loss','defensive','TFL', False, 1, ''),
-        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
+        ('sacks',    'Sacks',           'defensive','SACKS',False,1, ''),
     ]},
     'DB': {'label': 'Defensive Backs', 'peer': ['CB','S','SS','FS','SAF','DB'], 'axes': [
         ('tackles',  'Total Tackles',   'defensive','TOT', False, 0, ''),
         ('interceptions','Interceptions','defensive','INT',False, 0, ''),
         ('pd',       'Passes Defended', 'defensive','PD',  False, 0, ''),
         ('tfl',      'Tackles for Loss','defensive','TFL', False, 1, ''),
-        ('epa',      'EPA / Play',      'ppa', 'avg_ppa_all', False, 3, ''),
     ]},
 }
 
@@ -5623,11 +5622,13 @@ _DEF_WIDE = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB']
 _RB_REC_WIDE = ['WR','TE','RB','HB','FB']
 
 
-def _explorer_player_scope(cursor, group, season, qualified_only=True):
-    """Every player in a position group with their raw values for the group's
-    scatter axes. Defaults to the leaderboards' qualified pool (min attempts/
-    carries/etc.) to keep the plot readable; qualified_only=False ships the
-    whole group. Reuses the persisted percentile pools, so this is cheap."""
+def _explorer_player_scope(cursor, group, season, qualified_only=True, conference=None):
+    """Players in a position group (scoped to one conference — plotting an
+    entire position across all of FBS is too dense to be readable or cheap to
+    ship) with their raw values for the group's scatter axes. Defaults to the
+    leaderboards' qualified pool (min attempts/carries/etc.); qualified_only=
+    False ships the whole group within the conference. Reuses the persisted
+    percentile pools, so this is cheap."""
     spec = EXPLORER_PLAYER_SPEC[group]
     peer = spec['peer']
     cat_pools, need_ppa = {}, False
@@ -5651,12 +5652,22 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True):
     if not pids:
         return []
     int_pids = [int(p) for p in pids if str(p).lstrip('-').isdigit()]
-    cursor.execute('''
-        SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
-               t.logo_dark, t.color, t.conference
-        FROM players p LEFT JOIN teams t ON t.name = p.team
-        WHERE p.id = ANY(%s)
-    ''', (int_pids,))
+    # Restrict to the requested conference at the DB, so only that conference's
+    # players are ever built/shipped — never the full FBS position group.
+    if conference:
+        cursor.execute('''
+            SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
+                   t.logo_dark, t.color, t.conference
+            FROM players p JOIN teams t ON t.name = p.team
+            WHERE p.id = ANY(%s) AND t.conference = %s
+        ''', (int_pids, conference))
+    else:
+        cursor.execute('''
+            SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
+                   t.logo_dark, t.color, t.conference
+            FROM players p LEFT JOIN teams t ON t.name = p.team
+            WHERE p.id = ANY(%s)
+        ''', (int_pids,))
     meta = {str(r[0]): r for r in cursor.fetchall()}
 
     from urllib.parse import quote
@@ -5775,18 +5786,27 @@ def explorer():
         conn = get_db()
         try:
             cursor = conn.cursor()
-            players_data = _explorer_player_scope(cursor, group, season, qualified_only)
+            # The scatter is always scoped to a single conference — one FBS
+            # position group is far too dense to plot or ship whole.
+            cursor.execute('SELECT DISTINCT conference FROM teams '
+                           'WHERE conference IS NOT NULL AND conference <> ALL(%s) '
+                           'ORDER BY conference', (list(FCS_CONFS),))
+            all_confs = [r[0] for r in cursor.fetchall()]
+            conf = request.args.get('conf', '')
+            if conf not in all_confs:
+                conf = 'SEC' if 'SEC' in all_confs else (all_confs[0] if all_confs else '')
+            players_data = _explorer_player_scope(cursor, group, season, qualified_only, conf)
         finally:
             release_db(conn)
         axes_meta = [{'key': k, 'label': l, 'invert': inv, 'dp': dp, 'unit': u}
                      for k, l, _c, _s, inv, dp, u in EXPLORER_PLAYER_SPEC[group]['axes']]
         groups_meta = [{'key': g, 'label': EXPLORER_PLAYER_SPEC[g]['label']}
                        for g in EXPLORER_PLAYER_SPEC]
-        confs = sorted({p['conf'] for p in players_data if p['conf']})
         return render_template('explorer.html', scope='player',
                                players_data=players_data, player_axes=axes_meta,
                                player_group=group, player_groups=groups_meta,
-                               player_confs=confs, qualified_only=qualified_only,
+                               player_confs=all_confs, player_conf=conf,
+                               qualified_only=qualified_only,
                                season=season, available_seasons=get_available_seasons())
 
     conn = get_db()

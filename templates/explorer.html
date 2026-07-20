@@ -9,7 +9,7 @@
     <div>
         <div class="section-label">Stat Explorer</div>
         <h1 class="xp-title">{{ season }} {{ 'Player' if scope == 'player' else 'Team' }} Landscape</h1>
-        <p class="xp-sub">Pick any two stats — {{ 'players plot as their headshot' if scope == 'player' else 'every FBS team plots as its logo' }}. Axes always point the good way: up and right is better, whatever the stat.</p>
+        <p class="xp-sub">Pick any two stats — {% if scope == 'player' %}players in one conference plot as their headshot{% else %}every FBS team plots as its logo{% endif %}. Axes always point the good way: up and right is better, whatever the stat.</p>
     </div>
     {% if available_seasons and available_seasons|length > 1 %}
     <select class="lb-select season-select" id="xp-season" aria-label="Season">
@@ -103,8 +103,7 @@
         <div class="lb-filter-group">
             <label class="lb-filter-label" for="xp-conf">Conference</label>
             <select id="xp-conf" class="lb-select">
-                <option value="">All conferences</option>
-                {% for c in player_confs %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                {% for c in player_confs %}<option value="{{ c }}" {{ 'selected' if c == player_conf }}>{{ c }}</option>{% endfor %}
             </select>
         </div>
         {% endif %}
@@ -119,7 +118,7 @@
         <div class="xp-legend">
             <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
             <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>Group average</span>
-            <span class="xp-legend-note" id="xp-count">{{ players_data|length }} players · {{ season }}</span>
+            <span class="xp-legend-note" id="xp-count">{{ players_data|length }} {{ player_conf }} players · {{ season }}</span>
         </div>
     </div>
 </div>
@@ -311,11 +310,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function buildPlayer() {
         var xk = selX.value, yk = selY.value;
-        var conf = selConf ? selConf.value : '';
+        // Conference is scoped server-side (PLAYERS already holds only that
+        // conference), so no client-side conference filter is needed here.
         var pts = PLAYERS.filter(function (p) {
-            return p.stats[xk]!=null && p.stats[yk]!=null && (!conf || p.conf===conf);
+            return p.stats[xk]!=null && p.stats[yk]!=null;
         });
-        document.getElementById('xp-count').textContent = pts.length + ' players · ' + SEASON;
+        var confLbl = selConf ? selConf.value + ' ' : '';
+        document.getElementById('xp-count').textContent = pts.length + ' ' + confLbl + 'players · ' + SEASON;
         if (!pts.length) { Plotly.react('xp-plot', [], {}, {displayModeBar:false}); return; }
         var xs = pts.map(function(p){return p.stats[xk];});
         var ys = pts.map(function(p){return p.stats[yk];});
@@ -353,7 +354,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     selX.addEventListener('change', buildPlayer);
     selY.addEventListener('change', buildPlayer);
-    if (selConf) selConf.addEventListener('change', buildPlayer);
+    // Conference now changes the plotted pool server-side -> reload
+    if (selConf) selConf.addEventListener('change', function(){ reloadWith({scope:'player', pos:GROUP, conf:selConf.value}); });
     document.getElementById('xp-swap').addEventListener('click', function(){
         var x=selX.value; selX.value=selY.value; selY.value=x; buildPlayer();
     });
