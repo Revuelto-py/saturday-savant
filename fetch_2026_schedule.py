@@ -71,18 +71,20 @@ for game in fbs_games:
     time_tbd = 1 if getattr(game, 'start_time_tbd', False) else 0
     cursor.execute('''
         INSERT INTO games (id, season, week, season_type, home_team, home_points,
-                           away_team, away_points, completed, start_date, notes, start_time_tbd)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           away_team, away_points, completed, start_date, notes, start_time_tbd, neutral_site)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             season = EXCLUDED.season, week = EXCLUDED.week,
             season_type = EXCLUDED.season_type,
             home_team = EXCLUDED.home_team, home_points = EXCLUDED.home_points,
             away_team = EXCLUDED.away_team, away_points = EXCLUDED.away_points,
             completed = EXCLUDED.completed, start_date = EXCLUDED.start_date,
-            notes = EXCLUDED.notes, start_time_tbd = EXCLUDED.start_time_tbd
+            notes = EXCLUDED.notes, start_time_tbd = EXCLUDED.start_time_tbd,
+            neutral_site = EXCLUDED.neutral_site
     ''', (game.id, game.season, game.week, str(game.season_type),
           game.home_team, game.home_points, game.away_team, game.away_points,
-          is_completed, str(game.start_date) if game.start_date else None, game.notes, time_tbd))
+          is_completed, str(game.start_date) if game.start_date else None, game.notes, time_tbd,
+          1 if getattr(game, 'neutral_site', False) else 0))
     inserted += 1
 
 conn.commit()

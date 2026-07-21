@@ -79,18 +79,20 @@ def backfill_games(apis, y):
     _refresh('games', y)
     execute_values(cursor, '''
         INSERT INTO games (id, season, week, season_type, home_team, home_points,
-                           away_team, away_points, completed, start_date, notes, start_time_tbd)
+                           away_team, away_points, completed, start_date, notes, start_time_tbd, neutral_site)
         VALUES %s
         ON CONFLICT (id) DO UPDATE SET
             season=EXCLUDED.season, week=EXCLUDED.week, season_type=EXCLUDED.season_type,
             home_team=EXCLUDED.home_team, home_points=EXCLUDED.home_points,
             away_team=EXCLUDED.away_team, away_points=EXCLUDED.away_points,
             completed=EXCLUDED.completed, start_date=EXCLUDED.start_date,
-            notes=EXCLUDED.notes, start_time_tbd=EXCLUDED.start_time_tbd
+            notes=EXCLUDED.notes, start_time_tbd=EXCLUDED.start_time_tbd,
+            neutral_site=EXCLUDED.neutral_site
     ''', [(g.id, g.season, g.week, str(g.season_type), g.home_team, g.home_points,
            g.away_team, g.away_points, 1 if g.completed else 0,
            str(g.start_date) if g.start_date else None, g.notes,
-           1 if getattr(g, 'start_time_tbd', False) else 0) for g in fbs],
+           1 if getattr(g, 'start_time_tbd', False) else 0,
+           1 if getattr(g, 'neutral_site', False) else 0) for g in fbs],
         page_size=500)
     conn.commit()
     print(f"  games: {len(fbs)} (of {len(all_games)})")
