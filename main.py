@@ -468,6 +468,56 @@ def get_rivalry_map(cursor):
     cursor.execute('SELECT team1, team2, rivalry_name FROM rivalries')
     return {(t1, t2): name for t1, t2, name in cursor.fetchall()}
 
+def get_upsets(cursor, game_ids=None, season=None, week=None):
+    """Completed games where the team Savant Forecast favored pre-kickoff lost.
+
+    Reads the FROZEN prediction stored by predict_games.py (scored=1 rows are
+    never rewritten), so this is always graded against what was actually on the
+    page before kickoff — never a re-forecast with hindsight.
+
+    `correct = 0` on a scored row means exactly this: the side with the higher
+    win probability did not win. Returns {game_id: {...}} with the favorite and
+    the probability it carried, so the badge can say how big a surprise it was.
+
+    Filter by explicit game_ids (the /games hub and game page) or by
+    season+week (the weekly upsets list). Degrades to {} if the predictions
+    table doesn't exist yet.
+    """
+    where, params = ['p.scored = 1', 'p.correct = 0'], []
+    if game_ids is not None:
+        if not game_ids:
+            return {}
+        where.append('p.game_id = ANY(%s)')
+        params.append(list(game_ids))
+    if season is not None:
+        where.append('p.season = %s'); params.append(season)
+    if week is not None:
+        where.append('p.week = %s'); params.append(week)
+    try:
+        cursor.execute(f'''
+            SELECT p.game_id, p.home_team, p.away_team, p.home_prob,
+                   g.home_points, g.away_points, p.week, g.start_date
+            FROM game_predictions p JOIN games g ON g.id = p.game_id
+            WHERE {' AND '.join(where)}
+            ORDER BY GREATEST(p.home_prob, 1 - p.home_prob) DESC
+        ''', params)
+    except Exception:
+        cursor.connection.rollback()   # game_predictions absent on a fresh DB
+        return {}
+    out = {}
+    for gid, home, away, prob, hp, ap, wk, sd in cursor.fetchall():
+        home_fav = prob >= 0.5
+        out[gid] = {
+            'favorite': home if home_fav else away,
+            'winner':   away if home_fav else home,   # the favorite lost, so the other side won
+            'fav_prob': prob if home_fav else 1 - prob,
+            'home': home, 'away': away,
+            'home_points': hp, 'away_points': ap,
+            'week': wk, 'start_date': sd,
+        }
+    return out
+
+
 def get_game_label(notes):
     if not notes: return 'Bowl Games'
     if 'National Championship' in notes: return 'National Championship'
@@ -1487,11 +1537,40 @@ def games_hub():
                 forecasts = {gid: p for gid, p in cursor.fetchall() if p is not None}
             except Exception:
                 conn.rollback()   # table absent on a fresh DB — no chips
+
+        # Upset indicators for the completed cards on this view.
+        completed_ids = [g['id'] for g in games if g['completed']]
+        upsets = get_upsets(cursor, game_ids=completed_ids)
+
+        # "This Week's Upsets" — the most recently completed week's upsets for
+        # the selected season, a filtered view over data that already exists.
+        week_upsets = []
+        try:
+            cursor.execute('''
+                SELECT MAX(week) FROM game_predictions
+                WHERE scored = 1 AND correct = 0 AND season = %s
+            ''', (season,))
+            latest = cursor.fetchone()
+            latest_week = latest[0] if latest else None
+        except Exception:
+            conn.rollback(); latest_week = None
+        if latest_week is not None:
+            wu = get_upsets(cursor, season=season, week=latest_week)
+            logos = {}
+            names = {g['home'] for g in wu.values()} | {g['away'] for g in wu.values()}
+            if names:
+                cursor.execute('SELECT name, logo_dark FROM teams WHERE name = ANY(%s)', (list(names),))
+                logos = dict(cursor.fetchall())
+            for u in wu.values():
+                u['winner_logo'] = logos.get(u['winner'])
+                u['favorite_logo'] = logos.get(u['favorite'])
+                week_upsets.append(u)
     finally:
         release_db(conn)
 
     return render_template('games.html',
         games=games, seasons=seasons, season=season, forecasts=forecasts,
+        upsets=upsets, week_upsets=week_upsets, week_upsets_week=latest_week,
         week_options=week_options, sel_week=sel_week, sel_stype=sel_stype,
         conferences=conferences, team_names=team_names,
         sel_conf=sel_conf, sel_team=sel_team)
@@ -2126,70 +2205,6 @@ def teams():
         if conf not in sorted_confs: sorted_confs[conf] = conferences[conf]
     return render_template('teams.html', conferences=sorted_confs, ap_rankings=ap_rankings,
                            conf_logos=conf_logos)
-
-@app.route('/forecast')
-@cache.cached(timeout=21600)  # refreshed weekly by predict_games.py via cache-clear
-def forecast_page():
-    """Savant Forecast hub: this week's win probabilities, the public accuracy
-    tracker (scored, frozen pre-kickoff predictions), and the methodology.
-    Everything here is precomputed — the page only SELECTs."""
-    conn = get_db()
-    try:
-        cursor = conn.cursor()
-        upcoming, tracker, season = [], {'games': 0, 'correct': 0, 'weeks': []}, None
-        try:
-            # Next week with unscored predictions = the week to feature.
-            cursor.execute('''
-                SELECT p.season, MIN(p.week) FROM game_predictions p
-                JOIN games g ON g.id = p.game_id
-                WHERE p.scored = 0 AND g.completed = 0
-                GROUP BY p.season ORDER BY p.season LIMIT 1
-            ''')
-            row = cursor.fetchone()
-            if row:
-                season, feat_week = row
-                cursor.execute('''
-                    SELECT p.game_id, p.home_team, p.away_team, p.home_prob,
-                           p.predicted_margin, g.start_date, COALESCE(g.start_time_tbd, 0),
-                           th.logo_dark, ta.logo_dark, th.color, ta.color
-                    FROM game_predictions p
-                    JOIN games g ON g.id = p.game_id
-                    LEFT JOIN teams th ON th.name = p.home_team
-                    LEFT JOIN teams ta ON ta.name = p.away_team
-                    WHERE p.season = %s AND p.week = %s AND p.scored = 0 AND g.completed = 0
-                    ORDER BY g.start_date NULLS LAST, p.game_id
-                ''', (season, feat_week))
-                for (gid, home, away, prob, margin, sd, tbd,
-                     hlogo, alogo, hcolor, acolor) in cursor.fetchall():
-                    kd, kt = format_kickoff(sd, tbd)
-                    fav_home = prob >= 0.5
-                    upcoming.append({
-                        'id': gid, 'home': home, 'away': away,
-                        'home_prob': prob, 'margin': margin,
-                        'fav': home if fav_home else away,
-                        'fav_prob': prob if fav_home else 1 - prob,
-                        'home_logo': hlogo, 'away_logo': alogo,
-                        'home_color': hcolor, 'away_color': acolor,
-                        'kickoff_date': kd, 'kickoff_time': kt,
-                    })
-                tracker['week'] = feat_week
-
-            # Public accuracy tracker — scored rows only, frozen pre-kickoff.
-            cursor.execute('''
-                SELECT week, COUNT(*), SUM(correct) FROM game_predictions
-                WHERE scored = 1 AND season = %s GROUP BY week ORDER BY week
-            ''', (season if season is not None else CURRENT_SEASON + 1,))
-            for wk, n, c in cursor.fetchall():
-                tracker['weeks'].append({'week': wk, 'games': n, 'correct': c or 0})
-                tracker['games'] += n
-                tracker['correct'] += c or 0
-        except Exception:
-            conn.rollback()   # game_predictions absent on a fresh DB
-    finally:
-        release_db(conn)
-    return render_template('forecast.html',
-        upcoming=upcoming, tracker=tracker, forecast_season=season)
-
 
 @app.route('/savant-rating')
 @cache.cached(timeout=86400)  # 24 hours — recomputed offline by compute_savant_ratings.py
@@ -3844,8 +3859,16 @@ def game_detail(game_id):
     week_num = game_info[5]
     notes = game_info[7] or ''
 
+    # Upset badge — the frozen pre-kickoff forecast said otherwise.
+    conn_u = get_db()
+    try:
+        upset = get_upsets(conn_u.cursor(), game_ids=[game_id]).get(game_id)
+    finally:
+        release_db(conn_u)
+
     return render_template('game.html',
         game=game_info,
+        upset=upset,
         is_scheduled=False,
         home_team=home_team,
         away_team=away_team,
@@ -6101,7 +6124,7 @@ def sitemap():
     base = f"https://{request.host}"
     paths = ['/', '/teams', '/rankings', '/leaderboards', '/leaderboards/teams',
              '/bracket', '/compare', '/transfers', '/rivalries', '/savant-rating',
-             '/explorer', '/forecast']
+             '/explorer']
     for cat in ('passing', 'rushing', 'receiving', 'defense'):
         paths.append(f'/leaderboards/{cat}')
     conn = get_db()

@@ -121,6 +121,14 @@
             <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
             {% else %}
             <span class="gh-status-pill">Final</span>
+            {% if upset %}<span class="upset-badge">Upset</span>{% endif %}
+            {% endif %}
+            {% if upset %}
+            {# Context makes the badge informative rather than decorative — how
+               big a surprise it was, per the frozen pre-kickoff forecast. #}
+            <div style="margin-top:10px;color:var(--text-secondary);font-size:var(--text-sm)">
+                Savant had {{ upset.favorite }} at {{ '%.0f' % (upset.fav_prob * 100) }}%
+            </div>
             {% endif %}
             {% if rivalry_name %}
             <div>
@@ -161,7 +169,6 @@
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
             <div class="t-meta" style="font-size:var(--text-xs);letter-spacing:0.12em">SAVANT FORECAST</div>
             <div style="flex:1;height:1px;background:var(--border)"></div>
-            <a href="/forecast" style="color:var(--text-dim);font-size:var(--text-xs);text-decoration:none">How this works →</a>
         </div>
         <div class="fc-block-heads">
             <span style="text-align:left">
@@ -184,6 +191,12 @@
             {% if forecast.margin|abs >= 1.5 %}Savant expects {{ fav_team }} by ~{{ '%.0f' % (forecast.margin|abs) }}{% else %}Savant calls it even{% endif %}
         </div>
         {% endif %}
+        {# Lightweight transparency note — the standalone methodology page was
+           removed, so the basis is stated inline rather than linked away. #}
+        <div style="margin-top:8px;color:var(--text-dim);font-size:var(--text-xs);line-height:1.5;text-align:center">
+            Model estimate from team strength, roster continuity, and results so far.
+            A probability, not a prediction — locked before kickoff.
+        </div>
     </div>
     {% endif %}
     <div style="margin-top:26px;color:var(--text-dim);font-size:var(--text-sm);line-height:1.6">

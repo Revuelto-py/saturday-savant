@@ -72,10 +72,32 @@
     </div>
     {% endif %}
 
+    <!-- This Week's Upsets — filtered view over the frozen forecast record -->
+    {% if week_upsets %}
+    <div class="upsets-strip">
+        <div class="upsets-strip-head">
+            <span class="upset-badge">Upsets</span>
+            <h3>Week {{ week_upsets_week }}</h3>
+            <span class="upsets-strip-count">{{ week_upsets|length }} the forecast missed</span>
+        </div>
+        <div class="upsets-strip-list">
+            {% for u in week_upsets %}
+            <a class="upset-row" href="/game/{{ u.id }}">
+                {% if u.winner_logo %}<img src="{{ u.winner_logo }}" alt="" loading="lazy">{% endif %}
+                <span class="upset-row-txt">
+                    <span class="upset-row-teams"><b>{{ u.winner }}</b> over {{ u.favorite }}</span>
+                    <span class="upset-row-note">Savant had {{ u.favorite }} at {{ '%.0f' % (u.fav_prob * 100) }}%</span>
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Games grid -->
     {% if games %}
     <div class="games-grid">
-        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id)) }}{% endfor %}
+        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id), upset=upsets.get(g.id)) }}{% endfor %}
     </div>
     {% else %}
     <div class="games-empty">
