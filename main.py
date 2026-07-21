@@ -255,6 +255,24 @@ def _pool_store_put(key, season, pool):
     finally:
         release_db(conn)
 
+def _pool_store_delete(keys):
+    """Drop stored pools by exact key so the next compute regenerates them.
+    The weekly precompute uses this to force a refresh — otherwise the compute
+    functions read the (now stale) value straight back out of pool_store and
+    never recompute against the freshly-fetched tables."""
+    keys = [k for k in keys if k]
+    if not keys:
+        return
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM pool_store WHERE key = ANY(%s)', (list(keys),))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+
 @cache.memoize(timeout=21600)
 def _stats_pool_cached(category, positions_key, season):
     key = f"stats:{category}:{','.join(positions_key)}:{season}"
@@ -769,6 +787,40 @@ def compute_havoc_field_pos_percentiles(all_teams_advanced, team_name):
         percentiles[metric] = max(1, min(99, pct))
 
     return percentiles
+
+
+@cache.memoize(timeout=21600)
+def _team_percentiles_all(season):
+    """Every team's merged advanced-stat percentiles for a season: the
+    team_stats-based metrics (compute_percentiles) plus the havoc/field-position
+    metrics (compute_havoc_field_pos_percentiles), keyed by team name.
+
+    Ranking one team's metrics requires the whole FBS field, so the two
+    all-teams SELECTs are done once here and every team's percentiles derived
+    from them — far cheaper than the team route re-fetching the field on each
+    request. Precomputed weekly into pool_store (key `teampct:{season}`) by
+    precompute.py; on a miss it computes live and writes back (self-healing)."""
+    key = f"teampct:{season}"
+    stored = _pool_store_get(key)
+    if stored is not None:
+        return stored
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM team_stats WHERE season=%s', (season,))
+        all_teams_stats = cur.fetchall()
+        cur.execute('SELECT * FROM team_advanced WHERE season=%s', (season,))
+        adv_cols = [d[0] for d in cur.description]
+        all_teams_advanced = {row[0]: dict(zip(adv_cols, row)) for row in cur.fetchall()}
+    finally:
+        release_db(conn)
+    result = {}
+    for t in {r[0] for r in all_teams_stats} | set(all_teams_advanced):
+        pct = compute_percentiles(all_teams_stats, t)
+        pct.update(compute_havoc_field_pos_percentiles(all_teams_advanced, t))
+        result[t] = pct
+    _pool_store_put(key, season, result)
+    return result
 
 def sort_players(cat_dict, sort_key, min_val=0):
     players = []
@@ -2088,7 +2140,16 @@ def _rp_def_value(tot, tfl, sacks, ints, pd):
 @cache.memoize(timeout=21600)
 def _returning_production_ranks(season):
     """Every FBS team's offense/defense/overall returning-production percentage
-    for `season` (vs season-1), plus national ranks. Memoized per season."""
+    for `season` (vs season-1), plus national ranks.
+
+    Precomputed weekly into pool_store (key `returning:{season}`) by
+    precompute.py; on a miss (e.g. a brand-new season, or right after a store
+    reset) it computes live and writes back, the same self-healing pattern the
+    percentile pools use. The @cache.memoize adds an in-process layer on top."""
+    key = f"returning:{season}"
+    stored = _pool_store_get(key)
+    if stored is not None:
+        return stored
     prior = season - 1
     conn = get_db()
     try:
@@ -2139,7 +2200,9 @@ def _returning_production_ranks(season):
         for i, t in enumerate(ranked, 1):
             teams[t][rank_key] = i
         counts[rank_key] = len(ranked)
-    return {'teams': teams, 'counts': counts}
+    result = {'teams': teams, 'counts': counts}
+    _pool_store_put(key, season, result)
+    return result
 
 
 def _returning_breakdown(cursor, team, prior, season, limit=4):
@@ -2199,7 +2262,14 @@ def _team_nfl_talent(team):
     transfer counts only for the school he left for the NFL, not every school he
     passed through. Drafted players are grouped into draft classes (newest
     first, earliest picks first within a class); UDFAs (which carry no draft
-    year) are listed separately."""
+    year) are listed separately.
+
+    Precomputed weekly into pool_store (key `nfltalent:{team}`) by precompute.py;
+    on a miss it computes live and writes back (self-healing, like the pools)."""
+    key = f"nfltalent:{team}"
+    stored = _pool_store_get(key)
+    if stored is not None:
+        return stored
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -2232,7 +2302,7 @@ def _team_nfl_talent(team):
         classes.append({'year': yr, 'players': list(grp)})
     udfa.sort(key=lambda d: d['name'])
 
-    return {
+    result = {
         'classes': classes, 'udfa': udfa,
         'summary': {
             'draft_picks': len(drafted),
@@ -2241,6 +2311,8 @@ def _team_nfl_talent(team):
             'total': len(drafted) + len(udfa),
         },
     }
+    _pool_store_put(key, None, result)
+    return result
 
 
 @app.route('/team/<path:team_ref>')
@@ -2536,9 +2608,9 @@ def team(team_ref):
             if p.get('PCT') is not None and float(p.get('PCT', 0)) <= 1.0:
                 p['PCT'] = round(float(p['PCT']) * 100, 1)
 
-        cursor.execute('SELECT * FROM team_stats WHERE season=%s', (season,))
-        all_teams_stats = cursor.fetchall()
-        percentiles = compute_percentiles(all_teams_stats, team_name)
+        # Precomputed once per season (all teams) and read here — a copy so the
+        # havoc merge below never mutates the shared cached object.
+        percentiles = dict(_team_percentiles_all(season).get(team_name, {}))
 
         cursor.execute('SELECT * FROM team_stats WHERE team=%s AND season=%s', (team_name, season))
         ts = cursor.fetchone()
@@ -2625,13 +2697,14 @@ def team(team_ref):
         recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
                       for r in cursor.fetchall()]
 
-        # Havoc + field position (from team_advanced) — fetch every team so we
-        # can rank this team's havoc/field-position numbers into percentiles,
-        # same as the team_stats-based metrics above.
-        cursor.execute('SELECT * FROM team_advanced WHERE season=%s', (season,))
+        # Havoc + field position (from team_advanced) — just this team's row.
+        # The havoc/field-position percentiles are already merged into
+        # `percentiles` by _team_percentiles_all(season) above, so there's no
+        # need to pull the whole field here anymore.
+        cursor.execute('SELECT * FROM team_advanced WHERE season=%s AND team=%s', (season, team_name))
         adv_cols = [d[0] for d in cursor.description]
-        all_teams_advanced = {row[0]: dict(zip(adv_cols, row)) for row in cursor.fetchall()}
-        adv_row = all_teams_advanced.get(team_name)
+        _adv = cursor.fetchone()
+        adv_row = dict(zip(adv_cols, _adv)) if _adv else None
         havoc = None
         if adv_row and adv_row.get('def_havoc_total') is not None:
             havoc = {
@@ -2643,7 +2716,6 @@ def team(team_ref):
                 'scoring_opps': adv_row['off_scoring_opps'],
                 'pts_per_opp': round(adv_row['off_pts_per_opp'], 2) if adv_row['off_pts_per_opp'] else None,
             }
-        percentiles.update(compute_havoc_field_pos_percentiles(all_teams_advanced, team_name))
 
         conf_logo = get_conference_logos(cursor).get(team_info[1])
 

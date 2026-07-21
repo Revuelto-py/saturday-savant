@@ -43,6 +43,12 @@ PPA_POOLS = [QB, RB, WRT, DL, LB, DB]
 def run():
     seasons = [int(a) for a in sys.argv[1:]] or main.get_available_seasons()
     for season in sorted(seasons):
+        # Force a fresh rebuild: drop the stored pools first, else the compute
+        # functions read the (stale) value straight back out of pool_store and
+        # never recompute against the freshly-fetched player_stats/player_ppa.
+        stale = [f"stats:{cat}:{','.join(pos)}:{season}" for cat, pos in STAT_POOLS]
+        stale += [f"ppa:{','.join(pos)}:{season}" for pos in PPA_POOLS]
+        main._pool_store_delete(stale)
         n = 0
         for category, positions in STAT_POOLS:
             key = f"stats:{category}:{','.join(positions)}:{season}"
