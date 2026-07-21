@@ -121,13 +121,16 @@
             <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
             {% else %}
             <span class="gh-status-pill">Final</span>
-            {% if upset %}<span class="upset-badge">Upset</span>{% endif %}
+            {% if forecast and forecast.is_upset %}<span class="upset-badge">Upset</span>{% endif %}
             {% endif %}
-            {% if upset %}
-            {# Context makes the badge informative rather than decorative — how
-               big a surprise it was, per the frozen pre-kickoff forecast. #}
-            <div style="margin-top:10px;color:var(--text-secondary);font-size:var(--text-sm)">
-                Savant had {{ upset.favorite }} at {{ '%.0f' % (upset.fav_prob * 100) }}%
+            {% if not is_scheduled and forecast %}
+            {# One pre-kickoff-forecast recap for the completed game — the same
+               frozen prediction that powers the upset badge, so it's shown once.
+               The badge (above) flags a miss; a hit gets a ✓ here. #}
+            <div class="fc-recap">
+                <span class="fc-recap-lead">Savant forecast</span>
+                favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}
+                {% if forecast.correct %}<span class="fc-recap-hit">✓ hit</span>{% endif %}
             </div>
             {% endif %}
             {% if rivalry_name %}

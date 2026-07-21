@@ -518,6 +518,41 @@ def get_upsets(cursor, game_ids=None, season=None, week=None):
     return out
 
 
+def get_frozen_forecasts(cursor, game_ids):
+    """Frozen pre-kickoff Savant Forecast + graded outcome for completed games
+    that carry a scored prediction — the SAME rows the upset badge and accuracy
+    tracker read (scored=1, never rewritten by predict_games.py), so a completed
+    game's displayed forecast never changes after the fact.
+
+    Returns {game_id: {home_prob, favorite, fav_prob, margin, correct,
+    is_upset}}. Games without a stored prediction (pre-Forecast seasons, FCS
+    matchups) are simply absent — callers render nothing for them."""
+    if not game_ids:
+        return {}
+    try:
+        cursor.execute('''
+            SELECT game_id, home_team, away_team, home_prob, predicted_margin, correct
+            FROM game_predictions WHERE game_id = ANY(%s) AND scored = 1
+        ''', (list(game_ids),))
+    except Exception:
+        cursor.connection.rollback()   # game_predictions absent on a fresh DB
+        return {}
+    out = {}
+    for gid, home, away, prob, margin, correct in cursor.fetchall():
+        if prob is None:
+            continue
+        home_fav = prob >= 0.5
+        out[gid] = {
+            'home_prob': prob,
+            'favorite': home if home_fav else away,
+            'fav_prob': prob if home_fav else 1 - prob,
+            'margin': margin,
+            'correct': bool(correct),
+            'is_upset': not correct,
+        }
+    return out
+
+
 def get_game_label(notes):
     if not notes: return 'Bowl Games'
     if 'National Championship' in notes: return 'National Championship'
@@ -1538,9 +1573,10 @@ def games_hub():
             except Exception:
                 conn.rollback()   # table absent on a fresh DB — no chips
 
-        # Upset indicators for the completed cards on this view.
+        # Frozen forecast for every completed card on this view (favorite %,
+        # margin, and whether it hit) — the upset chip is derived from it.
         completed_ids = [g['id'] for g in games if g['completed']]
-        upsets = get_upsets(cursor, game_ids=completed_ids)
+        completed_forecasts = get_frozen_forecasts(cursor, completed_ids)
 
         # "This Week's Upsets" — the most recently completed week's upsets for
         # the selected season, a filtered view over data that already exists.
@@ -1570,7 +1606,8 @@ def games_hub():
 
     return render_template('games.html',
         games=games, seasons=seasons, season=season, forecasts=forecasts,
-        upsets=upsets, week_upsets=week_upsets, week_upsets_week=latest_week,
+        completed_forecasts=completed_forecasts,
+        week_upsets=week_upsets, week_upsets_week=latest_week,
         week_options=week_options, sel_week=sel_week, sel_stype=sel_stype,
         conferences=conferences, team_names=team_names,
         sel_conf=sel_conf, sel_team=sel_team)
@@ -3859,16 +3896,18 @@ def game_detail(game_id):
     week_num = game_info[5]
     notes = game_info[7] or ''
 
-    # Upset badge — the frozen pre-kickoff forecast said otherwise.
+    # Frozen pre-kickoff Savant Forecast for this completed game (drives both
+    # the recap line and, when it was a miss, the upset badge). None when the
+    # game predates Forecast or was never predicted.
     conn_u = get_db()
     try:
-        upset = get_upsets(conn_u.cursor(), game_ids=[game_id]).get(game_id)
+        forecast = get_frozen_forecasts(conn_u.cursor(), [game_id]).get(game_id)
     finally:
         release_db(conn_u)
 
     return render_template('game.html',
         game=game_info,
-        upset=upset,
+        forecast=forecast,
         is_scheduled=False,
         home_team=home_team,
         away_team=away_team,

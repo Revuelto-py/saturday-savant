@@ -1,13 +1,13 @@
 {# Shared game card — used by the home page and the /games hub.
    Takes a dict built by build_game_card() in main.py. Renders a final score
    for completed games and a kickoff date/time for scheduled (future) ones. #}
-{% macro game_card(g, prob=None, upset=None) %}
+{% macro game_card(g, prob=None, forecast=None) %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
 <a class="game-card-v2{{ ' is-upcoming' if not g.completed else '' }}" href="/game/{{ g.id }}">
     <div class="gc-head">
         <span class="gc-note">{{ g.notes or 'Week ' ~ g.week }}</span>
-        {% if g.completed and upset %}<span class="gc-upset">Upset</span>{% endif %}
+        {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
         {% if g.completed %}
             <span class="gc-final">Final</span>
         {% else %}
@@ -46,8 +46,12 @@
             <span class="gc-fc-pct">{{ fav }} {{ '%.0f' % fav_pct }}%</span>
         </span>
         {% endif %}
-    {% elif upset %}
-        <span class="gc-upset-note">Savant had {{ upset.favorite }} at {{ '%.0f' % (upset.fav_prob * 100) }}%</span>
+    {% elif forecast %}
+        {# Completed + predicted: the frozen pre-kickoff call and whether it hit.
+           An upset also carries the red chip in the header (above). #}
+        <span class="gc-fc-recap{{ ' is-hit' if forecast.correct else '' }}">
+            Savant: {{ forecast.favorite }} {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.correct %} ✓{% endif %}
+        </span>
     {% elif g.rivalry %}
         <span class="gc-rivalry">{{ g.rivalry }}</span>
     {% endif %}
