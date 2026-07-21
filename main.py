@@ -1302,6 +1302,7 @@ def build_game_card(row, ap_rankings, rivalry_map):
 
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
+@cache.cached(timeout=21600)  # keyed on path, so / and each /week/<n>/<type> cache separately
 def home(week=None, season_type='regular'):
     conn = get_db()
     try:

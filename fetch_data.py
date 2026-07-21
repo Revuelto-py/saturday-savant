@@ -49,6 +49,7 @@ for p in ppa_data:
     cursor.execute('''
         INSERT INTO player_ppa (player_id, player_name, position, team, conference, avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa, season)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 2025)
+        ON CONFLICT (player_id, season) DO NOTHING
     ''', (p.id, p.name, p.position, p.team, p.conference,
           p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush, p.total_ppa.all))
 
