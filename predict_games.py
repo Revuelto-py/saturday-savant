@@ -24,7 +24,7 @@ import os
 os.environ.setdefault('POOL_BACKFILL', '1')
 import main
 from season_util import current_cfb_season
-from forecast_features import (build_dataset, _feature_vector,
+from forecast_features import (build_dataset, _feature_vector, _parse_dt,
                                ELO_START, ELO_CARRY, ELO_NEW_TEAM)
 
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forecast_model.json')
@@ -89,7 +89,8 @@ def main_():
         fbs_now = {r[0] for r in cur.fetchall()}
 
         cur.execute('''
-            SELECT id, week, season_type, home_team, away_team, COALESCE(neutral_site, 0)
+            SELECT id, week, season_type, home_team, away_team,
+                   COALESCE(neutral_site, 0), start_date
             FROM games WHERE season = %s AND completed = 0
             ORDER BY week, id
         ''', (season,))
@@ -109,8 +110,16 @@ def main_():
         coef, b0 = model['coef'], model['intercept']
         mcoef, mb0 = model['margin_coef'], model['margin_intercept']
 
+        def rest_days(team, kickoff_dt):
+            """Days between the team's last completed game and this kickoff —
+            the same computation (and ±14 clamp, 7.0 default) training used."""
+            s = stats.get(team)
+            if kickoff_dt is None or not s or s.get('last') is None:
+                return 7.0
+            return max(-14.0, min(14.0, (kickoff_dt - s['last']).days))
+
         n = 0
-        for gid, week, stype, home, away, neutral in upcoming:
+        for gid, week, stype, home, away, neutral, start_date in upcoming:
             if home not in fbs_now or away not in fbs_now:
                 continue
             # Preseason Elo carry for teams whose rating was last touched in a
@@ -123,10 +132,11 @@ def main_():
                 season_of[t] = season
 
             post = 1.0 if 'POST' in (stype or '').upper() else 0.0
+            kick = _parse_dt(start_date)
             feats = _feature_vector(season, week, neutral, post, home, away,
                                     elo, stats, refs['sp'], refs['savant'],
                                     refs['recruit'], refs['transfer'], refs['retprod'],
-                                    7.0, 7.0)   # rest unknown pre-schedule detail: neutral default
+                                    rest_days(home, kick), rest_days(away, kick))
             z = [(f - m) / s for f, m, s in zip(feats, mu, sd)]
             logit = b0 + sum(c * v for c, v in zip(coef, z))
             prob = 1.0 / (1.0 + math.exp(-logit))
