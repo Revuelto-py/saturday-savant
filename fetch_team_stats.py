@@ -2,8 +2,11 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from season_util import current_cfb_season
 
 load_dotenv()
+
+SEASON = current_cfb_season()
 
 configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
@@ -11,11 +14,11 @@ cursor = conn.cursor()
 
 with cfbd.ApiClient(configuration) as api_client:
     stats_api = cfbd.StatsApi(api_client)
-    advanced = stats_api.get_advanced_season_stats(year=2025, exclude_garbage_time=True)
+    advanced = stats_api.get_advanced_season_stats(year=SEASON, exclude_garbage_time=True)
 
-# Multi-season table — only refresh 2025 so prior years (loaded by
+# Multi-season table — only refresh the active season so prior years (loaded by
 # backfill_history.py) survive.
-cursor.execute('DELETE FROM team_stats WHERE season = 2025')
+cursor.execute('DELETE FROM team_stats WHERE season = %s', (SEASON,))
 saved = 0
 for s in advanced:
     try:
@@ -62,7 +65,7 @@ for s in advanced:
 
 # The positional INSERT above fills every column except the trailing `season`
 # (added later by migrate_seasons.py), so tag the freshly-inserted rows.
-cursor.execute('UPDATE team_stats SET season = 2025 WHERE season IS NULL')
+cursor.execute('UPDATE team_stats SET season = %s WHERE season IS NULL', (SEASON,))
 conn.commit()
 conn.close()
 print(f"Saved {saved} teams")

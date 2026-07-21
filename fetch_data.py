@@ -2,8 +2,11 @@ import psycopg2
 import cfbd
 import os
 from dotenv import load_dotenv
+from season_util import current_cfb_season
 
 load_dotenv()
+
+SEASON = current_cfb_season()
 
 configuration = cfbd.Configuration(
     access_token=os.getenv("CFBD_API_KEY")
@@ -12,22 +15,22 @@ configuration = cfbd.Configuration(
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
 cursor = conn.cursor()
 
-# Refresh ONLY the current season — these tables are multi-season (history is
+# Refresh ONLY the active season — these tables are multi-season (history is
 # loaded by backfill_history.py and tagged by `season`), so an unscoped DELETE
-# would wipe every prior year. Scope every delete to season 2025.
-cursor.execute('DELETE FROM games WHERE season = 2025')
-cursor.execute('DELETE FROM player_stats WHERE season = 2025')
-cursor.execute('DELETE FROM player_ppa WHERE season = 2025')
+# would wipe every prior year. Scope every delete to SEASON.
+cursor.execute('DELETE FROM games WHERE season = %s', (SEASON,))
+cursor.execute('DELETE FROM player_stats WHERE season = %s', (SEASON,))
+cursor.execute('DELETE FROM player_ppa WHERE season = %s', (SEASON,))
 
 with cfbd.ApiClient(configuration) as api_client:
     games_api = cfbd.GamesApi(api_client)
-    result = games_api.get_games(2025)
+    result = games_api.get_games(SEASON)
 
     stats_api = cfbd.StatsApi(api_client)
-    stats = stats_api.get_player_season_stats(year=2025, season_type='regular')
+    stats = stats_api.get_player_season_stats(year=SEASON, season_type='regular')
 
     metrics_api = cfbd.MetricsApi(api_client)
-    ppa_data = metrics_api.get_predicted_points_added_by_player_season(year=2025)
+    ppa_data = metrics_api.get_predicted_points_added_by_player_season(year=SEASON)
 
 # Save games
 for game in result:
@@ -41,17 +44,17 @@ for game in result:
 for s in stats:
     cursor.execute('''
         INSERT INTO player_stats (player_id, player_name, team, conference, position, category, stat_type, stat, season)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 2025)
-    ''', (s.player_id, s.player, s.team, s.conference, s.position, s.category, s.stat_type, s.stat))
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (s.player_id, s.player, s.team, s.conference, s.position, s.category, s.stat_type, s.stat, SEASON))
 
 # Save PPA
 for p in ppa_data:
     cursor.execute('''
         INSERT INTO player_ppa (player_id, player_name, position, team, conference, avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa, season)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 2025)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (player_id, season) DO NOTHING
     ''', (p.id, p.name, p.position, p.team, p.conference,
-          p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush, p.total_ppa.all))
+          p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush, p.total_ppa.all, SEASON))
 
 print(f"Games saved: {len(result)}")
 print(f"Stats saved: {len(stats)}")

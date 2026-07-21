@@ -2,8 +2,11 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from season_util import current_cfb_season
 
 load_dotenv()
+
+SEASON = current_cfb_season()
 
 configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
@@ -23,7 +26,7 @@ except Exception:
 
 with cfbd.ApiClient(configuration) as api_client:
     rankings_api = cfbd.RankingsApi(api_client)
-    rankings = rankings_api.get_rankings(year=2025)
+    rankings = rankings_api.get_rankings(year=SEASON)
 
 # Collect all AP poll weeks
 ap_weeks = []
@@ -53,17 +56,17 @@ else:
 
     season_type = 'postseason' if 'post' in cur_type.lower() else 'regular'
 
-    # Multi-season table — only refresh 2025 so prior years' final polls
-    # (loaded by backfill_history.py) survive.
-    cursor.execute('DELETE FROM ap_rankings WHERE season = 2025')
+    # Multi-season table — only refresh the active season so prior years' final
+    # polls (loaded by backfill_history.py) survive.
+    cursor.execute('DELETE FROM ap_rankings WHERE season = %s', (SEASON,))
     for r in cur_ranks:
         prev = prev_rank_map.get(r.school)
         cursor.execute('''
             INSERT INTO ap_rankings
             (team, rank, points, first_place_votes, week, season, prev_rank, season_type)
-            VALUES (%s, %s, %s, %s, %s, 2025, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ''', (r.school, r.rank, getattr(r, 'points', None),
-              getattr(r, 'first_place_votes', None), cur_week, prev, season_type))
+              getattr(r, 'first_place_votes', None), cur_week, SEASON, prev, season_type))
 
     conn.commit()
     print(f"Saved {len(cur_ranks)} teams")

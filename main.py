@@ -151,12 +151,30 @@ def ensure_indexes():
 ensure_indexes()
 
 # ── Seasons ──────────────────────────────────────────────────────────────────
-# CURRENT_SEASON is the most recent completed-stats season (what leaderboards,
-# team stats, and player pages show by default); UPCOMING_SEASON is the roster/
-# schedule year the site projects forward to. Historical seasons (2016+) are
-# reachable everywhere via a ?season=YYYY query parameter.
-CURRENT_SEASON = 2025
-UPCOMING_SEASON = 2026
+# CURRENT_SEASON is the most recent season that actually has stats loaded — the
+# default for leaderboards, team stats, and player pages. It's DERIVED from the
+# data, not hardcoded, so it advances to a new season on its own the first time
+# that season produces stats; until then the site keeps showing the last
+# completed season. UPCOMING_SEASON is the season the site projects forward to
+# (next roster / schedule). Historical seasons (2016+) stay reachable via
+# ?season=YYYY. The data pipeline's *ingest* season is separate and date-driven
+# (season_util.current_cfb_season) — it rolls over before the new season has any
+# data, which is exactly why the display default can't just mirror it.
+def _newest_stats_season(default=2025):
+    try:
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT MAX(season) FROM player_stats WHERE season IS NOT NULL')
+            row = cur.fetchone()
+            return row[0] if row and row[0] else default
+        finally:
+            release_db(conn)
+    except Exception:
+        return default
+
+CURRENT_SEASON = _newest_stats_season()
+UPCOMING_SEASON = CURRENT_SEASON + 1
 
 @cache.memoize(timeout=21600)
 def get_available_seasons():

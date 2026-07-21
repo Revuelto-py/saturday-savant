@@ -2,8 +2,11 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from season_util import current_cfb_season
 
 load_dotenv()
+
+SEASON = current_cfb_season()
 
 configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
@@ -18,10 +21,10 @@ with cfbd.ApiClient(configuration) as api_client:
     # ── 1. TEAM ADVANCED STATS ────────────────────────────────────────────────
     print("Fetching team advanced stats...")
     try:
-        adv = stats_api.get_advanced_season_stats(year=2025, exclude_garbage_time=True)
-        # Multi-season table — only refresh 2025 so prior years (loaded by
-        # backfill_history.py) survive.
-        cursor.execute('DELETE FROM team_advanced WHERE season = 2025')
+        adv = stats_api.get_advanced_season_stats(year=SEASON, exclude_garbage_time=True)
+        # Multi-season table — only refresh the active season so prior years
+        # (loaded by backfill_history.py) survive.
+        cursor.execute('DELETE FROM team_advanced WHERE season = %s', (SEASON,))
         saved = 0
         for s in adv:
             o = s.offense
@@ -64,7 +67,7 @@ with cfbd.ApiClient(configuration) as api_client:
             saved += 1
 
         # Positional INSERT skips the trailing `season` column — tag new rows.
-        cursor.execute('UPDATE team_advanced SET season = 2025 WHERE season IS NULL')
+        cursor.execute('UPDATE team_advanced SET season = %s WHERE season IS NULL', (SEASON,))
         conn.commit()
         print(f"  Saved {saved} team advanced records")
     except Exception as e:
@@ -75,7 +78,7 @@ with cfbd.ApiClient(configuration) as api_client:
     # ── 2. PLAYER USAGE STATS ─────────────────────────────────────────────────
     print("\nFetching player usage stats...")
     try:
-        usage = players_api.get_player_usage(year=2025)
+        usage = players_api.get_player_usage(year=SEASON)
         saved = 0
         for u in usage:
             pid = getattr(u, 'id', None)
@@ -93,7 +96,7 @@ with cfbd.ApiClient(configuration) as api_client:
                     standard_downs=EXCLUDED.standard_downs,
                     passing_downs=EXCLUDED.passing_downs
             ''', (
-                pid, u.name, u.team, u.position, 2025,
+                pid, u.name, u.team, u.position, SEASON,
                 getattr(ud, 'overall', None),
                 getattr(ud, 'var_pass', None),
                 getattr(ud, 'rush', None),

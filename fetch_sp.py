@@ -2,8 +2,11 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from season_util import current_cfb_season
 
 load_dotenv()
+
+SEASON = current_cfb_season()
 
 configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
@@ -11,11 +14,11 @@ cursor = conn.cursor()
 
 with cfbd.ApiClient(configuration) as api_client:
     ratings_api = cfbd.RatingsApi(api_client)
-    sp = ratings_api.get_sp(year=2025)
+    sp = ratings_api.get_sp(year=SEASON)
 
-# Multi-season table — only refresh 2025 so prior years (loaded by
+# Multi-season table — only refresh the active season so prior years (loaded by
 # backfill_history.py) survive.
-cursor.execute('DELETE FROM sp_ratings WHERE season = 2025')
+cursor.execute('DELETE FROM sp_ratings WHERE season = %s', (SEASON,))
 saved = 0
 for s in sp:
     off = getattr(s, 'offense', None)
@@ -36,7 +39,7 @@ for s in sp:
     saved += 1
 
 # Positional INSERT skips the trailing `season` column — tag new rows.
-cursor.execute('UPDATE sp_ratings SET season = 2025 WHERE season IS NULL')
+cursor.execute('UPDATE sp_ratings SET season = %s WHERE season IS NULL', (SEASON,))
 conn.commit()
 conn.close()
 print(f"Saved {saved} SP+ ratings")

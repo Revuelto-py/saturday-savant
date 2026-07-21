@@ -95,14 +95,16 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
+from season_util import current_cfb_season
+
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
 
-# Season comes from the CLI (first numeric arg); 2025 remains the default.
-# 2025 is computed from the stored ESPN game summaries (the original,
-# validated path). Historical seasons have no ESPN summaries — they are
-# computed from CFBD's drives feed (one API call per season), mapped into
+# Season comes from the CLI (first numeric arg); the active season is the
+# default. The active season is computed from the stored ESPN game summaries
+# (the original, validated path). Older seasons have no ESPN summaries — they
+# are computed from CFBD's drives feed (one API call per season), mapped into
 # the exact same per-game aggregates with the same exclusion rules.
-SEASON = next((int(a) for a in sys.argv[1:] if a.isdigit()), 2025)
+SEASON = next((int(a) for a in sys.argv[1:] if a.isdigit()), current_cfb_season())
 
 # FCS conferences — mirrors FCS_CONFS in main.py
 FCS_CONFS = ('CAA', 'Big Sky', 'MVFC', 'SWAC', 'MEAC', 'Southland', 'Big South',
@@ -453,7 +455,7 @@ def main():
     try:
         cur = conn.cursor()
         print(f"season: {SEASON}")
-        if SEASON == 2025:
+        if SEASON == current_cfb_season():
             games, _fbs, hfa_ratio = load_game_samples(cur)   # stored ESPN summaries
         else:
             games, _fbs, hfa_ratio = load_game_samples_cfbd(cur, SEASON)
