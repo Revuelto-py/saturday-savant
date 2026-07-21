@@ -2785,6 +2785,35 @@ def team(team_ref):
                 'games':       svr_row[7],
             }
 
+        # Weekly Savant snapshots (compute_savant_ratings writes one per cron
+        # run in-season): the latest week labels the displayed rating as
+        # "Through Week N", and the full series drives the within-season
+        # progression chart on the Trends tab. Seasons without snapshots
+        # (2016–2024) show neither — their end-of-season display is unchanged.
+        # Week 20 is the postseason sentinel: the season is complete, so no
+        # "through week" label applies.
+        svr_week = None
+        svr_weekly = None
+        try:
+            cursor.execute('''
+                SELECT week, off_rating, def_rating, net_rating, net_ranking
+                FROM savant_weekly WHERE team=%s AND season=%s ORDER BY week
+            ''', (team_name, season))
+            wrows = cursor.fetchall()
+            if wrows:
+                last_wk = wrows[-1][0]
+                svr_week = last_wk if last_wk < 20 else None
+                if len(wrows) >= 2:
+                    svr_weekly = {
+                        'weeks': [('Post' if w == 20 else w) for w, *_ in wrows],
+                        'off':  [r[1] for r in wrows],
+                        'def':  [r[2] for r in wrows],
+                        'net':  [r[3] for r in wrows],
+                        'rank': [r[4] for r in wrows],
+                    }
+        except Exception:
+            conn.rollback()   # savant_weekly absent on a fresh DB
+
         # Recruiting rankings trend
         cursor.execute('''
             SELECT year, rank, points FROM team_recruiting
@@ -2854,6 +2883,7 @@ def team(team_ref):
 
         trends = {
             'seasons': all_seasons,
+            'weekly': svr_weekly,   # within-season progression (None pre-2025)
             'savant': {'off': sv_off, 'def': sv_def, 'net': sv_net, 'rank': sv_rank},
             'sp': {'rating': sp_rt, 'off': sp_off, 'def': sp_def, 'rank': sp_rank},
             'recruiting': {'rank': rec_rank, 'points': rec_pts},
@@ -2898,6 +2928,7 @@ def team(team_ref):
                 kicking_stats=kicking_stats, punting_stats=punting_stats,
                 kick_return_stats=kick_return_stats, punt_return_stats=punt_return_stats,
                 team_adv=team_adv, percentiles=percentiles, sp=sp, svr=svr,
+                svr_week=svr_week,
                 ap_rankings=ap_rankings, team_rank=team_rank,
                 team_awards=team_awards,
                 recruiting=recruiting, havoc=havoc, conf_logo=conf_logo)

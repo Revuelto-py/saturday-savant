@@ -100,11 +100,32 @@ from season_util import current_cfb_season
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
 
 # Season comes from the CLI (first numeric arg); the active season is the
-# default. The active season is computed from the stored ESPN game summaries
-# (the original, validated path). Older seasons have no ESPN summaries — they
-# are computed from CFBD's drives feed (one API call per season), mapped into
-# the exact same per-game aggregates with the same exclusion rules.
-SEASON = next((int(a) for a in sys.argv[1:] if a.isdigit()), current_cfb_season())
+# default. Seasons with stored ESPN game summaries (2025+, kept fresh by the
+# weekly fetch) are computed from those (the original, validated path); older
+# seasons have no summaries and are computed from CFBD's drives feed, mapped
+# into the exact same per-game aggregates with the same exclusion rules.
+#
+# Flags:
+#   --write            persist to savant_ratings AND write a weekly snapshot
+#   --snapshot-only    write ONLY the weekly snapshot (savant_ratings untouched)
+#                      — used to replay a past season's weeks without touching
+#                      its end-of-season ratings
+#   --through-week N   use only regular-season games through week N (simulation
+#                      / snapshot replay); postseason excluded
+_argv = list(sys.argv[1:])
+THROUGH_WEEK = None
+if '--through-week' in _argv:
+    _i = _argv.index('--through-week')
+    THROUGH_WEEK = int(_argv[_i + 1])
+    del _argv[_i:_i + 2]          # so the week number isn't mistaken for a season
+SEASON = next((int(a) for a in _argv if a.isdigit()), current_cfb_season())
+
+# In-season a fresh week is computed from partial data. The PRIOR_DRIVES
+# Bayesian prior (below) is the stabilizer — every team carries ~2 games of
+# national-average pseudo-drives, so tiny samples shrink hard toward the mean.
+# Below this many league-wide games the ratings are pure prior/noise (and the
+# offseason has zero), so the script exits cleanly without writing anything.
+MIN_GAMES = 20
 
 # FCS conferences — mirrors FCS_CONFS in main.py
 FCS_CONFS = ('CAA', 'Big Sky', 'MVFC', 'SWAC', 'MEAC', 'Southland', 'Big South',
@@ -449,20 +470,89 @@ def write_table(cur, ratings):
     print(f"\nwrote {len(ratings)} rows to savant_ratings")
 
 
+def write_snapshot(cur, ratings, through_week):
+    """Persist this week's ratings as an immutable-ish snapshot row per team,
+    so 'Indiana's Net Rating as of week 6' survives the week-10 recompute.
+    Re-running within the same week refreshes that week's snapshot (upsert).
+    Week 20 is the postseason sentinel (bowls/CFP included in the sample)."""
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS savant_weekly (
+            season       INTEGER NOT NULL,
+            week         INTEGER NOT NULL,
+            team         TEXT NOT NULL,
+            games        INTEGER,
+            off_rating   REAL, off_ranking INTEGER,
+            def_rating   REAL, def_ranking INTEGER,
+            net_rating   REAL, net_ranking INTEGER,
+            sos          REAL,
+            computed_at  TIMESTAMPTZ DEFAULT now(),
+            PRIMARY KEY (season, week, team)
+        )
+    ''')
+    for t, r in ratings.items():
+        cur.execute('''
+            INSERT INTO savant_weekly
+                (season, week, team, games, off_rating, off_ranking,
+                 def_rating, def_ranking, net_rating, net_ranking, sos)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (season, week, team) DO UPDATE SET
+                games = EXCLUDED.games,
+                off_rating = EXCLUDED.off_rating, off_ranking = EXCLUDED.off_ranking,
+                def_rating = EXCLUDED.def_rating, def_ranking = EXCLUDED.def_ranking,
+                net_rating = EXCLUDED.net_rating, net_ranking = EXCLUDED.net_ranking,
+                sos = EXCLUDED.sos, computed_at = now()
+        ''', (SEASON, through_week, t, r['games'],
+              r['off_rating'], r['off_ranking'], r['def_rating'], r['def_ranking'],
+              r['net_rating'], r['net_ranking'], r['sos']))
+    print(f"wrote week-{through_week} snapshot ({len(ratings)} teams) to savant_weekly")
+
+
 def main():
     write = '--write' in sys.argv
+    snapshot_only = '--snapshot-only' in sys.argv
     conn = psycopg2.connect(dsn=os.getenv('DATABASE_URL'))
     try:
         cur = conn.cursor()
-        print(f"season: {SEASON}")
-        if SEASON == current_cfb_season():
-            games, _fbs, hfa_ratio = load_game_samples(cur)   # stored ESPN summaries
+        print(f"season: {SEASON}" + (f" (through week {THROUGH_WEEK})" if THROUGH_WEEK else ""))
+        # ESPN summaries when this season has them stored (2025+, refreshed
+        # weekly in-season); CFBD drives feed for older seasons.
+        cur.execute('SELECT COUNT(*) FROM game_summaries s JOIN games g ON g.id = s.game_id '
+                    'WHERE g.season = %s', (SEASON,))
+        if cur.fetchone()[0] >= 50:
+            games, _fbs, hfa_ratio = load_game_samples(cur)
         else:
             games, _fbs, hfa_ratio = load_game_samples_cfbd(cur, SEASON)
+
+        if THROUGH_WEEK is not None:
+            games = [g for g in games
+                     if g['order'][0] == 0 and g['order'][1] <= THROUGH_WEEK]
+            print(f"filtered to {len(games)} regular-season games through week {THROUGH_WEEK}")
+
+        # Offseason / first-days guard: below MIN_GAMES the ratings would be
+        # pure prior. Exit cleanly WITHOUT touching existing rows so last
+        # season's ratings (and any snapshots) survive an empty-season run.
+        if len(games) < MIN_GAMES:
+            print(f"only {len(games)} usable games (< {MIN_GAMES}) — nothing to compute, exiting")
+            return
+
         ratings = compute_ratings(games, hfa_ratio)
         validate(cur, ratings)
-        if write:
+
+        # Snapshot label: max regular-season week in the sample, or the
+        # postseason sentinel (20) once bowl/CFP games are included.
+        if THROUGH_WEEK is not None:
+            through_week = THROUGH_WEEK
+        else:
+            reg_weeks = [g['order'][1] for g in games if g['order'][0] == 0]
+            has_post = any(g['order'][0] == 1 for g in games)
+            through_week = 20 if has_post else (max(reg_weeks) if reg_weeks else 0)
+
+        if snapshot_only:
+            write_snapshot(cur, ratings, through_week)
+            conn.commit()
+        elif write:
             write_table(cur, ratings)
+            write_snapshot(cur, ratings, through_week)
             conn.commit()
         else:
             print("\n(dry run — pass --write to persist)")

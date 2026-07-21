@@ -49,6 +49,7 @@
                     <div style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
                     <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:4px;text-transform:uppercase">Net Savant</div>
                     {% if svr.net_ranking %}<div style="color: var(--gold);font-size: var(--text-xs);font-weight:700;margin-top:4px;opacity:0.85">{{ ordinal(svr.net_ranking) }}</div>{% endif %}
+                    {% if svr_week %}<div style="color: var(--text-dim);font-size:0.62rem;font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
                 </div>
                 {% endif %}
                 {% for label, val, rk in [
@@ -264,7 +265,7 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
             <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h5>
             <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · {{ season }} ·
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · {{ season }}{% if svr_week %} · through week {{ svr_week }}{% endif %} ·
                 <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
                    onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
             </span>
@@ -888,6 +889,10 @@
     </div>
     {% endmacro %}
 
+    {% if trends.weekly %}
+    {{ trend_card('tr-weekly', season ~ ' Savant Rating · Week by Week',
+                  'recomputed after each week of games · defense: lower is better') }}
+    {% endif %}
     {{ trend_card('tr-savant', 'Savant Rating', "Saturday Savant's opponent-adjusted model · defense: lower is better") }}
     {{ trend_card('tr-record', 'Season Records', 'wins and losses per season, postseason included') }}
     {{ trend_card('tr-sp', 'SP+ Rating', "Bill Connelly's predictive model") }}
@@ -1219,6 +1224,27 @@
     function build() {
         if (built || typeof Plotly === 'undefined') return;
         built = true;
+
+        // Within-season progression — x axis is weeks, not seasons, so it
+        // gets its own traces rather than the shared line() helper.
+        if (T.weekly) {
+            var wk = T.weekly.weeks;
+            function wline(name, ys, color, width) {
+                return {
+                    name: name, x: wk, y: ys, type: 'scatter', mode: 'lines+markers',
+                    connectgaps: false,
+                    line: { color: color, width: width || 2.5, shape: 'spline', smoothing: 0.25 },
+                    marker: { size: 6, color: color, line: { color: '#0a0b0d', width: 1.5 } },
+                    customdata: T.weekly.rank,
+                    hovertemplate: name + ': <b>%{y}</b> · net #%{customdata}<extra></extra>'
+                };
+            }
+            plot('tr-weekly', [
+                wline('Net', T.weekly.net, C.net, 3.5),
+                wline('Offense', T.weekly.off, C.off),
+                wline('Defense', T.weekly.def, C.def)
+            ], layout({ xaxis: { type: 'category', dtick: 1, tickfont: { size: 10 } } }));
+        }
 
         plot('tr-savant', [
             line('Net', T.savant.net, C.net, { line: { color: C.net, width: 3.5, shape: 'spline', smoothing: 0.25 } }),
