@@ -2327,10 +2327,22 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .lf-stage { display: grid; }
 .lf-stage > .lf-rows { grid-area: 1 / 1; justify-content: center; }
 .lf-rows.lf-hidden { visibility: hidden; }
-/* Condense the 3-row defense so it isn't taller than the 2-row offense. */
-#lf-defense { gap: clamp(8px, 1.7vw, 18px); }
+/* Defense is 4 stacked levels (safeties, corners, LBs, D-line) — keep the
+   inter-level gap tight so it isn't much taller than the 2-row offense. */
+#lf-defense { gap: clamp(8px, 1.6vw, 18px); }
 .lf-row { display: flex; justify-content: center; align-items: flex-start; gap: clamp(6px, 1.4vw, 16px); }
 .lf-row--spread { justify-content: space-between; width: 100%; max-width: 620px; margin: 0 auto; }
+
+/* ── Cover 2 secondary (deepest levels, at the top given the flipped view) ──
+   Safeties split the deep middle in two; corners a level shallower and out on
+   the numbers. The small negative margin tucks the corners up toward the
+   safeties so the two read as one secondary shell rather than separate rows. */
+.lf-row--safeties { gap: clamp(70px, 16vw, 240px); }
+.lf-row--corners  { justify-content: space-between; width: 100%; max-width: min(94%, 720px); margin: calc(-1 * clamp(4px, 1vw, 12px)) auto 0; }
+/* Linebackers — evenly spread across the box. */
+.lf-row--lb { gap: clamp(28px, 6.5vw, 96px); }
+/* D-line at the line of scrimmage — a cohesive front spanning the tackle box. */
+.lf-row--dline { justify-content: space-between; width: 100%; max-width: min(78%, 600px); margin: 0 auto; }
 /* Line row: WRs sit just outside the tackles (a small split off the ends of
    the O-line), extending the line rather than floating at the field edges. */
 .lf-row--line { gap: clamp(4px, 1vw, 12px); flex-wrap: nowrap; }
@@ -2340,9 +2352,11 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .lf-row--backfield { gap: clamp(26px, 7vw, 88px); margin-top: clamp(6px, 1.4vw, 16px); }
 .lf-row--backfield > .lf-card:last-child { margin-top: clamp(10px, 2.2vw, 24px); }
 
-/* Player card */
+/* Player card — sized so the widest row (the 9-across offense line: 3 WR +
+   5 OL + TE) fills the field on desktop without overflowing, and scales down
+   with the viewport so it still fits a phone. */
 .lf-card {
-    width: clamp(54px, 12vw, 78px);
+    width: clamp(46px, 7.4vw, 96px);
     display: flex; flex-direction: column; align-items: center; gap: 6px;
     text-decoration: none;
 }
@@ -2409,13 +2423,15 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
     .lineup-toggle button { padding: 6px 14px; }
 }
 @media (max-width: 575.98px) {
-    /* Eight cards share the line row now (2 WR + 5 OL + TE) — shrink them so
-       the formation fits a phone without clipping. */
-    .lf-card { width: clamp(38px, 10.5vw, 58px); }
-    .lf-row--line { gap: 3px; }
+    /* Nine cards share the offense line row now (3 WR + 5 OL + TE) — the
+       widest formation on the page — so shrink cards to fit a phone cleanly. */
+    .lf-card { width: clamp(30px, 8.6vw, 46px); }
+    .lf-row--line { gap: 2px; }
     .lf-row--line > .lf-card:first-child,
-    .lf-row--line > .lf-card:last-child { margin-inline: 5px; }
-    .lf-jersey { font-size: 0.66rem; }
+    .lf-row--line > .lf-card:last-child { margin-inline: 4px; }
+    .lf-jersey { font-size: 0.64rem; }
+    /* keep the deep-safety split from overflowing a narrow screen */
+    .lf-row--safeties { gap: clamp(44px, 22vw, 120px); }
 }
 @media (prefers-reduced-motion: reduce) {
     a.lf-card:hover .lf-card-inner { transform: none; }

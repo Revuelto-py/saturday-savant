@@ -947,27 +947,35 @@
         <!-- Both sides share one grid cell so the field is the same height on
              either toggle (no jump), and each is vertically centered. -->
         <div class="lf-stage">
-        <!-- OFFENSE: receivers split just outside the tackles (extending the
-             line), then a shotgun backfield with the RB set beside the QB. -->
+        <!-- OFFENSE: all three receivers sit on the line — WR1 wide left with
+             WR3 in the left slot (twins left), TE inline and WR2 wide right —
+             then a shotgun backfield with the RB set beside the QB. -->
         <div id="lf-offense" class="lf-rows">
             <div class="lf-row lf-row--line">
-                {{ lf_card('WR1','skill') }}{{ lf_card('LT','ol') }}{{ lf_card('LG','ol') }}{{ lf_card('C','ol') }}{{ lf_card('RG','ol') }}{{ lf_card('RT','ol') }}{{ lf_card('TE','skill') }}{{ lf_card('WR2','skill') }}
+                {{ lf_card('WR1','skill') }}{{ lf_card('WR3','skill') }}{{ lf_card('LT','ol') }}{{ lf_card('LG','ol') }}{{ lf_card('C','ol') }}{{ lf_card('RG','ol') }}{{ lf_card('RT','ol') }}{{ lf_card('TE','skill') }}{{ lf_card('WR2','skill') }}
             </div>
             <div class="lf-row lf-row--backfield">
-                {{ lf_card('WR3','skill') }}{{ lf_card('QB','skill') }}{{ lf_card('RB','skill') }}
+                {{ lf_card('QB','skill') }}{{ lf_card('RB','skill') }}
             </div>
         </div>
 
-        <!-- DEFENSE -->
+        <!-- DEFENSE: mirrors the offense's line-of-scrimmage reference, so the
+             D-line sits at the bottom (the LOS) with the second and third
+             levels stacked back from it. The secondary reads as a Cover 2
+             shell — two safeties deep and split toward the middle, the corners
+             a level shallower and out on the numbers. -->
         <div id="lf-defense" class="lf-rows lf-hidden">
-            <div class="lf-row">
-                {{ lf_card('DE1','dl') }}{{ lf_card('DT1','dl') }}{{ lf_card('DT2','dl') }}{{ lf_card('DE2','dl') }}
+            <div class="lf-row lf-row--safeties">
+                {{ lf_card('S1','db') }}{{ lf_card('S2','db') }}
             </div>
-            <div class="lf-row">
+            <div class="lf-row lf-row--corners">
+                {{ lf_card('CB1','db') }}{{ lf_card('CB2','db') }}
+            </div>
+            <div class="lf-row lf-row--lb">
                 {{ lf_card('LB1','lb') }}{{ lf_card('LB2','lb') }}{{ lf_card('LB3','lb') }}
             </div>
-            <div class="lf-row lf-row--spread">
-                {{ lf_card('CB1','db') }}{{ lf_card('S1','db') }}{{ lf_card('S2','db') }}{{ lf_card('CB2','db') }}
+            <div class="lf-row lf-row--dline">
+                {{ lf_card('DE1','dl') }}{{ lf_card('DT1','dl') }}{{ lf_card('DT2','dl') }}{{ lf_card('DE2','dl') }}
             </div>
         </div>
         </div>
