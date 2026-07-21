@@ -152,6 +152,40 @@
             <div style="font-weight:700;color:var(--text-primary)">{{ kickoff_time }}</div>
         </div>
     </div>
+    {% if forecast %}
+    {# ── Savant Forecast — precomputed weekly, locked before kickoff ── #}
+    {% set fav_home = forecast.home_prob >= 0.5 %}
+    {% set fav_team = home_team if fav_home else away_team %}
+    {% set fav_prob = forecast.home_prob if fav_home else 1 - forecast.home_prob %}
+    <div class="fc-block" style="max-width:440px;margin:30px auto 0;text-align:left">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div class="t-meta" style="font-size:var(--text-xs);letter-spacing:0.12em">SAVANT FORECAST</div>
+            <div style="flex:1;height:1px;background:var(--border)"></div>
+            <a href="/forecast" style="color:var(--text-dim);font-size:var(--text-xs);text-decoration:none">How this works →</a>
+        </div>
+        <div class="fc-block-heads">
+            <span style="text-align:left">
+                <span class="fc-pct">{{ '%.0f' % ((1 - forecast.home_prob) * 100) }}%</span>
+                <span class="fc-team">{{ away_team }}</span>
+            </span>
+            <span style="text-align:right">
+                <span class="fc-pct">{{ '%.0f' % (forecast.home_prob * 100) }}%</span>
+                <span class="fc-team">{{ home_team }}</span>
+            </span>
+        </div>
+        <div class="fc-bar" role="img" aria-label="{{ fav_team }} win probability {{ '%.0f' % (fav_prob * 100) }} percent">
+            <span class="fc-bar-fill" style="background:linear-gradient(90deg,
+                {{ away_color }}cc 0%, {{ away_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%,
+                {{ home_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%, {{ home_color }}cc 100%)"></span>
+            <span class="fc-bar-tick" style="left: {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%"></span>
+        </div>
+        {% if forecast.margin is not none %}
+        <div style="margin-top:10px;color:var(--text-secondary);font-size:var(--text-sm);text-align:center">
+            {% if forecast.margin|abs >= 1.5 %}Savant expects {{ fav_team }} by ~{{ '%.0f' % (forecast.margin|abs) }}{% else %}Savant calls it even{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
     <div style="margin-top:26px;color:var(--text-dim);font-size:var(--text-sm);line-height:1.6">
         Box score, drives, win probability, and game leaders will appear here once the game is played.
     </div>

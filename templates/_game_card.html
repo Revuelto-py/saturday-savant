@@ -1,7 +1,7 @@
 {# Shared game card — used by the home page and the /games hub.
    Takes a dict built by build_game_card() in main.py. Renders a final score
    for completed games and a kickoff date/time for scheduled (future) ones. #}
-{% macro game_card(g) %}
+{% macro game_card(g, prob=None) %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
 <a class="game-card-v2{{ ' is-upcoming' if not g.completed else '' }}" href="/game/{{ g.id }}">
@@ -32,6 +32,19 @@
 
     {% if not g.completed %}
         <span class="gc-kickoff">{{ g.kickoff_time }}</span>
+        {% if prob is not none %}
+        {# Savant Forecast chip: thin team-color split bar + the favorite's % #}
+        {% set hc = g.home_color if (g.home_color and g.home_color[0]=='#' and g.home_color|length==7) else '#2b3a55' %}
+        {% set ac = g.away_color if (g.away_color and g.away_color[0]=='#' and g.away_color|length==7) else '#5a2b2b' %}
+        {% set fav = g.home if prob >= 0.5 else g.away %}
+        {% set fav_pct = (prob if prob >= 0.5 else 1 - prob) * 100 %}
+        <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%">
+            <span class="fc-bar"><span class="fc-bar-fill" style="background:linear-gradient(90deg,
+                {{ ac }}cc 0%, {{ ac }}cc {{ '%.1f' % ((1 - prob) * 100) }}%,
+                {{ hc }}cc {{ '%.1f' % ((1 - prob) * 100) }}%, {{ hc }}cc 100%)"></span></span>
+            <span class="gc-fc-pct">{{ fav }} {{ '%.0f' % fav_pct }}%</span>
+        </span>
+        {% endif %}
     {% elif g.rivalry %}
         <span class="gc-rivalry">{{ g.rivalry }}</span>
     {% endif %}

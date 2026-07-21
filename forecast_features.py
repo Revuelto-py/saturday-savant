@@ -115,10 +115,51 @@ def _load_reference(cur, seasons):
     return sp, fbs, savant, recruit, transfer, retprod
 
 
-def build_dataset(first_season=2016, last_season=2025):
-    """Returns (rows, feature_names). Each row: meta + 'features' vector +
-    'target' (1 = home win). Rows are emitted for every completed FBS-vs-FBS
-    game; 'burn_in' flags season 2016 (Elo warm-up, excluded from training)."""
+def _feature_vector(season, week, neutral, post, home, away,
+                    elo, stats, sp, savant, recruit, transfer, retprod, rest_h, rest_a):
+    """The single feature-assembly path shared by training (build_dataset) and
+    serving (predict_games.py) so the two can never drift apart."""
+    hs = stats.get(home, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
+    as_ = stats.get(away, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
+
+    def recruit4(team):
+        vals = [recruit.get((y, team)) for y in range(season - 3, season + 1)]
+        vals = [v for v in vals if v is not None]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    prior_missing = 1.0 if (
+        (season - 1, home) not in savant and (season - 1, home) not in sp
+        or (season - 1, away) not in savant and (season - 1, away) not in sp) else 0.0
+
+    return [
+        elo[home] - elo[away],
+        savant.get((season - 1, home), 0.0) - savant.get((season - 1, away), 0.0),
+        sp.get((season - 1, home), 0.0) - sp.get((season - 1, away), 0.0),
+        prior_missing,
+        retprod.get((season, home), 50.0) - retprod.get((season, away), 50.0),
+        recruit.get((season, home), 0.0) - recruit.get((season, away), 0.0),
+        recruit4(home) - recruit4(away),
+        transfer.get((season, home), 0.0) - transfer.get((season, away), 0.0),
+        (hs['w'] / hs['g'] if hs['g'] else 0.5) - (as_['w'] / as_['g'] if as_['g'] else 0.5),
+        (hs['pf'] / hs['g'] if hs['g'] else 0.0) - (as_['pf'] / as_['g'] if as_['g'] else 0.0),
+        (hs['pa'] / hs['g'] if hs['g'] else 0.0) - (as_['pa'] / as_['g'] if as_['g'] else 0.0),
+        float(min(hs['g'], as_['g'])),
+        rest_h - rest_a,
+        float(week or 0),
+        float(neutral),
+        post,
+    ]
+
+
+def build_dataset(first_season=2016, last_season=2025, return_state=False):
+    """Returns (rows, feature_names) — or (rows, names, state) with
+    return_state, where `state` carries the Elo ratings, season-to-date stats,
+    and reference lookups as of the last completed game, so predict_games.py
+    can extend the exact same computation to upcoming games.
+
+    Each row: meta + 'features' vector + 'target' (1 = home win). Rows are
+    emitted for every completed FBS-vs-FBS game; 'burn_in' flags season 2016
+    (Elo warm-up, excluded from training)."""
     seasons = list(range(first_season, last_season + 1))
     conn = main.get_db()
     try:
@@ -143,11 +184,6 @@ def build_dataset(first_season=2016, last_season=2025):
     rows = []
     cur_season = None
     stats = {}                  # (team) -> season-to-date {g,w,pf,pa,last_dt}
-
-    def recruit4(season, team):
-        vals = [recruit.get((y, team)) for y in range(season - 3, season + 1)]
-        vals = [v for v in vals if v is not None]
-        return sum(vals) / len(vals) if vals else 0.0
 
     for gid, season, week, stype, home, away, hp, ap, sd, neutral in games:
         if home not in fbs.get(season, set()) or away not in fbs.get(season, set()):
@@ -176,28 +212,9 @@ def build_dataset(first_season=2016, last_season=2025):
             return max(-14.0, min(14.0, (dt - s['last']).days))
 
         post = 1.0 if 'POST' in (stype or '').upper() else 0.0
-        prior_missing = 1.0 if (
-            (season - 1, home) not in savant and (season - 1, home) not in sp
-            or (season - 1, away) not in savant and (season - 1, away) not in sp) else 0.0
-
-        feats = [
-            elo[home] - elo[away],
-            savant.get((season - 1, home), 0.0) - savant.get((season - 1, away), 0.0),
-            sp.get((season - 1, home), 0.0) - sp.get((season - 1, away), 0.0),
-            prior_missing,
-            retprod.get((season, home), 50.0) - retprod.get((season, away), 50.0),
-            recruit.get((season, home), 0.0) - recruit.get((season, away), 0.0),
-            recruit4(season, home) - recruit4(season, away),
-            transfer.get((season, home), 0.0) - transfer.get((season, away), 0.0),
-            (hs['w'] / hs['g'] if hs['g'] else 0.5) - (as_['w'] / as_['g'] if as_['g'] else 0.5),
-            (hs['pf'] / hs['g'] if hs['g'] else 0.0) - (as_['pf'] / as_['g'] if as_['g'] else 0.0),
-            (hs['pa'] / hs['g'] if hs['g'] else 0.0) - (as_['pa'] / as_['g'] if as_['g'] else 0.0),
-            float(min(hs['g'], as_['g'])),
-            rest(hs) - rest(as_),
-            float(week or 0),
-            float(neutral),
-            post,
-        ]
+        feats = _feature_vector(season, week, neutral, post, home, away,
+                                elo, stats, sp, savant, recruit, transfer, retprod,
+                                rest(hs), rest(as_))
 
         rows.append({
             'game_id': gid, 'season': season, 'week': week,
@@ -230,6 +247,12 @@ def build_dataset(first_season=2016, last_season=2025):
         if dt is not None:
             hs['last'] = dt; as_['last'] = dt
 
+    if return_state:
+        state = {'elo': elo, 'season_of': season_of, 'stats': stats,
+                 'cur_season': cur_season,
+                 'refs': {'sp': sp, 'fbs': fbs, 'savant': savant,
+                          'recruit': recruit, 'transfer': transfer, 'retprod': retprod}}
+        return rows, FEATURE_NAMES, state
     return rows, FEATURE_NAMES
 
 

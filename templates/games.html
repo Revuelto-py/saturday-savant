@@ -75,7 +75,7 @@
     <!-- Games grid -->
     {% if games %}
     <div class="games-grid">
-        {% for g in games %}{{ gc.game_card(g) }}{% endfor %}
+        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id)) }}{% endfor %}
     </div>
     {% else %}
     <div class="games-empty">

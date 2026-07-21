@@ -23,23 +23,27 @@ cd "$(dirname "$0")"
 
 PY="${PYTHON:-python3}"
 
-echo "── [1/9] player box scores + PPA (fetch_data) ──"
+echo "── [1/11] player box scores + PPA (fetch_data) ──"
 $PY fetch_data.py
-echo "── [2/9] team stats (fetch_team_stats) ──"
+echo "── [2/11] team stats (fetch_team_stats) ──"
 $PY fetch_team_stats.py
-echo "── [3/9] advanced team stats (fetch_advanced) ──"
+echo "── [3/11] advanced team stats (fetch_advanced) ──"
 $PY fetch_advanced.py
-echo "── [4/9] SP+ ratings (fetch_sp) ──"
+echo "── [4/11] SP+ ratings (fetch_sp) ──"
 $PY fetch_sp.py
-echo "── [5/9] AP rankings (fetch_rankings) ──"
+echo "── [5/11] AP rankings (fetch_rankings) ──"
 $PY fetch_rankings.py
-echo "── [6/9] game summaries / drives (fetch_game_summaries) ──"
+echo "── [6/11] game summaries / drives (fetch_game_summaries) ──"
 $PY fetch_game_summaries.py
-echo "── [7/9] Savant ratings (compute_savant_ratings) ──"
+echo "── [7/11] Savant ratings (compute_savant_ratings) ──"
 $PY compute_savant_ratings.py --write   # --write persists; without it the script only dry-runs
-echo "── [8/9] percentile peer pools (backfill_pools) ──"
+echo "── [8/11] percentile peer pools (backfill_pools) ──"
 $PY backfill_pools.py
-echo "── [9/9] team-page + returning-production precompute (precompute) ──"
+echo "── [9/11] team-page + returning-production precompute (precompute) ──"
 $PY precompute.py
+echo "── [10/11] Vegas lines, active season (fetch_betting_lines) ──"
+$PY fetch_betting_lines.py
+echo "── [11/11] Savant Forecast: score last week + predict upcoming (predict_games) ──"
+$PY predict_games.py
 
 echo "weekly pipeline complete"
