@@ -33,7 +33,7 @@ for game in result:
         cursor.execute('''
             INSERT INTO games (id, season, week, season_type, home_team, home_points, away_team, away_points, completed, start_date, notes)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ''', (game.id, game.season, game.week, str(game.season_type), game.home_team, game.home_points, game.away_team, game.away_points, game.completed, str(game.start_date), game.notes))
+        ''', (game.id, game.season, game.week, str(game.season_type), game.home_team, game.home_points, game.away_team, game.away_points, 1 if game.completed else 0, str(game.start_date), game.notes))
 
 # Save player stats
 for s in stats:
