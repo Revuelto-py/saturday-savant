@@ -508,13 +508,13 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         specific LT/LG/C/RG/RT labels are not individually verifiable.
 
     EA Sports College Football 27 overall rating (fetch_ea_ratings.py) is the
-    PRIMARY signal: when a player has a rating it dominates the ordering at his
-    position, and the 2025 production above only (a) breaks ties between
-    similarly-rated players, or (b) ranks players who have no EA rating at all.
-    This is the reverse of the earlier design, where EA was a small tiebreaker
-    layered on top of production. EA ratings are internal-only and never
-    surfaced in the UI (licensed/proprietary data); a missing/unpopulated
-    ea_ratings table degrades gracefully to production-only scoring.
+    SOLE signal for rated players: a rated player's score is exactly his EA
+    overall, so at every position the higher EA grade always starts and
+    production never reorders rated players. The 2025 production above is used
+    only to rank players who have NO EA rating (they sit below the rated pool
+    and start only where a position has no rated player at all). EA ratings are
+    internal-only and never surfaced in the UI (licensed/proprietary data); a
+    missing/unpopulated ea_ratings table degrades to production-only scoring.
     """
     ids = [str(p[4]) for p in roster if p[4] is not None]
     int_ids = [int(p[4]) for p in roster if p[4] is not None]
@@ -565,15 +565,13 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         except Exception:
             cursor.connection.rollback()  # ea_ratings not populated yet
 
-    # EA-primary scoring. build_lineup() sorts each position pool independently,
-    # so a score only has to order players *within* a position group. Each
-    # player's score is his EA overall (0–99) plus a small production nudge, so
-    # EA dominates and production only reorders players whose EA ratings are
-    # within TIE_BAND of each other. Players with no EA rating fall back to a
-    # production-ranked band (UNRATED_BASE … UNRATED_BASE+UNRATED_SPREAD) that
-    # sits below the rated pool, so they start only where a position has no
-    # rated player or their production is genuinely elite.
-    TIE_BAND = 2.5          # production can reorder EA only within ~2.5 points
+    # EA-only scoring. build_lineup() sorts each position pool independently, so
+    # a score only has to order players *within* a position group. A rated
+    # player's score is exactly his EA overall (0–99) — production never reorders
+    # rated players, so the higher EA grade always starts. Players with no EA
+    # rating fall back to a production-ranked band (UNRATED_BASE …
+    # UNRATED_BASE+UNRATED_SPREAD) that sits below the rated pool, so they start
+    # only where a position has no rated player at all.
     UNRATED_BASE = 48.0     # unrated players rank here (EA ratings run 47–99)…
     UNRATED_SPREAD = 22.0   # …ordered among themselves by production (48–70)
 
@@ -609,7 +607,7 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         q = max(0.0, min(1.0, _quality(p, pid, pos)))
         ovr = ea.get(pid)
         if ovr is not None:
-            base = ovr + TIE_BAND * q                    # EA dominant, production breaks near-ties
+            base = ovr                                    # rated players ordered purely by EA overall
         else:
             base = UNRATED_BASE + UNRATED_SPREAD * q      # no EA → ranked by production, below the rated pool
         scores[pid] = base + (99 - min(jersey, 99)) * 1e-4  # deterministic final tiebreak
@@ -635,7 +633,7 @@ def build_lineup(roster, starter_scores=None, ea_pos=None):
     # has claimed his own — so a left tackle is never grabbed to play center.
     slot_primary = {
         'QB': ['QB'], 'RB': ['HB','RB','FB','APB','ATH'],
-        'WR1': ['WR'], 'WR2': ['WR'], 'TE': ['TE'],
+        'WR1': ['WR'], 'WR2': ['WR'], 'WR3': ['WR'], 'TE': ['TE'],
         'LT': ['LT'], 'LG': ['LG'], 'C': ['C'], 'RG': ['RG'], 'RT': ['RT'],
         'DE1': ['LE','DE','EDGE'], 'DE2': ['RE','DE','EDGE'],
         'DT1': ['DT','NT'], 'DT2': ['DT','NT'],
@@ -644,7 +642,7 @@ def build_lineup(roster, starter_scores=None, ea_pos=None):
         'S1': ['FS','S','SAF'], 'S2': ['SS','S','SAF'],
     }
     slot_fallback = {
-        'QB': [], 'RB': [], 'WR1': ['ATH'], 'WR2': ['ATH'], 'TE': [],
+        'QB': [], 'RB': [], 'WR1': ['ATH'], 'WR2': ['ATH'], 'WR3': ['ATH'], 'TE': [],
         'LT': ['OT','OL','OG','G','RT','LG','RG','C'],
         'LG': ['OG','G','OL','OT','RG','C','LT','RT'],
         'C':  ['OL','OG','G','LG','RG','LT','RT','OT'],
@@ -670,7 +668,7 @@ def build_lineup(roster, starter_scores=None, ea_pos=None):
     for pool in pos_pool.values():
         pool.sort(key=lambda x: x['score'], reverse=True)
 
-    fill_order = ['QB','RB','WR1','WR2','TE','LT','LG','C','RG','RT',
+    fill_order = ['QB','RB','WR1','WR2','WR3','TE','LT','LG','C','RG','RT',
                   'DE1','DE2','DT1','DT2','LB1','LB2','LB3','CB1','CB2','S1','S2']
     lineup, used = {}, set()
 
