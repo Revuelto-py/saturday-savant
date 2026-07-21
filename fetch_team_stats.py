@@ -13,7 +13,9 @@ with cfbd.ApiClient(configuration) as api_client:
     stats_api = cfbd.StatsApi(api_client)
     advanced = stats_api.get_advanced_season_stats(year=2025, exclude_garbage_time=True)
 
-cursor.execute('DELETE FROM team_stats')
+# Multi-season table — only refresh 2025 so prior years (loaded by
+# backfill_history.py) survive.
+cursor.execute('DELETE FROM team_stats WHERE season = 2025')
 saved = 0
 for s in advanced:
     try:
@@ -58,6 +60,9 @@ for s in advanced:
         conn.rollback()
         print(f"Error on {s.team}: {e}")
 
+# The positional INSERT above fills every column except the trailing `season`
+# (added later by migrate_seasons.py), so tag the freshly-inserted rows.
+cursor.execute('UPDATE team_stats SET season = 2025 WHERE season IS NULL')
 conn.commit()
 conn.close()
 print(f"Saved {saved} teams")

@@ -53,7 +53,9 @@ else:
 
     season_type = 'postseason' if 'post' in cur_type.lower() else 'regular'
 
-    cursor.execute('DELETE FROM ap_rankings')
+    # Multi-season table — only refresh 2025 so prior years' final polls
+    # (loaded by backfill_history.py) survive.
+    cursor.execute('DELETE FROM ap_rankings WHERE season = 2025')
     for r in cur_ranks:
         prev = prev_rank_map.get(r.school)
         cursor.execute('''

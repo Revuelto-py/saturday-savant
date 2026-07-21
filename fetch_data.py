@@ -12,10 +12,12 @@ configuration = cfbd.Configuration(
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
 cursor = conn.cursor()
 
-# Clear tables that get refreshed
-cursor.execute('DELETE FROM games')
-cursor.execute('DELETE FROM player_stats')
-cursor.execute('DELETE FROM player_ppa')
+# Refresh ONLY the current season — these tables are multi-season (history is
+# loaded by backfill_history.py and tagged by `season`), so an unscoped DELETE
+# would wipe every prior year. Scope every delete to season 2025.
+cursor.execute('DELETE FROM games WHERE season = 2025')
+cursor.execute('DELETE FROM player_stats WHERE season = 2025')
+cursor.execute('DELETE FROM player_ppa WHERE season = 2025')
 
 with cfbd.ApiClient(configuration) as api_client:
     games_api = cfbd.GamesApi(api_client)
@@ -38,15 +40,15 @@ for game in result:
 # Save player stats
 for s in stats:
     cursor.execute('''
-        INSERT INTO player_stats (player_id, player_name, team, conference, position, category, stat_type, stat)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO player_stats (player_id, player_name, team, conference, position, category, stat_type, stat, season)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 2025)
     ''', (s.player_id, s.player, s.team, s.conference, s.position, s.category, s.stat_type, s.stat))
 
 # Save PPA
 for p in ppa_data:
     cursor.execute('''
-        INSERT INTO player_ppa (player_id, player_name, position, team, conference, avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO player_ppa (player_id, player_name, position, team, conference, avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa, season)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 2025)
     ''', (p.id, p.name, p.position, p.team, p.conference,
           p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush, p.total_ppa.all))
 

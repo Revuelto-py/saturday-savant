@@ -36,7 +36,7 @@ $PY fetch_rankings.py
 echo "── [6/9] game summaries / drives (fetch_game_summaries) ──"
 $PY fetch_game_summaries.py
 echo "── [7/9] Savant ratings (compute_savant_ratings) ──"
-$PY compute_savant_ratings.py
+$PY compute_savant_ratings.py --write   # --write persists; without it the script only dry-runs
 echo "── [8/9] percentile peer pools (backfill_pools) ──"
 $PY backfill_pools.py
 echo "── [9/9] team-page + returning-production precompute (precompute) ──"

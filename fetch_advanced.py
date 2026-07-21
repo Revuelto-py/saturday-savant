@@ -19,7 +19,9 @@ with cfbd.ApiClient(configuration) as api_client:
     print("Fetching team advanced stats...")
     try:
         adv = stats_api.get_advanced_season_stats(year=2025, exclude_garbage_time=True)
-        cursor.execute('DELETE FROM team_advanced')
+        # Multi-season table — only refresh 2025 so prior years (loaded by
+        # backfill_history.py) survive.
+        cursor.execute('DELETE FROM team_advanced WHERE season = 2025')
         saved = 0
         for s in adv:
             o = s.offense
@@ -61,6 +63,8 @@ with cfbd.ApiClient(configuration) as api_client:
             ))
             saved += 1
 
+        # Positional INSERT skips the trailing `season` column — tag new rows.
+        cursor.execute('UPDATE team_advanced SET season = 2025 WHERE season IS NULL')
         conn.commit()
         print(f"  Saved {saved} team advanced records")
     except Exception as e:
@@ -80,9 +84,9 @@ with cfbd.ApiClient(configuration) as api_client:
                 continue
             cursor.execute('''
                 INSERT INTO player_usage VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (player_id) DO UPDATE SET
+                ON CONFLICT (player_id, season) DO UPDATE SET
                     player_name=EXCLUDED.player_name, team=EXCLUDED.team,
-                    position=EXCLUDED.position, season=EXCLUDED.season,
+                    position=EXCLUDED.position,
                     overall=EXCLUDED.overall, pass=EXCLUDED.pass,
                     rush=EXCLUDED.rush, first_down=EXCLUDED.first_down,
                     second_down=EXCLUDED.second_down, third_down=EXCLUDED.third_down,

@@ -13,7 +13,9 @@ with cfbd.ApiClient(configuration) as api_client:
     ratings_api = cfbd.RatingsApi(api_client)
     sp = ratings_api.get_sp(year=2025)
 
-cursor.execute('DELETE FROM sp_ratings')
+# Multi-season table — only refresh 2025 so prior years (loaded by
+# backfill_history.py) survive.
+cursor.execute('DELETE FROM sp_ratings WHERE season = 2025')
 saved = 0
 for s in sp:
     off = getattr(s, 'offense', None)
@@ -33,6 +35,8 @@ for s in sp:
     ))
     saved += 1
 
+# Positional INSERT skips the trailing `season` column — tag new rows.
+cursor.execute('UPDATE sp_ratings SET season = 2025 WHERE season IS NULL')
 conn.commit()
 conn.close()
 print(f"Saved {saved} SP+ ratings")
