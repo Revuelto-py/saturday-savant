@@ -63,7 +63,7 @@ from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, redirect
+from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory
 from flask_caching import Cache
 from collections import OrderedDict
 from itertools import groupby
@@ -6019,6 +6019,16 @@ def robots():
         "Crawl-delay: 5\n"
         f"Sitemap: {base}/sitemap.xml\n",
         mimetype='text/plain')
+
+
+@app.route('/favicon.ico')
+def favicon_ico():
+    # Serve the multi-resolution .ico at the canonical root path crawlers probe
+    # (Google, bots, older browsers), even though the <head> also links the
+    # higher-res favicon-*.png. Same white-mark-on-navy brand icon, cached hard.
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'), 'favicon.ico',
+        mimetype='image/x-icon', max_age=60 * 60 * 24 * 30)
 
 
 @app.route('/admin/clear-cache')

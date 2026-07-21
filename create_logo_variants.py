@@ -42,14 +42,27 @@ if mbox:
 # favicon-<n> (browser tabs / Google) + logo-mark-180 (apple-touch-icon)
 favicons = {'favicon-16.png': 16, 'favicon-32.png': 32, 'favicon-48.png': 48,
             'logo-mark-180.png': 180}
-for filename, size in favicons.items():
+def _composite(size):
+    """White mark centred on the brand navy, ~12% padding — one favicon frame."""
     canvas = Image.new('RGBA', (size, size), NAVY)
     pad = max(1, round(size * 0.12))           # ~12% breathing room each side
     inner = size - 2 * pad
     m = mark.copy()
     m.thumbnail((inner, inner), Image.LANCZOS)
     canvas.alpha_composite(m, ((size - m.width) // 2, (size - m.height) // 2))
-    canvas.convert('RGB').save(os.path.join(BASE_DIR, 'static', filename))
+    return canvas
+
+for filename, size in favicons.items():
+    _composite(size).convert('RGB').save(os.path.join(BASE_DIR, 'static', filename))
     print(f"Saved {filename} ({size}x{size}) — white mark on navy")
+
+# favicon.ico — the canonical root icon crawlers probe at /favicon.ico. Multi-
+# resolution (16/32/48) so browsers/Google pick the size they want; each frame
+# is composited at its own size (not a single downscale) to stay crisp at 16px.
+ico_frames = [_composite(s).convert('RGBA') for s in (16, 32, 48)]
+ico_frames[-1].save(os.path.join(BASE_DIR, 'static', 'favicon.ico'),
+                    format='ICO', sizes=[(16, 16), (32, 32), (48, 48)],
+                    append_images=ico_frames[:-1])
+print("Saved favicon.ico (16/32/48) — white mark on navy")
 
 print("Done")
