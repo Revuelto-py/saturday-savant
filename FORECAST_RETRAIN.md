@@ -20,6 +20,34 @@ the test season, stay calibrated within ~2 points per probability bucket, and
 remain below the Vegas closing line (anything above it means a bug, not a
 breakthrough).
 
+## Standing practice for any new feature
+
+These are requirements, not suggestions. Two experiments have already been
+rejected on them, and one near-miss was caused by skipping the third.
+
+1. **Verify the feature's data before trusting its result.** Print the non-zero
+   rate, mean, std, and min/max of every candidate column, and check the row
+   coverage of any join it depends on, *before* reading its evaluation. A
+   feature that silently resolves to all zeros will produce a clean-looking
+   "reject" that means nothing.
+   > This is not hypothetical: the 2026-07 sweep initially evaluated rolling
+   > turnover margin as a column of zeros, because ESPN box scores store mascot
+   > display names ("Maine Black Bears") that never join to the games table
+   > ("Maine") — 0 of 17,262 rows matched. It surfaced only as a 0/0 McNemar
+   > disagreement count. Once fixed, that feature turned out to be the single
+   > best candidate in the entire sweep. The bug would have buried the most
+   > promising finding under a false rejection.
+2. **Judge on multi-season walk-forward + McNemar, never a single test season.**
+   The as-of-week Savant feature looked like +0.005 on 2025 alone and was
+   −0.0006 across seven walk-forward seasons (p=0.857).
+3. **Bar to ship:** > +0.002 walk-forward weighted accuracy **and** p < 0.05,
+   without degrading Brier or calibration. Also check whether the new
+   coefficient merely cannibalizes an existing one (as-of-week Savant pulled
+   `elo_diff` from +0.67 to +0.41 — it was re-expressing Elo, not adding to it).
+4. **Test candidates one at a time first, then in combination.** Combined
+   effects differ, and on ~8.6k games more features is a real overfitting risk:
+   all 13 candidates together scored *worse* than the production 16.
+
 ## Open experiment — as-of-week Savant Rating (`savant_asof_diff`)
 
 **Status: evaluated 2026-07-21, DEFERRED. Re-test after the 2026 season.**
@@ -128,10 +156,9 @@ January — it is the only feature that moved accuracy above the threshold
 lacks; it simply could not clear significance at this sample size.
 
 *Process note:* the first run of this sweep silently tested `tov3_diff` as a
-column of zeros — the ESPN box scores store display names with mascots
-("Maine Black Bears") which never join to the games table. It was caught by a
-0/0 McNemar disagreement count and a non-zero-rate check on every candidate.
-**Always verify a candidate's distribution before trusting its rejection.**
+column of zeros (the ESPN mascot-name join bug). See **Standing practice #1**
+above — this is why distribution/coverage checks are now mandatory before any
+evaluation result is trusted.
 
 ## Known model behavior (documented, not a defect)
 
