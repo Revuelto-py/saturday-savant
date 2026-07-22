@@ -435,15 +435,22 @@ def _compute_conference_standings(cursor, season):
     if not team_conf:
         return {}
     teams = list(team_conf)
+    # CFBD labels conference championship games as REGULAR (week 14/15) with a
+    # 'X Championship' note, so the season_type filter alone doesn't exclude
+    # them. They must NOT count toward the conference RECORD that seeds the
+    # standings (that's the regular-season league record) — but they still count
+    # toward overall record, like any game a team played.
     cursor.execute('''
-        SELECT home_team, home_points, away_team, away_points
+        SELECT home_team, home_points, away_team, away_points, notes
         FROM games
         WHERE completed = 1 AND season = %s AND season_type = 'SeasonType.REGULAR'
           AND home_points IS NOT NULL AND away_points IS NOT NULL
           AND (home_team = ANY(%s) OR away_team = ANY(%s))
     ''', (season, teams, teams))
     rec = {t: {'w': 0, 'l': 0, 'cw': 0, 'cl': 0, 'pf': 0, 'pa': 0} for t in teams}
-    for h, hp, a, ap in cursor.fetchall():
+    h2h = {}   # h2h[team][opp] = [wins, losses] in conference play (for tiebreaks)
+    for h, hp, a, ap, notes in cursor.fetchall():
+        is_ccg = bool(notes) and 'championship' in notes.lower()
         for t, opp, p, op in ((h, a, hp, ap), (a, h, ap, hp)):
             r = rec.get(t)
             if r is None or p == op:      # skip a non-FBS side and (rare) ties
@@ -451,8 +458,9 @@ def _compute_conference_standings(cursor, season):
             r['pf'] += p; r['pa'] += op
             won = p > op
             r['w' if won else 'l'] += 1
-            if team_conf.get(opp) == team_conf[t]:   # both same conference
+            if not is_ccg and team_conf.get(opp) == team_conf[t]:   # same-conf, not a title game
                 r['cw' if won else 'cl'] += 1
+                h2h.setdefault(t, {}).setdefault(opp, [0, 0])[0 if won else 1] += 1
     cursor.execute('SELECT name, logo_dark FROM teams')
     logos = dict(cursor.fetchall())
     ap_ranks = get_ap_rankings(cursor, season)
@@ -470,7 +478,34 @@ def _compute_conference_standings(cursor, season):
             'ap_rank': ap_ranks.get(t),
         })
     for c in confs:
-        confs[c].sort(key=lambda x: (-x['conf_pct'], -x['conf_wins'], -x['overall_pct'], x['name']))
+        rows = confs[c]
+        rows.sort(key=lambda x: (-x['conf_pct'], -x['conf_wins']))
+        # Break ties (same conference record) by head-to-head among the tied
+        # teams — the standard first tiebreaker — then overall win pct, then
+        # name. (Full multi-team conference procedures are more elaborate; this
+        # covers the common cases, e.g. Alabama over Georgia when both finish
+        # tied and Alabama won the meeting.)
+        ordered, i = [], 0
+        while i < len(rows):
+            j = i
+            while j < len(rows) and (rows[j]['conf_wins'], rows[j]['conf_losses']) == \
+                                    (rows[i]['conf_wins'], rows[i]['conf_losses']):
+                j += 1
+            block = rows[i:j]
+            if len(block) > 1:
+                names = {b['name'] for b in block}
+                def _h2h_key(b):
+                    w = l = 0
+                    for opp in names:
+                        rr = h2h.get(b['name'], {}).get(opp)
+                        if rr:
+                            w += rr[0]; l += rr[1]
+                    pct = w / (w + l) if (w + l) else 0.5   # 0.5 = neutral if none played
+                    return (-pct, -b['overall_pct'], b['name'])
+                block.sort(key=_h2h_key)
+            ordered.extend(block)
+            i = j
+        confs[c] = ordered
     return confs
 
 @cache.memoize(timeout=21600)
