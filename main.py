@@ -1636,9 +1636,11 @@ def search():
             player_results = cursor.fetchall()
             cursor.execute('''
                 SELECT name, conference, logo_dark, color
-                FROM teams WHERE name ILIKE %s OR abbreviation ILIKE %s
+                FROM teams
+                WHERE (name ILIKE %s OR abbreviation ILIKE %s)
+                  AND conference IS NOT NULL AND conference <> ALL(%s)
                 ORDER BY name LIMIT 10
-            ''', (f'%{q}%', f'%{q}%'))
+            ''', (f'%{q}%', f'%{q}%', list(FCS_CONFS)))
             team_results = cursor.fetchall()
         finally:
             release_db(conn)
@@ -3023,10 +3025,11 @@ def api_players():
             cursor.execute('''
                 SELECT name, conference, logo_dark, color, 'team' as result_type
                 FROM teams
-                WHERE name ILIKE %s OR abbreviation ILIKE %s
+                WHERE (name ILIKE %s OR abbreviation ILIKE %s)
+                  AND conference IS NOT NULL AND conference <> ALL(%s)
                 ORDER BY name
                 LIMIT 4
-            ''', (f'%{q}%', f'%{q}%'))
+            ''', (f'%{q}%', f'%{q}%', list(FCS_CONFS)))
             team_rows = cursor.fetchall()
     finally:
         release_db(conn)
