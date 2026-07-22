@@ -250,6 +250,10 @@ def ensure_indexes():
         cursor = conn.cursor()
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_player_stats_player_id ON player_stats(player_id);
+            -- The player page looks up every team a player recorded stats under
+            -- with `player_id = %s OR player_name = %s`; without this the
+            -- player_name arm forced a full scan of ~1.1M rows (~3s per page).
+            CREATE INDEX IF NOT EXISTS idx_player_stats_player_name ON player_stats(player_name);
             CREATE INDEX IF NOT EXISTS idx_player_stats_team ON player_stats(team);
             CREATE INDEX IF NOT EXISTS idx_player_stats_category_stattype ON player_stats(category, stat_type);
             CREATE INDEX IF NOT EXISTS idx_player_ppa_player_id ON player_ppa(player_id);
