@@ -211,8 +211,47 @@ def requested_season():
     return CURRENT_SEASON
 
 def get_ap_rankings(cursor, season=CURRENT_SEASON):
-    cursor.execute('SELECT team, rank FROM ap_rankings WHERE season=%s ORDER BY rank', (season,))
-    return {row[0]: row[1] for row in cursor.fetchall()}
+    """The FINAL AP poll for a season as {team: rank} — the postseason poll if
+    it exists, else the latest regular-season week. ap_rankings now holds every
+    weekly poll, so this pins to a single one (used for the home ticker, team
+    hero, etc., where a single poll is wanted)."""
+    cursor.execute('''
+        SELECT team, rank FROM ap_rankings WHERE season = %s
+          AND (season_type, week) = (
+              SELECT season_type, week FROM ap_rankings WHERE season = %s
+              ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
+    ''', (season, season))
+    return {t: r for t, r in cursor.fetchall()}
+
+
+def get_ap_week_map(cursor, season):
+    """Every weekly AP poll for a season, for as-of-game-week lookups.
+    Returns (regular, final): regular = {ranking_week: {team: rank}},
+    final = {team: rank} (the postseason poll). Empty when a season has no
+    polls loaded yet (e.g. a season that hasn't started)."""
+    regular, final = {}, {}
+    try:
+        cursor.execute('SELECT season_type, week, team, rank FROM ap_rankings WHERE season = %s',
+                       (season,))
+        for stype, week, team, rank in cursor.fetchall():
+            if stype == 'postseason':
+                final[team] = rank
+            else:
+                regular.setdefault(week, {})[team] = rank
+    except psycopg2.Error:
+        cursor.connection.rollback()
+    return regular, final
+
+
+def ap_asof(ap_weekly, week, is_post):
+    """The AP poll {team: rank} in effect for a game — the latest regular poll
+    whose ranking week ≤ the game's week (poll teams carry INTO that week), or
+    the final poll for postseason games. Empty when no poll applies yet."""
+    regular, final = ap_weekly
+    if is_post:
+        return final
+    weeks = [w for w in regular if w <= (week or 0)]
+    return regular[max(weeks)] if weeks else {}
 
 def get_conference_logos(cursor):
     """{conference_name: logo_url} for the Teams page and team-page standings.
@@ -1329,14 +1368,18 @@ def format_kickoff(start_date_raw, time_tbd):
     except Exception:
         return (str(start_date_raw)[:10], 'TBD')
 
-def build_game_card(row, ap_rankings, rivalry_map):
+def build_game_card(row, ap_weekly, rivalry_map):
     """Turn a GAME_CARD_SELECT row into the dict the game_card macro consumes.
     Handles both completed games (scores, winner) and scheduled ones (kickoff
-    date/time, no score)."""
+    date/time, no score). `ap_weekly` is the season's (regular, final) poll map
+    from get_ap_week_map — each team's rank is the poll in effect for THAT
+    game's week (scheduled or final), not a single season-wide poll."""
     (gid, home, home_pts, away, away_pts, week, season_type, notes,
      home_logo, away_logo, completed, start_date, time_tbd,
      home_color, away_color) = row
     date_str, time_str = format_kickoff(start_date, time_tbd)
+    is_post = 'POST' in str(season_type or '').upper()
+    ap = ap_asof(ap_weekly, week, is_post) if ap_weekly else {}
     return {
         'id': gid,
         'home': home, 'away': away,
@@ -1345,11 +1388,10 @@ def build_game_card(row, ap_rankings, rivalry_map):
         'home_color': home_color, 'away_color': away_color,
         'week': week, 'notes': notes,
         'completed': bool(completed),
-        # AP rankings are the final 2025 poll — only meaningful on completed
-        # (2025) games. Suppress them on scheduled 2026 games so a team doesn't
-        # carry a stale rank into next season.
-        'home_rank': ap_rankings.get(home) if (ap_rankings and completed) else None,
-        'away_rank': ap_rankings.get(away) if (ap_rankings and completed) else None,
+        # Rank each team carried into this game — the weekly poll as-of its
+        # week (upcoming games show ranks too once that week's poll is out).
+        'home_rank': ap.get(home),
+        'away_rank': ap.get(away),
         'rivalry': rivalry_map.get((home, away), '') if rivalry_map else '',
         'kickoff_date': date_str, 'kickoff_time': time_str,
     }
@@ -1361,7 +1403,8 @@ def home(week=None, season_type='regular'):
     conn = get_db()
     try:
         cursor = conn.cursor()
-        ap_rankings = get_ap_rankings(cursor)
+        ap_rankings = get_ap_rankings(cursor)                  # final poll (leaders/ticker)
+        ap_weekly = get_ap_week_map(cursor, CURRENT_SEASON)    # per-week, for game cards
 
         cursor.execute('''
             SELECT week, season_type FROM (
@@ -1402,7 +1445,7 @@ def home(week=None, season_type='regular'):
 
         # One query for the whole rivalries table instead of one per game (N+1 fix)
         rivalry_map = get_rivalry_map(cursor)
-        games = [build_game_card(row, ap_rankings, rivalry_map) for row in raw_games]
+        games = [build_game_card(row, ap_weekly, rivalry_map) for row in raw_games]
 
         label_order = ['National Championship','Semifinal','Quarterfinal','First Round','Conference Championships','Bowl Games']
         grouped_games = OrderedDict((label, []) for label in label_order)
@@ -1438,7 +1481,6 @@ def games_hub():
     conn = get_db()
     try:
         cursor = conn.cursor()
-        ap_rankings = get_ap_rankings(cursor)
 
         cursor.execute('SELECT DISTINCT season FROM games ORDER BY season DESC')
         seasons = [r[0] for r in cursor.fetchall()]
@@ -1509,7 +1551,8 @@ def games_hub():
         raw_games = cursor.fetchall()
 
         rivalry_map = get_rivalry_map(cursor)
-        games = [build_game_card(row, ap_rankings, rivalry_map) for row in raw_games]
+        ap_weekly = get_ap_week_map(cursor, season)   # poll as-of each game's week
+        games = [build_game_card(row, ap_weekly, rivalry_map) for row in raw_games]
 
         # Savant Forecast chips for upcoming games — one batch read of the
         # precomputed predictions (predict_games.py), keyed by game id.
@@ -3001,33 +3044,60 @@ def api_players():
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def rankings():
     season = requested_season()
+
+    def poll_label(wk, st):
+        if st == 'postseason':
+            return 'Final'
+        return 'Preseason' if wk == 1 else f'Week {wk}'
+
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT a.rank, a.team, a.points, a.first_place_votes, a.week,
-                   t.logo, t.conference, t.color,
-                   sp.rating, sp.ranking as sp_rank,
-                   SUM(CASE WHEN (g.home_team=a.team AND g.home_points>g.away_points) OR (g.away_team=a.team AND g.away_points>g.home_points) THEN 1 ELSE 0 END) as wins,
-                   SUM(CASE WHEN (g.home_team=a.team AND g.home_points<g.away_points) OR (g.away_team=a.team AND g.away_points<g.home_points) THEN 1 ELSE 0 END) as losses,
-                   a.prev_rank, t.logo_dark, t.alt_color
-            FROM ap_rankings a
-            LEFT JOIN teams t ON a.team = t.name
-            LEFT JOIN sp_ratings sp ON a.team = sp.team AND sp.season = a.season
-            LEFT JOIN games g ON (g.home_team=a.team OR g.away_team=a.team)
-                AND g.completed=1 AND g.season = a.season AND g.season_type='SeasonType.REGULAR'
-            WHERE a.season = %s
-            GROUP BY a.rank, a.team, a.points, a.first_place_votes, a.week, a.prev_rank,
-                     t.logo, t.conference, t.color, t.logo_dark, t.alt_color,
-                     sp.rating, sp.ranking
-            ORDER BY a.rank
-        ''', (season,))
-        rows = cursor.fetchall()
-        cursor.execute('SELECT week, season, season_type FROM ap_rankings WHERE season=%s LIMIT 1', (season,))
-        meta = cursor.fetchone()
+        # Every poll this season has, chronological (regular weeks, then final).
+        cursor.execute('SELECT DISTINCT week, season_type FROM ap_rankings WHERE season = %s', (season,))
+        polls = sorted(cursor.fetchall(), key=lambda r: (0 if r[1] == 'regular' else 1, r[0]))
+
+        sel_week = sel_type = None
+        rows = []
+        if polls:
+            # Selected poll from ?w=<season_type>-<week>; default to the final.
+            want = request.args.get('w', '')
+            chosen = next(((wk, st) for wk, st in polls if f'{st}-{wk}' == want), polls[-1])
+            sel_week, sel_type = chosen
+            is_post = sel_type == 'postseason'
+
+            # Win/loss record AS OF this poll: the poll for ranking week W
+            # reflects results through week W-1, so count regular games with
+            # week < W; the final poll counts the whole season (bowls included).
+            cursor.execute('''
+                SELECT a.rank, a.team, a.points, a.first_place_votes, a.week,
+                       t.logo, t.conference, t.color,
+                       sp.rating, sp.ranking as sp_rank,
+                       SUM(CASE WHEN (g.home_team=a.team AND g.home_points>g.away_points) OR (g.away_team=a.team AND g.away_points>g.home_points) THEN 1 ELSE 0 END) as wins,
+                       SUM(CASE WHEN (g.home_team=a.team AND g.home_points<g.away_points) OR (g.away_team=a.team AND g.away_points<g.home_points) THEN 1 ELSE 0 END) as losses,
+                       a.prev_rank, t.logo_dark, t.alt_color
+                FROM ap_rankings a
+                LEFT JOIN teams t ON a.team = t.name
+                LEFT JOIN sp_ratings sp ON a.team = sp.team AND sp.season = a.season
+                LEFT JOIN games g ON (g.home_team=a.team OR g.away_team=a.team)
+                    AND g.completed=1 AND g.season = a.season
+                    AND (%(post)s OR (g.season_type='SeasonType.REGULAR' AND g.week < %(wk)s))
+                WHERE a.season = %(season)s AND a.week = %(wk)s AND a.season_type = %(stype)s
+                GROUP BY a.rank, a.team, a.points, a.first_place_votes, a.week, a.prev_rank,
+                         t.logo, t.conference, t.color, t.logo_dark, t.alt_color,
+                         sp.rating, sp.ranking
+                ORDER BY a.rank
+            ''', {'season': season, 'wk': sel_week, 'stype': sel_type, 'post': is_post})
+            rows = cursor.fetchall()
     finally:
         release_db(conn)
-    return render_template('rankings.html', rankings=rows, meta=meta,
+
+    poll_options = [{'value': f'{st}-{wk}', 'label': poll_label(wk, st),
+                     'selected': (wk == sel_week and st == sel_type)} for wk, st in polls]
+    return render_template('rankings.html', rankings=rows,
+                           poll_options=poll_options,
+                           sel_label=poll_label(sel_week, sel_type) if sel_week else None,
+                           sel_is_final=(sel_type == 'postseason'),
                            season=season, available_seasons=get_available_seasons())
 
 
@@ -3124,8 +3194,10 @@ def game_detail(game_id):
         # FCS opponents have no team page — only link the ones we know are FBS.
         home_is_fbs = bool(game_info[18]) and game_info[18] not in FCS_CONFS
         away_is_fbs = bool(game_info[19]) and game_info[19] not in FCS_CONFS
-        # AP ranks for the game's own season (empty until that poll is loaded)
-        ap_rankings = get_ap_rankings(cursor, game_season)
+        # AP ranks each team carried INTO this game — the weekly poll as-of the
+        # game's week (final poll for postseason), empty until that poll exists.
+        _is_post = 'POST' in str(game_info[6] or '').upper()
+        ap_rankings = ap_asof(get_ap_week_map(cursor, game_season), game_info[5], _is_post)
         rivalry_name = get_rivalry(cursor, home_team, away_team)
 
         # Scheduled-but-unplayed game (e.g. the 2026 season): there's no box
@@ -3191,8 +3263,9 @@ def game_detail(game_id):
             game=game_info, home_team=home_team, away_team=away_team,
             forecast=forecast,
             home_is_fbs=home_is_fbs, away_is_fbs=away_is_fbs,
-            # No AP ranks on 2026 games — the poll reflects the 2025 season.
-            ap_rankings={}, rivalry_name=rivalry_name,
+            # As-of-week ranks (per-season now) — empty until that week's poll
+            # exists, so upcoming games show ranks once the poll is out.
+            ap_rankings=ap_rankings, rivalry_name=rivalry_name,
             is_scheduled=True,
             kickoff_date=kick_date, kickoff_time=kick_time,
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',

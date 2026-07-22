@@ -8,28 +8,41 @@
     <div>
         <h2 style="color: var(--text-primary);font-weight:900;font-size: var(--text-xl);margin:0;letter-spacing:-0.01em">
             AP Top 25
-            {% if meta and meta[2] == 'postseason' %}<span class="ap-final-pill">Final</span>{% endif %}
+            {% if sel_is_final %}<span class="ap-final-pill">Final</span>{% endif %}
         </h2>
-        {% if meta %}
+        {% if sel_label %}
         <div style="color: var(--text-dim);font-size: var(--text-sm);margin-top:6px">
-            {% if meta[2] == 'postseason' %}
-                Final Poll · {{ meta[1] }} Season
-            {% else %}
-                Week {{ meta[0] }} · {{ meta[1] }} Season
-            {% endif %}
+            {{ sel_label }} · {{ season }} Season
         </div>
         {% endif %}
     </div>
-    {% if available_seasons and available_seasons|length > 1 %}
-    <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
-            onchange="location='?season='+this.value">
-        {% for s in available_seasons %}
-        <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
-        {% endfor %}
-    </select>
-    {% endif %}
+    <div class="d-flex gap-2 flex-wrap">
+        {% if poll_options %}
+        <select class="lb-select" style="min-width:132px" aria-label="Poll week"
+                onchange="location='?season={{ season }}&w='+this.value">
+            {% for p in poll_options|reverse %}
+            <option value="{{ p.value }}" {{ 'selected' if p.selected else '' }}>{{ p.label }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        {% if available_seasons and available_seasons|length > 1 %}
+        <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
+                onchange="location='?season='+this.value">
+            {% for s in available_seasons %}
+            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
 </div>
 
+{% if not rankings %}
+<div class="dark-card" style="text-align:center;padding:44px 24px;color:var(--text-secondary)">
+    No AP poll for the {{ season }} season yet.
+</div>
+{% endif %}
+
+{% if rankings %}
 <!-- Column headers -->
 <div class="ap-rankings-grid ap-head">
     <div class="ap-col-label">Rk</div>
@@ -108,6 +121,7 @@
     </a>
 {% endfor %}
 </div>
+{% endif %}
 
 </div>
 {% endblock %}
