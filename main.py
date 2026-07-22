@@ -180,6 +180,60 @@ def _shed_crawler_load():
             status=429, mimetype='text/plain',
             headers={'Retry-After': '86400'})
 
+# ── Per-IP rate limiting ─────────────────────────────────────────────────────
+# Second line of defense after the user-agent blocklist above: a single client
+# that spoofs a browser UA still can't hammer the (heavy, single-worker) site.
+# A dependency-free in-memory sliding window — fine because we run one worker,
+# so this dict is authoritative; it just resets on deploy and, if a second
+# worker is ever added, each simply enforces its own share. Tune or disable
+# without a code change via RATE_LIMIT_MAX (0 disables) / RATE_LIMIT_WINDOW.
+import time as _time
+from collections import deque as _deque
+from threading import Lock as _Lock
+
+_RL_MAX    = int(os.getenv('RATE_LIMIT_MAX', '100'))    # requests per window per IP
+_RL_WINDOW = int(os.getenv('RATE_LIMIT_WINDOW', '60'))  # window length, seconds
+_rl_hits = {}            # ip -> deque[monotonic timestamps within the window]
+_rl_lock = _Lock()
+_rl_last_prune = [0.0]
+
+def _client_ip():
+    # Behind Render's proxy the connecting address is the proxy; the real
+    # client is the first hop of X-Forwarded-For.
+    xff = request.headers.get('X-Forwarded-For', '')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+@app.before_request
+def _rate_limit():
+    if _RL_MAX <= 0:
+        return
+    path = request.path
+    if path == '/healthz' or path.startswith('/static'):
+        return
+    ip = _client_ip()
+    now = _time.monotonic()
+    cutoff = now - _RL_WINDOW
+    with _rl_lock:
+        dq = _rl_hits.get(ip)
+        if dq is None:
+            dq = _rl_hits[ip] = _deque()
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        if len(dq) >= _RL_MAX:
+            retry = int(dq[0] + _RL_WINDOW - now) + 1
+            return Response(
+                'Too many requests. Please slow down.\n',
+                status=429, mimetype='text/plain',
+                headers={'Retry-After': str(max(1, retry))})
+        dq.append(now)
+        # Bound memory: drop IPs idle for a full window, at most every 5 min.
+        if now - _rl_last_prune[0] > 300:
+            _rl_last_prune[0] = now
+            for k in [k for k, d in _rl_hits.items() if not d or d[-1] < cutoff]:
+                _rl_hits.pop(k, None)
+
 @app.route('/healthz')
 def healthz():
     """Liveness probe that never touches the DB or renders a template — so it
