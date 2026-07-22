@@ -382,6 +382,35 @@ def _ppa_pool_cached(positions_key, season):
     _pool_store_put(key, season, pool)
     return pool
 
+def _fetch_usage_pool(cursor, positions, season=CURRENT_SEASON):
+    """Usage-rate peer pool (player_usage.overall = share of team plays the
+    player was involved in) — the site's own snap-count proxy / target-share
+    signal. Memoized + persisted like the other pools; keyed on the canonical
+    players.id so it lines up with the stats/PPA pools. Read-only."""
+    return _usage_pool_cached(tuple(positions), season)
+
+@cache.memoize(timeout=21600)
+def _usage_pool_cached(positions_key, season):
+    key = f"usage:{','.join(positions_key)}:{season}"
+    stored = _pool_store_get(key)
+    if stored is not None:
+        return stored
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        ph = ','.join(['%s'] * len(positions_key))
+        cursor.execute(f'''
+            SELECT pl.id::text, CAST(pu.overall AS REAL)
+            FROM player_usage pu
+            JOIN players pl ON pu.player_id::text = pl.id::text
+            WHERE pu.season=%s AND pl.position IN ({ph}) AND pu.overall IS NOT NULL
+        ''', [season] + list(positions_key))
+        pool = {pid: {'overall': ov} for pid, ov in cursor.fetchall()}
+    finally:
+        release_db(conn)
+    _pool_store_put(key, season, pool)
+    return pool
+
 def _rank_pct(player_id, pool, stat_key, higher_better=True):
     """Rank and percentile from pre-fetched pool dict — no DB call."""
     pid_str = str(player_id)
@@ -400,7 +429,11 @@ def _rank_pct(player_id, pool, stat_key, higher_better=True):
     else:
         rank  = sum(1 for v in all_vals if v < my_val) + 1
         below = sum(1 for v in all_vals if v > my_val)
-    percentile = max(1, min(99, round((below / n) * 100)))
+    # Mid-rank ties so a modal value (e.g. a LB with 0 QB hurries, where most
+    # peers also have 0) lands mid-pack, not dumped at the 1st-percentile floor
+    # the plain "fraction strictly below" would give every zero-holder.
+    equal = sum(1 for v in all_vals if v == my_val)
+    percentile = max(1, min(99, round((below + 0.5 * equal) / n * 100)))
     return rank, percentile, n
 
 # Minimum qualification thresholds by position group and stat category.
@@ -490,6 +523,182 @@ def compute_rank_and_percentile(cursor, player_id, stat_type, category, position
     pool = _qualify_pool(pool, pool, qual_stat, qual_min)
     single = {pid: {stat_type: d.get(stat_type)} for pid, d in pool.items()}
     return _rank_pct(player_id, single, stat_type, higher_better)
+
+
+# ── Player percentile rankings (Baseball-Savant style) ────────────────────────
+# Curated, advanced-first metric sets per position group. Each row is
+# (label, source, stat_key, higher_better); `source` names a peer pool assembled
+# in _build_percentiles. The lead metrics are efficiency / EPA-based (the point
+# of the feature); a few raw counting stats trail for context where no better
+# efficiency equivalent exists in the data. Every stat_key here was verified to
+# be populated for the position — sparse metrics (player-level success rate,
+# explosiveness, defensive EPA, exact target share, catch rate) are NOT stored
+# per player anywhere in the DB, so they are deliberately absent rather than
+# shown on an unreliable pool. See the report accompanying this change.
+#
+# Which advanced data actually exists per player:
+#   • EPA (player_ppa: avg_ppa_all/pass/rush, total_ppa) — OFFENSE ONLY.
+#   • Efficiency rates (player_stats: PCT, YPA, YPC, YPR).
+#   • Usage rate (player_usage.overall) — involvement / target-share proxy.
+#   • Defense has no EPA or rate stats (no snap counts) — only disruption and
+#     coverage counting stats, led by the most differentiating ones.
+PERCENTILE_METRICS = {
+    'QB': [
+        ('EPA / Play',        'ppa',       'avg_ppa_all',  True),
+        ('Pass EPA / Play',   'ppa',       'avg_ppa_pass', True),
+        ('Rush EPA / Play',   'ppa',       'avg_ppa_rush', True),
+        ('Total EPA',         'ppa',       'total_ppa',    True),
+        ('Completion %',      'passing',   'PCT',          True),
+        ('Yards / Attempt',   'passing',   'YPA',          True),
+        ('Interceptions',     'passing',   'INT',          False),
+        ('Pass Yards',        'passing',   'YDS',          True),
+        ('Pass TDs',          'passing',   'TD',           True),
+    ],
+    'RB': [
+        ('EPA / Play',        'ppa',       'avg_ppa_all',  True),
+        ('Rush EPA / Play',   'ppa',       'avg_ppa_rush', True),
+        ('Total EPA',         'ppa',       'total_ppa',    True),
+        ('Yards / Carry',     'rushing',   'YPC',          True),
+        ('Usage Rate',        'usage',     'overall',      True),
+        ('Rush Yards',        'rushing',   'YDS',          True),
+        ('Rush TDs',          'rushing',   'TD',           True),
+        ('Receiving Yards',   'receiving', 'YDS',          True),
+    ],
+    'WR': [
+        ('EPA / Play',        'ppa',       'avg_ppa_all',  True),
+        ('Total EPA',         'ppa',       'total_ppa',    True),
+        ('Yards / Reception', 'receiving', 'YPR',          True),
+        ('Usage Rate',        'usage',     'overall',      True),
+        ('Receiving Yards',   'receiving', 'YDS',          True),
+        ('Receptions',        'receiving', 'REC',          True),
+        ('Receiving TDs',     'receiving', 'TD',           True),
+    ],
+    'DL': [
+        ('Sacks',             'defensive', 'SACKS',        True),
+        ('Tackles for Loss',  'defensive', 'TFL',          True),
+        ('QB Hurries',        'defensive', 'QB HUR',       True),
+        ('Passes Defended',   'defensive', 'PD',           True),
+        ('Tackles',           'defensive', 'TOT',          True),
+        ('Solo Tackles',      'defensive', 'SOLO',         True),
+    ],
+    'DB': [
+        ('Interceptions',     'ints',      'INT',          True),
+        ('Passes Defended',   'defensive', 'PD',           True),
+        ('Tackles for Loss',  'defensive', 'TFL',          True),
+        ('Tackles',           'defensive', 'TOT',          True),
+        ('Solo Tackles',      'defensive', 'SOLO',         True),
+    ],
+}
+PERCENTILE_METRICS['TE'] = PERCENTILE_METRICS['WR']   # TEs share the receiver set
+PERCENTILE_METRICS['LB'] = PERCENTILE_METRICS['DL']   # LBs share the front-seven set
+
+# National-rank keys still shown on the season-stat header cards (rank only, not
+# percentile). Kept in lockstep with the labels player.html maps to each key.
+_RANK_SPECS = {
+    'QB': [('pass_yds_rank','passing','YDS',True), ('pass_td_rank','passing','TD',True),
+           ('pct_rank','passing','PCT',True), ('ypa_rank','passing','YPA',True),
+           ('int_rank','passing','INT',False), ('epa_rank','ppa','avg_ppa_all',True)],
+    'RB': [('rush_yds_rank','rushing','YDS',True), ('rush_td_rank','rushing','TD',True),
+           ('ypc_rank','rushing','YPC',True), ('rec_yds_rank','receiving','YDS',True),
+           ('epa_rank','ppa','avg_ppa_all',True)],
+    'WR': [('rec_yds_rank','receiving','YDS',True), ('rec_td_rank','receiving','TD',True),
+           ('rec_rank','receiving','REC',True), ('ypr_rank','receiving','YPR',True),
+           ('epa_rank','ppa','avg_ppa_all',True)],
+    'DL': [('tackles_rank','defensive','TOT',True), ('sacks_rank','defensive','SACKS',True)],
+    'DB': [('tackles_rank','defensive','TOT',True), ('sacks_rank','defensive','SACKS',True)],
+}
+_RANK_SPECS['TE'] = _RANK_SPECS['WR']
+_RANK_SPECS['LB'] = _RANK_SPECS['DL']
+
+# Peer positions pooled for each qualification group (the "vs FBS <group>s" set).
+_GROUP_POSITIONS = {
+    'QB': ['QB'],
+    'RB': ['RB','HB','FB'],
+    'WR': ['WR','TE'], 'TE': ['WR','TE'],
+    'DL': ['DE','DT','NT','DL','EDGE'],
+    'LB': ['LB','ILB','OLB','MLB'],
+    'DB': ['CB','S','SS','FS','SAF','DB'],
+}
+# Qualification group -> which metric set it uses (TE→WR, LB→DL share sets).
+METRIC_GROUP = {'QB':'QB','RB':'RB','WR':'WR','TE':'TE','DL':'DL','LB':'LB','DB':'DB'}
+# The counting-stat category that gates qualification for each group.
+_PRIMARY_CATEGORY = {'QB':'passing','RB':'rushing','WR':'receiving','TE':'receiving',
+                     'DL':'defensive','LB':'defensive','DB':'defensive'}
+
+
+def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
+    """Assemble the player-page percentile rankings for one player.
+
+    Returns (national_ranks, percentile_rows, group_name, peer_count):
+      • national_ranks — {rank_key: national rank} for the season-stat cards.
+      • percentile_rows — ordered [{'label', 'pct'}] for the percentile bars,
+        advanced-first, only metrics the player actually qualifies for.
+      • group_name — e.g. 'QB', 'WR', 'DL' (for the "vs FBS <group>s" header).
+      • peer_count — size of the qualified peer pool.
+
+    Every group is handled (offense and defense). Counting stats are zero-filled
+    across the qualified pool so a player with none of a stat (a DL with no
+    sacks) ranks at the bottom of qualified peers rather than dropping out of the
+    pool — which would overstate everyone who recorded one. EPA and usage are not
+    zero-filled: absence there means the player is outside that data, not a zero.
+    """
+    qgroup = POS_GROUP_MAP.get(pos)
+    mgroup = METRIC_GROUP.get(qgroup) if qgroup else None
+    if not mgroup:
+        return {}, [], None, 0
+
+    gp = _GROUP_POSITIONS[qgroup]
+    specs = PERCENTILE_METRICS[mgroup]
+    rank_specs = _RANK_SPECS.get(mgroup, [])
+    needed = {s for _, s, _, _ in specs} | {s for _, s, _, _ in rank_specs}
+
+    # Qualify against the group's primary counting stat (playing-time proxy).
+    primary_cat = _PRIMARY_CATEGORY[qgroup]
+    qstat, qmin = _qual_threshold(qgroup, primary_cat)
+    primary_raw = _fetch_stats_pool(cursor, primary_cat, gp, season)
+    qualified = {pid for pid, d in primary_raw.items() if (d.get(qstat) or 0) >= qmin}
+
+    # Build each referenced source, restricted to the qualified peer set.
+    # (pool, fill): fill=True zero-fills a missing stat to 0 before ranking.
+    sources = {}
+    for src in needed:
+        if src in ('passing', 'rushing', 'receiving', 'defensive'):
+            raw = primary_raw if src == primary_cat else _fetch_stats_pool(cursor, src, gp, season)
+            sources[src] = ({pid: raw.get(pid, {}) for pid in qualified}, True)
+        elif src == 'ppa':
+            raw = _fetch_ppa_pool(cursor, gp, season)
+            sources['ppa'] = ({pid: raw[pid] for pid in qualified if pid in raw}, False)
+        elif src == 'usage':
+            raw = _fetch_usage_pool(cursor, gp, season)
+            sources['usage'] = ({pid: raw[pid] for pid in qualified if pid in raw}, False)
+        elif src == 'ints':
+            raw = _fetch_stats_pool(cursor, 'interceptions', gp, season)
+            sources['ints'] = ({pid: {'INT': (raw.get(pid, {}).get('INT') or 0)}
+                                for pid in qualified}, False)
+
+    def rank_one(src, stat_key, hb):
+        entry = sources.get(src)
+        if not entry:
+            return None, None, 0
+        pool, fill = entry
+        if fill:
+            pool = {pid: {stat_key: (d.get(stat_key) or 0)} for pid, d in pool.items()}
+        return _rank_pct(player_id, pool, stat_key, hb)
+
+    national = {}
+    for key, src, stat_key, hb in rank_specs:
+        r, _, _ = rank_one(src, stat_key, hb)
+        if r is not None:
+            national[key] = r
+
+    rows, peer = [], 0
+    for label, src, stat_key, hb in specs:
+        _, p, n = rank_one(src, stat_key, hb)
+        if p is not None:
+            rows.append({'label': label, 'pct': p})
+            peer = max(peer, n)
+
+    return national, rows, qgroup, peer
 
 
 def get_rivalry(cursor, team1, team2):
@@ -4276,211 +4485,22 @@ def _player_detail_cached(player_id, season):
         ap_row = cursor.fetchone()
         ap_rank = ap_row[0] if ap_row else None
 
-        # ── NATIONAL RANKS + PERCENTILES (unified identical pool) ─────────────────
+        # ── NATIONAL RANKS + PERCENTILES ─────────────────────────────────────────
+        # One place builds both the season-stat national ranks and the ordered,
+        # advanced-first percentile bars for every position group (see
+        # _build_percentiles / PERCENTILE_METRICS).
         national_ranks     = {}
         player_percentiles = {}
+        percentile_rows    = []
         try:
-            pos = player.get('position') or ''
-
-            _pos_groups = {
-                'QB':   ('QB',  ['QB']),
-                'RB':   ('RB',  ['RB','HB','FB']),
-                'HB':   ('RB',  ['RB','HB','FB']),
-                'FB':   ('RB',  ['RB','HB','FB']),
-                'WR':   ('WR',  ['WR','TE']),
-                'TE':   ('TE',  ['WR','TE']),
-                'DE':   ('DL',  ['DE','DT','NT','DL','EDGE']),
-                'DT':   ('DL',  ['DE','DT','NT','DL','EDGE']),
-                'NT':   ('DL',  ['DE','DT','NT','DL','EDGE']),
-                'DL':   ('DL',  ['DE','DT','NT','DL','EDGE']),
-                'EDGE': ('DL',  ['DE','DT','NT','DL','EDGE']),
-                'LB':   ('LB',  ['LB','ILB','OLB','MLB']),
-                'ILB':  ('LB',  ['LB','ILB','OLB','MLB']),
-                'OLB':  ('LB',  ['LB','ILB','OLB','MLB']),
-                'MLB':  ('LB',  ['LB','ILB','OLB','MLB']),
-                'CB':   ('DB',  ['CB','S','SS','FS','SAF','DB']),
-                'S':    ('DB',  ['CB','S','SS','FS','SAF','DB']),
-                'SS':   ('DB',  ['CB','S','SS','FS','SAF','DB']),
-                'FS':   ('DB',  ['CB','S','SS','FS','SAF','DB']),
-                'SAF':  ('DB',  ['CB','S','SS','FS','SAF','DB']),
-                'DB':   ('DB',  ['CB','S','SS','FS','SAF','DB']),
-            }
-
-            if pos in _pos_groups:
-                group_name, gp = _pos_groups[pos]
-                pool_size = 0
-
-                if pos == 'QB':
-                    sp = _fetch_stats_pool(cursor, 'passing', gp, season)
-                    pp = _fetch_ppa_pool(cursor, gp, season)
-                    pass_stat, pass_min = _qual_threshold(group_name, 'passing')
-                    ppa_stat,  ppa_min  = _qual_threshold(group_name, 'ppa')
-                    sp = _qualify_pool(sp, sp, pass_stat, pass_min)
-                    pp = _qualify_pool(pp, sp, ppa_stat, ppa_min)
-                    for rk, st, pk, hb in [
-                        ('pass_yds_rank','YDS','pass_yards',True),
-                        ('pass_td_rank', 'TD', 'pass_td',   True),
-                        ('pct_rank',     'PCT','completion', True),
-                        ('ypa_rank',     'YPA','yards_per_att',True),
-                    ]:
-                        r, p, n = _rank_pct(player_id, sp, st, hb)
-                        if r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-                        pool_size = max(pool_size, n)
-                    r, p, _ = _rank_pct(player_id, sp, 'INT', higher_better=False)
-                    if r is not None: national_ranks['int_rank'] = r
-                    for col, rk, pk in [
-                        ('avg_ppa_all', 'epa_rank', 'epa_per_play'),
-                        ('avg_ppa_pass', None,       'epa_pass'),
-                        ('avg_ppa_rush', None,        'epa_rush'),
-                        ('total_ppa',   None,        'total_epa'),
-                    ]:
-                        r, p, _ = _rank_pct(player_id, pp, col)
-                        if rk and r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-
-                elif pos in ('RB','HB','FB'):
-                    sp = _fetch_stats_pool(cursor, 'rushing', gp, season)
-                    rp = _fetch_stats_pool(cursor, 'receiving', ['WR','TE','RB','HB','FB'], season)
-                    pp = _fetch_ppa_pool(cursor, gp, season)
-                    rush_stat, rush_min = _qual_threshold(group_name, 'rushing')
-                    rec_stat,  rec_min  = _qual_threshold(group_name, 'receiving')
-                    ppa_stat,  ppa_min  = _qual_threshold(group_name, 'ppa')
-                    sp = _qualify_pool(sp, sp, rush_stat, rush_min)
-                    rp = _qualify_pool(rp, rp, rec_stat, rec_min)
-                    pp = _qualify_pool(pp, sp, ppa_stat, ppa_min)
-                    for rk, st, pk in [
-                        ('rush_yds_rank','YDS','rush_yards'),
-                        ('rush_td_rank', 'TD', 'rush_td'),
-                    ]:
-                        r, p, n = _rank_pct(player_id, sp, st)
-                        if r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-                        pool_size = max(pool_size, n)
-                    r, p, _ = _rank_pct(player_id, sp, 'YPC')
-                    if r is not None: national_ranks['ypc_rank'] = r
-                    if p is not None: player_percentiles['yards_per_carry'] = p
-                    _, p, _ = _rank_pct(player_id, rp, 'YDS')
-                    if p is not None: player_percentiles['rec_yards'] = p
-                    for col, rk, pk in [
-                        ('avg_ppa_all', 'epa_rank', 'epa_per_play'),
-                        ('total_ppa',   None,       'total_epa'),
-                    ]:
-                        r, p, _ = _rank_pct(player_id, pp, col)
-                        if rk and r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-
-                elif pos in ('WR','TE'):
-                    sp = _fetch_stats_pool(cursor, 'receiving', gp, season)
-                    pp = _fetch_ppa_pool(cursor, gp, season)
-                    rec_stat, rec_min = _qual_threshold(group_name, 'receiving')
-                    ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
-                    sp = _qualify_pool(sp, sp, rec_stat, rec_min)
-                    pp = _qualify_pool(pp, sp, ppa_stat, ppa_min)
-                    for rk, st, pk in [
-                        ('rec_yds_rank','YDS','rec_yards'),
-                        ('rec_td_rank', 'TD', 'rec_td'),
-                        ('rec_rank',    'REC','receptions'),
-                        ('ypr_rank',    'AVG','yards_per_rec'),
-                    ]:
-                        r, p, n = _rank_pct(player_id, sp, st)
-                        if r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-                        pool_size = max(pool_size, n)
-                    for col, rk, pk in [
-                        ('avg_ppa_all', 'epa_rank', 'epa_per_play'),
-                        ('total_ppa',   None,       'total_epa'),
-                    ]:
-                        r, p, _ = _rank_pct(player_id, pp, col)
-                        if rk and r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-
-                elif pos in ('DE','DT','NT','DL','EDGE'):
-                    dl_all = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB']
-                    sp_wide = _fetch_stats_pool(cursor, 'defensive', dl_all, season)
-                    sp_dl   = _fetch_stats_pool(cursor, 'defensive', gp, season)
-                    pp = _fetch_ppa_pool(cursor, gp, season)
-                    def_stat, def_min = _qual_threshold(group_name, 'defensive')
-                    ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
-                    sp_wide = _qualify_pool(sp_wide, sp_wide, def_stat, def_min)
-                    sp_dl   = _qualify_pool(sp_dl, sp_dl, def_stat, def_min)
-                    pp      = _qualify_pool(pp, sp_dl, ppa_stat, ppa_min)
-                    for rk, st, pk in [
-                        ('tackles_rank','TOT',  'tackles'),
-                        ('sacks_rank',  'SACKS','sacks'),
-                    ]:
-                        r, p, n = _rank_pct(player_id, sp_wide, st)
-                        if r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-                        pool_size = max(pool_size, n)
-                    _, p, _ = _rank_pct(player_id, sp_dl, 'TFL')
-                    if p is not None: player_percentiles['tfl'] = p
-                    for col, rk, pk in [
-                        ('avg_ppa_all', 'epa_rank', 'epa_per_play'),
-                        ('total_ppa',   None,       'total_epa'),
-                    ]:
-                        r, p, _ = _rank_pct(player_id, pp, col)
-                        if rk and r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-
-                elif pos in ('LB','ILB','OLB','MLB'):
-                    lb_all = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB']
-                    sp_wide = _fetch_stats_pool(cursor, 'defensive', lb_all, season)
-                    sp_lb   = _fetch_stats_pool(cursor, 'defensive', gp, season)
-                    pp = _fetch_ppa_pool(cursor, gp, season)
-                    def_stat, def_min = _qual_threshold(group_name, 'defensive')
-                    ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
-                    sp_wide = _qualify_pool(sp_wide, sp_wide, def_stat, def_min)
-                    sp_lb   = _qualify_pool(sp_lb, sp_lb, def_stat, def_min)
-                    pp      = _qualify_pool(pp, sp_lb, ppa_stat, ppa_min)
-                    for rk, st, pk in [
-                        ('tackles_rank','TOT',  'tackles'),
-                        ('sacks_rank',  'SACKS','sacks'),
-                    ]:
-                        r, p, n = _rank_pct(player_id, sp_wide, st)
-                        if r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-                        pool_size = max(pool_size, n)
-                    _, p, _ = _rank_pct(player_id, sp_lb, 'TFL')
-                    if p is not None: player_percentiles['tfl'] = p
-                    for col, rk, pk in [
-                        ('avg_ppa_all', 'epa_rank', 'epa_per_play'),
-                        ('total_ppa',   None,       'total_epa'),
-                    ]:
-                        r, p, _ = _rank_pct(player_id, pp, col)
-                        if rk and r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-
-                elif pos in ('CB','S','SS','FS','SAF','DB'):
-                    sp = _fetch_stats_pool(cursor, 'defensive', gp, season)
-                    pp = _fetch_ppa_pool(cursor, gp, season)
-                    def_stat, def_min = _qual_threshold(group_name, 'defensive')
-                    ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
-                    sp = _qualify_pool(sp, sp, def_stat, def_min)
-                    pp = _qualify_pool(pp, sp, ppa_stat, ppa_min)
-                    r, p, n = _rank_pct(player_id, sp, 'TOT')
-                    if r is not None: national_ranks['tackles_rank'] = r
-                    if p is not None: player_percentiles['tackles'] = p
-                    pool_size = n
-                    _, p, _ = _rank_pct(player_id, sp, 'INT')
-                    if p is not None: player_percentiles['interceptions'] = p
-                    _, p, _ = _rank_pct(player_id, sp, 'PD')
-                    if p is not None: player_percentiles['pd'] = p
-                    for col, rk, pk in [
-                        ('avg_ppa_all', 'epa_rank', 'epa_per_play'),
-                        ('total_ppa',   None,       'total_epa'),
-                    ]:
-                        r, p, _ = _rank_pct(player_id, pp, col)
-                        if rk and r is not None: national_ranks[rk] = r
-                        if p is not None: player_percentiles[pk] = p
-
-                player_percentiles['group']      = group_name
-                player_percentiles['peer_count'] = pool_size
-
+            national_ranks, percentile_rows, _pgroup, _peer = _build_percentiles(
+                cursor, player_id, player.get('position') or '', season)
+            if _pgroup:
+                player_percentiles = {'group': _pgroup, 'peer_count': _peer}
         except Exception as e:
             print(f"Rank/percentile error: {e}")
             import traceback; traceback.print_exc()
-            player_percentiles = {}
+            national_ranks, player_percentiles, percentile_rows = {}, {}, []
 
 
         # Player usage
@@ -4834,6 +4854,7 @@ def _player_detail_cached(player_id, season):
         ap_rank=ap_rank, c1=c1, c2=c2,
         game_log=game_log,
         player_percentiles=player_percentiles,
+        percentile_rows=percentile_rows,
         national_ranks=national_ranks,
         usage=usage,
         is_active_2026=is_active_2026,

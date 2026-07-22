@@ -508,7 +508,7 @@
         <div class="col-lg-4">
         <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;height:100%">
 
-            {% if player_percentiles and player_percentiles.get('epa_per_play') is not none %}
+            {% if percentile_rows %}
 
             {% macro pct_bar(label, p) %}
             {% if p is not none %}
@@ -556,35 +556,9 @@
                 </div>
             </div>
 
-            {{ pct_bar('EPA / Play', player_percentiles.get('epa_per_play')) }}
-            {{ pct_bar('Total EPA', player_percentiles.get('total_epa')) }}
-
-            {% if is_qb %}
-                {{ pct_bar('Pass Yards', player_percentiles.get('pass_yards')) }}
-                {{ pct_bar('Pass TDs', player_percentiles.get('pass_td')) }}
-                {{ pct_bar('Completion %', player_percentiles.get('completion')) }}
-                {{ pct_bar('Yards / Attempt', player_percentiles.get('yards_per_att')) }}
-                {{ pct_bar('Pass EPA / Play', player_percentiles.get('epa_pass')) }}
-                {{ pct_bar('Rush EPA / Play', player_percentiles.get('epa_rush')) }}
-            {% elif is_rb %}
-                {{ pct_bar('Rush Yards', player_percentiles.get('rush_yards')) }}
-                {{ pct_bar('Rush TDs', player_percentiles.get('rush_td')) }}
-                {{ pct_bar('Yards / Carry', player_percentiles.get('yards_per_carry')) }}
-                {{ pct_bar('Receiving Yards', player_percentiles.get('rec_yards')) }}
-            {% elif is_receiver %}
-                {{ pct_bar('Receiving Yards', player_percentiles.get('rec_yards')) }}
-                {{ pct_bar('Receptions', player_percentiles.get('receptions')) }}
-                {{ pct_bar('Receiving TDs', player_percentiles.get('rec_td')) }}
-                {{ pct_bar('Yards / Reception', player_percentiles.get('yards_per_rec')) }}
-            {% elif is_def_dl %}
-                {{ pct_bar('Tackles', player_percentiles.get('tackles')) }}
-                {{ pct_bar('Sacks', player_percentiles.get('sacks')) }}
-                {{ pct_bar('TFL', player_percentiles.get('tfl')) }}
-            {% elif is_def_db %}
-                {{ pct_bar('Tackles', player_percentiles.get('tackles')) }}
-                {{ pct_bar('Interceptions', player_percentiles.get('interceptions')) }}
-                {{ pct_bar('Passes Defended', player_percentiles.get('pd')) }}
-            {% endif %}
+            {% for row in percentile_rows %}
+            {{ pct_bar(row.label, row.pct) }}
+            {% endfor %}
 
             {% else %}
             <div style="color: var(--text-dim);font-size: var(--text-sm);text-align:center;padding:40px 0">No percentile data available</div>
