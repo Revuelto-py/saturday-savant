@@ -401,6 +401,88 @@ def get_conference_logos(cursor):
         cursor.connection.rollback()
         return {}
 
+# ── Conference standings ─────────────────────────────────────────────────────
+# Standings are ordered by CONFERENCE record (games vs same-conference opponents
+# only), not overall record. Conference membership is per-season and
+# realignment-accurate: a team's conference that season comes from
+# player_stats.conference, and the FBS set is the teams that carry an SP+ rating
+# that season (the pipeline's FBS definition, which excludes D-II opponents that
+# also appear in player_stats). For an upcoming season with nothing played yet,
+# both fall back to the current teams table.
+def _team_confs_for_season(cursor, season):
+    cursor.execute('SELECT team FROM sp_ratings WHERE season = %s', (season,))
+    fbs = {r[0] for r in cursor.fetchall()}
+    cursor.execute('''SELECT team, MIN(conference) FROM player_stats
+                      WHERE season = %s AND conference IS NOT NULL GROUP BY team''', (season,))
+    ps_conf = dict(cursor.fetchall())
+    cursor.execute('SELECT name, conference FROM teams WHERE conference IS NOT NULL')
+    tbl_conf = dict(cursor.fetchall())
+    if not fbs:                       # upcoming season: nothing played yet
+        fbs = {n for n, c in tbl_conf.items() if c not in FCS_CONFS}
+    out = {}
+    for t in fbs:
+        c = ps_conf.get(t) or tbl_conf.get(t)
+        if c and c not in FCS_CONFS:
+            out[t] = c
+    return out
+
+def _compute_conference_standings(cursor, season):
+    """{conference: [team rows]} for a season, each conference sorted by
+    conference win pct (then conf wins, then overall win pct, then name).
+    Row keys: name, logo, conf, wins, losses, conf_wins, conf_losses, pf, pa,
+    conf_pct, overall_pct, ap_rank."""
+    team_conf = _team_confs_for_season(cursor, season)
+    if not team_conf:
+        return {}
+    teams = list(team_conf)
+    cursor.execute('''
+        SELECT home_team, home_points, away_team, away_points
+        FROM games
+        WHERE completed = 1 AND season = %s AND season_type = 'SeasonType.REGULAR'
+          AND home_points IS NOT NULL AND away_points IS NOT NULL
+          AND (home_team = ANY(%s) OR away_team = ANY(%s))
+    ''', (season, teams, teams))
+    rec = {t: {'w': 0, 'l': 0, 'cw': 0, 'cl': 0, 'pf': 0, 'pa': 0} for t in teams}
+    for h, hp, a, ap in cursor.fetchall():
+        for t, opp, p, op in ((h, a, hp, ap), (a, h, ap, hp)):
+            r = rec.get(t)
+            if r is None or p == op:      # skip a non-FBS side and (rare) ties
+                continue
+            r['pf'] += p; r['pa'] += op
+            won = p > op
+            r['w' if won else 'l'] += 1
+            if team_conf.get(opp) == team_conf[t]:   # both same conference
+                r['cw' if won else 'cl'] += 1
+    cursor.execute('SELECT name, logo_dark FROM teams')
+    logos = dict(cursor.fetchall())
+    ap_ranks = get_ap_rankings(cursor, season)
+    confs = {}
+    for t, c in team_conf.items():
+        r = rec[t]
+        cg, g = r['cw'] + r['cl'], r['w'] + r['l']
+        confs.setdefault(c, []).append({
+            'name': t, 'logo': logos.get(t), 'conf': c,
+            'wins': r['w'], 'losses': r['l'],
+            'conf_wins': r['cw'], 'conf_losses': r['cl'],
+            'pf': r['pf'], 'pa': r['pa'],
+            'conf_pct': r['cw'] / cg if cg else 0.0,
+            'overall_pct': r['w'] / g if g else 0.0,
+            'ap_rank': ap_ranks.get(t),
+        })
+    for c in confs:
+        confs[c].sort(key=lambda x: (-x['conf_pct'], -x['conf_wins'], -x['overall_pct'], x['name']))
+    return confs
+
+@cache.memoize(timeout=21600)
+def conference_standings(season):
+    """Memoized {conference: [rows]} — shared by the team page (one conference)
+    and the /standings page (all conferences)."""
+    conn = get_db()
+    try:
+        return _compute_conference_standings(conn.cursor(), season)
+    finally:
+        release_db(conn)
+
 _VALID_PPA_COLS = {'avg_ppa_all', 'avg_ppa_pass', 'avg_ppa_rush', 'total_ppa'}
 
 def _fetch_stats_pool(cursor, category, positions, season=CURRENT_SEASON):
@@ -2600,6 +2682,33 @@ def teams():
     return render_template('teams.html', conferences=sorted_confs, ap_rankings=ap_rankings,
                            conf_logos=conf_logos)
 
+# Preferred display order for conferences; anything not listed (e.g. Pac-12 in
+# recent years, or historical leagues) sorts alphabetically after these.
+STANDINGS_CONF_ORDER = ['SEC', 'Big Ten', 'Big 12', 'ACC', 'Pac-12',
+                        'American Athletic', 'Mountain West', 'Sun Belt',
+                        'Mid-American', 'Conference USA', 'FBS Independents']
+
+@app.route('/standings')
+@cache.cached(timeout=21600, query_string=True)
+def standings():
+    """Conference standings for every FBS conference in a season, ordered by
+    CONFERENCE record (see conference_standings())."""
+    season = requested_season()
+    all_st = conference_standings(season)
+    conn = get_db()
+    try:
+        conf_logos = get_conference_logos(conn.cursor())
+    finally:
+        release_db(conn)
+    ordered = [c for c in STANDINGS_CONF_ORDER if c in all_st] + \
+              sorted(c for c in all_st if c not in STANDINGS_CONF_ORDER)
+    standings_by_conf = [
+        {'conf': c, 'logo': conf_logos.get(c), 'teams': all_st[c]} for c in ordered
+    ]
+    return render_template('standings.html', season=season,
+                           seasons=sorted(get_available_seasons(), reverse=True),
+                           standings_by_conf=standings_by_conf)
+
 @app.route('/savant-rating')
 @cache.cached(timeout=86400)  # 24 hours — recomputed offline by compute_savant_ratings.py
 def savant_rating_methodology():
@@ -2948,22 +3057,16 @@ def team(team_ref):
             'rush_yds_pg':    _rank_of(rush_pg, higher_better=True),
         }
 
-        standings = []
-        if team_info[1]:
-            cursor.execute('''
-                SELECT t.name, t.logo,
-                    SUM(CASE WHEN (g.home_team=t.name AND g.home_points>g.away_points) OR (g.away_team=t.name AND g.away_points>g.home_points) THEN 1 ELSE 0 END) as wins,
-                    SUM(CASE WHEN (g.home_team=t.name AND g.home_points<g.away_points) OR (g.away_team=t.name AND g.away_points<g.home_points) THEN 1 ELSE 0 END) as losses,
-                    SUM(CASE WHEN g.home_team=t.name THEN g.home_points ELSE CASE WHEN g.away_team=t.name THEN g.away_points ELSE 0 END END) as pf,
-                    SUM(CASE WHEN g.home_team=t.name THEN g.away_points ELSE CASE WHEN g.away_team=t.name THEN g.home_points ELSE 0 END END) as pa,
-                    t.logo_dark
-                FROM teams t
-                LEFT JOIN games g ON (g.home_team=t.name OR g.away_team=t.name)
-                    AND g.completed=1 AND g.season=%s AND g.season_type='SeasonType.REGULAR'
-                WHERE t.conference=%s
-                GROUP BY t.name, t.logo, t.logo_dark ORDER BY wins DESC
-            ''', (season, team_info[1]))
-            standings = cursor.fetchall()
+        # Conference standings — ordered by CONFERENCE record, using the team's
+        # per-season conference (realignment-accurate). Shared helper also backs
+        # the /standings page.
+        _all_standings = conference_standings(season)
+        team_season_conf = next(
+            (c for c, rows in _all_standings.items()
+             if any(r['name'] == team_name for r in rows)),
+            team_info[1])                       # fall back to current conference
+        standings = _all_standings.get(team_season_conf, [])
+        team_conf_record = next((r for r in standings if r['name'] == team_name), None)
 
         # One query for the whole rivalries table instead of one per
         # schedule row (N+1 fix)
@@ -3257,7 +3360,8 @@ def team(team_ref):
                 'pts_per_opp': round(adv_row['off_pts_per_opp'], 2) if adv_row['off_pts_per_opp'] else None,
             }
 
-        conf_logo = get_conference_logos(cursor).get(team_info[1])
+        # Use the per-season conference (realignment) for the standings header/logo.
+        conf_logo = get_conference_logos(cursor).get(team_season_conf)
 
         # ── Trends tab: this program's full multi-season history ──────────
         # One row per loaded season per metric; missing seasons stay None so
@@ -3339,7 +3443,9 @@ def team(team_ref):
                 roster_season=roster_season, next_season=UPCOMING_SEASON,
                 available_seasons=get_available_seasons(),
                 trends=trends,
-                standings=standings, schedule=schedule, schedule_next=schedule_next,
+                standings=standings, team_conf_record=team_conf_record,
+                team_season_conf=team_season_conf,
+                schedule=schedule, schedule_next=schedule_next,
                 roster=roster, lineup=lineup,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,

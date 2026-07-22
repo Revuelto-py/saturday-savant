@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Standings · {{ season }} · Saturday Savant{% endblock %}
+{% block og_title %}{{ season }} Conference Standings · Saturday Savant{% endblock %}
+{% block og_description %}Conference standings for every FBS conference in {{ season }}, ordered by conference record.{% endblock %}
+
+{% block content %}
+<div class="page-wrapper" style="padding-top:40px">
+
+    <!-- Page header -->
+    <div style="margin-bottom: var(--s5)">
+        <div class="section-label" style="margin-bottom: var(--s2)">Standings</div>
+        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
+            {{ season }} Conference Standings
+        </h1>
+        <div style="color: var(--text-dim);font-size: var(--text-sm);margin-top:6px">
+            Ordered by <span style="color: var(--text-secondary);font-weight:600">conference record</span> — games between same-conference opponents. Overall record shown for context.
+        </div>
+    </div>
+
+    <!-- Season toggle -->
+    <div class="lb-mode-toggle" style="margin-bottom: var(--s7)">
+        {% for s in seasons %}
+        <a href="{{ url_for('standings', season=s) }}" class="lb-mode-btn {{ 'active' if s == season else '' }}">{{ s }}</a>
+        {% endfor %}
+    </div>
+
+    {% if not standings_by_conf %}
+    <div style="color: var(--text-dim);font-size: var(--text-sm);text-align:center;padding:60px 0">
+        No standings available for {{ season }} yet.
+    </div>
+    {% endif %}
+
+    <div class="standings-grid">
+    {% for group in standings_by_conf %}
+    <section class="standings-conf">
+        <!-- Conference header -->
+        <div style="display:flex;align-items:center;gap: var(--s3);margin-bottom: var(--s3)">
+            {% if group.logo %}<img src="{{ group.logo }}" class="conf-logo-img conf-logo-img-sm" alt="{{ group.conf }} logo" loading="lazy" width="30" height="30">{% endif %}
+            <h3 style="margin:0;font-family: var(--font-display);font-weight:600;font-size: var(--text-lg);letter-spacing:0.02em;color: var(--text-primary)">{{ group.conf }}</h3>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ group.teams|length }}</span>
+        </div>
+
+        <div class="dark-card" style="overflow-x:auto">
+            <table class="data-table" style="width:100%;min-width:340px">
+                <thead>
+                    <tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+                        <th style="text-align:center;width:26px">#</th>
+                        <th style="text-align:left">TEAM</th>
+                        <th style="text-align:center" title="Conference record — determines standings">CONF</th>
+                        <th style="text-align:center" title="Overall record">OVR</th>
+                        <th style="text-align:center" title="Points for">PF</th>
+                        <th style="text-align:center" title="Points against">PA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in group.teams %}
+                    <tr class="standings-row" onclick="window.location.href='{{ team_url(t.name, season) }}'">
+                        <td style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;text-align:center;padding:9px 4px">{{ loop.index }}</td>
+                        <td style="padding:9px 10px 9px 4px">
+                            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+                                {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" loading="lazy" width="24" height="24" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">{% endif %}
+                                <a href="{{ team_url(t.name, season) }}" style="color: var(--text-primary);text-decoration:none;font-weight:500;font-size: var(--text-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                                    {% if t.ap_rank %}<span style="color: var(--gold);font-size: var(--text-xs);font-weight:800;margin-right:4px">{{ t.ap_rank }}</span>{% endif %}
+                                    {{ t.name }}
+                                </a>
+                            </div>
+                        </td>
+                        <td style="color: var(--text-primary);font-size: var(--text-sm);font-weight:700;text-align:center;padding:9px 8px">{{ t.conf_wins }}-{{ t.conf_losses }}</td>
+                        <td style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.wins }}-{{ t.losses }}</td>
+                        <td style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.pf }}</td>
+                        <td style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.pa }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endfor %}
+    </div>
+
+</div>
+
+<style>
+    /* Two-up on wide screens so 11 conferences don't scroll forever; single
+       column on mobile. Matches the site's card layering + accent-tinted hover. */
+    .standings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: var(--s6) var(--s5);
+        align-items: start;
+    }
+    /* Tight, single-line cells so PF/PA never clip; long team names ellipsis
+       inside the flexible TEAM column rather than pushing the numbers off. */
+    .standings-conf .data-table td { padding: 8px 6px; white-space: nowrap; }
+    .standings-conf .data-table td:nth-child(2) { max-width: 0; width: 99%; }
+    .standings-row { cursor: pointer; border-top: 1px solid var(--border); transition: background 0.12s ease; }
+    .standings-row:hover { background: rgba(28,156,240,0.09); }
+</style>
+{% endblock %}
