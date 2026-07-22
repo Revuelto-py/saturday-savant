@@ -51,7 +51,7 @@
             <div style="height:56px;display:flex;align-items:center;justify-content:center;
                         margin-bottom:12px;position:relative;z-index:1">
                 {% if team[2] %}
-                <img src="{{ team[2] }}" alt="{{ team[0] }} logo" style="max-height:52px;max-width:100%;object-fit:contain;filter:drop-shadow(0 2px 7px rgba(0,0,0,0.55))">
+                <img src="{{ team[2] }}" alt="{{ team[0] }} logo" loading="lazy" decoding="async" width="52" height="52" style="max-height:52px;max-width:100%;object-fit:contain;filter:drop-shadow(0 2px 7px rgba(0,0,0,0.55))">
                 {% else %}
                 <div style="width:52px;height:52px;border-radius:50%;
                             background:{{ _c1 }}44;border:1px solid {{ _c1 }}66;

@@ -93,17 +93,63 @@ def init_db_pool():
     global connection_pool
     connection_pool = pg_pool.ThreadedConnectionPool(
         minconn=2,
-        maxconn=10,
-        dsn=os.getenv('DATABASE_URL')
+        # Must be >= the gunicorn thread count (see Procfile: --threads 12) so a
+        # thread never blocks waiting for a connection under load. Well under the
+        # server's max_connections.
+        maxconn=16,
+        dsn=os.getenv('DATABASE_URL'),
+        # TCP keepalives: detect a connection dropped by the network or Postgres
+        # promptly, instead of discovering it later as 'SSL SYSCALL error: EOF'.
+        keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
+        connect_timeout=10,
     )
     print("Database connection pool initialized")
     print(f"Pool created: min={connection_pool.minconn}, max={connection_pool.maxconn}")
 
 def get_db():
-    return connection_pool.getconn()
+    """Borrow a live, transaction-clean connection from the pool.
+
+    A gunicorn worker killed mid-request (WORKER TIMEOUT under crawler load)
+    leaves the connection it held half-dead or stuck in an aborted transaction.
+    Without this guard the next borrower gets 'SSL SYSCALL error: EOF detected'
+    or 'current transaction is aborted' and 500s — and because one worker holds
+    many pooled connections, a single kill used to cascade across the whole site.
+    We roll back (a cheap round-trip that both resets leftover transaction state
+    and probes liveness); on any failure we discard the dead connection and take
+    a fresh one."""
+    last_err = None
+    for _ in range(3):
+        conn = connection_pool.getconn()
+        try:
+            if conn.closed:
+                raise psycopg2.OperationalError('connection already closed')
+            conn.rollback()
+            return conn
+        except psycopg2.Error as e:
+            last_err = e
+            try:
+                connection_pool.putconn(conn, close=True)  # drop the dead one, free the slot
+            except Exception:
+                pass
+    # Every attempt handed back a dead connection — the DB is likely down.
+    raise last_err if last_err else psycopg2.OperationalError('no usable connection')
 
 def release_db(conn):
-    connection_pool.putconn(conn)
+    """Return a connection to the pool in a clean state — or discard it if
+    broken — so a failed request never poisons the pool for the next one."""
+    if conn is None:
+        return
+    try:
+        if conn.closed:
+            connection_pool.putconn(conn, close=True)
+            return
+        conn.rollback()  # clear any open/aborted transaction before reuse
+        connection_pool.putconn(conn)
+    except Exception:
+        try:
+            connection_pool.putconn(conn, close=True)
+        except Exception:
+            pass
 
 init_db_pool()
 
