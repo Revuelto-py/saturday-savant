@@ -160,6 +160,26 @@ column of zeros (the ESPN mascot-name join bug). See **Standing practice #1**
 above — this is why distribution/coverage checks are now mandatory before any
 evaluation result is trusted.
 
+## Backfilled 2025 forecasts (2026-07-21)
+
+`game_predictions` holds two kinds of rows, both read identically by the
+display/upset/tracker code:
+- **2026+ (live):** written by `predict_games.py` before kickoff, frozen on
+  scoring. The real going-forward record.
+- **2025 (backfilled backtest):** written once by `backfill_2025_forecasts.py`.
+  2025 was the held-out TEST season, so these are genuine out-of-sample
+  point-in-time forecasts (each game's features use only earlier games) — the
+  same predictions that produced the validated **71.8%** test accuracy (808
+  games, 228 upsets). They exist so the completed-game forecast display and
+  upset badges aren't blank on 2025 games.
+
+Frozen-safety: `predict_games.py` only touches `season = current_cfb_season()`
+and only `scored=0` rows, so it never overwrites the 2025 backfill. If the
+accuracy tracker is ever resurfaced as a page, label 2025 as backtested vs 2026
+as live. Older seasons (2017–2024) were deliberately NOT backfilled — doing so
+honestly requires walk-forward models (2017–2023 are training seasons;
+forecasting them with the production model would be in-sample).
+
 ## Known model behavior (documented, not a defect)
 
 - Weeks 4–8 is the weakest stretch (~69% in 2025) — priors are fading while
