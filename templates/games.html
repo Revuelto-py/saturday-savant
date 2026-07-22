@@ -72,9 +72,21 @@
     </div>
     {% endif %}
 
-    <!-- Upsets in the current view — synced to the same week/filters as the grid -->
+    <!-- Games grid -->
+    {% if games %}
+    <div class="games-grid">
+        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id)) }}{% endfor %}
+    </div>
+    {% else %}
+    <div class="games-empty">
+        No games found for this selection.
+    </div>
+    {% endif %}
+
+    <!-- Upsets in the current view — synced to the same week/filters as the grid.
+         Placed below the grid so it doesn't crowd the top of the page. -->
     {% if week_upsets %}
-    <div class="upsets-strip">
+    <div class="upsets-strip" style="margin-top: var(--s6); margin-bottom: 0">
         <div class="upsets-strip-head">
             <span class="upset-badge">Upsets</span>
             <h3>{{ upsets_label }}</h3>
@@ -91,17 +103,6 @@
             </a>
             {% endfor %}
         </div>
-    </div>
-    {% endif %}
-
-    <!-- Games grid -->
-    {% if games %}
-    <div class="games-grid">
-        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id)) }}{% endfor %}
-    </div>
-    {% else %}
-    <div class="games-empty">
-        No games found for this selection.
     </div>
     {% endif %}
 
