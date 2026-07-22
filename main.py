@@ -468,56 +468,6 @@ def get_rivalry_map(cursor):
     cursor.execute('SELECT team1, team2, rivalry_name FROM rivalries')
     return {(t1, t2): name for t1, t2, name in cursor.fetchall()}
 
-def get_upsets(cursor, game_ids=None, season=None, week=None):
-    """Completed games where the team Savant Forecast favored pre-kickoff lost.
-
-    Reads the FROZEN prediction stored by predict_games.py (scored=1 rows are
-    never rewritten), so this is always graded against what was actually on the
-    page before kickoff — never a re-forecast with hindsight.
-
-    `correct = 0` on a scored row means exactly this: the side with the higher
-    win probability did not win. Returns {game_id: {...}} with the favorite and
-    the probability it carried, so the badge can say how big a surprise it was.
-
-    Filter by explicit game_ids (the /games hub and game page) or by
-    season+week (the weekly upsets list). Degrades to {} if the predictions
-    table doesn't exist yet.
-    """
-    where, params = ['p.scored = 1', 'p.correct = 0'], []
-    if game_ids is not None:
-        if not game_ids:
-            return {}
-        where.append('p.game_id = ANY(%s)')
-        params.append(list(game_ids))
-    if season is not None:
-        where.append('p.season = %s'); params.append(season)
-    if week is not None:
-        where.append('p.week = %s'); params.append(week)
-    try:
-        cursor.execute(f'''
-            SELECT p.game_id, p.home_team, p.away_team, p.home_prob,
-                   g.home_points, g.away_points, p.week, g.start_date
-            FROM game_predictions p JOIN games g ON g.id = p.game_id
-            WHERE {' AND '.join(where)}
-            ORDER BY GREATEST(p.home_prob, 1 - p.home_prob) DESC
-        ''', params)
-    except Exception:
-        cursor.connection.rollback()   # game_predictions absent on a fresh DB
-        return {}
-    out = {}
-    for gid, home, away, prob, hp, ap, wk, sd in cursor.fetchall():
-        home_fav = prob >= 0.5
-        out[gid] = {
-            'favorite': home if home_fav else away,
-            'winner':   away if home_fav else home,   # the favorite lost, so the other side won
-            'fav_prob': prob if home_fav else 1 - prob,
-            'home': home, 'away': away,
-            'home_points': hp, 'away_points': ap,
-            'week': wk, 'start_date': sd,
-        }
-    return out
-
-
 def get_frozen_forecasts(cursor, game_ids):
     """Frozen pre-kickoff Savant Forecast + graded outcome for completed games
     that carry a scored prediction — the SAME rows the upset badge and accuracy
@@ -1578,36 +1528,38 @@ def games_hub():
         completed_ids = [g['id'] for g in games if g['completed']]
         completed_forecasts = get_frozen_forecasts(cursor, completed_ids)
 
-        # "This Week's Upsets" — the most recently completed week's upsets for
-        # the selected season, a filtered view over data that already exists.
+        # Upsets among EXACTLY the games in the current view — derived from the
+        # same cards + forecasts the grid renders, so the section always matches
+        # what's listed (respects the week/conference/team filters). Previously
+        # this queried MAX(week) independently and could show week 15's upsets
+        # over a week-1 grid.
         week_upsets = []
-        try:
-            cursor.execute('''
-                SELECT MAX(week) FROM game_predictions
-                WHERE scored = 1 AND correct = 0 AND season = %s
-            ''', (season,))
-            latest = cursor.fetchone()
-            latest_week = latest[0] if latest else None
-        except Exception:
-            conn.rollback(); latest_week = None
-        if latest_week is not None:
-            wu = get_upsets(cursor, season=season, week=latest_week)
-            logos = {}
-            names = {g['home'] for g in wu.values()} | {g['away'] for g in wu.values()}
-            if names:
-                cursor.execute('SELECT name, logo_dark FROM teams WHERE name = ANY(%s)', (list(names),))
-                logos = dict(cursor.fetchall())
-            for u in wu.values():
-                u['winner_logo'] = logos.get(u['winner'])
-                u['favorite_logo'] = logos.get(u['favorite'])
-                week_upsets.append(u)
+        for g in games:
+            f = completed_forecasts.get(g['id'])
+            if not (g['completed'] and f and f['is_upset']):
+                continue
+            home_won = (g['home_pts'] or 0) > (g['away_pts'] or 0)
+            week_upsets.append({
+                'id': g['id'], 'favorite': f['favorite'], 'fav_prob': f['fav_prob'],
+                'winner': g['home'] if home_won else g['away'],
+                'winner_logo': g['home_logo'] if home_won else g['away_logo'],
+            })
+        week_upsets.sort(key=lambda u: u['fav_prob'], reverse=True)   # biggest surprise first
+
+        # Label the section to match the view, so header and contents agree.
+        if sel_team:
+            upsets_label = sel_team
+        elif sel_stype == 'postseason':
+            upsets_label = 'Postseason'
+        else:
+            upsets_label = f'Week {sel_week}'
     finally:
         release_db(conn)
 
     return render_template('games.html',
         games=games, seasons=seasons, season=season, forecasts=forecasts,
         completed_forecasts=completed_forecasts,
-        week_upsets=week_upsets, week_upsets_week=latest_week,
+        week_upsets=week_upsets, upsets_label=upsets_label,
         week_options=week_options, sel_week=sel_week, sel_stype=sel_stype,
         conferences=conferences, team_names=team_names,
         sel_conf=sel_conf, sel_team=sel_team)

@@ -7,12 +7,10 @@
 <a class="game-card-v2{{ ' is-upcoming' if not g.completed else '' }}" href="/game/{{ g.id }}">
     <div class="gc-head">
         <span class="gc-note">{{ g.notes or 'Week ' ~ g.week }}</span>
-        {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
-        {% if g.completed %}
-            <span class="gc-final">Final</span>
-        {% else %}
-            <span class="gc-upcoming">{{ g.kickoff_date }}</span>
-        {% endif %}
+        <span class="gc-badges">
+            {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
+            {% if g.completed %}<span class="gc-final">Final</span>{% else %}<span class="gc-upcoming">{{ g.kickoff_date }}</span>{% endif %}
+        </span>
     </div>
 
     <div class="gc-team{{ ' winner' if away_won else '' }}">

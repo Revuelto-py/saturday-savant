@@ -117,24 +117,26 @@
         </div>
 
         <div style="text-align:center;margin-top:24px">
-            {% if is_scheduled %}
-            <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
-            {% else %}
-            <span class="gh-status-pill">Final</span>
-            {% if forecast and forecast.is_upset %}<span class="upset-badge">Upset</span>{% endif %}
-            {% endif %}
+            <div class="gh-pill-row">
+                {% if is_scheduled %}
+                <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
+                {% else %}
+                <span class="gh-status-pill">Final</span>
+                {% if forecast and forecast.is_upset %}<span class="upset-badge">Upset</span>{% endif %}
+                {% endif %}
+            </div>
             {% if not is_scheduled and forecast %}
-            {# One pre-kickoff-forecast recap for the completed game — the same
-               frozen prediction that powers the upset badge, so it's shown once.
-               The badge (above) flags a miss; a hit gets a ✓ here. #}
+            {# One pre-kickoff-forecast recap for the completed game — its own
+               deliberate element below the Final pill (the same frozen
+               prediction that powers the upset badge, shown once). #}
             <div class="fc-recap">
-                <span class="fc-recap-lead">Savant forecast</span>
-                favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}
+                <span class="fc-recap-lead">Savant Forecast</span>
+                <span class="fc-recap-body">favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}</span>
                 {% if forecast.correct %}<span class="fc-recap-hit">✓ hit</span>{% endif %}
             </div>
             {% endif %}
             {% if rivalry_name %}
-            <div>
+            <div style="margin-top:12px">
                 <span class="rivalry-badge">{{ rivalry_name }}</span>
             </div>
             {% endif %}

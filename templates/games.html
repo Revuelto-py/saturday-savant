@@ -72,12 +72,12 @@
     </div>
     {% endif %}
 
-    <!-- This Week's Upsets — filtered view over the frozen forecast record -->
+    <!-- Upsets in the current view — synced to the same week/filters as the grid -->
     {% if week_upsets %}
     <div class="upsets-strip">
         <div class="upsets-strip-head">
             <span class="upset-badge">Upsets</span>
-            <h3>Week {{ week_upsets_week }}</h3>
+            <h3>{{ upsets_label }}</h3>
             <span class="upsets-strip-count">{{ week_upsets|length }} the forecast missed</span>
         </div>
         <div class="upsets-strip-list">
