@@ -32,30 +32,56 @@ SEASON = 2025
 MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forecast_model.json')
 
 
+def _apply(mdl, feats):
+    z = [(f - m) / s for f, m, s in zip(feats, mdl['scaler_mean'], mdl['scaler_std'])]
+    prob = 1.0 / (1.0 + math.exp(-(mdl['intercept'] + sum(c * v for c, v in zip(mdl['coef'], z)))))
+    margin = mdl['margin_intercept'] + sum(c * v for c, v in zip(mdl['margin_coef'], z))
+    return prob, margin
+
+
 def main_():
     write = '--write' in sys.argv
     with open(MODEL_PATH) as f:
         model = json.load(f)
-    mu, sd = model['scaler_mean'], model['scaler_std']
-    coef, b0 = model['coef'], model['intercept']
-    mcoef, mb0 = model['margin_coef'], model['margin_intercept']
+    fcs_model = None
+    fcs_path = os.path.join(os.path.dirname(MODEL_PATH), 'fcs_forecast_model.json')
+    if os.path.exists(fcs_path):
+        with open(fcs_path) as f:
+            fcs_model = json.load(f)
 
-    rows = [r for r in build_dataset()[0] if r['season'] == SEASON]
+    fbs_rows, _, fcs_rows = build_dataset(collect_fcs=True)
     preds = []
-    for r in rows:
-        z = [(f - m) / s for f, m, s in zip(r['features'], mu, sd)]
-        prob = 1.0 / (1.0 + math.exp(-(b0 + sum(c * v for c, v in zip(coef, z)))))
-        margin = mb0 + sum(c * v for c, v in zip(mcoef, z))
+
+    # ── FBS vs FBS (main model) ──
+    for r in (x for x in fbs_rows if x['season'] == SEASON):
+        prob, margin = _apply(model, r['features'])
         home_won = 1 if r['home_points'] > r['away_points'] else 0
         correct = 1 if (prob >= 0.5) == (home_won == 1) else 0
         preds.append((r['game_id'], r['week'], r['home'], r['away'],
-                      round(prob, 4), round(margin, 1), home_won, correct))
+                      round(prob, 4), round(margin, 1), home_won, correct, model['version']))
+
+    # ── FBS vs FCS (FCS model; stored home-perspective) ──
+    nf = 0
+    if fcs_model is not None:
+        for r in (x for x in fcs_rows if x['season'] == SEASON):
+            p_fbs, m_fbs = _apply(fcs_model, r['features'])
+            hf = r['fbs_is_home']
+            home = r['fbs'] if hf else r['fcs']
+            away = r['fcs'] if hf else r['fbs']
+            home_prob = p_fbs if hf else 1 - p_fbs
+            margin = m_fbs if hf else -m_fbs
+            home_won = 1 if r['fbs_points'] > r['fcs_points'] else 0   # from FBS perspective
+            home_won = home_won if hf else (1 - home_won)             # convert to home perspective
+            correct = 1 if (home_prob >= 0.5) == (home_won == 1) else 0
+            preds.append((r['game_id'], r['week'], home, away,
+                          round(home_prob, 4), round(margin, 1), home_won, correct, fcs_model['version']))
+            nf += 1
 
     n = len(preds)
     acc = sum(p[7] for p in preds) / n if n else 0.0
     upsets = sum(1 for p in preds if p[7] == 0)
-    print(f"{SEASON}: {n} games forecast  |  accuracy {acc:.4f}  |  {upsets} upsets "
-          f"(favorite lost)", flush=True)
+    print(f"{SEASON}: {n} games forecast ({n - nf} FBS-vs-FBS, {nf} FBS-vs-FCS)  |  "
+          f"accuracy {acc:.4f}  |  {upsets} upsets (favorite lost)", flush=True)
 
     if not write:
         print("(dry run — pass --write to persist to game_predictions)")
@@ -64,7 +90,7 @@ def main_():
     conn = main.get_db()
     try:
         cur = conn.cursor()
-        for gid, week, home, away, prob, margin, home_won, correct in preds:
+        for gid, week, home, away, prob, margin, home_won, correct, version in preds:
             cur.execute('''
                 INSERT INTO game_predictions
                     (game_id, season, week, home_team, away_team, home_prob,
@@ -77,7 +103,7 @@ def main_():
                     scored = 1, home_won = EXCLUDED.home_won,
                     correct = EXCLUDED.correct, week = EXCLUDED.week
             ''', (gid, SEASON, week, home, away, prob, margin,
-                  model['version'], home_won, correct))
+                  version, home_won, correct))
         conn.commit()
         print(f"wrote {n} scored forecasts to game_predictions", flush=True)
     finally:

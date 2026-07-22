@@ -4,6 +4,25 @@ The production model (`forecast_model.json`, v1, 16 features) is trained
 **locally only** by `train_forecast.py`; sklearn never deploys. Serving is a dot
 product in `predict_games.py`.
 
+## Two models
+
+- **FBS vs FBS** — `forecast_model.json` (16 features), trained by
+  `train_forecast.py`. The main model; everything above refers to it.
+- **FBS vs FCS** — `fcs_forecast_model.json`, trained by `train_fcs_forecast.py`
+  (2026-07-21). The main model can't rate an FCS opponent, so these games use a
+  4-feature logistic keyed only on the FBS team's strength (Elo as-of, prior
+  SP+, prior Savant, home). FBS wins ~93% regardless, so accuracy ≈ the
+  always-pick-FBS base rate by construction — the model earns its keep on
+  CALIBRATION (test 2025 Brier 0.030, well-calibrated per bucket) and SPREAD: it
+  ranges Ohio State 99.7% vs Grambling down to weak-FBS-on-the-road toss-ups
+  (e.g. NDSU at home favored over UTEP), which is exactly where the FCS upsets
+  live. Training rows come from `build_dataset(collect_fcs=True)` — a flag that
+  emits FBS-vs-FCS rows WITHOUT touching FBS Elo/stats (the FBS-vs-FBS feature
+  hash stays `9615cb34…`, verified). predict_games.py loads both artifacts and
+  routes each upcoming game by whether one or both sides are FBS; the display,
+  upset badge, and tracker read `game_predictions` and don't care which model
+  produced a row. Retrain it in January alongside the main model.
+
 ## When to retrain
 
 After each season completes (January, once bowls/CFP are final and the weekly

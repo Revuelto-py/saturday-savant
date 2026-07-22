@@ -60,6 +60,26 @@ FEATURE_NAMES = [
     'postseason',
 ]
 
+# ── FBS-vs-FCS forecast ─────────────────────────────────────────────────────
+# The main model can't rate an FCS opponent (no Elo, no priors), so these games
+# get a separate tiny model keyed only on the FBS team's strength: an FBS team's
+# odds of beating an FCS opponent are almost entirely about how good the FBS
+# team is. Historically FBS wins ~93% of these, but a top team is ~99% while a
+# weak one is far shakier (that's where the FCS upsets cluster). Same leakage
+# discipline: the FBS team's Elo is as-of the game, priors are prior-season.
+FCS_FEATURE_NAMES = [
+    'fbs_elo',          # FBS team's Elo as-of the game (higher = safer)
+    'fbs_prior_sp',     # FBS team's prior-season SP+ (0 if missing)
+    'fbs_prior_savant', # FBS team's prior-season Savant Net (0 if missing)
+    'fbs_home',         # 1 = FBS hosting (nearly always), 0 = neutral/road
+]
+
+
+def _fcs_feature_vector(fbs_elo, prior_sp, prior_savant, fbs_home):
+    """Shared FBS-vs-FCS feature path (training in build_dataset, serving in
+    predict_games) so the two can't drift."""
+    return [fbs_elo, prior_sp, prior_savant, float(fbs_home)]
+
 
 def _parse_dt(s):
     if not s:
@@ -151,11 +171,13 @@ def _feature_vector(season, week, neutral, post, home, away,
     ]
 
 
-def build_dataset(first_season=2016, last_season=2025, return_state=False):
+def build_dataset(first_season=2016, last_season=2025, return_state=False, collect_fcs=False):
     """Returns (rows, feature_names) — or (rows, names, state) with
     return_state, where `state` carries the Elo ratings, season-to-date stats,
     and reference lookups as of the last completed game, so predict_games.py
-    can extend the exact same computation to upcoming games.
+    can extend the exact same computation to upcoming games. With collect_fcs,
+    also returns FBS-vs-FCS training rows (appended as a final element, or in
+    state['fcs_rows']); collecting them never alters the FBS-vs-FBS rows.
 
     Each row: meta + 'features' vector + 'target' (1 = home win). Rows are
     emitted for every completed FBS-vs-FBS game; 'burn_in' flags season 2016
@@ -182,12 +204,24 @@ def build_dataset(first_season=2016, last_season=2025, return_state=False):
     elo = {}                    # team -> rating (carried across seasons)
     season_of = {}              # team -> season the rating was last touched
     rows = []
+    fcs_rows = []               # FBS-vs-FCS rows (only when collect_fcs)
     cur_season = None
     stats = {}                  # (team) -> season-to-date {g,w,pf,pa,last_dt}
 
+    def _carry_elo(t):
+        """Initialise / regress-to-mean a team's Elo for the current season
+        (applied once per team per season)."""
+        if t not in elo:
+            elo[t] = ELO_START if season == first_season else ELO_NEW_TEAM
+        elif season_of.get(t, season) != season:
+            elo[t] = ELO_START + ELO_CARRY * (elo[t] - ELO_START)
+        season_of[t] = season
+
     for gid, season, week, stype, home, away, hp, ap, sd, neutral in games:
-        if home not in fbs.get(season, set()) or away not in fbs.get(season, set()):
-            continue
+        hf = home in fbs.get(season, set())
+        af = away in fbs.get(season, set())
+        if not hf and not af:
+            continue  # both non-FBS — irrelevant to the site
         if hp is None or ap is None or hp == ap:
             continue  # unplayed edge case or (pre-OT era) tie — no target
 
@@ -195,13 +229,36 @@ def build_dataset(first_season=2016, last_season=2025, return_state=False):
             cur_season = season
             stats = {}
 
-        for t in (home, away):
-            if t not in elo:
-                elo[t] = ELO_START if season == first_season else ELO_NEW_TEAM
-            elif season_of.get(t, season) != season:
-                elo[t] = ELO_START + ELO_CARRY * (elo[t] - ELO_START)
-            season_of[t] = season
-            stats.setdefault(t, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
+        # ── FBS vs FCS ──────────────────────────────────────────────────────
+        # Emit a row for the separate FCS model, but DON'T touch the FBS team's
+        # Elo or season-to-date state: beating/losing to an FCS opponent must
+        # leave the FBS-vs-FBS pipeline byte-identical to before this existed.
+        # (This branch only runs when collect_fcs is set — production/training
+        # of the main model pass collect_fcs=False and skip FCS entirely.)
+        if hf != af:
+            if collect_fcs:
+                fbs_t = home if hf else away
+                fbs_home = 1.0 if (hf and not neutral) else 0.0
+                fbs_pts, opp_pts = (hp, ap) if hf else (ap, hp)
+                _carry_elo(fbs_t)
+                fcs_rows.append({
+                    'game_id': gid, 'season': season, 'week': week,
+                    'fbs': fbs_t, 'fcs': (away if hf else home),
+                    'fbs_is_home': hf, 'fbs_points': fbs_pts, 'fcs_points': opp_pts,
+                    'target': 1 if fbs_pts > opp_pts else 0,   # 1 = FBS win
+                    'margin': fbs_pts - opp_pts,               # FBS perspective
+                    'burn_in': season == first_season,
+                    'features': _fcs_feature_vector(
+                        elo[fbs_t], sp.get((season - 1, fbs_t), 0.0),
+                        savant.get((season - 1, fbs_t), 0.0), fbs_home),
+                })
+            continue
+
+        # ── FBS vs FBS (the production pipeline) ────────────────────────────
+        _carry_elo(home)
+        _carry_elo(away)
+        stats.setdefault(home, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
+        stats.setdefault(away, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
 
         hs, as_ = stats[home], stats[away]
         dt = _parse_dt(sd)
@@ -252,7 +309,11 @@ def build_dataset(first_season=2016, last_season=2025, return_state=False):
                  'cur_season': cur_season,
                  'refs': {'sp': sp, 'fbs': fbs, 'savant': savant,
                           'recruit': recruit, 'transfer': transfer, 'retprod': retprod}}
+        if collect_fcs:
+            state['fcs_rows'] = fcs_rows
         return rows, FEATURE_NAMES, state
+    if collect_fcs:
+        return rows, FEATURE_NAMES, fcs_rows
     return rows, FEATURE_NAMES
 
 
