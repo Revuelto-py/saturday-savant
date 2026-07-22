@@ -2491,7 +2491,17 @@ def leaderboards_teams(category='savant'):
             LEFT JOIN team_advanced adv ON adv.team = t.name AND adv.season = {season}
             LEFT JOIN sp_ratings sp ON sp.team = t.name AND sp.season = {season}
             LEFT JOIN savant_ratings svr ON svr.team = t.name AND svr.season = {season}
-            LEFT JOIN ap_rankings ar ON ar.team = t.name AND ar.season = {season}
+            -- ap_rankings now holds every weekly poll (many rows per team), so
+            -- pin to the FINAL poll (postseason if any, else latest regular
+            -- week) — otherwise this join multiplies each ranked team into one
+            -- leaderboard row per week it was ranked. Matches get_ap_rankings().
+            LEFT JOIN (
+                SELECT team, rank FROM ap_rankings
+                WHERE season = {season}
+                  AND (season_type, week) = (
+                      SELECT season_type, week FROM ap_rankings WHERE season = {season}
+                      ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
+            ) ar ON ar.team = t.name
             WHERE t.conference NOT IN ('{fcs_in}')
             {conf_sql} {team_sql}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
@@ -2602,11 +2612,17 @@ def savant_rating_methodology():
                    sr.def_rating, sr.sos, sr.net_ranking, ar.rank
             FROM savant_ratings sr
             JOIN teams t ON t.name = sr.team
-            LEFT JOIN ap_rankings ar ON ar.team = sr.team AND ar.season = sr.season
+            LEFT JOIN (
+                SELECT team, rank FROM ap_rankings
+                WHERE season = %s
+                  AND (season_type, week) = (
+                      SELECT season_type, week FROM ap_rankings WHERE season = %s
+                      ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
+            ) ar ON ar.team = sr.team
             WHERE sr.season = %s
             ORDER BY sr.net_ranking
             LIMIT 10
-        ''', (CURRENT_SEASON,))
+        ''', (CURRENT_SEASON, CURRENT_SEASON, CURRENT_SEASON))
         top10 = [{'team': r[0], 'logo': r[1], 'conf': r[2], 'net': r[3], 'off': r[4],
                   'def': r[5], 'sos': r[6], 'rank': r[7], 'ap': r[8]}
                  for r in cursor.fetchall()]
@@ -3263,7 +3279,10 @@ def team(team_ref):
         rec_rank, rec_pts = _series(
             'SELECT year, rank, points FROM team_recruiting WHERE team=%s', (team_name,), 2)
         ap_rank, = _series(
-            'SELECT season, rank FROM ap_rankings WHERE team=%s', (team_name,), 1)
+            # One rank per season = that season's FINAL poll (ap_rankings now
+            # holds every weekly poll, so an unpinned read yields many per year).
+            'SELECT DISTINCT ON (season) season, rank FROM ap_rankings WHERE team=%s '
+            "ORDER BY season, (season_type='postseason') DESC, week DESC", (team_name,), 1)
         epa_off, epa_def = _series(
             'SELECT season, off_ppa, def_ppa FROM team_stats WHERE team=%s', (team_name,), 2)
         t_wins, t_losses = _series('''
@@ -5591,7 +5610,10 @@ def compare():
         def ap_rank(team, yr):
             if not team:
                 return None
-            cursor.execute('SELECT rank FROM ap_rankings WHERE season=%s AND team=%s', (yr, team))
+            # Pin to the season's FINAL poll — ap_rankings holds every weekly
+            # poll now, so an unpinned fetchone would return an arbitrary week.
+            cursor.execute("SELECT rank FROM ap_rankings WHERE season=%s AND team=%s "
+                           "ORDER BY (season_type='postseason') DESC, week DESC LIMIT 1", (yr, team))
             r = cursor.fetchone()
             return r[0] if r else None
 
