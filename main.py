@@ -153,6 +153,40 @@ def release_db(conn):
 
 init_db_pool()
 
+# ── Abusive-crawler load shedding ────────────────────────────────────────────
+# This site runs on a single gunicorn worker, and its heavy team/player/game
+# pages (some 600 KB+) can each hold a thread for many seconds. Meta's
+# link-preview crawler (meta-externalagent) and a handful of SEO/AI scrapers
+# ignore robots.txt and sweep every ?season= variant of every page from many
+# IPs at once — enough to saturate the worker and take the site down for real
+# users (constant gunicorn WORKER TIMEOUTs). Refuse the worst offenders here,
+# before any DB work or rendering: a few microseconds per request instead of
+# seconds, so even a non-compliant flood stays harmless. Real search engines
+# (Googlebot, Bingbot) are deliberately NOT in this list.
+_BLOCKED_UA = (
+    'meta-externalagent', 'meta-externalfetcher', 'facebookexternalhit',
+    'semrushbot', 'ahrefsbot', 'dotbot', 'dataforseo', 'mj12bot',
+    'bytespider', 'gptbot', 'ccbot', 'claudebot', 'anthropic-ai',
+    'amazonbot', 'imagesiftbot', 'petalbot',
+)
+
+@app.before_request
+def _shed_crawler_load():
+    ua = (request.headers.get('User-Agent') or '').lower()
+    if ua and any(bot in ua for bot in _BLOCKED_UA):
+        return Response(
+            'Automated crawling is rate-limited on this site. Please slow down '
+            'or contact the site owner for bulk access.\n',
+            status=429, mimetype='text/plain',
+            headers={'Retry-After': '86400'})
+
+@app.route('/healthz')
+def healthz():
+    """Liveness probe that never touches the DB or renders a template — so it
+    stays fast and 200 even when the worker is under heavy load, letting the
+    platform health check distinguish 'alive but busy' from 'crashed'."""
+    return Response('ok', mimetype='text/plain')
+
 def ensure_indexes():
     """Idempotent — safe to run on every boot. CREATE INDEX IF NOT EXISTS is a
     no-op for anything that already exists, so this just backfills whatever's
