@@ -435,22 +435,47 @@ def _compute_conference_standings(cursor, season):
     if not team_conf:
         return {}
     teams = list(team_conf)
-    # CFBD labels conference championship games as REGULAR (week 14/15) with a
-    # 'X Championship' note, so the season_type filter alone doesn't exclude
-    # them. They must NOT count toward the conference RECORD that seeds the
-    # standings (that's the regular-season league record) — but they still count
-    # toward overall record, like any game a team played.
+    # CFBD labels conference championship games as SeasonType.REGULAR, so the
+    # season_type filter alone doesn't exclude them. They must NOT count toward
+    # the conference RECORD that seeds the standings (that's the regular-season
+    # league record) — but they still count toward overall record.
     cursor.execute('''
-        SELECT home_team, home_points, away_team, away_points, notes
+        SELECT home_team, home_points, away_team, away_points, notes,
+               week, COALESCE(neutral_site, 0)
         FROM games
         WHERE completed = 1 AND season = %s AND season_type = 'SeasonType.REGULAR'
           AND home_points IS NOT NULL AND away_points IS NOT NULL
           AND (home_team = ANY(%s) OR away_team = ANY(%s))
     ''', (season, teams, teams))
+    games = cursor.fetchall()
+
+    # Identify the conference-championship week. Title games are neutral-site,
+    # same-conference games clustered on one "Championship Saturday" late in the
+    # season. From 2022 on they carry an 'X Championship' note, but earlier
+    # seasons have no note at all — so fall back to that neutral-site cluster in
+    # the final weeks. Using the cluster week (not just "neutral + late") also
+    # keeps a neutral late rivalry like Army-Navy — played a week AFTER the
+    # cluster — counting as a normal conference game.
+    max_wk = max((g[5] for g in games), default=0)
+    wk_neutral = {}
+    for h, _, a, _, _, wk, ns in games:
+        if ns and team_conf.get(h) and team_conf.get(h) == team_conf.get(a) and wk >= max_wk - 2:
+            wk_neutral[wk] = wk_neutral.get(wk, 0) + 1
+    champ_week = max(wk_neutral, key=wk_neutral.get) \
+        if wk_neutral and max(wk_neutral.values()) >= 3 else None
+
+    def _is_title_game(notes, wk, ns, same_conf):
+        if not same_conf:
+            return False
+        if notes and 'championship' in notes.lower():   # 2022+ authoritative label
+            return True
+        return bool(ns) and wk == champ_week             # pre-2022 fallback
+
     rec = {t: {'w': 0, 'l': 0, 'cw': 0, 'cl': 0, 'pf': 0, 'pa': 0} for t in teams}
     h2h = {}   # h2h[team][opp] = [wins, losses] in conference play (for tiebreaks)
-    for h, hp, a, ap, notes in cursor.fetchall():
-        is_ccg = bool(notes) and 'championship' in notes.lower()
+    for h, hp, a, ap, notes, wk, ns in games:
+        same = bool(team_conf.get(h)) and team_conf.get(h) == team_conf.get(a)
+        is_ccg = _is_title_game(notes, wk, ns, same)
         for t, opp, p, op in ((h, a, hp, ap), (a, h, ap, hp)):
             r = rec.get(t)
             if r is None or p == op:      # skip a non-FBS side and (rare) ties
