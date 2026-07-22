@@ -40,6 +40,11 @@
                         {% if team_conf_record and (team_conf_record.conf_wins + team_conf_record.conf_losses) > 0 %}
                         <span style="background:rgba(28,156,240,0.12);border: 1px solid rgba(28,156,240,0.4);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700">{{ team_conf_record.conf_wins }}-{{ team_conf_record.conf_losses }}<span style="color: var(--accent);font-size: var(--text-xs);font-weight:700;margin-left:6px">{{ team_season_conf|upper }}</span></span>
                         {% endif %}
+                        {% if team_conf_record and team_conf_record.is_champion %}
+                        <span style="background:rgba(212,175,55,0.15);border: 1px solid var(--gold);color: var(--gold);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:800;display:inline-flex;align-items:center;gap:6px">
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="var(--gold)" aria-hidden="true"><path d="M2 7l5 4 5-7 5 7 5-4-2.2 11H4.2L2 7z"/><path d="M4.2 19.5h15.6V21H4.2z"/></svg>{{ team_season_conf }} Champion
+                        </span>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>
@@ -199,17 +204,18 @@
                     <tbody>
                         {% for s in standings %}
                         {% set ic = s.name==team[0] %}
-                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(59,130,246,0.1)' if ic else 'transparent' }};cursor:pointer" onclick="window.location.href='{{ team_url(s.name, season) }}'">
+                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(59,130,246,0.1)' if ic else ('rgba(212,175,55,0.10)' if s.is_champion else 'transparent') }};{% if s.is_champion %}box-shadow:inset 3px 0 0 var(--gold);{% endif %}cursor:pointer" onclick="window.location.href='{{ team_url(s.name, season) }}'">
                             <td style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;text-align:center;padding:9px 4px">{{ loop.index }}</td>
                             <td style="padding:9px 10px 9px 4px">
                                 <div style="display:flex;align-items:center;gap:8px">
                                     {% if s.logo %}
                                     <img src="{{ s.logo }}" alt="{{ s.name }} logo" loading="lazy" width="24" height="24" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
                                     {% endif %}
-                                    <a href="{{ team_url(s.name, season) }}" style="color: var(--text-primary);text-decoration:none;font-weight:{{ '700' if ic else '500' }};font-size: var(--text-sm)">
+                                    <a href="{{ team_url(s.name, season) }}" style="color: {{ 'var(--gold)' if s.is_champion else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '800' if s.is_champion else ('700' if ic else '500') }};font-size: var(--text-sm)">
                                         {% if s.ap_rank %}<span style="color:var(--gold);font-size: var(--text-xs);font-weight:800;margin-right:4px">{{ s.ap_rank }}</span>{% endif %}
                                         {{ s.name }}
                                     </a>
+                                    {% if s.is_champion %}<svg viewBox="0 0 24 24" width="14" height="14" fill="var(--gold)" aria-label="Conference champion" style="flex-shrink:0"><title>Conference champion</title><path d="M2 7l5 4 5-7 5 7 5-4-2.2 11H4.2L2 7z"/><path d="M4.2 19.5h15.6V21H4.2z"/></svg>{% endif %}
                                 </div>
                             </td>
                             <td style="color: var(--text-primary);font-size: var(--text-sm);font-weight:700;text-align:center;padding:9px 8px">{{ s.conf_wins }}-{{ s.conf_losses }}</td>

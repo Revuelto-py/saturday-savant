@@ -473,9 +473,15 @@ def _compute_conference_standings(cursor, season):
 
     rec = {t: {'w': 0, 'l': 0, 'cw': 0, 'cl': 0, 'pf': 0, 'pa': 0} for t in teams}
     h2h = {}   # h2h[team][opp] = [wins, losses] in conference play (for tiebreaks)
+    champions = {}   # conference -> champion (winner of that conference's title game)
     for h, hp, a, ap, notes, wk, ns in games:
         same = bool(team_conf.get(h)) and team_conf.get(h) == team_conf.get(a)
         is_ccg = _is_title_game(notes, wk, ns, same)
+        if is_ccg and hp != ap:
+            # The champion is the title-game WINNER, which need not be the team
+            # with the best conference record (e.g. 2025 American: Tulane won the
+            # title game though Navy finished a game better in the standings).
+            champions[team_conf[h]] = h if hp > ap else a
         for t, opp, p, op in ((h, a, hp, ap), (a, h, ap, hp)):
             r = rec.get(t)
             if r is None or p == op:      # skip a non-FBS side and (rare) ties
@@ -501,6 +507,7 @@ def _compute_conference_standings(cursor, season):
             'conf_pct': r['cw'] / cg if cg else 0.0,
             'overall_pct': r['w'] / g if g else 0.0,
             'ap_rank': ap_ranks.get(t),
+            'is_champion': champions.get(c) == t,
         })
     for c in confs:
         rows = confs[c]
