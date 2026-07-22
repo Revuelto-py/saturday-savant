@@ -3211,13 +3211,19 @@ def game_detail(game_id):
         summary_row = None
         if not is_scheduled:
             def _record(team):
+                # Record through this game (inclusive), ordered CHRONOLOGICALLY.
+                # Game ids are NOT time-ordered (a week-1 game can have a higher
+                # id than a week-10 one), so compare by (start_date, id) against
+                # this game's — an `id <= game_id` filter counted later games and
+                # produced records like Army 2-1 on a week-1 loss.
                 cursor.execute('''
                     SELECT
                         SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
                         SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
                     FROM games
                     WHERE (home_team=%s OR away_team=%s) AND home_points IS NOT NULL AND away_points IS NOT NULL
-                      AND season = %s AND id <= %s
+                      AND season = %s
+                      AND (start_date, id) <= (SELECT start_date, id FROM games WHERE id = %s)
                 ''', (team, team, team, team, team, team, game_season, game_id))
                 row = cursor.fetchone()
                 return (row[0] or 0, row[1] or 0) if row else (0, 0)
