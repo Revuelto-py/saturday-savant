@@ -6,7 +6,7 @@ Usage:
 
 Loads, per season (~11 CFBD calls each):
     games (regular + postseason, FBS home)      -> games
-    player season stats (regular)               -> player_stats(season)
+    player season stats (regular + postseason)  -> player_stats(season)
     player PPA                                  -> player_ppa(season)
     advanced team stats (garbage time excluded) -> team_stats(season) + team_advanced(season)
     player usage                                -> player_usage(season)
@@ -99,7 +99,8 @@ def backfill_games(apis, y):
 
 
 def backfill_player_stats(apis, y):
-    stats = apis['stats'].get_player_season_stats(year=y, season_type='regular')
+    # 'both' = regular + postseason combined so bowl/CFP production counts.
+    stats = apis['stats'].get_player_season_stats(year=y, season_type='both')
     _refresh('player_stats', y)
     execute_values(cursor, '''
         INSERT INTO player_stats (player_id, player_name, team, conference, position,

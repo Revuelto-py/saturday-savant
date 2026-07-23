@@ -27,7 +27,10 @@ with cfbd.ApiClient(configuration) as api_client:
     result = games_api.get_games(SEASON)
 
     stats_api = cfbd.StatsApi(api_client)
-    stats = stats_api.get_player_season_stats(year=SEASON, season_type='regular')
+    # 'both' = regular + postseason combined, so bowl/CFP production counts
+    # toward season totals (e.g. a sack in the CFP shows in the season sack
+    # total). CFBD returns one combined row per player/stat for 'both'.
+    stats = stats_api.get_player_season_stats(year=SEASON, season_type='both')
 
     metrics_api = cfbd.MetricsApi(api_client)
     ppa_data = metrics_api.get_predicted_points_added_by_player_season(year=SEASON)
