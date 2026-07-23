@@ -40,6 +40,13 @@
                         {% if team_conf_record and (team_conf_record.conf_wins + team_conf_record.conf_losses) > 0 %}
                         <span style="background:rgba(28,156,240,0.12);border: 1px solid rgba(28,156,240,0.4);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700">{{ team_conf_record.conf_wins }}-{{ team_conf_record.conf_losses }}<span style="color: var(--accent);font-size: var(--text-xs);font-weight:700;margin-left:6px">{{ team_season_conf|upper }}</span></span>
                         {% endif %}
+                        {% if projected_record %}
+                        {# Season projection = actual record + summed Savant Forecast win
+                           probabilities for remaining games; recomputed weekly (never frozen).
+                           Dashed border signals an estimate; tooltip carries the exact decimal. #}
+                        <span title="Savant Forecast projection: {{ projected_record.proj_wins }}-{{ projected_record.proj_losses }} ({{ '%+.2f'|format(projected_record.exp_wins) }} expected wins from {{ projected_record.remaining }} remaining game{{ '' if projected_record.remaining == 1 else 's' }})"
+                              style="background:rgba(167,139,250,0.10);border: 1px dashed rgba(167,139,250,0.6);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700;cursor:help">{{ projected_record.display }}<span style="color:#a78bfa;font-size: var(--text-xs);font-weight:700;margin-left:6px">PROJECTED</span></span>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>

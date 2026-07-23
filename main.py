@@ -3007,6 +3007,51 @@ def _team_nfl_talent(team):
     return result
 
 
+def _projected_record(cursor, team, season, actual_wins, actual_losses):
+    """Projected final regular-season record: the actual record so far plus the
+    expected outcome of the team's remaining games, summing the CURRENT Savant
+    Forecast win probability for each remaining regular-season game (from the
+    team's perspective — home_prob if home, else 1 - home_prob).
+
+    Read LIVE from game_predictions on every call, never persisted or frozen:
+    predict_games.py rewrites each upcoming game's forecast weekly (rows freeze
+    only at kickoff), and its notify_cache_clear() drops the team-page cache, so
+    the next render recomputes this from the current week's numbers. This is the
+    deliberate difference from an individual prediction — the projection for a
+    game that hasn't kicked off must keep moving as the model updates.
+
+    Missing forecasts (e.g. a not-yet-forecasted matchup) are skipped via the
+    INNER JOIN rather than breaking the sum. Returns None when the team has no
+    remaining forecasted games (season complete, or not yet started) — the
+    caller then shows nothing extra and the actual record stands on its own.
+    """
+    cursor.execute('''
+        SELECT CASE WHEN gp.home_team = %s THEN gp.home_prob ELSE 1 - gp.home_prob END
+        FROM games g
+        JOIN game_predictions gp ON gp.game_id = g.id
+        WHERE g.season = %s AND g.season_type = 'SeasonType.REGULAR'
+          AND g.completed = 0
+          AND (g.home_team = %s OR g.away_team = %s)
+          AND gp.home_prob IS NOT NULL
+    ''', (team, season, team, team))
+    probs = [float(r[0]) for r in cursor.fetchall()]
+    if not probs:
+        return None
+    exp_wins  = sum(probs)
+    remaining = len(probs)
+    total     = actual_wins + actual_losses + remaining
+    proj_wins = actual_wins + exp_wins
+    disp_w    = int(round(proj_wins))
+    disp_l    = total - disp_w
+    return {
+        'display':      f"{disp_w}-{disp_l}",   # rounded to a whole record
+        'exp_wins':     round(exp_wins, 2),      # expected wins from remaining (decimal)
+        'proj_wins':    round(proj_wins, 2),     # precise projected win total
+        'proj_losses':  round(total - proj_wins, 2),
+        'remaining':    remaining,
+    }
+
+
 @app.route('/team/<path:team_ref>')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
@@ -3058,6 +3103,13 @@ def team(team_ref):
             FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
         ''', (team_name,)*6 + (season,))
         record = cursor.fetchone()
+
+        # Projected final record — only for the in-progress current season, and
+        # only while games remain (a finished/past season shows nothing extra).
+        projected_record = None
+        if is_current and record:
+            projected_record = _projected_record(
+                cursor, team_name, season, record[0] or 0, record[1] or 0)
 
         cursor.execute('''
             SELECT COUNT(*),
@@ -3508,7 +3560,8 @@ def team(team_ref):
         nfl_talent = _team_nfl_talent(team_name)
 
         return render_template('team.html',
-                team=team_info, record=record, season_stats=season_stats,
+                team=team_info, record=record, projected_record=projected_record,
+                season_stats=season_stats,
                 returning=returning, nfl_talent=nfl_talent,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
