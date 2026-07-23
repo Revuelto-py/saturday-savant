@@ -571,7 +571,7 @@
 
     <!-- Usage Rate card (full width if available) -->
     {% if usage and pos != 'QB' %}
-    <div class="mt-4">
+    <div class="mt-4" style="margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
             <h5 class="section-label" style="margin:0">Usage Rate</h5>
             <div style="flex:1;height:1px;background:rgba(255,255,255,0.07)"></div>
@@ -607,10 +607,10 @@
     </div>
     {% endif %}
 
-    <!-- ROW 2: Career Log — one row per season, team attributed per year
-         from the rosters table (transfers show each season under the team
-         actually played for). Rows link to that season's player view; team
-         cells link to the team's page for that season. -->
+    <!-- ROW 2: Career Log — one row per season, each credited to the team the
+         season's stats were recorded under (transfers show each season under
+         the team actually played for, not a new team not yet suited up for).
+         Rows link to that season's player view; team cells link to the team. -->
     {% if career_log and career_log|length > 1 %}
     <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;margin-bottom:16px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:var(--s4)">

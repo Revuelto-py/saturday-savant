@@ -5057,11 +5057,13 @@ def _player_detail_cached(player_id, season):
         import traceback; traceback.print_exc()
 
     # ── Career log + season selector ─────────────────────────────────────
-    # One row per season the player recorded stats, newest first, with the
-    # team attributed from the rosters table (per-season truth) rather than
-    # players.team (current team only) — same principle as the transfer badge
-    # and game-log Team column. player_stats' own per-season team is the
-    # fallback for seasons with no roster row (e.g. pre-2019 partial rosters).
+    # One row per season the player recorded stats, newest first, attributed to
+    # the team those stats were recorded under (player_stats.team) — the row
+    # SHOWS that season's stats, so it must credit the team that earned them.
+    # The rosters table is only a fallback for a season with no stat-team,
+    # because roster membership can run ahead of play: a transfer is often listed
+    # on the new team's roster before ever playing there (e.g. James Peoples was
+    # on Penn State's 2025 roster while his 2025 stats were still at Ohio State).
     conn2b = get_db()
     try:
         cursor2 = conn2b.cursor()
@@ -5082,8 +5084,8 @@ def _player_detail_cached(player_id, season):
         cursor2.execute('SELECT season, avg_ppa_all FROM player_ppa WHERE player_id = %s', (str(player_id),))
         ppa_by_season = dict(cursor2.fetchall())
 
-        career_teams = {roster_team_by_season.get(s) or stat_team_by_season.get(s)
-                        for s in career_by_season} - {None}
+        career_teams = ({stat_team_by_season.get(s) for s in career_by_season} |
+                        {roster_team_by_season.get(s) for s in career_by_season}) - {None}
         team_meta = {}
         if career_teams:
             cursor2.execute('SELECT name, logo_dark, slug, conference FROM teams WHERE name = ANY(%s)',
@@ -5156,7 +5158,7 @@ def _player_detail_cached(player_id, season):
 
     career_log = []
     for s in sorted(career_by_season, reverse=True):
-        team_name = roster_team_by_season.get(s) or stat_team_by_season.get(s)
+        team_name = stat_team_by_season.get(s) or roster_team_by_season.get(s)
         meta = team_meta.get(team_name, {})
         career_log.append({
             'season': s,
