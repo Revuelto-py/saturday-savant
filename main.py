@@ -3225,24 +3225,33 @@ def team(team_ref):
                     CASE WHEN g.home_team=%s THEN g.away_points ELSE g.home_points END,
                     g.week, g.season_type, g.notes,
                     CASE WHEN g.home_team=%s THEN t2.logo_dark ELSE t1.logo_dark END,
-                    g.completed, g.start_date, COALESCE(g.start_time_tbd, 0)
+                    g.completed, g.start_date, COALESCE(g.start_time_tbd, 0),
+                    -- Savant Forecast win probability from this team's side; used
+                    -- to flag not-yet-played games as projected W/L (the same
+                    -- probabilities the projected record sums).
+                    CASE WHEN g.home_team=%s THEN gp.home_prob ELSE 1 - gp.home_prob END
                 FROM games g
                 LEFT JOIN teams t1 ON g.home_team=t1.name
                 LEFT JOIN teams t2 ON g.away_team=t2.name
+                LEFT JOIN game_predictions gp ON gp.game_id = g.id
                 WHERE (g.home_team=%s OR g.away_team=%s) AND g.season=%s
                 ORDER BY CASE WHEN g.season_type='SeasonType.REGULAR' THEN 0 ELSE 1 END, g.week
-            ''', (team_name,)*8 + (season,))
+            ''', (team_name,)*9 + (season,))
             out = []
             for r in cursor.fetchall():
                 kd, kt = format_kickoff(r[11], r[12])
                 rivalry = rivalry_map.get((team_name, r[2]), '')
-                out.append(r[:10] + (r[10], kd, kt, rivalry))
+                win_prob = float(r[13]) if r[13] is not None else None
+                out.append(r[:10] + (r[10], kd, kt, rivalry, win_prob))
             return out
 
         # Each season view shows only its own schedule now (the upcoming season
         # is its own ?season= view, not a toggle bolted onto the current one).
         schedule = _team_schedule(season)
         schedule_next = []
+        # Any not-yet-played game with a forecast → the schedule shows projected
+        # W/L badges (drives the schedule legend).
+        schedule_has_projections = any(g[10] == 0 and g[14] is not None for g in schedule)
 
         # Every view shows the roster for the season being viewed — 2016-2025
         # from that year's rosters table, 2026 from the current active roster.
@@ -3590,6 +3599,7 @@ def team(team_ref):
                 team_season_conf=team_season_conf,
                 schedule=schedule, schedule_next=schedule_next,
                 roster=roster, lineup=lineup,
+                schedule_has_projections=schedule_has_projections,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
                 kicking_stats=kicking_stats, punting_stats=punting_stats,

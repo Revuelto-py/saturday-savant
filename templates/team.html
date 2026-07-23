@@ -142,6 +142,16 @@
                         {% set rc = 'var(--green)' if won else 'var(--red)' %}
                         <div style="color: var(--text-secondary);font-size: var(--text-sm);font-weight:600;min-width:55px;text-align:right">{{ game[4] }} - {{ game[5] }}</div>
                         <div style="background:{{ rc }}22;border:1px solid {{ rc }}66;color:{{ rc }};font-size: var(--text-xs);font-weight:900;padding:2px 7px;border-radius: var(--r-sm);min-width:26px;text-align:center">{{ 'W' if won else 'L' }}</div>
+                    {% elif game[14] is not none %}
+                        {# Upcoming game with a Savant Forecast — projected W/L (dashed
+                           badge signals a projection, not a final result) + win prob %.
+                           These are the per-game outcomes the projected record sums. #}
+                        {% set pwin = game[14] >= 0.5 %}
+                        {% set pc = 'var(--green)' if pwin else 'var(--red)' %}
+                        {% set pct = (game[14] * 100) | round | int %}
+                        <div style="color: var(--text-dim);font-size: var(--text-xs);text-align:right;min-width:52px">{{ game[11] }}</div>
+                        <div style="color:{{ pc }};font-size: var(--text-sm);font-weight:700;min-width:38px;text-align:right;font-variant-numeric:tabular-nums">{{ pct }}%</div>
+                        <div title="Savant Forecast: projected {{ 'win' if pwin else 'loss' }} — {{ pct }}% to win. Recomputed weekly." style="background:{{ pc }}14;border:1px dashed {{ pc }};color:{{ pc }};font-size: var(--text-xs);font-weight:900;padding:2px 7px;border-radius: var(--r-sm);min-width:26px;text-align:center;cursor:help">{{ 'W' if pwin else 'L' }}</div>
                     {% else %}
                         <div style="text-align:right;min-width:88px">
                             <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700">{{ game[11] }}</div>
@@ -151,12 +161,14 @@
                 </a>
             {% endmacro %}
 
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+            <div style="margin-bottom:8px">
                 <h5 class="section-label" id="sched-heading" style="margin:0;font-size: var(--text-sm)">{{ season }} Schedule</h5>
-                {% if schedule_next %}
-                <div class="sched-toggle">
-                    <button type="button" class="sched-tab active" data-season="{{ season }}" onclick="showSchedule('{{ season }}')">{{ season }}</button>
-                    <button type="button" class="sched-tab" data-season="{{ next_season }}" onclick="showSchedule('{{ next_season }}')">{{ next_season }}</button>
+                {% if schedule_has_projections %}
+                <div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:4px;line-height:1.5">
+                    Upcoming games show the <b style="color:#a78bfa">Savant Forecast</b> pick — a dashed
+                    <span style="color: var(--green);font-weight:800">W</span> (favored) /
+                    <span style="color: var(--red);font-weight:800">L</span> (underdog) with win probability, recomputed weekly.
+                    {% if projected_record %}The <b>Projected</b> record above weights every game by that probability, so it reflects likely close-game splits rather than simply counting the favorites.{% endif %}
                 </div>
                 {% endif %}
             </div>
