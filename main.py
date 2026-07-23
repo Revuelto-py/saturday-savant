@@ -3055,8 +3055,17 @@ def _projected_record(cursor, team, season, actual_wins, actual_losses):
 @app.route('/team/<path:team_ref>')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
-    season = requested_season()
-    is_current = season == CURRENT_SEASON
+    # The team page can view the UPCOMING season (schedule/roster/projections
+    # already ingested even before any game is played) in addition to every
+    # season with stats — it's a first-class ?season= view, not the old
+    # "next season toggled onto the current view". Default stays the
+    # data-derived current season (the newest with actual results); it advances
+    # to the upcoming year on its own once that year produces stats.
+    _team_seasons = [UPCOMING_SEASON] + get_available_seasons()   # newest (2026) first
+    _req = request.args.get('season', type=int)
+    season = _req if _req in _team_seasons else CURRENT_SEASON
+    is_current  = season == CURRENT_SEASON
+    is_upcoming = season == UPCOMING_SEASON     # the pre-season projection view
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -3103,13 +3112,20 @@ def team(team_ref):
             FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
         ''', (team_name,)*6 + (season,))
         record = cursor.fetchone()
+        # A not-yet-played season (the upcoming view) has no completed games, so
+        # the SUMs come back NULL — mark that and normalize to 0-0 so the hero
+        # never renders "None-None".
+        has_games = bool(record) and record[0] is not None
+        record = (record[0] or 0, record[1] or 0) if record else (0, 0)
 
-        # Projected final record — only for the in-progress current season, and
-        # only while games remain (a finished/past season shows nothing extra).
+        # Projected final record — for the current AND upcoming seasons while
+        # games remain (summing live Savant Forecast probs); a finished or past
+        # season returns None and shows nothing. This is the headline number on
+        # the upcoming (pre-season) view, where every game is still ahead.
         projected_record = None
-        if is_current and record:
+        if season >= CURRENT_SEASON:
             projected_record = _projected_record(
-                cursor, team_name, season, record[0] or 0, record[1] or 0)
+                cursor, team_name, season, record[0], record[1])
 
         cursor.execute('''
             SELECT COUNT(*),
@@ -3223,12 +3239,14 @@ def team(team_ref):
                 out.append(r[:10] + (r[10], kd, kt, rivalry))
             return out
 
+        # Each season view shows only its own schedule now (the upcoming season
+        # is its own ?season= view, not a toggle bolted onto the current one).
         schedule = _team_schedule(season)
-        schedule_next = _team_schedule(UPCOMING_SEASON) if is_current else []
+        schedule_next = []
 
-        # The current view shows the upcoming roster (who's on the team next
-        # season); a historical view shows that season's actual roster.
-        roster_season = UPCOMING_SEASON if is_current else season
+        # Every view shows the roster for the season being viewed — 2016-2025
+        # from that year's rosters table, 2026 from the current active roster.
+        roster_season = season
         cursor.execute('''
             SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot,
                    r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0)
@@ -3252,15 +3270,14 @@ def team(team_ref):
         ''', (team_name, roster_season))
         roster = cursor.fetchall()
 
-        # Starters are picked from real 2025 usage/production keyed on
-        # player_id (transfer-aware — see compute_starter_scores), not from
-        # roster order. Pass the full roster tuples so OL seniority (the
-        # year column) is available to the scorer and the slotter.
-        # The projected-starters lineup is a forward projection (EA ratings +
-        # last season's production), so it only renders on the current view —
-        # historical rosters get the roster table without a projection.
+        # Projected starters — a forward-looking depth chart (EA talent grades +
+        # last season's production), so it renders ONLY on the upcoming-season
+        # view. Completed/historical seasons get the roster table with no
+        # projection. Starters are keyed on player_id (transfer-aware, see
+        # compute_starter_scores), not roster order; full roster tuples are
+        # passed so OL seniority (the year column) is available to the slotter.
         lineup = {}
-        if is_current:
+        if is_upcoming:
             starter_scores = compute_starter_scores(cursor, roster)
             # Specific EA positions (LT/LG/C/RG/RT, LE/RE, MLB/LOLB/ROLB, CB/FS/SS…)
             # so players slot into their actual spot, not just a generic OL/DL pool.
@@ -3565,8 +3582,9 @@ def team(team_ref):
                 returning=returning, nfl_talent=nfl_talent,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
+                is_upcoming_season=is_upcoming, has_games=has_games,
                 roster_season=roster_season, next_season=UPCOMING_SEASON,
-                available_seasons=get_available_seasons(),
+                available_seasons=_team_seasons,
                 trends=trends,
                 standings=standings, team_conf_record=team_conf_record,
                 team_season_conf=team_season_conf,

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ team[0] }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ team[0] }}{% if team_rank %} (AP #{{ team_rank }}){% endif %} · Saturday Savant{% endblock %}
-{% block og_description %}{{ team[0] }} — {{ team[1] }}{% if record %} · {{ record[0] }}-{{ record[1] }} in {{ season }}{% endif %}{% if svr %} · Net Savant {{ '%+.1f'|format(svr.net_rating) }}{% endif %}. Ratings, stats, and roster on Saturday Savant.{% endblock %}
+{% block og_description %}{{ team[0] }} — {{ team[1] }}{% if has_games %} · {{ record[0] }}-{{ record[1] }} in {{ season }}{% elif is_upcoming_season and projected_record %} · {{ season }} projection {{ projected_record.display }}{% endif %}{% if svr %} · Net Savant {{ '%+.1f'|format(svr.net_rating) }}{% endif %}. Ratings, stats, and roster on Saturday Savant.{% endblock %}
 {% block og_image %}{{ team[3] or team[6] or (request.url_root ~ 'static/logo-512.png') }}{% endblock %}
 
 {% set c1 = team[4] if team[4] else '#1e3a5f' %}
@@ -34,9 +34,13 @@
                         {% endif %}
                     </h1>
                     <div style="color: var(--text-secondary);font-size: var(--text-base);margin-top:4px">{{ team[1] }}</div>
-                    {% if record %}
+                    {% if has_games or projected_record %}
                     <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+                        {% if has_games %}
                         <span style="background:rgba(0,0,0,0.4);border: 1px solid var(--border-strong);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700">{{ record[0] }}-{{ record[1] }}<span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:600;margin-left:6px">OVERALL</span></span>
+                        {% elif is_upcoming_season %}
+                        <span style="background:rgba(0,0,0,0.4);border: 1px solid var(--border-strong);color: var(--text-secondary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700;letter-spacing:0.04em">PRESEASON</span>
+                        {% endif %}
                         {% if team_conf_record and (team_conf_record.conf_wins + team_conf_record.conf_losses) > 0 %}
                         <span style="background:rgba(28,156,240,0.12);border: 1px solid rgba(28,156,240,0.4);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700">{{ team_conf_record.conf_wins }}-{{ team_conf_record.conf_losses }}<span style="color: var(--accent);font-size: var(--text-xs);font-weight:700;margin-left:6px">{{ team_season_conf|upper }}</span></span>
                         {% endif %}
@@ -62,6 +66,7 @@
                     {% if svr_week %}<div style="color: var(--text-dim);font-size:0.62rem;font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
                 </div>
                 {% endif %}
+                {% if has_games %}
                 {% for label, val, rk in [
                         ('PTS FOR/G',     season_stats.pts_for_pg,     hero_ranks.pts_for_pg),
                         ('PTS AGAINST/G', season_stats.pts_against_pg, hero_ranks.pts_against_pg),
@@ -73,6 +78,7 @@
                     {% if rk %}<div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;margin-top:4px;opacity:0.8">{{ ordinal(rk) }}</div>{% endif %}
                 </div>
                 {% endfor %}
+                {% endif %}
             </div>
         </div>
         {# Awards live on their own full-width row (not inside the left column)
@@ -269,6 +275,10 @@
         <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Team Analytics</h5>
         <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the {{ season }} season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
     </div>
+
+    {% if not has_games %}
+    <div class="pending-panel">Savant Rating, SP+, and opponent-adjusted efficiency for {{ season }} will appear here once games are played. The roster-based <b>Returning Production</b> breakdown below is available now for a preseason read.</div>
+    {% endif %}
 
     <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
     {% if svr %}
@@ -671,9 +681,13 @@
 
 <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
     <h4 class="section-label" style="margin:0;font-size: var(--text-base)">{{ season }} Season Stats</h4>
-    <span class="badge-pos" style="letter-spacing:0.04em">Final</span>
+    {% if has_games %}<span class="badge-pos" style="letter-spacing:0.04em">Final</span>{% endif %}
     <span style="color: var(--text-dim);font-size: var(--text-xs)">Individual production from the {{ season }} season</span>
 </div>
+
+{% if not has_games %}
+<div class="pending-panel">Player stats for {{ season }} will appear here once games are played. See the <b>Roster</b> tab for the current roster and projected starters.</div>
+{% endif %}
 
 {% if passing_stats %}
 <div class="mb-5">
@@ -920,8 +934,12 @@
 
 <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
     <h4 class="section-label" style="margin:0;font-size: var(--text-base)">{{ roster_season }} Roster</h4>
+    {% if is_upcoming_season %}
     <span class="badge-pos" style="letter-spacing:0.04em">Current</span>
-    <span style="color: var(--text-dim);font-size: var(--text-xs)">Upcoming-season roster, including offseason transfers</span>
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Active roster, including offseason transfers</span>
+    {% else %}
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Roster as of the {{ roster_season }} season</span>
+    {% endif %}
 </div>
 
 {# ── Projected starting lineup — formation diagram above the roster table ── #}
