@@ -3485,7 +3485,7 @@ def team(team_ref):
         # Recruiting rankings trend
         cursor.execute('''
             SELECT year, rank, points FROM team_recruiting
-            WHERE team=%s AND year >= 2022 ORDER BY year DESC
+            WHERE team=%s ORDER BY year DESC LIMIT 4
         ''', (team_name,))
         recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
                       for r in cursor.fetchall()]

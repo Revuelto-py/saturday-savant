@@ -1119,6 +1119,48 @@ tr.postseason-row:hover {
 }
 .stat-header:hover::after { opacity: 1; }
 
+/* Inline info-icon tooltip (schedule forecast note, etc.) — popup anchored to
+   the section head so it never overflows on narrow columns. */
+.info-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--text-dim);
+    cursor: help;
+    line-height: 0;
+    border-radius: 50%;
+    transition: color 0.15s ease;
+}
+.info-tip:hover, .info-tip:focus-visible { color: #a78bfa; outline: none; }
+.info-tip:focus-visible { box-shadow: 0 0 0 2px rgba(167,139,250,0.5); }
+.info-tip svg { width: 14px; height: 14px; display: block; }
+.info-tip-pop {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: #1a2e4a;
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    line-height: 1.55;
+    white-space: normal;
+    width: max-content;
+    max-width: min(340px, 100%);
+    padding: 10px 12px;
+    border-radius: var(--r-sm);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 100;
+}
+.info-tip:hover ~ .info-tip-pop,
+.info-tip:focus-visible ~ .info-tip-pop,
+.info-tip-pop:hover { opacity: 1; }
+
 /* ── Leaderboards: stat table ──────────────────────────────────────────── */
 .lb-table-scroll { overflow-x: auto; }
 .lb-table { width: 100%; border-collapse: collapse; min-width: 760px; }
