@@ -18,7 +18,7 @@
     </div>
 
     <!-- Season toggle -->
-    <div class="lb-mode-toggle" style="margin-bottom: var(--s7)">
+    <div class="lb-mode-toggle" style="margin-bottom: var(--s8)">
         {% for s in seasons %}
         <a href="{{ url_for('standings', season=s) }}" class="lb-mode-btn {{ 'active' if s == season else '' }}">{{ s }}</a>
         {% endfor %}
