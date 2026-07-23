@@ -249,14 +249,20 @@ def ensure_indexes():
     try:
         cursor = conn.cursor()
         cursor.execute('''
-            CREATE INDEX IF NOT EXISTS idx_player_stats_player_id ON player_stats(player_id);
+            -- NOTE: standalone idx_player_stats_(player_id), (team) and (season)
+            -- were dropped as redundant — the composite indexes below
+            -- (player_id, season) / (team, season) / (season, category,
+            -- stat_type) serve those single-column lookups via their leftmost
+            -- prefix, so the extras just cost ~47 MB of disk. Do NOT re-add them.
+            --
             -- The player page looks up every team a player recorded stats under
             -- with `player_id = %s OR player_name = %s`; without this the
             -- player_name arm forced a full scan of ~1.1M rows (~3s per page).
             CREATE INDEX IF NOT EXISTS idx_player_stats_player_name ON player_stats(player_name);
-            CREATE INDEX IF NOT EXISTS idx_player_stats_team ON player_stats(team);
             CREATE INDEX IF NOT EXISTS idx_player_stats_category_stattype ON player_stats(category, stat_type);
-            CREATE INDEX IF NOT EXISTS idx_player_ppa_player_id ON player_ppa(player_id);
+            -- player_ppa: (player_id) and (player_id, season) indexes were
+            -- dropped as redundant with the uq_player_ppa_pid_season UNIQUE
+            -- constraint (same columns), which already serves those lookups.
             CREATE INDEX IF NOT EXISTS idx_players_team ON players(team);
             CREATE INDEX IF NOT EXISTS idx_games_season_week ON games(season, week);
             -- multi-season perf set (added with the 2016-2025 expansion):
@@ -267,7 +273,6 @@ def ensure_indexes():
             CREATE INDEX IF NOT EXISTS idx_player_stats_season_cat_type ON player_stats (season, category, stat_type);
             CREATE INDEX IF NOT EXISTS idx_player_stats_team_season ON player_stats (team, season);
             CREATE INDEX IF NOT EXISTS idx_player_stats_pid_season ON player_stats (player_id, season);
-            CREATE INDEX IF NOT EXISTS idx_player_ppa_pid_season ON player_ppa (player_id, season);
             CREATE INDEX IF NOT EXISTS idx_team_stats_team_season ON team_stats (team, season);
             CREATE INDEX IF NOT EXISTS idx_team_stats_season ON team_stats (season);
             CREATE INDEX IF NOT EXISTS idx_team_advanced_team_season ON team_advanced (team, season);
