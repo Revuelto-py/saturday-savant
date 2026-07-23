@@ -60,12 +60,12 @@
                         <td style="padding:9px 10px 9px 4px">
                             <div style="display:flex;align-items:center;gap:8px;min-width:0">
                                 {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" loading="lazy" width="24" height="24" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">{% endif %}
-                                <a href="{{ team_url(t.name, season) }}" style="color: {{ 'var(--gold)' if t.is_champion else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '800' if t.is_champion else '500' }};font-size: var(--text-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-                                    {% if t.ap_rank %}<span style="color: var(--gold);font-size: var(--text-xs);font-weight:800;margin-right:4px">{{ t.ap_rank }}</span>{% endif %}
+                                <a href="{{ team_url(t.name, season) }}" style="color: {{ '#f0c66a' if t.is_champion else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '800' if t.is_champion else '500' }};font-size: var(--text-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                                    {% if t.ap_rank %}<span style="color: var(--accent);font-size: var(--text-xs);font-weight:800;margin-right:4px">{{ t.ap_rank }}</span>{% endif %}
                                     {{ t.name }}
                                 </a>
                                 {% if t.is_champion %}
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="var(--gold)" aria-label="Conference champion" style="flex-shrink:0"><title>Conference champion</title><path d="M2 7l5 4 5-7 5 7 5-4-2.2 11H4.2L2 7z"/><path d="M4.2 19.5h15.6V21H4.2z"/></svg>
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="#f0c66a" aria-label="Conference champion" style="flex-shrink:0"><title>Conference champion</title><path d="M2 7l5 4 5-7 5 7 5-4-2.2 11H4.2L2 7z"/><path d="M4.2 19.5h15.6V21H4.2z"/></svg>
                                 {% endif %}
                             </div>
                         </td>
@@ -101,7 +101,7 @@
     .standings-row:hover { background: rgba(28,156,240,0.09); }
     /* Conference champion (title-game winner) — gold, not necessarily the
        record leader. */
-    .standings-champ { background: linear-gradient(90deg, rgba(212,175,55,0.15), rgba(212,175,55,0.02)); box-shadow: inset 3px 0 0 var(--gold); }
+    .standings-champ { background: linear-gradient(90deg, rgba(212,175,55,0.15), rgba(212,175,55,0.02)); box-shadow: inset 3px 0 0 #e8b04b; }
     .standings-champ:hover { background: linear-gradient(90deg, rgba(212,175,55,0.22), rgba(212,175,55,0.05)); }
 </style>
 {% endblock %}
