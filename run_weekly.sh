@@ -23,27 +23,31 @@ cd "$(dirname "$0")"
 
 PY="${PYTHON:-python3}"
 
-echo "── [1/11] player box scores + PPA (fetch_data) ──"
+echo "── [1/12] player box scores + PPA (fetch_data) ──"
 $PY fetch_data.py
-echo "── [2/11] team stats (fetch_team_stats) ──"
+echo "── [2/12] team stats (fetch_team_stats) ──"
 $PY fetch_team_stats.py
-echo "── [3/11] advanced team stats (fetch_advanced) ──"
+echo "── [3/12] advanced team stats (fetch_advanced) ──"
 $PY fetch_advanced.py
-echo "── [4/11] SP+ ratings (fetch_sp) ──"
+echo "── [4/12] SP+ ratings (fetch_sp) ──"
 $PY fetch_sp.py
-echo "── [5/11] AP rankings (fetch_rankings) ──"
+echo "── [5/12] AP rankings (fetch_rankings) ──"
 $PY fetch_rankings.py
-echo "── [6/11] game summaries / drives (fetch_game_summaries) ──"
+echo "── [6/12] head coaches, current season (fetch_coaches) ──"
+# Supplementary (team-page hero only) and CFBD publishes the new season late, so
+# a failure/empty response must not abort the pipeline — keep going regardless.
+$PY fetch_coaches.py || echo "  coach fetch failed — non-critical, continuing"
+echo "── [7/12] game summaries / drives (fetch_game_summaries) ──"
 $PY fetch_game_summaries.py
-echo "── [7/11] Savant ratings (compute_savant_ratings) ──"
+echo "── [8/12] Savant ratings (compute_savant_ratings) ──"
 $PY compute_savant_ratings.py --write   # --write persists; without it the script only dry-runs
-echo "── [8/11] percentile peer pools (backfill_pools) ──"
+echo "── [9/12] percentile peer pools (backfill_pools) ──"
 $PY backfill_pools.py
-echo "── [9/11] team-page + returning-production precompute (precompute) ──"
+echo "── [10/12] team-page + returning-production precompute (precompute) ──"
 $PY precompute.py
-echo "── [10/11] Vegas lines, active season (fetch_betting_lines) ──"
+echo "── [11/12] Vegas lines, active season (fetch_betting_lines) ──"
 $PY fetch_betting_lines.py
-echo "── [11/11] Savant Forecast: score last week + predict upcoming (predict_games) ──"
+echo "── [12/12] Savant Forecast: score last week + predict upcoming (predict_games) ──"
 $PY predict_games.py
 
 echo "weekly pipeline complete"
