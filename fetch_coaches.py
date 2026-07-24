@@ -37,6 +37,40 @@ load_dotenv()
 import main
 from season_util import current_cfb_season
 
+# ── Manual current-season hire overrides ────────────────────────────────────
+# CFBD's coaches endpoint is record-based and has nothing for an upcoming season
+# (see the module docstring), so it can't reflect the offseason carousel until
+# the season is under way. Until CFBD publishes it, these confirmed head-coach
+# hires — taken from a published coaching-changes roundup — are layered on top of
+# CFBD so the team-page hero is current. Keyed to the DB's EXACT team names
+# (verified against the teams table; note "Cal" is stored "California"). They fill
+# ONLY teams CFBD hasn't published — once CFBD provides a team's coach it wins —
+# so this whole block becomes a no-op and can be trimmed as CFBD catches up.
+COACH_OVERRIDES = {
+    2026: {
+        'Michigan': 'Kyle Whittingham',      'Missouri State': 'Casey Woods',
+        'Washington State': 'Kirby Moore',    'Coastal Carolina': 'Ryan Beard',
+        'Southern Miss': 'Blake Anderson',    'Toledo': 'Mike Jacobs',
+        'Tulane': 'Will Hall',                'UConn': 'Jason Candle',
+        'Memphis': 'Charles Huff',            'Penn State': 'Matt Campbell',
+        'California': 'Tosh Lupoi',           'James Madison': 'Billy Napier',
+        'UAB': 'Alex Mortensen',              'South Florida': 'Brian Hartline',
+        'North Texas': 'Neal Brown',          'Kentucky': 'Will Stein',
+        'Michigan State': 'Pat Fitzgerald',   'UCLA': 'Bob Chesney',
+        'Ole Miss': 'Pete Golding',           'LSU': 'Lane Kiffin',
+        'Florida': 'Jon Sumrall',             'Auburn': 'Alex Golesh',
+        'Arkansas': 'Ryan Silverfield',       'Stanford': 'Tavita Pritchard',
+        'Oregon State': 'JaMarcus Shephard',  'Colorado State': 'Jim Mora',
+        'Oklahoma State': 'Eric Morris',      'Virginia Tech': 'James Franklin',
+        'Kent State': 'Mark Carney',
+    },
+}
+# Placeholder hire date for an override: an offseason (>= Sept) date so the hero's
+# hire_date-derived tenure reads "1st season" in the hire year (correct — every
+# override is a coach's first year at that team). Only the derived tenure is shown,
+# never the raw date, so a placeholder is safe; CFBD's real date replaces it later.
+OVERRIDE_HIRE_DATE = '2025-12-01 00:00:00+00:00'
+
 
 def fetch_coaches(season):
     key = os.getenv('CFBD_API_KEY')
@@ -57,6 +91,15 @@ def fetch_coaches(season):
             if s.year == season and s.school:
                 by_team[s.school] = (s.school, season, name,
                                      str(getattr(c, 'hire_date', '') or ''))
+
+    # Layer manual overrides on top, but only for teams CFBD hasn't published —
+    # CFBD is authoritative wherever it has data.
+    n_override = 0
+    for team, coach in COACH_OVERRIDES.get(season, {}).items():
+        if team not in by_team:
+            by_team[team] = (team, season, coach, OVERRIDE_HIRE_DATE)
+            n_override += 1
+
     rows = list(by_team.values())
 
     conn = main.get_db()
@@ -84,7 +127,8 @@ def fetch_coaches(season):
             ON CONFLICT (team, season) DO UPDATE SET
                 coach=EXCLUDED.coach, hire_date=EXCLUDED.hire_date''', rows)
         conn.commit()
-        print(f'{season} coaches: refreshed {len(rows)} teams', flush=True)
+        via = f' ({len(rows) - n_override} from CFBD, {n_override} from manual overrides)' if n_override else ''
+        print(f'{season} coaches: refreshed {len(rows)} teams{via}', flush=True)
     finally:
         main.release_db(conn)
 

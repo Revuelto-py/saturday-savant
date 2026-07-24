@@ -3174,7 +3174,15 @@ def team(team_ref):
         if not _coach_row and season >= CURRENT_SEASON:
             cursor.execute('SELECT coach, hire_date FROM coaches WHERE team=%s AND season <= %s '
                            'AND coach IS NOT NULL ORDER BY season DESC LIMIT 1', (team_name, season))
-            _coach_row = cursor.fetchone()
+            _prev = cursor.fetchone()
+            # Only carry the prior coach forward if he hasn't taken a job elsewhere
+            # for this season — otherwise a coach who left (e.g. Whittingham: Utah
+            # -> Michigan) would wrongly stay listed at BOTH his old and new team.
+            if _prev:
+                cursor.execute('SELECT 1 FROM coaches WHERE season=%s AND coach=%s '
+                               'AND team<>%s LIMIT 1', (season, _prev[0], team_name))
+                if not cursor.fetchone():
+                    _coach_row = _prev
         if _coach_row and _coach_row[0]:
             _tenure = None
             try:
