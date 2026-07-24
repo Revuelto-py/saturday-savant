@@ -100,12 +100,11 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#player-stats">Player Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#trends" id="trends-tab-btn">Trends</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#roster">Roster</button></li>
-            {# Starters is a real sibling tab, but the projected depth chart is a
-               standalone page — so this one navigates (an <a>, not a bootstrap
-               tab pane). Shown on the upcoming-season view, where the projection
-               exists; the link lands on that same projected-season page. #}
+            {# Starters is a sibling tab that opens the projected depth chart in
+               place, under the hero (an in-page tab pane, not a page nav). Shown
+               only on the upcoming-season view, where the projection exists. #}
             {% if is_upcoming_season and lineup %}
-            <li class="nav-item"><a class="nav-link" href="/team/{{ team_slug }}/starters">Starters</a></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#starters">Starters</button></li>
             {% endif %}
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nfl-talent">NFL Talent</button></li>
         </ul>
@@ -1027,6 +1026,20 @@
 </div>
 </div>
 <!-- ===== END ROSTER ===== -->
+
+<!-- ===== STARTERS (projected depth chart, in-page) ===== -->
+{% if is_upcoming_season and lineup %}
+<div class="tab-pane fade" id="starters">
+<div class="pt-4">
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px">
+        <h4 class="section-label" style="margin:0;font-size: var(--text-base)">Projected {{ roster_season }} Starters</h4>
+        <span style="color: var(--text-dim);font-size: var(--text-xs)">Talent-based depth chart · offense &amp; defense</span>
+    </div>
+    {% include "_depth_chart.html" %}
+</div>
+</div>
+{% endif %}
+<!-- ===== END STARTERS ===== -->
 
 <!-- ===== NFL TALENT ===== -->
 <div class="tab-pane fade" id="nfl-talent">

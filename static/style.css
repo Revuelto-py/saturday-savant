@@ -2494,7 +2494,9 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
     transition: opacity 0.2s ease;
 }
 #dc-offense { justify-content: space-evenly; }
-#dc-defense { justify-content: center; gap: clamp(10px, 1.3vw, 20px); }
+/* Three levels now (safeties / linebackers / LOS-with-corners). A generous gap
+   keeps the two-high safeties reading as a deep Cover-2 shell above the front. */
+#dc-defense { justify-content: center; gap: clamp(18px, 3vw, 52px); }
 .dc-hidden { visibility: hidden; opacity: 0; }
 
 /* Rows keep their real formation shape horizontally; vertical spacing is left
@@ -2507,19 +2509,23 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 /* Shotgun backfield: QB + RB, RB set a touch off and back. */
 .dc-row--backfield { gap: clamp(30px, 7vw, 96px); }
 .dc-row--backfield > .lf-card:last-child { margin-top: clamp(8px, 1.8vw, 20px); }
-/* Cover-2 secondary: safeties split the deep middle, corners out on the numbers. */
+/* Cover-2 safeties split the deep middle (two high). */
 .dc-row--safeties { gap: clamp(84px, 18vw, 280px); }
-.dc-row--corners  { justify-content: space-between; width: 100%; max-width: min(94%, 780px); margin: 0 auto; }
-/* Linebackers spread across the box; D-line spans the tackle box at the LOS. */
+/* Linebackers spread across the box. */
 .dc-row--lb    { gap: clamp(30px, 7vw, 108px); }
-.dc-row--dline { justify-content: space-between; width: 100%; max-width: min(80%, 640px); margin: 0 auto; }
+/* Line of scrimmage: the D-line as a center cluster with the cornerbacks out on
+   the numbers, so the corners sit right beside the front (not a separate deep
+   level). Dropping the old separate CB level frees a row of height for the
+   larger cards. */
+.dc-row--front { justify-content: space-between; align-items: flex-start; width: 100%; max-width: min(96%, 940px); margin: 0 auto; }
+.dc-dl-group { display: flex; justify-content: center; gap: clamp(6px, 1.4vw, 20px); }
 
 /* Card sizing scoped to this page — bigger than the roster thumbnails for
    readability, a shade shorter than square (5/4) to keep the four-row defense
    compact. The position tag overlays the photo corner (not a pill below), which
    trims a row of height. The field grows with the cards (content-driven), so
    larger cards never clip — they just make the field a little taller. */
-.dc-field .lf-card { width: clamp(52px, 6vw, 104px); position: relative; gap: 0; }
+.dc-field .lf-card { width: clamp(64px, 8vw, 108px); position: relative; gap: 0; }
 .dc-field .lf-photo,
 .dc-field .lf-photo-fallback,
 .dc-field .lf-empty { aspect-ratio: 5 / 4; }

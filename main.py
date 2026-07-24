@@ -1140,15 +1140,27 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         except Exception:
             cursor.connection.rollback()  # ea_ratings not populated yet
 
-    # EA-only scoring. build_lineup() sorts each position pool independently, so
-    # a score only has to order players *within* a position group. A rated
+    # EA-primary scoring. build_lineup() sorts each position pool independently,
+    # so a score only has to order players *within* a position group. A rated
     # player's score is exactly his EA overall (0–99) — production never reorders
-    # rated players, so the higher EA grade always starts. Players with no EA
-    # rating fall back to a production-ranked band (UNRATED_BASE …
-    # UNRATED_BASE+UNRATED_SPREAD) that sits below the rated pool, so they start
-    # only where a position has no rated player at all.
-    UNRATED_BASE = 48.0     # unrated players rank here (EA ratings run 47–99)…
-    UNRATED_SPREAD = 22.0   # …ordered among themselves by production (48–70)
+    # rated players, so among rated players the higher EA grade always starts.
+    #
+    # A player EA has NO rating for is scored from 2025 production instead. EA's
+    # dataset omits some obvious returning starters (e.g. Georgia's Gunner
+    # Stockton — no EA row at all), so for skill/defense positions a strong
+    # enough production score can rise INTO the rated range and outrank a rated
+    # backup: a proven starter should never be projected behind a rated third-
+    # stringer just because EA lacks a grade for him. The offensive line has no
+    # individual box-score signal (seniority proxy only), so OL keeps a low
+    # fallback band that stays below the rated pool.
+    UNRATED_BASE = 48.0     # OL fallback floor (EA ratings run 47–99)…
+    UNRATED_SPREAD = 22.0   # …OL ordered among themselves by seniority (48–70)
+    # Skill/defense: production maps into the rated range so a returning starter
+    # (dominant usage / tackle volume) beats a rated backup, capped below the
+    # genuinely elite so raw volume can't leapfrog a highly-rated true starter.
+    STARTER_BASE = 50.0
+    STARTER_SLOPE = 48.0
+    STARTER_CAP = 88.0
 
     year_rank = {'4': 4, '3': 3, '2': 2, '1': 1}
 
@@ -1183,8 +1195,10 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         ovr = ea.get(pid)
         if ovr is not None:
             base = ovr                                    # rated players ordered purely by EA overall
+        elif pos in _LINEUP_OL:
+            base = UNRATED_BASE + UNRATED_SPREAD * q      # OL: weak seniority proxy stays below the rated pool
         else:
-            base = UNRATED_BASE + UNRATED_SPREAD * q      # no EA → ranked by production, below the rated pool
+            base = min(STARTER_CAP, STARTER_BASE + STARTER_SLOPE * q)  # skill/def: production stands in for a missing EA grade
         scores[pid] = base + (99 - min(jersey, 99)) * 1e-4  # deterministic final tiebreak
     return scores
 
