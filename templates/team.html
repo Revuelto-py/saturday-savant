@@ -34,6 +34,14 @@
                         {% endif %}
                     </h1>
                     <div style="color: var(--text-secondary);font-size: var(--text-base);margin-top:4px">{{ team[1] }}</div>
+                    {% if head_coach %}
+                    {# Understated coach line — a quick-glance detail under the
+                       conference, per-season accurate (see the coaches table). #}
+                    <div style="font-size: var(--text-sm);margin-top:5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                        <span style="text-transform:uppercase;letter-spacing:0.1em;font-size:0.6rem;font-weight:800;color: var(--text-dim)">Head Coach</span>
+                        <span style="color: var(--text-secondary);font-weight:600">{{ head_coach.name }}{% if head_coach.tenure %}<span style="color: var(--text-dim);font-weight:500"> · {{ ordinal(head_coach.tenure) }} season</span>{% endif %}</span>
+                    </div>
+                    {% endif %}
                     {% if has_games or projected_record %}
                     <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
                         {% if has_games %}

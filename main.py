@@ -3160,6 +3160,34 @@ def team(team_ref):
             return render_template('404.html',
                 message=f'{team_name} is an FCS team — no team page is available.'), 404
 
+        # Head coach for the VIEWED season. The coaches table holds one row per
+        # team per season (2016-2025), so per-season changes are reflected
+        # exactly (e.g. a mid-year or offseason hire shows the right coach for
+        # that year). The upcoming season isn't ingested yet, so for the current
+        # or upcoming view fall back to the most recent known coach — but never
+        # invent one for a historical gap (an older season a team lacks): that
+        # just omits the line. Tenure ("Nth season") is derived from hire_date.
+        head_coach = None
+        cursor.execute('SELECT coach, hire_date FROM coaches WHERE team=%s AND season=%s',
+                       (team_name, season))
+        _coach_row = cursor.fetchone()
+        if not _coach_row and season >= CURRENT_SEASON:
+            cursor.execute('SELECT coach, hire_date FROM coaches WHERE team=%s AND season <= %s '
+                           'AND coach IS NOT NULL ORDER BY season DESC LIMIT 1', (team_name, season))
+            _coach_row = cursor.fetchone()
+        if _coach_row and _coach_row[0]:
+            _tenure = None
+            try:
+                # hire month <= Aug -> that year's team; Sep+ -> next season
+                # (offseason hire), clamped so a mid-season interim reads 1st yr.
+                _hy, _hm = int(_coach_row[1][:4]), int(_coach_row[1][5:7])
+                _first = min(_hy if _hm <= 8 else _hy + 1, season)
+                if season - _first + 1 >= 1:
+                    _tenure = season - _first + 1
+            except (TypeError, ValueError, IndexError):
+                pass  # empty/unparseable hire_date -> show name only
+            head_coach = {'name': _coach_row[0], 'tenure': _tenure}
+
         cursor.execute('''
             SELECT
                 SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
@@ -3662,7 +3690,7 @@ def team(team_ref):
                 team_adv=team_adv, percentiles=percentiles, sp=sp, svr=svr,
                 svr_week=svr_week,
                 ap_rankings=ap_rankings, team_rank=team_rank,
-                team_awards=team_awards,
+                team_awards=team_awards, head_coach=head_coach,
                 recruiting=recruiting, havoc=havoc, conf_logo=conf_logo,
                 team_slug=team_ref)
     finally:
