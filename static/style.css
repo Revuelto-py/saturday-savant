@@ -2430,7 +2430,7 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .dc-hero-scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.5); pointer-events: none; }
 .dc-hero-inner {
     position: relative; z-index: 1;
-    padding-top: clamp(12px, 1.8vw, 20px); padding-bottom: clamp(12px, 1.8vw, 20px);
+    padding-top: clamp(10px, 1.4vw, 16px); padding-bottom: clamp(10px, 1.4vw, 16px);
 }
 .dc-back {
     display: inline-flex; align-items: center; gap: 5px;
@@ -2468,7 +2468,8 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 /* The field — fixed height, so both sides share one frame */
 .dc-field {
     position: relative; overflow: hidden;
-    height: clamp(410px, 52vh, 500px);
+    display: grid;   /* both formations share one cell → field is as tall as the
+                        taller side (defense), so its 4 rows can never clip. */
     background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
 }
 .dc-field::before { /* faint yard lines */
@@ -2481,15 +2482,20 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
     content: ''; position: absolute; left: 0; right: 0; top: 36%; height: 40%;
     background: radial-gradient(ellipse at 50% 50%, rgba(28,156,240,0.07), transparent 70%); pointer-events: none;
 }
-/* Both formations fill the field and distribute rows evenly across its height.
-   The inactive one is display:none — the field height is fixed, so hiding it
-   never changes the frame. */
+/* Both formations occupy the same grid cell and BOTH stay in layout (the
+   inactive one is only visibility:hidden), so the field height is driven by the
+   taller side — defense — and the two are always exactly the same height with
+   no jump on toggle. Defense sets that height from its 4 rows + real gaps;
+   offense's 2 rows fill the same height with space-evenly. */
 .dc-formation {
-    position: absolute; inset: 0; z-index: 1;
-    padding: clamp(10px, 1.6vw, 20px) clamp(14px, 3vw, 40px);
-    display: flex; flex-direction: column; justify-content: space-evenly;
+    grid-area: 1 / 1; z-index: 1;
+    padding: clamp(10px, 1.5vw, 20px) clamp(14px, 3vw, 40px);
+    display: flex; flex-direction: column;
+    transition: opacity 0.2s ease;
 }
-.dc-hidden { display: none; }
+#dc-offense { justify-content: space-evenly; }
+#dc-defense { justify-content: center; gap: clamp(10px, 1.3vw, 20px); }
+.dc-hidden { visibility: hidden; opacity: 0; }
 
 /* Rows keep their real formation shape horizontally; vertical spacing is left
    to the parent's space-evenly so both sides fill the same height. */
@@ -2508,11 +2514,12 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .dc-row--lb    { gap: clamp(30px, 7vw, 108px); }
 .dc-row--dline { justify-content: space-between; width: 100%; max-width: min(80%, 640px); margin: 0 auto; }
 
-/* Card sizing scoped to this page — a shade shorter than square so all four
-   defensive rows fit the fixed field height while names stay readable. The
-   position tag overlays the photo corner (rather than a pill below the card),
-   which reclaims a row of vertical space so the whole defense fits. */
-.dc-field .lf-card { width: clamp(46px, 5vw, 80px); position: relative; gap: 0; }
+/* Card sizing scoped to this page — bigger than the roster thumbnails for
+   readability, a shade shorter than square (5/4) to keep the four-row defense
+   compact. The position tag overlays the photo corner (not a pill below), which
+   trims a row of height. The field grows with the cards (content-driven), so
+   larger cards never clip — they just make the field a little taller. */
+.dc-field .lf-card { width: clamp(52px, 6vw, 104px); position: relative; gap: 0; }
 .dc-field .lf-photo,
 .dc-field .lf-photo-fallback,
 .dc-field .lf-empty { aspect-ratio: 5 / 4; }
@@ -2531,9 +2538,8 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .dc-note { margin: 0; max-width: 640px; }
 
 @media (max-width: 767.98px) {
-    /* Mobile may scroll, but keep it tidy: shorter field, stacked footer,
-       slightly larger tap-friendly toggle already inherited. */
-    .dc-field { height: clamp(420px, 62vh, 560px); }
+    /* Mobile may scroll; keep it tidy with a stacked footer. Field height stays
+       content-driven so the defense never clips. */
     .dc-controls { margin-bottom: 12px; }
     .dc-form-label { display: none; }
     .dc-footer { flex-direction: column; align-items: flex-start; gap: 12px; }
@@ -2551,11 +2557,9 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
     .dc-title { font-size: 1.7rem; }
     .dc-hero-logo { height: 48px; }
 }
-@media (prefers-reduced-motion: no-preference) {
-    /* Crossfade the incoming side so the offense↔defense toggle reads as one
-       field flipping over rather than a hard swap. */
-    .dc-formation:not(.dc-hidden) { animation: dcFade 0.22s ease-out; }
-    @keyframes dcFade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    /* No crossfade — snap between sides. */
+    .dc-formation { transition: none; }
 }
 
 /* Roster-tab entry point → the standalone depth chart */

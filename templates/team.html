@@ -100,6 +100,13 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#player-stats">Player Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#trends" id="trends-tab-btn">Trends</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#roster">Roster</button></li>
+            {# Starters is a real sibling tab, but the projected depth chart is a
+               standalone page — so this one navigates (an <a>, not a bootstrap
+               tab pane). Shown on the upcoming-season view, where the projection
+               exists; the link lands on that same projected-season page. #}
+            {% if is_upcoming_season and lineup %}
+            <li class="nav-item"><a class="nav-link" href="/team/{{ team_slug }}/starters">Starters</a></li>
+            {% endif %}
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#nfl-talent">NFL Talent</button></li>
         </ul>
         {% if available_seasons and available_seasons|length > 1 %}
@@ -951,30 +958,8 @@
     {% endif %}
 </div>
 
-{# Projected starters now live on their own full-page depth chart; the roster
-   tab links to it rather than embedding the formation. Shown only on the
-   upcoming-season view, where the projection (lineup) is built. #}
-{% if lineup %}
-<a class="starters-cta" href="/team/{{ team[0]|team_slug }}/starters">
-    <div class="starters-cta-field" aria-hidden="true">
-        <svg viewBox="0 0 40 28" fill="none" stroke="currentColor" stroke-width="1.4">
-            <rect x="1" y="1" width="38" height="26" rx="2"/>
-            <line x1="1" y1="14" x2="39" y2="14"/>
-            <circle cx="12" cy="9" r="2.1" fill="currentColor" stroke="none"/>
-            <circle cx="20" cy="9" r="2.1" fill="currentColor" stroke="none"/>
-            <circle cx="28" cy="9" r="2.1" fill="currentColor" stroke="none"/>
-            <circle cx="16" cy="20" r="2.1" fill="currentColor" stroke="none"/>
-            <circle cx="24" cy="20" r="2.1" fill="currentColor" stroke="none"/>
-        </svg>
-    </div>
-    <div class="starters-cta-text">
-        <div class="starters-cta-title">Projected {{ roster_season }} Starters</div>
-        <div class="starters-cta-sub">See the full offense &amp; defense depth chart in formation</div>
-    </div>
-    <svg class="starters-cta-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
-</a>
-{% endif %}
-
+{# Projected starters have their own top-level "Starters" tab (a link to the
+   standalone depth-chart page); the Roster tab is purely the roster table. #}
 {% set off_positions = ['QB','RB','HB','FB','WR','TE','OL','OT','OG','LT','LG','C','RG','RT'] %}
 {% set def_positions = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB','CB','S','SS','FS','SAF','DB'] %}
 {% set spc_positions = ['K','P','LS','ATH','APB'] %}
