@@ -179,6 +179,59 @@ column of zeros (the ESPN mascot-name join bug). See **Standing practice #1**
 above — this is why distribution/coverage checks are now mandatory before any
 evaluation result is trusted.
 
+## Transfer & coaching signal investigation — 2026-07-24 (both rejected)
+
+Hypothesis under test: (a) the production transfer feature (`transfer_diff`) is
+closer to a raw count than a talent measure — it is star-weighted, but stars are
+NULL for 2016–2020 so `COALESCE(stars,2)` degrades to a count there — so an
+EA-OVR-weighted transfer net might add signal it misses; (b) the rejected
+first-year-HC binary couldn't tell a proven incoming coach from an unproven
+first-timer, so the incoming coach's prior-program record might. Both were built
+into `forecast_candidates.py` and run under the standing protocol. Baseline
+reproduced at 0.7106 and the 13 prior candidates matched their logged deltas
+(integrity check). **Neither new candidate shipped; the investigation did not
+check any specific team's output — features were judged only on aggregate
+walk-forward.**
+
+**EA-weighted transfer net (`xfer_ea_diff`) — rejected at the data gate
+(Standing Practice #1).** EA CFB 27 is a single 2026 snapshot: only players
+active in 2026 carry a rating, so a historical transfer (player since departed)
+never joins. Per-game non-zero coverage: **2019–2020 = 0%**, 2021 21%, 2022 51%,
+2023 85%, 2024–25 100% — identically empty across the early walk-forward folds,
+and where populated it is anachronistic (a 2026 ability rating scoring a past
+transfer decision leaks the player's later development). No valid point-in-time
+walk-forward is possible. Run for the record anyway: **Δacc −0.0006, p=0.766** —
+no signal even ignoring the invalidity, and it correlates **+0.375** with the
+existing star-weighted `transfer_diff`, i.e. re-expresses it where it exists.
+Unlike the Maine mascot bug (a fixable join), there is no historical EA time
+series to recover — if EA ever publishes a per-season archive, revisit.
+
+**Incoming-coach prior-program win% (`coach_prior_diff`) — validly tested,
+rejected on merit.** For a genuine coaching change, the incoming coach's FBS
+win% across all prior stints (seasons strictly earlier), shrunk toward .500
+(k=10 pseudo-games) and centered; a first-time-at-FBS hire reads 0 (genuinely
+unknown). Coverage is real and point-in-time clean — **13–25% of games non-zero
+in every walk-forward season** — and a value spot-check confirms it measures the
+intended thing: Kelly→LSU +0.23 (58-18 at ND), Riley→USC +0.29, Rhule→Nebraska
++0.04 (29-24), Sanders→Colorado **0.0** (arrived from FCS, no FBS record).
+**Result: Δacc −0.0010, p=0.405.** It is orthogonal to existing features (corr
+with `elo_diff` +0.008, `recruit_diff` +0.005), so this is a true null, not
+cannibalization: the incoming coach's track record, even measured correctly,
+adds nothing over the model's team-strength signals (Elo + priors + returning
+production). Consistent with the first-year binary's prior rejection (+0.0017,
+p=0.488). Deliberately did NOT sweep further coach formulations (prior SP+,
+trajectory): with the direct performance measure null and the binary already
+null, trying formulations until one clears p<0.05 is p-hacking against the
+multiple-comparisons discipline.
+
+**Combined** (base + both): **Δacc −0.0013, p=0.450.** Step 3 (combination +
+collinearity) is only triggered when a candidate clears Step 2; neither did, so
+this is reported for completeness, not as a live path. **Verdict: nothing
+shipped; `forecast_model.json` unchanged.** Both candidates remain in
+`forecast_candidates.py` (`INVESTIGATION_2026_07`) for the January re-check —
+`coach_prior_diff` is the only one worth re-testing (it is at least testable);
+`xfer_ea_diff` stays gated until a historical EA archive exists.
+
 ## Backfilled 2025 forecasts (2026-07-21)
 
 `game_predictions` holds two kinds of rows, both read identically by the

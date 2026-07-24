@@ -98,6 +98,50 @@ def load_candidate_sources():
             if v is not None:
                 sos.setdefault((s, t), []).append((w, v))
         src['sos_weekly'] = sos
+
+        # ── EA-rating-weighted transfer net (CANDIDATE, 2026-07 investigation) ──
+        # Net EA OVR per (year,team) = sum(incoming OVR) - sum(outgoing OVR),
+        # joining transfers.player_id -> ea_ratings. EA CFB 27 is a SINGLE 2026
+        # snapshot: only players still active in 2026 carry a rating, so a
+        # historical transfer (player since departed) never matches. The coverage
+        # print below shows this collapses to ~zero before 2024 — a data-gate
+        # failure (Standing Practice #1), kept here to demonstrate it, not because
+        # a valid point-in-time walk-forward is possible.
+        cur.execute('''
+            SELECT year, team, SUM(n) FROM (
+                SELECT t.year, t.destination AS team,  SUM(e.overall) n
+                  FROM transfers t JOIN ea_ratings e ON e.player_id = t.player_id
+                  WHERE t.destination IS NOT NULL GROUP BY t.year, t.destination
+                UNION ALL
+                SELECT t.year, t.origin AS team, -SUM(e.overall) n
+                  FROM transfers t JOIN ea_ratings e ON e.player_id = t.player_id
+                  WHERE t.origin IS NOT NULL GROUP BY t.year, t.origin
+            ) x GROUP BY year, team''')
+        src['xfer_ea'] = {(y, t): float(n) for y, t, n in cur.fetchall()}
+
+        # ── incoming-coach prior-program record (CANDIDATE) ──
+        # team-season W-L from completed games + each coach's stint list, so a
+        # genuinely NEW coach's prior FBS win% (seasons strictly < the game's) can
+        # be looked up — the "proven winner vs unproven first-timer" distinction
+        # the rejected first-year binary flag could not make. Point-in-time clean.
+        cur.execute('''SELECT season, home_team, away_team, home_points, away_points
+                       FROM games WHERE completed = 1
+                         AND home_points IS NOT NULL AND away_points IS NOT NULL''')
+        rec = defaultdict(lambda: [0, 0])
+        for s, h, a, hp, ap in cur.fetchall():
+            if hp == ap:
+                continue
+            rec[(s, h)][1] += 1; rec[(s, a)][1] += 1
+            if hp > ap:
+                rec[(s, h)][0] += 1
+            else:
+                rec[(s, a)][0] += 1
+        src['team_rec'] = dict(rec)
+        stints = defaultdict(list)
+        for (s, t), co in src['coach'].items():
+            if co:
+                stints[co].append((s, t))
+        src['coach_stints'] = dict(stints)
     finally:
         main.release_db(conn)
     return src
@@ -190,6 +234,28 @@ def build_candidates(rows, src):
         lm = src['line_move'].get(gid)
         out['line_move'].append((lm[1] - lm[0]) if lm and lm[0] is not None and lm[1] is not None else 0.0)
 
+        # ── EA-weighted transfer net diff (CANDIDATE) ──────────────────────
+        eh = src['xfer_ea'].get((s, home), 0.0); ea_ = src['xfer_ea'].get((s, away), 0.0)
+        out['xfer_ea_diff'].append((eh - ea_) / 100.0)
+
+        # ── incoming-coach prior-program win% diff (CANDIDATE) ─────────────
+        # Non-zero only for a real coaching change (coach differs from prior
+        # season, which needs season-1 present -> first detectable in 2017).
+        # Prior FBS record shrunk toward .500 (k=10 pseudo-games) so a thin
+        # sample can't spike; centered so an average past record reads 0 and a
+        # first-time HC (no prior stint) also reads 0 (genuinely unknown).
+        def coach_prior(team):
+            c = src['coach'].get((s, team)); p = src['coach'].get((s - 1, team))
+            if not (c and p and c != p):
+                return 0.0
+            w = g = 0
+            for ps, pt in src['coach_stints'].get(c, ()):
+                if ps < s:
+                    rw, rg = src['team_rec'].get((ps, pt), (0, 0))
+                    w += rw; g += rg
+            return (w + 5.0) / (g + 10.0) - 0.5
+        out['coach_prior_diff'].append(coach_prior(home) - coach_prior(away))
+
         # ── fold THIS game into rolling state (after features are recorded) ─
         hp, ap = r['home_points'], r['away_points']
         recent[(s, home)].append(hp - ap); recent[(s, away)].append(ap - hp)
@@ -204,7 +270,13 @@ def build_candidates(rows, src):
 
 CANDIDATES = ['travel_diff', 'wind_speed', 'temp_dev', 'precip', 'talent_diff',
               'sp_st_diff', 'new_coach_diff', 'rivalry', 'bye_diff',
-              'recent3_diff', 'tov3_diff', 'sos_asof_diff', 'line_move']
+              'recent3_diff', 'tov3_diff', 'sos_asof_diff', 'line_move',
+              # 2026-07 investigation: talent-weighted transfers + coach quality
+              'xfer_ea_diff', 'coach_prior_diff']
+
+# Candidates added by the 2026-07 transfer/coaching investigation, reported in
+# detail (coverage + walk-forward) regardless of outcome.
+INVESTIGATION_2026_07 = ['xfer_ea_diff', 'coach_prior_diff']
 
 
 # ── evaluation harness ──────────────────────────────────────────────────────
@@ -222,6 +294,17 @@ def _eval():
     yall = np.array([r['target'] for r in rows], dtype=int)
     seasons = np.array([r['season'] for r in rows])
     print(f"rows={len(rows)}  base features={base.shape[1]}  candidates={len(CANDIDATES)}\n")
+
+    # ── Standing Practice #1: distribution + per-season coverage of the new
+    #    candidates BEFORE reading any evaluation number (the Maine lesson). ──
+    print("=== coverage / distribution of investigation candidates ===")
+    for c in INVESTIGATION_2026_07:
+        col = np.array(cand[c], dtype=float)
+        by = "  ".join(f"{S}:{np.mean(col[seasons == S] != 0) * 100:.0f}%"
+                       for S in range(2019, 2026))
+        print(f"{c:16} overall nonzero={np.mean(col != 0) * 100:4.1f}%  "
+              f"mean={col.mean():+.4f} std={col.std():.4f}  by-season[{by}]")
+    print()
 
     def walk(X):
         """Walk-forward 2019-2025: returns (weighted acc, weighted brier, preds by row idx)."""
