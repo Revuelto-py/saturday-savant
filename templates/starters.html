@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ team[0] }} Projected Starters · Saturday Savant{% endblock %}
+{% block og_title %}{{ team[0] }} · Projected {{ season }} Starters{% endblock %}
+{% block og_description %}Projected {{ season }} starting lineup for {{ team[0] }} — a full offense and defense depth chart built from player talent grades and {{ current_season }} production.{% endblock %}
+{% block og_image %}{{ team[6] or (request.url_root ~ 'static/logo-512.png') }}{% endblock %}
+
+{% set c1 = team[4] if team[4] else '#1e3a5f' %}
+{% set c2 = team[5] if team[5] else '#0f1e3a' %}
+
+{# One card per formation slot — reuses the site's lf-card component (photo,
+   jersey, name, unit-coloured position tag). #}
+{% macro dc_card(slot, unit) %}
+{% set p = lineup.get(slot) %}
+{% set label = slot | replace('1','') | replace('2','') | replace('3','') %}
+{% if p %}
+<a class="lf-card lf-unit-{{ unit }}" href="{{ player_url(p.idx, season) }}" title="{{ p.first }} {{ p.name }} — {{ label }}">
+    <div class="lf-card-inner">
+        {% if p.headshot %}<img src="{{ p.headshot }}" class="lf-photo" alt="{{ p.first }} {{ p.name }} headshot" loading="lazy">
+        {% else %}<div class="lf-photo-fallback">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</div>{% endif %}
+        <div class="lf-meta">
+            <div class="lf-jersey">#{{ p.jersey if p.jersey else '—' }}</div>
+            <div class="lf-name">{{ p.name }}</div>
+        </div>
+    </div>
+    <span class="lf-tag">{{ label }}</span>
+</a>
+{% else %}
+<div class="lf-card lf-card--empty lf-unit-{{ unit }}">
+    <div class="lf-card-inner"><div class="lf-empty">—</div><div class="lf-meta"><div class="lf-jersey">—</div><div class="lf-name">&nbsp;</div></div></div>
+    <span class="lf-tag">{{ label }}</span>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+
+<!-- HERO — compact, team-coloured, so the field owns the viewport -->
+<div class="dc-hero" style="--c1:{{ c1 }};--c2:{{ c2 }}">
+    <div class="dc-hero-glow"></div>
+    <div class="dc-hero-scrim"></div>
+    <div class="page-wrapper dc-hero-inner">
+        <a class="dc-back" href="{{ team_url(team[0], season) }}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            {{ team[0] }}
+        </a>
+        <div class="dc-hero-row">
+            {% if team[6] %}<img src="{{ team[6] }}" alt="{{ team[0] }} logo" class="dc-hero-logo">{% endif %}
+            <div>
+                <div class="dc-eyebrow">Projected Depth Chart{% if team_rank %} · AP #{{ team_rank }}{% endif %}</div>
+                <h1 class="dc-title">{{ team[0] }}</h1>
+                <div class="dc-sub">{{ season }} projected starters · {{ team[1] }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-wrapper dc-wrap">
+    {% if lineup %}
+    <div class="dc-controls">
+        <div class="lineup-toggle" role="tablist" aria-label="Formation side">
+            <button id="dc-btn-off" class="active" role="tab" aria-selected="true" aria-controls="dc-offense" onclick="dcSide('offense')">Offense</button>
+            <button id="dc-btn-def" role="tab" aria-selected="false" aria-controls="dc-defense" onclick="dcSide('defense')">Defense</button>
+        </div>
+        <div class="dc-form-label" id="dc-form-label" aria-live="polite">Shotgun · 11 personnel</div>
+    </div>
+
+    <!-- Fixed-height field: both formations render into the same height and
+         distribute their rows with space-evenly, so switching sides never
+         changes the container size and neither side leaves dead space. -->
+    <div class="dc-field">
+        <div class="dc-formation" id="dc-offense">
+            <div class="dc-row dc-row--line">
+                {{ dc_card('WR1','skill') }}{{ dc_card('WR3','skill') }}{{ dc_card('LT','ol') }}{{ dc_card('LG','ol') }}{{ dc_card('C','ol') }}{{ dc_card('RG','ol') }}{{ dc_card('RT','ol') }}{{ dc_card('TE','skill') }}{{ dc_card('WR2','skill') }}
+            </div>
+            <div class="dc-row dc-row--backfield">
+                {{ dc_card('QB','skill') }}{{ dc_card('RB','skill') }}
+            </div>
+        </div>
+
+        <div class="dc-formation dc-hidden" id="dc-defense">
+            <div class="dc-row dc-row--safeties">
+                {{ dc_card('S1','db') }}{{ dc_card('S2','db') }}
+            </div>
+            <div class="dc-row dc-row--corners">
+                {{ dc_card('CB1','db') }}{{ dc_card('CB2','db') }}
+            </div>
+            <div class="dc-row dc-row--lb">
+                {{ dc_card('LB1','lb') }}{{ dc_card('LB2','lb') }}{{ dc_card('LB3','lb') }}
+            </div>
+            <div class="dc-row dc-row--dline">
+                {{ dc_card('DE1','dl') }}{{ dc_card('DT1','dl') }}{{ dc_card('DT2','dl') }}{{ dc_card('DE2','dl') }}
+            </div>
+        </div>
+    </div>
+
+    <div class="dc-footer">
+        <div class="lineup-legend">
+            <span class="lg-item"><span class="lg-dot" style="background: var(--gold)"></span>Playmakers</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--text-dim)"></span>Offensive Line</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--red)"></span>Defensive Line</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--blue)"></span>Linebackers</span>
+            <span class="lg-item"><span class="lg-dot" style="background: var(--green)"></span>Secondary</span>
+        </div>
+        <p class="lineup-note dc-note">Projected from player talent grades and {{ current_season }} production, transfers included. Individual offensive-line snaps aren't tracked in the available data, so line spots are approximate.</p>
+    </div>
+    {% else %}
+    <div class="pending-panel">The {{ season }} projected depth chart isn't available yet — {{ team[0] }}'s upcoming roster hasn't been posted. Check back once the offseason roster is set.</div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function dcSide(side) {
+    var off = side === 'offense';
+    var o = document.getElementById('dc-offense');
+    var d = document.getElementById('dc-defense');
+    if (o) o.classList.toggle('dc-hidden', !off);
+    if (d) d.classList.toggle('dc-hidden', off);
+    var bo = document.getElementById('dc-btn-off'), bd = document.getElementById('dc-btn-def');
+    bo.classList.toggle('active', off); bo.setAttribute('aria-selected', off);
+    bd.classList.toggle('active', !off); bd.setAttribute('aria-selected', !off);
+    var lbl = document.getElementById('dc-form-label');
+    if (lbl) lbl.textContent = off ? 'Shotgun · 11 personnel' : 'Cover 2 · 4-3 front';
+}
+</script>
+{% endblock %}

@@ -2311,14 +2311,10 @@ table, .data-table { font-variant-numeric: tabular-nums; }
    playmakers, slate for the line, red/blue/green for the front, second
    level and secondary) rather than a bespoke palette.
    ══════════════════════════════════════════════════════════════════════ */
-.lineup-block { margin-bottom: var(--s8); }
-.lineup-head {
-    display: flex; align-items: center; gap: 12px;
-    margin-bottom: var(--s3);
-}
-.lineup-head .section-label { margin: 0; }
-/* divider rule matching the other team-page section headers */
-.lineup-head-rule { flex: 1; height: 1px; background: var(--border); }
+/* Shared projected-lineup bits reused by the standalone depth chart (.dc-*):
+   the disclaimer note, the offense/defense toggle, the unit legend, and the
+   .lf-card player card + .lf-unit-* colours further down. The old embedded
+   field/row layout lived here too; it has been replaced by the .dc-* system. */
 .lineup-note { color: var(--text-dim); font-size: var(--text-xs); }
 
 /* Offense / Defense segmented toggle */
@@ -2337,66 +2333,6 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 }
 .lineup-toggle button:hover { color: var(--text-primary); }
 .lineup-toggle button.active { color: #1a1200; background: var(--gold); }
-
-/* The field — same card treatment as the team page's other dark-card
-   sections (solid --bg-card, --border, --r-lg), with a faint yard-line
-   texture layered on so it still reads as a field. */
-.lineup-field {
-    position: relative; overflow: hidden;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: clamp(22px, 3.5vw, 40px) clamp(12px, 3vw, 32px);
-}
-/* faint horizontal yard lines — evokes a field without the old dense grid */
-.lineup-field::before {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background-image: repeating-linear-gradient(180deg,
-        rgba(255,255,255,0.028) 0 1px, transparent 1px 46px);
-    -webkit-mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
-    mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
-}
-/* gold glow toward the line of scrimmage */
-.lineup-field::after {
-    content: ''; position: absolute; left: 0; right: 0; top: 42%; height: 40%;
-    background: radial-gradient(ellipse at 50% 50%, rgba(28, 156, 240,0.06), transparent 70%);
-    pointer-events: none;
-}
-.lf-rows {
-    position: relative; z-index: 1;
-    display: flex; flex-direction: column;
-    gap: clamp(14px, 2.6vw, 28px);
-}
-/* Offense and defense stacked in one grid cell so the field is the same height
-   on either toggle. The inactive side stays in layout (visibility:hidden) so it
-   still contributes to that shared height; content is vertically centered. */
-.lf-stage { display: grid; }
-.lf-stage > .lf-rows { grid-area: 1 / 1; justify-content: center; }
-.lf-rows.lf-hidden { visibility: hidden; }
-/* Defense is 4 stacked levels (safeties, corners, LBs, D-line) — keep the
-   inter-level gap tight so it isn't much taller than the 2-row offense. */
-#lf-defense { gap: clamp(8px, 1.6vw, 18px); }
-.lf-row { display: flex; justify-content: center; align-items: flex-start; gap: clamp(6px, 1.4vw, 16px); }
-.lf-row--spread { justify-content: space-between; width: 100%; max-width: 620px; margin: 0 auto; }
-
-/* ── Cover 2 secondary (deepest levels, at the top given the flipped view) ──
-   Safeties split the deep middle in two; corners a level shallower and out on
-   the numbers. The small negative margin tucks the corners up toward the
-   safeties so the two read as one secondary shell rather than separate rows. */
-.lf-row--safeties { gap: clamp(70px, 16vw, 240px); }
-.lf-row--corners  { justify-content: space-between; width: 100%; max-width: min(94%, 720px); margin: calc(-1 * clamp(4px, 1vw, 12px)) auto 0; }
-/* Linebackers — evenly spread across the box. */
-.lf-row--lb { gap: clamp(28px, 6.5vw, 96px); }
-/* D-line at the line of scrimmage — a cohesive front spanning the tackle box. */
-.lf-row--dline { justify-content: space-between; width: 100%; max-width: min(78%, 600px); margin: 0 auto; }
-/* Line row: WRs sit just outside the tackles (a small split off the ends of
-   the O-line), extending the line rather than floating at the field edges. */
-.lf-row--line { gap: clamp(4px, 1vw, 12px); flex-wrap: nowrap; }
-.lf-row--line > .lf-card:first-child { margin-right: clamp(6px, 1.6vw, 20px); }
-.lf-row--line > .lf-card:last-child { margin-left: clamp(6px, 1.6vw, 20px); }
-/* Shotgun backfield: QB and RB side by side, RB set a touch off and back. */
-.lf-row--backfield { gap: clamp(26px, 7vw, 88px); margin-top: clamp(6px, 1.4vw, 16px); }
-.lf-row--backfield > .lf-card:last-child { margin-top: clamp(10px, 2.2vw, 24px); }
 
 /* Player card — sized so the widest row (the 9-across offense line: 3 WR +
    5 OL + TE) fills the field on desktop without overflowing, and scales down
@@ -2465,23 +2401,194 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 
 @media (max-width: 767.98px) {
     .lf-name { font-size: 0.62rem; }
-    .lf-row { gap: 5px; }
     .lineup-toggle button { padding: 6px 14px; }
 }
 @media (max-width: 575.98px) {
-    /* Nine cards share the offense line row now (3 WR + 5 OL + TE) — the
-       widest formation on the page — so shrink cards to fit a phone cleanly. */
-    .lf-card { width: clamp(30px, 8.6vw, 46px); }
-    .lf-row--line { gap: 2px; }
-    .lf-row--line > .lf-card:first-child,
-    .lf-row--line > .lf-card:last-child { margin-inline: 4px; }
     .lf-jersey { font-size: 0.64rem; }
-    /* keep the deep-safety split from overflowing a narrow screen */
-    .lf-row--safeties { gap: clamp(44px, 22vw, 120px); }
 }
 @media (prefers-reduced-motion: reduce) {
     a.lf-card:hover .lf-card-inner { transform: none; }
 }
+
+/* ══ Projected depth chart — standalone /team/<x>/starters page ═══════════
+   A dedicated page for the projected starting 11. The whole formation fits
+   the viewport without scrolling: the field is a FIXED height and each side
+   (2-row offense / 4-row defense) distributes its rows with space-evenly, so
+   toggling never resizes the container and neither side leaves dead space. */
+
+/* Compact team-coloured hero so the field owns the screen */
+.dc-hero {
+    position: relative; overflow: hidden;
+    background: linear-gradient(135deg, var(--c1) 0%, #0a0b0d 55%, var(--c2) 122%);
+    border-bottom: 1px solid var(--border);
+}
+.dc-hero-glow {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+    background: radial-gradient(ellipse at 0% 40%, var(--c1) 0%, transparent 55%),
+                radial-gradient(ellipse at 100% 60%, var(--c2) 0%, transparent 55%);
+}
+.dc-hero-scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.5); pointer-events: none; }
+.dc-hero-inner {
+    position: relative; z-index: 1;
+    padding-top: clamp(12px, 1.8vw, 20px); padding-bottom: clamp(12px, 1.8vw, 20px);
+}
+.dc-back {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: rgba(255,255,255,0.85);
+    font-family: var(--font-display); font-weight: 600; font-size: var(--text-xs);
+    letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;
+    margin-bottom: 12px; transition: color var(--t-fast);
+}
+.dc-back:hover { color: #fff; }
+.dc-back:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 2px; }
+.dc-hero-row { display: flex; align-items: center; gap: clamp(14px, 2vw, 24px); }
+.dc-hero-logo {
+    height: clamp(48px, 6.4vw, 72px); width: auto; object-fit: contain; flex-shrink: 0;
+    filter: drop-shadow(0 3px 10px rgba(0,0,0,0.5));
+}
+.dc-eyebrow {
+    color: var(--gold); font-family: var(--font-display); font-weight: 700;
+    font-size: var(--text-xs); letter-spacing: 0.16em; text-transform: uppercase;
+}
+.dc-title { margin: 2px 0 0; font-weight: 800; font-size: clamp(1.7rem, 3.4vw, 2.6rem); line-height: 1; text-shadow: 0 2px 10px rgba(0,0,0,0.55); }
+.dc-sub { color: rgba(255,255,255,0.82); font-size: var(--text-base); margin-top: 5px; }
+
+.dc-wrap { padding-top: clamp(16px, 2.2vw, 26px); }
+
+/* Controls row: side toggle (reuses .lineup-toggle) + formation caption */
+.dc-controls {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: clamp(12px, 1.8vw, 20px);
+}
+.dc-form-label {
+    color: var(--text-dim); font-family: var(--font-display); font-weight: 600;
+    font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase;
+}
+
+/* The field — fixed height, so both sides share one frame */
+.dc-field {
+    position: relative; overflow: hidden;
+    height: clamp(410px, 52vh, 500px);
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
+}
+.dc-field::before { /* faint yard lines */
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 48px);
+    -webkit-mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
+    mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
+}
+.dc-field::after { /* line-of-scrimmage glow */
+    content: ''; position: absolute; left: 0; right: 0; top: 36%; height: 40%;
+    background: radial-gradient(ellipse at 50% 50%, rgba(28,156,240,0.07), transparent 70%); pointer-events: none;
+}
+/* Both formations fill the field and distribute rows evenly across its height.
+   The inactive one is display:none — the field height is fixed, so hiding it
+   never changes the frame. */
+.dc-formation {
+    position: absolute; inset: 0; z-index: 1;
+    padding: clamp(10px, 1.6vw, 20px) clamp(14px, 3vw, 40px);
+    display: flex; flex-direction: column; justify-content: space-evenly;
+}
+.dc-hidden { display: none; }
+
+/* Rows keep their real formation shape horizontally; vertical spacing is left
+   to the parent's space-evenly so both sides fill the same height. */
+.dc-row { display: flex; justify-content: center; align-items: flex-start; gap: clamp(6px, 1.2vw, 16px); }
+/* Offense line: WRs split just outside the tackles (5 OL + TE between). */
+.dc-row--line { flex-wrap: nowrap; gap: clamp(4px, 0.9vw, 12px); }
+.dc-row--line > .lf-card:first-child { margin-right: clamp(8px, 1.7vw, 24px); }
+.dc-row--line > .lf-card:last-child  { margin-left:  clamp(8px, 1.7vw, 24px); }
+/* Shotgun backfield: QB + RB, RB set a touch off and back. */
+.dc-row--backfield { gap: clamp(30px, 7vw, 96px); }
+.dc-row--backfield > .lf-card:last-child { margin-top: clamp(8px, 1.8vw, 20px); }
+/* Cover-2 secondary: safeties split the deep middle, corners out on the numbers. */
+.dc-row--safeties { gap: clamp(84px, 18vw, 280px); }
+.dc-row--corners  { justify-content: space-between; width: 100%; max-width: min(94%, 780px); margin: 0 auto; }
+/* Linebackers spread across the box; D-line spans the tackle box at the LOS. */
+.dc-row--lb    { gap: clamp(30px, 7vw, 108px); }
+.dc-row--dline { justify-content: space-between; width: 100%; max-width: min(80%, 640px); margin: 0 auto; }
+
+/* Card sizing scoped to this page — a shade shorter than square so all four
+   defensive rows fit the fixed field height while names stay readable. The
+   position tag overlays the photo corner (rather than a pill below the card),
+   which reclaims a row of vertical space so the whole defense fits. */
+.dc-field .lf-card { width: clamp(46px, 5vw, 80px); position: relative; gap: 0; }
+.dc-field .lf-photo,
+.dc-field .lf-photo-fallback,
+.dc-field .lf-empty { aspect-ratio: 5 / 4; }
+.dc-field .lf-tag {
+    position: absolute; top: 4px; left: 4px; z-index: 3;
+    font-size: 0.54rem; padding: 1px 5px; letter-spacing: 0.06em;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.55); backdrop-filter: blur(2px);
+}
+
+.dc-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px var(--s6); flex-wrap: wrap;
+    margin-top: clamp(12px, 1.8vw, 20px);
+}
+.dc-footer .lineup-legend { margin: 0; padding: 0; border: none; }
+.dc-note { margin: 0; max-width: 640px; }
+
+@media (max-width: 767.98px) {
+    /* Mobile may scroll, but keep it tidy: shorter field, stacked footer,
+       slightly larger tap-friendly toggle already inherited. */
+    .dc-field { height: clamp(420px, 62vh, 560px); }
+    .dc-controls { margin-bottom: 12px; }
+    .dc-form-label { display: none; }
+    .dc-footer { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .dc-row--safeties { gap: clamp(56px, 22vw, 160px); }
+}
+@media (max-width: 575.98px) {
+    /* Nine cards share the offense line (3 WR + 5 OL + TE) — the widest row —
+       so on a phone shrink cards and trim the WR split just enough that all
+       nine fit without the end receivers clipping at the field edge. */
+    .dc-field .lf-card { width: clamp(30px, 8vw, 52px); }
+    .dc-row--line { gap: 2px; }
+    .dc-row--line > .lf-card:first-child { margin-right: 4px; }
+    .dc-row--line > .lf-card:last-child { margin-left: 4px; }
+    .dc-field .lf-tag { font-size: 0.5rem; padding: 1px 3px; }
+    .dc-title { font-size: 1.7rem; }
+    .dc-hero-logo { height: 48px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+    /* Crossfade the incoming side so the offense↔defense toggle reads as one
+       field flipping over rather than a hard swap. */
+    .dc-formation:not(.dc-hidden) { animation: dcFade 0.22s ease-out; }
+    @keyframes dcFade { from { opacity: 0; } to { opacity: 1; } }
+}
+
+/* Roster-tab entry point → the standalone depth chart */
+.starters-cta {
+    display: flex; align-items: center; gap: var(--s4);
+    padding: var(--s4) var(--s5);
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); box-shadow: var(--shadow-card);
+    text-decoration: none; margin-bottom: var(--s6);
+    transition: border-color var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast);
+}
+.starters-cta:hover {
+    border-color: var(--border-gold);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.4);
+}
+.starters-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.starters-cta-field {
+    flex-shrink: 0; width: 52px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--gold);
+    background: rgba(28,156,240,0.08); border: 1px solid var(--border-gold);
+    border-radius: var(--r-sm);
+}
+.starters-cta-field svg { width: 34px; height: auto; }
+.starters-cta-text { flex: 1; min-width: 0; }
+.starters-cta-title {
+    color: var(--text-primary); font-family: var(--font-display);
+    font-weight: 700; font-size: var(--text-lg); line-height: 1.1;
+}
+.starters-cta-sub { color: var(--text-secondary); font-size: var(--text-sm); margin-top: 2px; }
+.starters-cta-arrow { color: var(--text-dim); flex-shrink: 0; transition: color var(--t-fast), transform var(--t-fast); }
+.starters-cta:hover .starters-cta-arrow { color: var(--gold); transform: translateX(3px); }
 
 /* ── Conference logos ──────────────────────────────────────────────────
    Shown bare on the dark theme like team logos — no background chip.

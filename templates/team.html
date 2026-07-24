@@ -951,88 +951,28 @@
     {% endif %}
 </div>
 
-{# ── Projected starting lineup — formation diagram above the roster table ── #}
+{# Projected starters now live on their own full-page depth chart; the roster
+   tab links to it rather than embedding the formation. Shown only on the
+   upcoming-season view, where the projection (lineup) is built. #}
 {% if lineup %}
-{% macro lf_card(slot, unit) %}
-{% set p = lineup.get(slot) %}
-{% set label = slot | replace('1','') | replace('2','') | replace('3','') %}
-{% if p %}
-<a class="lf-card lf-unit-{{ unit }}" href="{{ player_url(p.idx, season) }}" title="{{ p.first }} {{ p.name }}">
-    <div class="lf-card-inner">
-        {% if p.headshot %}<img src="{{ p.headshot }}" class="lf-photo" alt="{{ p.first }} {{ p.name }} headshot" loading="lazy">
-        {% else %}<div class="lf-photo-fallback">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</div>{% endif %}
-        <div class="lf-meta">
-            <div class="lf-jersey">#{{ p.jersey if p.jersey else '—' }}</div>
-            <div class="lf-name">{{ p.name }}</div>
-        </div>
+<a class="starters-cta" href="/team/{{ team[0]|team_slug }}/starters">
+    <div class="starters-cta-field" aria-hidden="true">
+        <svg viewBox="0 0 40 28" fill="none" stroke="currentColor" stroke-width="1.4">
+            <rect x="1" y="1" width="38" height="26" rx="2"/>
+            <line x1="1" y1="14" x2="39" y2="14"/>
+            <circle cx="12" cy="9" r="2.1" fill="currentColor" stroke="none"/>
+            <circle cx="20" cy="9" r="2.1" fill="currentColor" stroke="none"/>
+            <circle cx="28" cy="9" r="2.1" fill="currentColor" stroke="none"/>
+            <circle cx="16" cy="20" r="2.1" fill="currentColor" stroke="none"/>
+            <circle cx="24" cy="20" r="2.1" fill="currentColor" stroke="none"/>
+        </svg>
     </div>
-    <span class="lf-tag">{{ label }}</span>
+    <div class="starters-cta-text">
+        <div class="starters-cta-title">Projected {{ roster_season }} Starters</div>
+        <div class="starters-cta-sub">See the full offense &amp; defense depth chart in formation</div>
+    </div>
+    <svg class="starters-cta-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
 </a>
-{% else %}
-<div class="lf-card lf-card--empty lf-unit-{{ unit }}">
-    <div class="lf-card-inner"><div class="lf-empty">—</div><div class="lf-meta"><div class="lf-jersey">—</div><div class="lf-name">&nbsp;</div></div></div>
-    <span class="lf-tag">{{ label }}</span>
-</div>
-{% endif %}
-{% endmacro %}
-
-<div class="lineup-block">
-    <div class="lineup-head">
-        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Projected {{ roster_season }} Starters</h5>
-        <div class="lineup-head-rule"></div>
-        <div class="lineup-toggle" role="tablist" aria-label="Lineup side">
-            <button id="lf-btn-off" class="active" onclick="lineupSide('offense')">Offense</button>
-            <button id="lf-btn-def" onclick="lineupSide('defense')">Defense</button>
-        </div>
-    </div>
-
-    <div class="lineup-field">
-        <!-- Both sides share one grid cell so the field is the same height on
-             either toggle (no jump), and each is vertically centered. -->
-        <div class="lf-stage">
-        <!-- OFFENSE: all three receivers sit on the line — WR1 wide left with
-             WR3 in the left slot (twins left), TE inline and WR2 wide right —
-             then a shotgun backfield with the RB set beside the QB. -->
-        <div id="lf-offense" class="lf-rows">
-            <div class="lf-row lf-row--line">
-                {{ lf_card('WR1','skill') }}{{ lf_card('WR3','skill') }}{{ lf_card('LT','ol') }}{{ lf_card('LG','ol') }}{{ lf_card('C','ol') }}{{ lf_card('RG','ol') }}{{ lf_card('RT','ol') }}{{ lf_card('TE','skill') }}{{ lf_card('WR2','skill') }}
-            </div>
-            <div class="lf-row lf-row--backfield">
-                {{ lf_card('QB','skill') }}{{ lf_card('RB','skill') }}
-            </div>
-        </div>
-
-        <!-- DEFENSE: mirrors the offense's line-of-scrimmage reference, so the
-             D-line sits at the bottom (the LOS) with the second and third
-             levels stacked back from it. The secondary reads as a Cover 2
-             shell — two safeties deep and split toward the middle, the corners
-             a level shallower and out on the numbers. -->
-        <div id="lf-defense" class="lf-rows lf-hidden">
-            <div class="lf-row lf-row--safeties">
-                {{ lf_card('S1','db') }}{{ lf_card('S2','db') }}
-            </div>
-            <div class="lf-row lf-row--corners">
-                {{ lf_card('CB1','db') }}{{ lf_card('CB2','db') }}
-            </div>
-            <div class="lf-row lf-row--lb">
-                {{ lf_card('LB1','lb') }}{{ lf_card('LB2','lb') }}{{ lf_card('LB3','lb') }}
-            </div>
-            <div class="lf-row lf-row--dline">
-                {{ lf_card('DE1','dl') }}{{ lf_card('DT1','dl') }}{{ lf_card('DT2','dl') }}{{ lf_card('DE2','dl') }}
-            </div>
-        </div>
-        </div>
-
-        <div class="lineup-legend">
-            <span class="lg-item"><span class="lg-dot" style="background: var(--gold)"></span>Playmakers</span>
-            <span class="lg-item"><span class="lg-dot" style="background: var(--text-dim)"></span>Offensive Line</span>
-            <span class="lg-item"><span class="lg-dot" style="background: var(--red)"></span>Defensive Line</span>
-            <span class="lg-item"><span class="lg-dot" style="background: var(--blue)"></span>Linebackers</span>
-            <span class="lg-item"><span class="lg-dot" style="background: var(--green)"></span>Secondary</span>
-        </div>
-    </div>
-    <div class="lineup-note" style="margin-top:8px">Projected from player talent grades and {{ current_season }} production, transfers included. Individual offensive-line snaps aren't tracked in the available data, so line spots are approximate.</div>
-</div>
 {% endif %}
 
 {% set off_positions = ['QB','RB','HB','FB','WR','TE','OL','OT','OG','LT','LG','C','RG','RT'] %}
@@ -1351,17 +1291,6 @@ function showSchedule(season) {
     });
 }
 
-function lineupSide(side) {
-    const off = side === 'offense';
-    const o = document.getElementById('lf-offense');
-    const d = document.getElementById('lf-defense');
-    // Both stay in the grid (via .lf-hidden = visibility:hidden) so the field
-    // keeps one shared height and doesn't jump between offense and defense.
-    if (o) o.classList.toggle('lf-hidden', !off);
-    if (d) d.classList.toggle('lf-hidden', off);
-    document.getElementById('lf-btn-off').classList.toggle('active', off);
-    document.getElementById('lf-btn-def').classList.toggle('active', !off);
-}
 
 // ── Player Stats tables: client-side sorting + 10-row cap ──────────────────
 // Sorting is done in-place in the DOM (rows are already rendered), so it never

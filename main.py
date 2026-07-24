@@ -3608,9 +3608,77 @@ def team(team_ref):
                 svr_week=svr_week,
                 ap_rankings=ap_rankings, team_rank=team_rank,
                 team_awards=team_awards,
-                recruiting=recruiting, havoc=havoc, conf_logo=conf_logo)
+                recruiting=recruiting, havoc=havoc, conf_logo=conf_logo,
+                team_slug=team_ref)
     finally:
         release_db(conn)
+
+
+@app.route('/team/<path:team_ref>/starters')
+@cache.cached(timeout=21600)
+def team_starters(team_ref):
+    """Standalone projected depth chart. The lineup is a forward projection
+    (talent grades + last season's production), so this page always shows the
+    UPCOMING_SEASON starting eleven — the same slotting the team page's roster
+    tab used to embed, given its own full-page real estate so the whole
+    formation fits without scrolling. Linked from the upcoming-season roster."""
+    season = UPCOMING_SEASON
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        # Same slug resolution as the team page: canonical slug URLs, old raw-name
+        # links 301-redirect to the slug.
+        cursor.execute('SELECT name FROM teams WHERE slug = %s', (team_ref,))
+        _row = cursor.fetchone()
+        if _row:
+            team_name = _row[0]
+        else:
+            cursor.execute('SELECT slug FROM teams WHERE name = %s', (team_ref,))
+            _old = cursor.fetchone()
+            if _old:
+                return redirect(f'/team/{_old[0]}/starters', code=301)
+            return render_template('404.html', message=f'Team "{team_ref}" not found.'), 404
+
+        cursor.execute('SELECT name, conference, abbreviation, logo, color, alt_color, logo_dark FROM teams WHERE name = %s', (team_name,))
+        team_info = cursor.fetchone()
+        if not team_info:
+            return render_template('404.html', message=f'Team "{team_name}" not found.'), 404
+        if team_info[1] in FCS_CONFS:
+            return render_template('404.html',
+                message=f'{team_name} is an FCS team — no depth chart is available.'), 404
+
+        # Roster for the upcoming season → projected starters (same builder the
+        # team route uses; see build_lineup / compute_starter_scores).
+        cursor.execute('''
+            SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot,
+                   r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0)
+            FROM rosters r
+            JOIN players p ON p.id = r.player_id
+            WHERE r.team=%s AND r.season=%s
+        ''', (team_name, season))
+        roster = cursor.fetchall()
+
+        lineup = {}
+        if roster:
+            starter_scores = compute_starter_scores(cursor, roster)
+            ea_pos = {}
+            roster_int_ids = [int(p[4]) for p in roster if p[4] is not None]
+            if roster_int_ids:
+                try:
+                    cursor.execute('SELECT player_id, position FROM ea_ratings '
+                                   'WHERE player_id = ANY(%s) AND position IS NOT NULL', (roster_int_ids,))
+                    ea_pos = {str(pid): pos.upper() for pid, pos in cursor.fetchall()}
+                except Exception:
+                    cursor.connection.rollback()
+            lineup = build_lineup(roster, starter_scores, ea_pos)
+
+        team_rank = get_ap_rankings(cursor, CURRENT_SEASON).get(team_name)
+        return render_template('starters.html',
+                team=team_info, lineup=lineup, season=season,
+                team_slug=team_ref, team_rank=team_rank)
+    finally:
+        release_db(conn)
+
 
 @app.route('/api/players')
 def api_players():
