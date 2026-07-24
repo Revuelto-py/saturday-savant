@@ -22,7 +22,7 @@ import os
 import cfbd
 from dotenv import load_dotenv
 
-from main import get_db, release_db, FCS_CONFS, slugify_team
+from main import get_db, release_db, FCS_CONFS, FBS_PROMOTED_FROM_FCS, slugify_team
 
 load_dotenv()
 
@@ -99,14 +99,19 @@ def main():
 
         # Correct any PRE-EXISTING teams row that CFBD classifies as FCS but
         # that is stored with a non-FCS (FBS) conference — these leak onto
-        # FBS-only pages. Found in the wild: North Dakota State ('Mountain
-        # West') and Sacramento State ('Mid-American'), both FCS programs that
-        # carry only transfer-era player_stats (no games/roster). Reset them to
-        # their real FCS conference (authoritative per CFBD) so FCS_CONFS
-        # excludes them. Data-driven, so it also handles any future stragglers.
+        # FBS-only pages. Data-driven, so it handles future stragglers too.
+        #
+        # EXCEPTION: teams promoted from FCS to FBS in the 2026 realignment
+        # (FBS_PROMOTED_FROM_FCS). CFBD's classification here is get_teams(2025),
+        # where those programs were still FCS — but they are deliberately FBS for
+        # 2026 per the realignment migration, so we must NOT revert them. This
+        # correction pass previously reset exactly those two back to Big Sky /
+        # MVFC, which dropped them from the Teams grid and 404'd their pages.
         cursor.execute('SELECT name, conference FROM teams')
         corrected = []
         for name, conf in cursor.fetchall():
+            if name in FBS_PROMOTED_FROM_FCS:
+                continue  # promoted to FBS for 2026 — keep its FBS conference
             if 'fcs' in classification.get(name, '') and conf not in FCS_CONFS:
                 real = by_name[name].conference
                 cursor.execute('UPDATE teams SET conference=%s WHERE name=%s', (real, name))

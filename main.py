@@ -1445,6 +1445,35 @@ FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC',
              'Big South-OVC','Southern','UAC','Patriot','NEC','Pioneer','Ivy',
              'FCS Independents','SIAC')
 
+# Programs promoted from FCS to FBS in the 2026 realignment (football-only:
+# Sacramento State -> Mid-American, North Dakota State -> Mountain West). CFBD
+# still classifies them FCS for 2025 and earlier, so anything that keys off
+# CFBD's historical classification — notably fetch_fcs_logos' correction pass —
+# must treat these as FBS and NOT reset them to their old FCS conference (that
+# reversion is what silently dropped them from the Teams grid + 404'd their team
+# pages). Keep in sync with scripts/migrate_conferences_2026.py's NEW_FBS_TEAMS.
+FBS_PROMOTED_FROM_FCS = frozenset({'Sacramento State', 'North Dakota State'})
+# First season these programs are FBS. Earlier seasons are FCS: they carry
+# FCS-era player_stats but ~no games, so per-game stats there are meaningless.
+# Their team page only offers seasons from here on, so it never presents FCS
+# numbers as FBS. (A historical fact, not a moving target.)
+FBS_PROMOTED_START_SEASON = 2026
+
+
+def _promoted_fbs_exclusion(season, team_col):
+    """SQL fragment that keeps the FCS->FBS promoted programs out of FBS-only
+    queries (leaderboards, national-rank maps) for seasons BEFORE their FBS
+    start. Those seasons hold FCS-era stats with ~no games, which would rank as
+    absurd FBS per-game numbers. Returns '' once they're FBS (season >= start),
+    so their real 2026+ stats count normally. `team_col` is the team-name column
+    in the query (e.g. 'ps.team', 't.name'). Interpolates trusted constants only.
+    """
+    if season >= FBS_PROMOTED_START_SEASON or not FBS_PROMOTED_FROM_FCS:
+        return ''
+    names = "','".join(sorted(FBS_PROMOTED_FROM_FCS))
+    return f"AND {team_col} NOT IN ('{names}')"
+
+
 LEADERBOARD_PER_PAGE = 25
 
 # ── Leaderboard column definitions ──────────────────────────────────────────
@@ -2241,7 +2270,7 @@ def leaderboards(category='passing'):
                 JOIN teams t ON ps.team = t.name
                 {ppa_join}
                 WHERE p.position = 'QB'
-                  AND t.conference NOT IN ('{fcs_in}')
+                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
                 GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}
                 HAVING MAX(CASE WHEN ps.stat_type='ATT' THEN CAST(ps.stat AS REAL) END) >= {min_att}
@@ -2298,7 +2327,7 @@ def leaderboards(category='passing'):
                 {ppa_join}
                 {usage_join}
                 WHERE p.position IN ('RB','FB','QB','WR','ATH')
-                  AND t.conference NOT IN ('{fcs_in}')
+                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
                 GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}{usage_group}
                 HAVING MAX(CASE WHEN ps.stat_type='CAR' THEN CAST(ps.stat AS REAL) END) >= {min_att}
@@ -2350,7 +2379,7 @@ def leaderboards(category='passing'):
                 JOIN teams t ON ps.team = t.name
                 {ppa_join}
                 WHERE p.position IN ('WR','TE','RB','ATH')
-                  AND t.conference NOT IN ('{fcs_in}')
+                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
                 GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}
                 HAVING MAX(CASE WHEN ps.stat_type='REC' THEN CAST(ps.stat AS REAL) END) >= {min_rec}
@@ -2391,7 +2420,7 @@ def leaderboards(category='passing'):
                 JOIN teams t ON ps.team = t.name
                 LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions' AND pi.season = {season}
                 WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
-                  AND t.conference NOT IN ('{fcs_in}')
+                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
                 GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color
                 HAVING MAX(CASE WHEN ps.stat_type='TOT' THEN CAST(ps.stat AS REAL) END) >= {min_tot}
@@ -2523,6 +2552,9 @@ def slugify_team(name):
 
 app.jinja_env.filters['team_slug'] = slugify_team
 
+# Slugs of the FCS->FBS promoted programs, for the team route's season gating.
+_PROMOTED_SLUGS = frozenset(slugify_team(n) for n in FBS_PROMOTED_FROM_FCS)
+
 
 def team_url(name, season=None):
     """Build a team-page URL, season-aware. In a historical context (a page
@@ -2632,7 +2664,7 @@ def leaderboards_teams(category='savant'):
 
         cursor.execute(f'''
             SELECT COUNT(*) FROM teams t
-            WHERE t.conference NOT IN ('{fcs_in}')
+            WHERE t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 't.name')}
             {conf_sql} {team_sql}
         ''', params)
         page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
@@ -2670,7 +2702,7 @@ def leaderboards_teams(category='savant'):
                       SELECT season_type, week FROM ap_rankings WHERE season = {season}
                       ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
             ) ar ON ar.team = t.name
-            WHERE t.conference NOT IN ('{fcs_in}')
+            WHERE t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 't.name')}
             {conf_sql} {team_sql}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
@@ -2754,7 +2786,7 @@ def teams():
         rows = cursor.fetchall()
     finally:
         release_db(conn)
-    conf_order = ['SEC','Big Ten','Big 12','ACC','American Athletic','Mountain West','Sun Belt','MAC','Conference USA','FBS Independents']
+    conf_order = ['SEC','Big Ten','Big 12','ACC','Pac-12','American Athletic','Mountain West','Sun Belt','Mid-American','Conference USA','FBS Independents']
     conferences = {}
     for team in rows:
         conf = team[1] or 'Other'
@@ -3076,8 +3108,17 @@ def team(team_ref):
     # data-derived current season (the newest with actual results); it advances
     # to the upcoming year on its own once that year produces stats.
     _team_seasons = [UPCOMING_SEASON] + get_available_seasons()   # newest (2026) first
+    _default_season = CURRENT_SEASON
+    # Programs newly promoted from FCS have no FBS data before their first FBS
+    # season (they carry FCS-era player_stats that would render as garbage
+    # per-game FBS numbers). Offer only their FBS-era seasons and default to the
+    # newest one that has begun, so their page never shows a pre-FBS view.
+    if team_ref in _PROMOTED_SLUGS:
+        _team_seasons = [s for s in _team_seasons if s >= FBS_PROMOTED_START_SEASON]
+        _default_season = (CURRENT_SEASON if CURRENT_SEASON >= FBS_PROMOTED_START_SEASON
+                           else UPCOMING_SEASON)
     _req = request.args.get('season', type=int)
-    season = _req if _req in _team_seasons else CURRENT_SEASON
+    season = _req if _req in _team_seasons else _default_season
     is_current  = season == CURRENT_SEASON
     is_upcoming = season == UPCOMING_SEASON     # the pre-season projection view
     conn = get_db()
@@ -3174,7 +3215,7 @@ def team(team_ref):
             ordered = sorted(values.values(), reverse=higher_better)
             return ordered.index(values[team_name]) + 1
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT s.team, COUNT(*) gp, SUM(s.pf) pf, SUM(s.pa) pa
             FROM (
                 SELECT home_team AS team, home_points AS pf, away_points AS pa
@@ -3183,7 +3224,7 @@ def team(team_ref):
                 SELECT away_team AS team, away_points AS pf, home_points AS pa
                   FROM games WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
             ) s
-            JOIN teams t ON t.name = s.team AND t.conference NOT IN %s
+            JOIN teams t ON t.name = s.team AND t.conference NOT IN %s {_promoted_fbs_exclusion(season, 't.name')}
             GROUP BY s.team
         ''', (season, season, FCS_CONFS))
         pf_pg, pa_pg, gp_map = {}, {}, {}
@@ -3191,10 +3232,10 @@ def team(team_ref):
             if gp:
                 pf_pg[tm], pa_pg[tm], gp_map[tm] = (pf or 0) / gp, (pa or 0) / gp, gp
 
-        cursor.execute('''
+        cursor.execute(f'''
             SELECT ps.team, ps.category, SUM(ps.stat)
             FROM player_stats ps
-            JOIN teams t ON t.name = ps.team AND t.conference NOT IN %s
+            JOIN teams t ON t.name = ps.team AND t.conference NOT IN %s {_promoted_fbs_exclusion(season, 'ps.team')}
             WHERE ps.category IN ('passing','rushing') AND ps.stat_type='YDS' AND ps.season=%s
             GROUP BY ps.team, ps.category
         ''', (FCS_CONFS, season))
