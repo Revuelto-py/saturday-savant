@@ -3512,6 +3512,82 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .fc-margin { color: var(--text-secondary); font-size: var(--text-xs); }
 .fc-kick { color: var(--text-dim); font-size: var(--text-xs); margin-left: auto; }
 
+/* ── Scheduled game: forecast split in the hero's score slot ───────────────
+   A game that hasn't kicked off has no score, so the centre column carries the
+   win probability at score scale instead. Deliberate content for the state,
+   not a hollowed-out version of the played layout. */
+.gh-fc {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; flex-shrink: 0; padding: 0 var(--s3);
+}
+.gh-fc-eyebrow {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(0.62rem, 0.55rem + 0.2vw, 0.76rem);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: #cfd8e3; text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    white-space: nowrap;
+}
+.gh-fc-split { display: flex; align-items: baseline; }
+.gh-fc-pct {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(2.5rem, 1.8rem + 2.3vw, 4.6rem);
+    line-height: 1; letter-spacing: -0.01em;
+    /* Same shadow discipline as the rest of the hero: these sit over saturated
+       team-colour blooms and washed out without it. */
+    text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+}
+.gh-fc-pct.is-fav { color: #fff; }
+.gh-fc-pct.is-dog { color: rgba(255,255,255,0.58); }
+.gh-pct-sign { font-size: 0.46em; font-weight: 700; margin-left: 2px; }
+.gh-fc-dot {
+    font-size: clamp(1.1rem, 0.8rem + 0.9vw, 1.9rem);
+    color: rgba(255,255,255,0.35); padding: 0 clamp(10px, 1vw, 18px);
+    line-height: 1;
+}
+.gh-vs {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(1.9rem, 1.4rem + 1.8vw, 3.2rem);
+    letter-spacing: 0.1em; color: rgba(255,255,255,0.45);
+    text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+}
+
+/* ── Scheduled game: page body ─────────────────────────────────────────── */
+.sched-col {
+    max-width: 620px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: var(--s4);
+}
+.sched-card { padding: var(--s5) var(--s6); }
+/* Bar legend: names the two ends and restates the split small. The headline
+   version of these numbers lives in the hero, so repeating them at size here
+   would just be the same fact twice on one screen. */
+.fc-legend {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: var(--s3); margin-bottom: var(--s2);
+    font-size: var(--text-sm); color: var(--text-secondary);
+}
+.fc-legend b {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: var(--text-base); color: var(--text-primary);
+}
+/* Thicker than the default bar: on this page it is the headline graphic. */
+.sched-card .fc-bar { height: 20px; }
+.fc-expect {
+    margin-top: var(--s3); text-align: center;
+    font-size: var(--text-base); color: var(--text-secondary);
+}
+.fc-expect b { color: var(--text-primary); font-weight: 700; }
+.fc-basis {
+    margin-top: var(--s2); text-align: center;
+    font-size: var(--text-xs); color: var(--text-dim); line-height: 1.55;
+}
+/* Dashed edge marks it as a slot waiting to be filled, reusing the same
+   empty-state signal .compare-empty-slot already uses on the compare page. */
+.sched-empty {
+    padding: var(--s5) var(--s6); text-align: center;
+    color: var(--text-dim); font-size: var(--text-sm); line-height: 1.6;
+    background: transparent; border-style: dashed; box-shadow: none;
+}
+
 /* ── "Why Savant favors X" — per-feature breakdown ─────────────────────────
    Diverging bars on the same left/right axis as the probability bar: away
    pulls left, home pulls right, each in its team's colour. Position (not
