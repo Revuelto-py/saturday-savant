@@ -63,13 +63,17 @@
             <div class="d-flex flex-wrap gap-3 team-hero-stats">
                 {# Headline evaluative metric — the site's proprietary Net Savant
                    Rating, with its national rank beneath (gold-accented). #}
-                {# TIER 4 — the headline Net Savant card is the clear anchor
-                   (bigger, brighter border, glow); the four per-game stats below
-                   are smaller, lighter detail cards. #}
+                {# TIER 4 — hero stat cards, all one size. Net Savant keeps a blue
+                   border + glow to read as the headline metric, but the four
+                   per-game stats match its dimensions/typography exactly; every
+                   card centers its content vertically so a taller card (Net
+                   Savant with a "through week" line) never leaves the others
+                   top-aligned. #}
+                {% set stat_card_style = 'display:flex;flex-direction:column;justify-content:center;border-radius: var(--r-md);padding:14px 22px;text-align:center;min-width:124px;backdrop-filter:blur(4px)' %}
                 {% if svr %}
-                <div class="stat-card" style="background:rgba(28, 156, 240,0.10);border: 1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-md);padding:14px 22px;text-align:center;min-width:124px;backdrop-filter:blur(4px);box-shadow:0 4px 18px rgba(28,156,240,0.14)">
+                <div class="stat-card" style="{{ stat_card_style }};background:rgba(28, 156, 240,0.10);border: 1px solid rgba(28, 156, 240,0.5);box-shadow:0 4px 18px rgba(28,156,240,0.14)">
                     <div style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
-                    <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:5px;text-transform:uppercase">Net Savant</div>
+                    <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">Net Savant</div>
                     {% if svr.net_ranking %}<div style="color: var(--gold);font-size: var(--text-xs);font-weight:700;margin-top:4px;opacity:0.9">{{ ordinal(svr.net_ranking) }}</div>{% endif %}
                     {% if svr_week %}<div style="color: var(--text-dim);font-size:0.62rem;font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
                 </div>
@@ -80,10 +84,10 @@
                         ('PTS AGAINST/G', season_stats.pts_against_pg, hero_ranks.pts_against_pg),
                         ('PASS YDS/G',    season_stats.pass_yds_pg,    hero_ranks.pass_yds_pg),
                         ('RUSH YDS/G',    season_stats.rush_yds_pg,    hero_ranks.rush_yds_pg)] %}
-                <div class="stat-card" style="background:rgba(255,255,255,0.03);border: 1px solid var(--border);border-radius: var(--r-md);padding:10px 14px;text-align:center;min-width:94px;backdrop-filter:blur(4px)">
-                    <div style="color: var(--text-primary);font-size: var(--text-lg);font-weight:800;line-height:1">{{ val }}</div>
-                    <div style="color: var(--text-dim);font-size:0.6rem;font-weight:700;letter-spacing:0.08em;margin-top:4px;text-transform:uppercase">{{ label }}</div>
-                    {% if rk %}<div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;margin-top:3px;opacity:0.75">{{ ordinal(rk) }}</div>{% endif %}
+                <div class="stat-card" style="{{ stat_card_style }};background:rgba(255,255,255,0.045);border: 1px solid var(--border-strong)">
+                    <div style="color: var(--text-primary);font-size: var(--text-xl);font-weight:900;line-height:1">{{ val }}</div>
+                    <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">{{ label }}</div>
+                    {% if rk %}<div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;margin-top:4px;opacity:0.8">{{ ordinal(rk) }}</div>{% endif %}
                 </div>
                 {% endfor %}
                 {% endif %}
