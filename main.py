@@ -65,6 +65,9 @@ from urllib.parse import urlencode
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory
 from flask_caching import Cache
+# Labels/units for the stored Savant Forecast feature breakdown. The DB holds
+# only the model's numbers; the wording is applied here at render time.
+from forecast_explain import describe as describe_contrib
 from collections import OrderedDict
 from itertools import groupby
 
@@ -1021,14 +1024,15 @@ def get_frozen_forecasts(cursor, game_ids):
         return {}
     try:
         cursor.execute('''
-            SELECT game_id, home_team, away_team, home_prob, predicted_margin, correct
+            SELECT game_id, home_team, away_team, home_prob, predicted_margin,
+                   correct, contrib
             FROM game_predictions WHERE game_id = ANY(%s) AND scored = 1
         ''', (list(game_ids),))
     except Exception:
         cursor.connection.rollback()   # game_predictions absent on a fresh DB
         return {}
     out = {}
-    for gid, home, away, prob, margin, correct in cursor.fetchall():
+    for gid, home, away, prob, margin, correct, contrib in cursor.fetchall():
         if prob is None:
             continue
         home_fav = prob >= 0.5
@@ -1039,6 +1043,11 @@ def get_frozen_forecasts(cursor, game_ids):
             'margin': margin,
             'correct': bool(correct),
             'is_upset': not correct,
+            # Per-feature breakdown stored with the prediction (JSONB, so it
+            # arrives already decoded); labelled here at render time. Absent on
+            # FBS-vs-FCS rows and on any row written before the column existed
+            # — the page renders no breakdown for those rather than a stub.
+            'contrib': describe_contrib(contrib) or None,
         }
     return out
 
@@ -4061,11 +4070,12 @@ def game_detail(game_id):
         conn2 = get_db()
         try:
             c2 = conn2.cursor()
-            c2.execute('SELECT home_prob, predicted_margin FROM game_predictions '
+            c2.execute('SELECT home_prob, predicted_margin, contrib FROM game_predictions '
                        'WHERE game_id = %s AND scored = 0', (game_id,))
             fr = c2.fetchone()
             if fr and fr[0] is not None:
-                forecast = {'home_prob': fr[0], 'margin': fr[1]}
+                forecast = {'home_prob': fr[0], 'margin': fr[1],
+                            'contrib': describe_contrib(fr[2]) or None}
         except Exception:
             conn2.rollback()   # table absent on a fresh DB — degrade to no block
         finally:

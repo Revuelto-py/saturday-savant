@@ -26,6 +26,7 @@ import main
 from season_util import current_cfb_season
 from forecast_features import (build_dataset, _feature_vector, _fcs_feature_vector,
                                _parse_dt, ELO_START, ELO_CARRY, ELO_NEW_TEAM)
+from forecast_explain import explain
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(_HERE, 'forecast_model.json')
@@ -81,6 +82,13 @@ def main_():
                 correct          INTEGER
             )
         ''')
+        # Per-feature attribution for the "why" breakdown, stored with the
+        # prediction rather than recomputed on page load (the site never
+        # computes a forecast live). Added separately so existing tables get
+        # it too. NULL on FBS-vs-FCS rows: that's the 4-feature FCS model,
+        # which the public feature explanation doesn't describe.
+        cur.execute('ALTER TABLE game_predictions '
+                    'ADD COLUMN IF NOT EXISTS contrib JSONB')
 
         # ── pass 1: score completed predictions (then freeze them) ──────────
         cur.execute('''
@@ -137,18 +145,20 @@ def main_():
                 elo[t] = ELO_START + ELO_CARRY * (elo[t] - ELO_START)
             season_of[t] = season
 
-        def store(gid, week, home, away, home_prob, margin, version):
+        def store(gid, week, home, away, home_prob, margin, version, contrib=None):
             cur.execute('''
                 INSERT INTO game_predictions
                     (game_id, season, week, home_team, away_team,
-                     home_prob, predicted_margin, model_version, predicted_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+                     home_prob, predicted_margin, model_version, predicted_at, contrib)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now(), %s)
                 ON CONFLICT (game_id) DO UPDATE SET
                     week = EXCLUDED.week, home_prob = EXCLUDED.home_prob,
                     predicted_margin = EXCLUDED.predicted_margin,
-                    model_version = EXCLUDED.model_version, predicted_at = now()
+                    model_version = EXCLUDED.model_version, predicted_at = now(),
+                    contrib = EXCLUDED.contrib
                 WHERE game_predictions.scored = 0
-            ''', (gid, season, week, home, away, round(home_prob, 4), round(margin, 1), version))
+            ''', (gid, season, week, home, away, round(home_prob, 4), round(margin, 1), version,
+                  json.dumps(contrib) if contrib else None))
 
         n = nf = 0
         for gid, week, stype, home, away, neutral, start_date in upcoming:
@@ -166,7 +176,10 @@ def main_():
                                         refs['recruit'], refs['transfer'], refs['retprod'],
                                         rest_days(home, kick), rest_days(away, kick))
                 prob, margin = _predict(model, feats)
-                store(gid, week, home, away, prob, margin, model['version'])
+                # Decomposes the same dot product _predict just computed, from
+                # the same vector — the breakdown can't drift from the number.
+                store(gid, week, home, away, prob, margin, model['version'],
+                      explain(model, feats))
                 n += 1
             elif fcs_model is not None:
                 # ── FBS vs FCS: the FCS model (FBS-strength only) ──

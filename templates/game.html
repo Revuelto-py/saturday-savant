@@ -12,6 +12,65 @@
 {% set game_final = game[3] is not none and game[4] is not none %}
 {% set away_won_final = game_final and not home_won %}
 {% set home_won_final = game_final and home_won %}
+
+{# ── Savant Forecast: why the model landed where it did ────────────────────
+   Each row is one feature's push on this game's win probability, stored with
+   the prediction by predict_games.py (never computed live). Bars diverge from
+   a centre line on the SAME left/right axis as the probability bar above:
+   away pulls left, home pulls right, in each team's own colour, ordered
+   biggest push first. Direction — not colour — carries which team, so the
+   chart stays readable without colour vision.
+   Renders nothing when there's no stored breakdown (FCS matchups, pre-Forecast
+   games), per the feature's existing graceful-degradation rule. #}
+{% macro forecast_why(fc, fav_team, past) %}
+{% if fc and fc.contrib %}
+{% set peak = fc.contrib | map(attribute='logit') | map('abs') | max %}
+{# When the model calls a game even, "Why Savant favors X" would contradict the
+   line above it — so the heading drops the favourite on the same threshold the
+   expected-margin copy uses. #}
+{% set called_even = fc.margin is none or fc.margin|abs < 1.5 %}
+{% if peak and peak > 0 %}
+<details class="fc-why">
+    <summary class="fc-why-toggle">
+        <svg class="fc-why-chev" viewBox="0 0 16 16" width="12" height="12" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"/></svg>
+        {%- if called_even -%}
+            What {{ 'drove' if past else 'drives' }} this forecast
+        {%- else -%}
+            Why Savant {{ 'favored' if past else 'favors' }} {{ fav_team }}
+        {%- endif -%}
+    </summary>
+    {# One grid for every row so the label and value columns size themselves to
+       their longest content and the centre lines still stack in a straight
+       vertical line. #}
+    <div class="fc-why-body">
+        <span aria-hidden="true"></span>
+        <span class="fc-why-axis-names" aria-hidden="true">
+            <span>{{ away_team }}</span>
+            <span>{{ home_team }}</span>
+        </span>
+        <span aria-hidden="true"></span>
+        {% for r in fc.contrib %}
+        <span class="fc-why-label">{{ r.label }}</span>
+        <span class="fc-why-track" role="img"
+              aria-label="{{ r.label }} favors {{ home_team if r.logit >= 0 else away_team }}, {{ r.value }}">
+            <span class="fc-why-bar"
+                  style="{% if r.logit >= 0 %}left:50%;background:{{ home_color }}{% else %}right:50%;background:{{ away_color }}{% endif %};
+                         width:{{ '%.1f' % (r.logit|abs / peak * 50) }}%"></span>
+        </span>
+        <span class="fc-why-val">{{ r.value }}</span>
+        {% endfor %}
+        <p class="fc-why-note">
+            Bar length shows how hard each factor pushed this forecast, and which way.
+            These are the factors the model weighs most heavily — it reads a few smaller
+            ones too, so the bars won't add up to the percentage exactly.
+        </p>
+    </div>
+</details>
+{% endif %}
+{% endif %}
+{% endmacro %}
 {% set away_name_class = 'team-name-winner' if away_won_final else ('team-name-loser' if game_final else 'team-name-default') %}
 {% set home_name_class = 'team-name-winner' if home_won_final else ('team-name-loser' if game_final else 'team-name-default') %}
 
@@ -214,6 +273,7 @@
             Model estimate from team strength, roster continuity, and results so far.
             A probability, not a prediction — locked before kickoff.
         </div>
+        {{ forecast_why(forecast, fav_team, False) }}
     </div>
     {% endif %}
     <div style="margin-top:26px;color:var(--text-dim);font-size:var(--text-sm);line-height:1.6">
@@ -221,6 +281,14 @@
     </div>
 </div>
 {% else %}
+
+{# The hero states the frozen forecast in one line; the breakdown behind it
+   lives here so the hero keeps its fixed height. #}
+{% if forecast and forecast.contrib %}
+<div class="dark-card mb-4" style="padding:14px 24px">
+    {{ forecast_why(forecast, forecast.favorite, True) }}
+</div>
+{% endif %}
 
 {# ── QUARTER SCORE TABLE ───────────────────────────────────────────────────── #}
 {% if home_q or away_q %}
