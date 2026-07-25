@@ -3098,6 +3098,48 @@ def _projected_record(cursor, team, season, actual_wins, actual_losses):
     }
 
 
+@cache.memoize(timeout=86400)
+def _hero_rank_maps(season):
+    """National per-game maps (PF/PA, pass/rush yards) across the FBS field for a
+    season — the inputs to the team-hero rank ordinals. Identical for every team,
+    so it's memoized once per season instead of re-scanning all games +
+    player_stats on each team page (the weekly cache.clear() refreshes it)."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(f'''
+            SELECT s.team, COUNT(*) gp, SUM(s.pf) pf, SUM(s.pa) pa
+            FROM (
+                SELECT home_team AS team, home_points AS pf, away_points AS pa
+                  FROM games WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
+                UNION ALL
+                SELECT away_team AS team, away_points AS pf, home_points AS pa
+                  FROM games WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
+            ) s
+            JOIN teams t ON t.name = s.team AND t.conference NOT IN %s {_promoted_fbs_exclusion(season, 't.name')}
+            GROUP BY s.team
+        ''', (season, season, FCS_CONFS))
+        pf_pg, pa_pg, gp_map = {}, {}, {}
+        for tm, gp, pf, pa in cur.fetchall():
+            if gp:
+                pf_pg[tm], pa_pg[tm], gp_map[tm] = (pf or 0) / gp, (pa or 0) / gp, gp
+        cur.execute(f'''
+            SELECT ps.team, ps.category, SUM(ps.stat)
+            FROM player_stats ps
+            JOIN teams t ON t.name = ps.team AND t.conference NOT IN %s {_promoted_fbs_exclusion(season, 'ps.team')}
+            WHERE ps.category IN ('passing','rushing') AND ps.stat_type='YDS' AND ps.season=%s
+            GROUP BY ps.team, ps.category
+        ''', (FCS_CONFS, season))
+        yd = {}
+        for tm, cat, yds in cur.fetchall():
+            yd.setdefault(tm, {})[cat] = yds or 0
+        pass_pg = {tm: yd.get(tm, {}).get('passing', 0) / gp for tm, gp in gp_map.items()}
+        rush_pg = {tm: yd.get(tm, {}).get('rushing', 0) / gp for tm, gp in gp_map.items()}
+        return pf_pg, pa_pg, pass_pg, rush_pg
+    finally:
+        release_db(conn)
+
+
 @app.route('/team/<path:team_ref>')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
@@ -3251,35 +3293,8 @@ def team(team_ref):
             ordered = sorted(values.values(), reverse=higher_better)
             return ordered.index(values[team_name]) + 1
 
-        cursor.execute(f'''
-            SELECT s.team, COUNT(*) gp, SUM(s.pf) pf, SUM(s.pa) pa
-            FROM (
-                SELECT home_team AS team, home_points AS pf, away_points AS pa
-                  FROM games WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
-                UNION ALL
-                SELECT away_team AS team, away_points AS pf, home_points AS pa
-                  FROM games WHERE completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
-            ) s
-            JOIN teams t ON t.name = s.team AND t.conference NOT IN %s {_promoted_fbs_exclusion(season, 't.name')}
-            GROUP BY s.team
-        ''', (season, season, FCS_CONFS))
-        pf_pg, pa_pg, gp_map = {}, {}, {}
-        for tm, gp, pf, pa in cursor.fetchall():
-            if gp:
-                pf_pg[tm], pa_pg[tm], gp_map[tm] = (pf or 0) / gp, (pa or 0) / gp, gp
-
-        cursor.execute(f'''
-            SELECT ps.team, ps.category, SUM(ps.stat)
-            FROM player_stats ps
-            JOIN teams t ON t.name = ps.team AND t.conference NOT IN %s {_promoted_fbs_exclusion(season, 'ps.team')}
-            WHERE ps.category IN ('passing','rushing') AND ps.stat_type='YDS' AND ps.season=%s
-            GROUP BY ps.team, ps.category
-        ''', (FCS_CONFS, season))
-        yd = {}
-        for tm, cat, yds in cursor.fetchall():
-            yd.setdefault(tm, {})[cat] = yds or 0
-        pass_pg = {tm: yd.get(tm, {}).get('passing', 0) / gp for tm, gp in gp_map.items()}
-        rush_pg = {tm: yd.get(tm, {}).get('rushing', 0) / gp for tm, gp in gp_map.items()}
+        # National per-game maps (same for every team in the season) — memoized.
+        pf_pg, pa_pg, pass_pg, rush_pg = _hero_rank_maps(season)
 
         hero_ranks = {
             'pts_for_pg':     _rank_of(pf_pg, higher_better=True),
@@ -4854,7 +4869,26 @@ def _player_detail_cached(player_id, season):
         ''', (player_id,))
         row = cursor.fetchone()
         if not row:
-            return render_template('404.html', message='Player not found.'), 404
+            # ~1/3 of stat lines come from players never ingested into the bio
+            # `players` table (box-score-only names). Their /player pages were
+            # hard-404ing even though their stats exist AND the team page's stat
+            # tables link to them. Synthesize a minimal identity from player_stats
+            # so the page still renders (name + team + stat tables, just no
+            # headshot/measurables) instead of a dead 404.
+            cursor.execute('''SELECT ps.player_name, ps.team FROM player_stats ps
+                              WHERE ps.player_id = %s AND ps.team IS NOT NULL
+                              ORDER BY ps.season DESC LIMIT 1''', (str(player_id),))
+            stub = cursor.fetchone()
+            if not stub:
+                return render_template('404.html', message='Player not found.'), 404
+            _nm = (stub[0] or '').split(' ', 1)
+            cursor.execute('SELECT logo_dark, color, alt_color, conference FROM teams WHERE name=%s',
+                           (stub[1],))
+            _t = cursor.fetchone() or (None, None, None, None)
+            # Column order mirrors the SELECT above (23 columns).
+            row = [player_id, _nm[0] if _nm else '', _nm[1] if len(_nm) > 1 else '',
+                   stub[1], None, None, None, None, None, None,
+                   _t[0], _t[1], _t[2], _t[3], 1, None, None, None, None, None, None, None, 0]
 
         # The players row is only the CURRENT snapshot — a departed player
         # keeps his first-seen team there (e.g. Burrow's identity row says
@@ -5598,24 +5632,33 @@ def rivalries_page():
         ''')
         rivalry_list = cursor.fetchall()
 
-        rivalry_data = []
-        for r in rivalry_list:
-            ta, tb = r[0], r[1]
-
+        # Each rivalry's most recent meeting in ONE DISTINCT ON query keyed on the
+        # normalized (min,max) team pair, instead of a query per rivalry — this
+        # loop was 130 round-trips (~5s cold). Columns match the per-rivalry
+        # SELECT below so the mapping is unchanged.
+        pairs = tuple((r[0], r[1]) for r in rivalry_list)
+        by_pair = {}
+        if pairs:
             cursor.execute('''
-                SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points,
-                       g.week, g.season_type, g.notes, g.start_date,
-                       t1.logo_dark, t2.logo_dark
+                SELECT DISTINCT ON (LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team))
+                    g.id, g.home_team, g.away_team, g.home_points, g.away_points,
+                    g.week, g.season_type, g.notes, g.start_date,
+                    t1.logo_dark, t2.logo_dark
                 FROM games g
                 LEFT JOIN teams t1 ON t1.name = g.home_team
                 LEFT JOIN teams t2 ON t2.name = g.away_team
-                WHERE ((g.home_team=%s AND g.away_team=%s)
-                    OR (g.home_team=%s AND g.away_team=%s))
-                AND g.completed=1
-                ORDER BY g.start_date DESC
-                LIMIT 1
-            ''', (ta, tb, tb, ta))
-            last_game = cursor.fetchone()
+                WHERE g.completed = 1
+                  AND (LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team)) IN %s
+                ORDER BY LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team),
+                         g.start_date DESC NULLS LAST
+            ''', (pairs,))
+            for lg in cursor.fetchall():
+                by_pair[(min(lg[1], lg[2]), max(lg[1], lg[2]))] = lg
+
+        rivalry_data = []
+        for r in rivalry_list:
+            ta, tb = r[0], r[1]
+            last_game = by_pair.get((ta, tb))
 
             rivalry_data.append({
                 'ta': ta,
