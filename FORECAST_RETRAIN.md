@@ -39,6 +39,43 @@ the test season, stay calibrated within ~2 points per probability bucket, and
 remain below the Vegas closing line (anything above it means a bug, not a
 breakthrough).
 
+### After shipping a new model — the per-game breakdown must follow
+
+The game page's "Why Savant favors X" breakdown (`forecast_explain.py`) is
+derived from the model, so a retrain invalidates two things that do **not**
+update themselves:
+
+1. **Re-check `PUBLIC_FEATURES`.** It is a hand-curated list of the six
+   features judged independently meaningful and sign-correct — it is *not*
+   read from the artifact. A retrain can change which features qualify, and a
+   sign flip is the case to watch: the list deliberately excludes `wpct_diff`
+   precisely *because* it fits negative (re-expressing Elo rather than saying
+   wins hurt you). Print the new coefficients next to the list and confirm
+   every shown feature still carries meaningful, correctly-signed weight, and
+   that nothing newly meaningful is being hidden. Same filtering rule as
+   always: collinearity artifacts and bookkeeping inputs stay out.
+2. **Re-backfill stored `contrib` rows.** Every scored prediction stores the
+   breakdown computed under the model that made it. Rows predicted by the old
+   model keep old contributions, which is correct for frozen forecasts — but
+   if a season is *re-*forecast under the new model, its breakdowns must be
+   regenerated or the bars will explain a number that is no longer displayed:
+
+   ```bash
+   python3 backfill_forecast_contrib.py          # dry run: reports match rate
+   python3 backfill_forecast_contrib.py --write
+   ```
+
+   That script refuses any row whose replayed probability doesn't match what
+   is stored, so a mismatch after a retrain shows up as a `DRIFT` line rather
+   than silently wrong bars. A non-zero drift count is the signal that the
+   stored probabilities and the current artifact have parted ways — resolve
+   that before shipping, don't force the write.
+
+Upcoming-game rows need nothing: `predict_games.py` writes `contrib` on every
+prediction, so the next weekly run refreshes them. Note also that only the
+model's numbers are stored — labels and units live in `forecast_explain.describe()`
+and are applied at render, so rewording a factor never needs a data migration.
+
 ## Standing practice for any new feature
 
 These are requirements, not suggestions. Two experiments have already been
@@ -255,7 +292,9 @@ forecasting them with the production model would be in-sample).
 ## Known model behavior (documented, not a defect)
 
 - Weeks 4–8 is the weakest stretch (~69% in 2025) — priors are fading while
-  in-season data is still thin. Stated on the public `/forecast` methodology.
+  in-season data is still thin. (This was stated on the public `/forecast`
+  methodology page, removed in 8a5ebf1; the model's basis is now given inline
+  on the game page, plus the per-game breakdown described above.)
 - Preseason priors dominate only in week 1 (~62% of logit contribution); from
   **week 2 onward in-season signal leads (~58–62%)**, and Elo is the single
   largest coefficient all season.
