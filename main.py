@@ -4274,13 +4274,19 @@ def game_detail(game_id):
                 })
 
             # Build team-side map from competitors for play attribution
-            team_side_map = {}
+            team_side_map = {}      # team displayName -> 'home'/'away'
+            team_side_by_id = {}    # team id -> 'home'/'away' (exact; avoids name collisions)
             try:
                 comp2 = (data.get('header', {}).get('competitions') or [{}])[0]
                 for c in comp2.get('competitors', []):
-                    dn = c.get('team', {}).get('displayName', '')
+                    ha = c.get('homeAway', 'home')
+                    tobj = c.get('team', {}) or {}
+                    dn = tobj.get('displayName', '')
+                    tid = str(tobj.get('id', ''))
                     if dn:
-                        team_side_map[dn] = c.get('homeAway', 'home')
+                        team_side_map[dn] = ha
+                    if tid:
+                        team_side_by_id[tid] = ha
             except Exception:
                 pass
 
@@ -4484,7 +4490,6 @@ def game_detail(game_id):
                 d = {}
                 for st in (tb.get('statistics') or []):
                     d[st.get('name', '')] = st.get('displayValue', '')
-                print(f"Team {t_display} stat keys: {list(d.keys())}")
                 # Normalize sacks — ESPN uses several key names
                 if 'sacks' not in d:
                     for k in ('Sacks', 'sacksYardsLost', 'sackYardsLost', 'defensiveSacks'):
@@ -4507,13 +4512,16 @@ def game_detail(game_id):
                 t_obj  = pb.get('team', {}) or {}
                 t_id   = str(t_obj.get('id', ''))
                 t_name = t_obj.get('displayName', '')
-                tn_l   = t_name.lower()
-                at_l   = away_team.lower()
-                if tn_l and (tn_l == at_l or at_l in tn_l or tn_l in at_l
-                             or any(w in tn_l for w in at_l.split() if len(w) >= 2)):
-                    side = 'away'
-                else:
-                    side = 'home'
+                # Assign each team's box to home/away by ESPN's own homeAway flag
+                # (keyed on team id, then displayName). The old fuzzy name match
+                # put BOTH teams on the same side when they shared a word — e.g.
+                # "Penn State" (away) vs "Boise State" (home) both matched "state",
+                # so PSU's box overwrote Boise's and the home box came up empty.
+                side = team_side_by_id.get(t_id) or team_side_map.get(t_name)
+                if side is None:
+                    tn_l, at_l = t_name.lower(), away_team.lower()
+                    side = 'away' if (at_l and (tn_l == at_l or tn_l.startswith(at_l)
+                                                or at_l.startswith(tn_l))) else 'home'
                 if t_id and t_name:
                     team_id_lookup[t_id] = t_name
                 cats = []
@@ -4548,15 +4556,6 @@ def game_detail(game_id):
                         'labels': cat['labels'],
                         'athletes': cat['athletes'],
                     }
-            print("\n=== BOX SCORE DEBUG ===")
-            for p_side in ['away', 'home']:
-                team_lbl = away_team if p_side == 'away' else home_team
-                print(f"\n{team_lbl} ({p_side}):")
-                for cname, cdata in box_score[p_side].items():
-                    print(f"  {cname}: labels={cdata['labels']}")
-                    if cdata['athletes']:
-                        print(f"    first: {cdata['athletes'][0]['name']} stats={cdata['athletes'][0].get('stats', {})}")
-
             def _id_from_ref(obj, pattern):
                 m = re.search(pattern, obj.get('$ref', ''))
                 return m.group(1) if m else str(obj.get('id', ''))
@@ -4606,8 +4605,14 @@ def game_detail(game_id):
                     ('receivingYards', 'receiving', ['REC','YDS','TD']),
                 ]
                 for pb in boxscore_players:
-                    side   = pb.get('homeAway', 'home')
-                    t_name = (pb.get('team') or {}).get('displayName', '')
+                    # boxscore.players entries carry no homeAway field, so the old
+                    # pb.get('homeAway','home') defaulted EVERY team to home and
+                    # left the away side's leaders blank. Use the reliable
+                    # id/displayName -> side map instead.
+                    t_obj  = pb.get('team') or {}
+                    t_name = t_obj.get('displayName', '')
+                    side   = (team_side_by_id.get(str(t_obj.get('id', '')))
+                              or team_side_map.get(t_name, 'home'))
                     for cat in (pb.get('statistics') or []):
                         cn = cat.get('name', '').lower()
                         for api_key, keyword, want_cols in cat_cfg:
@@ -4658,22 +4663,18 @@ def game_detail(game_id):
         ('rushingYards',   'Rushing'),
         ('receivingYards', 'Receiving'),
     ]
-    def _matches_team(espn_full, db_short):
-        a, b = espn_full.lower(), db_short.lower()
-        # exact, substring, or any significant word overlap
-        return (a == b or b in a or a in b
-                or any(w in a for w in b.split() if len(w) >= 2))
-
     for api_key, display_name in leader_cats:
         if api_key in leaders:
-            players = leaders[api_key]
             home_leader = None
             away_leader = None
-            for p in players:
-                espn_name = p.get('team', '')
-                if _matches_team(espn_name, home_team):
+            for p in leaders[api_key]:
+                # Split by the is_home already resolved upstream from ESPN's
+                # homeAway flag — NOT a fuzzy team-name match, which put a team on
+                # the wrong side whenever the two shared a word ("Penn State" vs
+                # "Boise State" both contain "state"), leaving one side blank.
+                if p.get('is_home'):
                     home_leader = p
-                elif _matches_team(espn_name, away_team):
+                else:
                     away_leader = p
             structured_leaders[api_key] = {
                 'label': display_name,
