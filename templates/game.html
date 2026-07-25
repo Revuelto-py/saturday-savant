@@ -116,7 +116,7 @@
             </div>
         </div>
 
-        <div style="text-align:center;margin-top:24px">
+        <div class="gh-footer">
             <div class="gh-pill-row">
                 {% if is_scheduled %}
                 <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
@@ -125,19 +125,31 @@
                 {% if forecast and forecast.is_upset %}<span class="upset-badge">Upset</span>{% endif %}
                 {% endif %}
             </div>
-            {% if not is_scheduled and forecast %}
-            {# One pre-kickoff-forecast recap for the completed game — its own
-               deliberate element below the Final pill (the same frozen
-               prediction that powers the upset badge, shown once). #}
-            <div class="fc-recap">
-                <span class="fc-recap-lead">Savant Forecast</span>
-                <span class="fc-recap-body">favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}</span>
-                {% if forecast.correct %}<span class="fc-recap-hit">✓ hit</span>{% endif %}
-            </div>
-            {% endif %}
-            {% if rivalry_name %}
-            <div style="margin-top:12px">
-                <span class="rivalry-badge">{{ rivalry_name }}</span>
+            {# Forecast recap + rivalry share ONE row (not stacked). The hero has a
+               fixed height with vertically-centered content, so a game carrying
+               these badges is exactly as tall as one without them — the row is
+               omitted entirely when empty so both cases stay optically centered. #}
+            {% if (not is_scheduled and forecast) or rivalry_name %}
+            <div class="gh-meta-row">
+                {% if not is_scheduled and forecast %}
+                <span class="fc-recap">
+                    <span class="fc-recap-lead">Savant Forecast</span>
+                    <span class="fc-recap-body">favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}</span>
+                    {% if forecast.correct %}<span class="fc-recap-hit"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>Hit</span>{% endif %}
+                </span>
+                {% endif %}
+                {% if rivalry_name %}
+                <span class="rivalry-badge">
+                    {# Filled crossed-swords: the guard + pommel keep it reading as
+                       swords at 16px, where a thin stroked icon turns to mush and a
+                       bare diagonal cross reads as a multiplication sign. #}
+                    <svg class="rivalry-ico" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                        <g transform="rotate(45 12 12)"><path d="M12 1.2 13.1 3.2 13.1 13.4 10.9 13.4 10.9 3.2Z"/><path d="M8.3 13.9h7.4v1.7H8.3z"/><path d="M11.2 15.6h1.6v4.1h-1.6z"/><circle cx="12" cy="20.9" r="1.3"/></g>
+                        <g transform="rotate(-45 12 12)"><path d="M12 1.2 13.1 3.2 13.1 13.4 10.9 13.4 10.9 3.2Z"/><path d="M8.3 13.9h7.4v1.7H8.3z"/><path d="M11.2 15.6h1.6v4.1h-1.6z"/><circle cx="12" cy="20.9" r="1.3"/></g>
+                    </svg>
+                    <span class="rivalry-name">{{ rivalry_name }}</span>
+                </span>
+                {% endif %}
             </div>
             {% endif %}
         </div>

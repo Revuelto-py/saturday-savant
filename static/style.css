@@ -1248,24 +1248,27 @@ tr.postseason-row:hover {
 
 /* ── Game page: rivalry badge ─────────────────────────────────────────── */
 .rivalry-badge {
-    /* Frosted dark pill: stays readable over any team-color hero bloom and
-       pairs with the FINAL pill instead of fighting it. */
-    display: inline-block;
-    margin-top: 12px;
-    background: rgba(6,6,7,0.55);
+    /* Frosted dark pill built to the same recipe as .fc-recap, so the two hero
+       meta badges read as a matched pair over any team-color bloom. Label +
+       value, like the forecast pill, instead of one long shouty string. */
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(6,6,7,0.6);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.18);
     box-shadow: 0 2px 14px rgba(0,0,0,0.35);
     color: #fff;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    font-weight: 800;
-    letter-spacing: 0.1em;
     font-size: var(--text-sm);
-    text-transform: uppercase;
-    border-radius: var(--r-sm);
-    padding: 6px 14px;
+    line-height: 1.25;
+    letter-spacing: normal;
+    text-transform: none;
+    border-radius: var(--r-pill);
+    padding: 8px 16px;
 }
+.rivalry-name { font-weight: 800; color: #fff; }
 
 /* ── Game page: section headers (Game Leaders, Team Stats, etc.) ─────── */
 .section-header {
@@ -1310,7 +1313,14 @@ a.t-label:hover { color: #60a5fa; }
 /* ── Game hero — the score is the focal point; everything scales fluidly
    with the viewport so wide screens get a genuinely bigger hero ───────── */
 .game-hero {
-    padding: clamp(48px, 2vw + 36px, 76px) 0 clamp(40px, 1.8vw + 30px, 64px);
+    /* Fixed height with vertically-centered content, so every game hero is the
+       same height — the forecast recap, rivalry badge, and AP-rank badges no
+       longer change it (the min-height sits above the tallest content). */
+    min-height: clamp(540px, 40vw, 580px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 24px 0;
 }
 .game-hero .week-label {
     font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem);
@@ -1947,7 +1957,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .badge-rank, .badge-rivalry, .badge-pos, .badge-conf, .badge-final,
 .ap-final-pill, .lb-ap-pill, .compare-ap-badge,
 .lb-pos-pill, .compare-pos-badge, .search-result-pos,
-.gc-rivalry, .rivalry-badge, .gc-final, .ap-trend, .lb-pill, .drive-badge {
+.gc-rivalry, .gc-final, .ap-trend, .lb-pill, .drive-badge {
     display: inline-block;
     font-family: var(--font-display);
     font-weight: 700;
@@ -1969,8 +1979,10 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     box-shadow: none;
     color: var(--gold);
 }
-.badge-rivalry::before, .gc-rivalry::before, .rivalry-badge::before { content: '⚔ '; }
-.rivalry-badge::before { color: var(--gold); }
+.badge-rivalry::before, .gc-rivalry::before { content: '⚔ '; }
+/* The hero rivalry badge uses an inline SVG icon (below) instead of the emoji,
+   which rendered as a faint monochrome glyph over the dark hero. */
+.rivalry-ico { color: #f0c66a; flex-shrink: 0; }
 .badge-pos, .lb-pos-pill, .compare-pos-badge, .search-result-pos {
     background: rgba(59,130,246,0.12);
     border: 1px solid rgba(59,130,246,0.3);
@@ -3546,23 +3558,34 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .gc-fc-recap.is-hit::after { content: ''; }
 
 /* Game-page hero: pills on their own row, forecast recap its own element below */
-.gh-pill-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Hero footer: status pill row + the forecast/rivalry meta row. The meta row
+   holds a reserved height so a game without either badge doesn't shift the
+   layout (the .game-hero fixed height then keeps every hero identical). */
+.gh-footer { text-align: center; }
+.gh-pill-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.gh-meta-row {
+    display: flex; justify-content: center; align-items: center;
+    gap: 10px 14px; flex-wrap: wrap; margin-top: 14px;
+}
 .fc-recap {
-    margin: 16px auto 0; width: max-content; max-width: 100%;
-    display: flex; align-items: center; justify-content: center; gap: 6px 12px; flex-wrap: wrap;
-    padding: 9px 18px; border-radius: var(--r-pill);
-    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-    color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.3;
+    display: inline-flex; align-items: center; gap: 5px 10px; flex-wrap: wrap;
+    padding: 8px 16px; border-radius: var(--r-pill);
+    background: rgba(6,6,7,0.6); border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 14px rgba(0,0,0,0.35);
+    color: rgba(255,255,255,0.85); font-size: var(--text-sm); line-height: 1.25;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 .fc-recap-lead {
-    font-family: var(--font-display); font-weight: 800; letter-spacing: 0.12em;
-    text-transform: uppercase; font-size: var(--text-xs); color: var(--accent);
+    font-family: var(--font-display); font-weight: 800; letter-spacing: 0.1em;
+    text-transform: uppercase; font-size: var(--text-xs); color: #6cc4f5;
 }
-.fc-recap-body b { color: var(--text-primary); font-weight: 700; }
+.fc-recap-body b { color: #fff; font-weight: 800; }
 .fc-recap-hit {
-    color: #6ee7b7; font-weight: 700; font-size: var(--text-xs);
-    background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3);
-    padding: 2px 9px; border-radius: var(--r-pill);
+    display: inline-flex; align-items: center; gap: 3px;
+    color: #7ff0bf; font-weight: 800; font-size: var(--text-xs); text-shadow: none;
+    background: rgba(34,197,94,0.16); border: 1px solid rgba(34,197,94,0.4);
+    padding: 3px 9px; border-radius: var(--r-pill);
 }
 
 /* "This Week's Upsets" strip on the /games hub */
