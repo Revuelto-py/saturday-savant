@@ -4108,6 +4108,7 @@ def game_detail(game_id):
     box_score = {'home': {}, 'away': {}}
     home_stats = {}
     away_stats = {}
+    game_player_ids = {}   # name(lower) -> validated player id, for leader linking
 
     try:
         data = {}
@@ -4508,6 +4509,35 @@ def game_detail(game_id):
             athlete_lookup = {}   # athlete_id -> {name, headshot, team}
             team_id_lookup = {}   # team_id    -> display_name
 
+            # ESPN athlete ids ARE our player ids, so link box-score/leader rows
+            # by id — transfer-proof. name_to_player_id only held players still on
+            # these two teams, so anyone who transferred out since the game became
+            # unclickable. Validate ids so a link never points at a missing page.
+            _aid_name = {}
+            for _pb in boxscore_players:
+                for _cat in (_pb.get('statistics') or []):
+                    for _ae in (_cat.get('athletes') or []):
+                        _ad = _ae.get('athlete') or {}
+                        _aid = str(_ad.get('id') or '')
+                        if _aid:
+                            _aid_name[_aid] = _ad.get('displayName', '')
+            valid_player_ids, game_player_ids = set(), {}
+            if _aid_name:
+                _vc = get_db()
+                try:
+                    _vcur = _vc.cursor()
+                    _il = [int(a) for a in _aid_name if a.isdigit()]
+                    if _il:
+                        _vcur.execute('SELECT id FROM players WHERE id = ANY(%s)', (_il,))
+                        valid_player_ids |= {str(r[0]) for r in _vcur.fetchall()}
+                    _vcur.execute('SELECT DISTINCT player_id FROM player_stats WHERE player_id = ANY(%s)',
+                                  (list(_aid_name),))
+                    valid_player_ids |= {r[0] for r in _vcur.fetchall()}
+                finally:
+                    release_db(_vc)
+                game_player_ids = {name.lower(): aid for aid, name in _aid_name.items()
+                                   if aid in valid_player_ids and name}
+
             for pb in boxscore_players:
                 t_obj  = pb.get('team', {}) or {}
                 t_id   = str(t_obj.get('id', ''))
@@ -4543,7 +4573,8 @@ def game_detail(game_id):
                             'name':      ath_name,
                             'headshot':  hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
                             'stats':     dict(zip(labels, ae.get('stats', []))),
-                            'player_id': name_to_player_id.get(ath_name.lower()),
+                            'player_id': (aid if aid in valid_player_ids
+                                          else name_to_player_id.get(ath_name.lower())),
                         })
                     cats.append({'name': cat.get('name', ''), 'labels': labels, 'athletes': athletes})
                 player_stats.append({'side': side, 'categories': cats})
@@ -4687,7 +4718,9 @@ def game_detail(game_id):
         for side in ('home', 'away'):
             ldr = cat_data.get(side)
             if ldr:
-                ldr['player_id'] = name_to_player_id.get((ldr.get('name') or '').lower())
+                _ln = (ldr.get('name') or '').lower()
+                ldr['player_id'] = (game_player_ids.get(_ln)
+                                    or name_to_player_id.get(_ln))
 
     # Top plays by win probability added — derived from the same WP series
     # that feeds the chart. Each sample carries the post-play win %, so the
