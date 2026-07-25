@@ -356,6 +356,32 @@ def requested_season():
         return s
     return CURRENT_SEASON
 
+ALL_TIME = 'all'
+
+def requested_scope():
+    """(season, all_time) for the leaderboards.
+
+    `?season=all` widens a leaderboard from one season to every loaded season,
+    ranking individual SEASONS against each other — a 2019 passing line and a
+    2024 one are two separate rows, not a merged career total. `season` still
+    carries a real year in that mode so anything needing a concrete year (page
+    copy, fallback links) keeps working."""
+    if request.args.get('season') == ALL_TIME:
+        return CURRENT_SEASON, True
+    return requested_season(), False
+
+
+def _promoted_fbs_exclusion_all(team_col, season_col):
+    """All-time counterpart of _promoted_fbs_exclusion: the promoted programs
+    are excluded only for the seasons before they joined FBS, per row, instead
+    of for the whole query."""
+    if not FBS_PROMOTED_FROM_FCS:
+        return ''
+    names = "','".join(sorted(FBS_PROMOTED_FROM_FCS))
+    return (f"AND NOT ({team_col} IN ('{names}') "
+            f"AND {season_col} < {FBS_PROMOTED_START_SEASON})")
+
+
 def get_ap_rankings(cursor, season=CURRENT_SEASON):
     """The FINAL AP poll for a season as {team: rank} — the postseason poll if
     it exists, else the latest regular-season week. ap_rankings now holds every
@@ -1484,6 +1510,26 @@ def _promoted_fbs_exclusion(season, team_col):
 
 
 LEADERBOARD_PER_PAGE = 25
+# All-time boards keep only the best N seasons for the sorted column. Ten
+# seasons of qualifiers is thousands of rows deep and the tail carries no
+# meaning on an all-time list.
+ALL_TIME_TOP_N = 50
+
+# Leaderboard key -> the SELECT alias holding that stat, per category. When an
+# all-time board is sorted on one of these, the cut to the top N happens in
+# SQL, so a ten-season pool ships 50 rows instead of tens of thousands. Keys
+# absent here are computed in Python from several columns (RTG, ADJ YPA, TKL%,
+# AST...) and can't be ordered in SQL, so those sorts stream the full pool.
+ALL_TIME_SORT_ALIAS = {
+    'passing':   {'yds': 'yds', 'td': 'td', 'int': 'int_', 'att': 'att',
+                  'cmp': 'cmp', 'pct': 'pct', 'ypa': 'ypa'},
+    'rushing':   {'yds': 'yds', 'td': 'td', 'att': 'att', 'ypc': 'ypc',
+                  'long': 'long_', 'fum': 'fum'},
+    'receiving': {'yds': 'yds', 'td': 'td', 'rec': 'rec', 'ypr': 'ypr',
+                  'long': 'long_'},
+    'defense':   {'tot': 'tot', 'solo': 'solo', 'sacks': 'sacks', 'tfl': 'tfl',
+                  'pd': 'pd', 'td': 'td', 'int': 'int_'},
+}
 
 # ── Leaderboard column definitions ──────────────────────────────────────────
 # Each entry: (key, label, tooltip, sortable, format).
@@ -1680,16 +1726,22 @@ def _default_sort_col(columns, category, view):
 def _sortable_keys(columns, category, view):
     return {key for key, _, _, sortable, _ in columns[category][view] if sortable}
 
-def _sort_and_paginate(rows, sort_col, sort_dir, page_raw):
+def _sort_and_paginate(rows, sort_col, sort_dir, page_raw, top_n=None):
     """Sort a list of dicts by `sort_col`, always pushing None values to the
     end regardless of direction (mirrors SQL's NULLS LAST) — needed because
     several leaderboard columns (RTG, TKL%, ADJ YPA, ...) are computed in
-    Python from multiple joined sources and can't be ORDER BY'd in SQL."""
+    Python from multiple joined sources and can't be ORDER BY'd in SQL.
+
+    `top_n` truncates after sorting, for the all-time board: pooling ten
+    seasons makes the long tail meaningless (nobody reads the 4,000th-best
+    season), so it keeps only the leaders for whichever column is sorted."""
     reverse = sort_dir != 'asc'
     with_val = [r for r in rows if r.get(sort_col) is not None]
     without_val = [r for r in rows if r.get(sort_col) is None]
     with_val.sort(key=lambda r: r[sort_col], reverse=reverse)
     ordered = with_val + without_val
+    if top_n:
+        ordered = ordered[:top_n]
     page, offset, pagination = _pagination_ctx(page_raw, len(ordered))
     page_rows = ordered[offset:offset + LEADERBOARD_PER_PAGE]
     for i, r in enumerate(page_rows):
@@ -2213,7 +2265,7 @@ def leaderboards(category='passing'):
     try:
         cursor = conn.cursor()
 
-        season      = requested_season()
+        season, all_time = requested_scope()
         conf_filter = request.args.get('conf', '')
         team_filter = request.args.get('team', '')
         pos_filter  = request.args.get('pos', '')
@@ -2232,6 +2284,33 @@ def leaderboards(category='passing'):
 
         ap_rankings = get_ap_rankings(cursor, season)
         players = []
+
+        # ── Season scoping ──────────────────────────────────────────────────
+        # One season: every table is pinned to that year. All-time: the driving
+        # player_stats row carries the year, and every companion table joins on
+        # THAT row's season (pp.season = ps.season) so a 2019 line is never
+        # matched against another year's advanced numbers. Adding ps.season to
+        # the grouping is what makes each row a player-SEASON rather than a
+        # career total.
+        if all_time:
+            ps_season   = ''                 # no year filter on the driving table
+            join_season = 'ps.season'        # companions follow the row's year
+            season_sel  = ', ps.season'
+            season_grp  = ', ps.season'
+            excl        = _promoted_fbs_exclusion_all('ps.team', 'ps.season')
+            # Cut to the top N in SQL when the sorted column is a plain stat —
+            # same column and direction Python then sorts on, so the result is
+            # identical, just without shipping the whole ten-season pool.
+            _alias = ALL_TIME_SORT_ALIAS.get(category, {}).get(sort_col)
+            top_sql = (f'ORDER BY {_alias} {"ASC" if sort_dir == "asc" else "DESC"} '
+                       f'NULLS LAST LIMIT {ALL_TIME_TOP_N}') if _alias else ''
+        else:
+            ps_season   = f'AND ps.season = {season}'
+            join_season = str(season)
+            season_sel  = ''
+            season_grp  = ''
+            excl        = _promoted_fbs_exclusion(season, 'ps.team')
+            top_sql     = ''
 
         fcs_in = "','".join(FCS_CONFS)
         params = []
@@ -2258,7 +2337,7 @@ def leaderboards(category='passing'):
             if not qualified:
                 min_att = '0'
 
-            ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
+            ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {join_season}' if view == 'advanced' else ''
             ppa_select = ", pp.avg_ppa_pass as epa_pass, pp.total_ppa as total_epa" if view == 'advanced' else ''
             ppa_group  = ', pp.avg_ppa_pass, pp.total_ppa' if view == 'advanced' else ''
 
@@ -2273,16 +2352,17 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='COMPLETIONS' THEN CAST(ps.stat AS REAL) END) as cmp,
                     MAX(CASE WHEN ps.stat_type='PCT'         THEN CAST(ps.stat AS REAL) END) as pct,
                     MAX(CASE WHEN ps.stat_type='YPA'         THEN CAST(ps.stat AS REAL) END) as ypa
-                    {ppa_select}
+                    {ppa_select}{season_sel}
                 FROM players p
-                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing' AND ps.season = {season}
+                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing' {ps_season}
                 JOIN teams t ON ps.team = t.name
                 {ppa_join}
                 WHERE p.position = 'QB'
-                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
+                  AND t.conference NOT IN ('{fcs_in}') {excl}
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}{season_grp}
                 HAVING MAX(CASE WHEN ps.stat_type='ATT' THEN CAST(ps.stat AS REAL) END) >= {min_att}
+                {top_sql}
             ''', params)
             for r in cursor.fetchall():
                 yds, td, int_, att, cmp_ = r[10] or 0, r[11] or 0, r[12] or 0, r[13] or 0, r[14] or 0
@@ -2300,6 +2380,9 @@ def leaderboards(category='passing'):
                     'rtg': round(rtg, 1) if rtg is not None else None,
                     'adj_ypa': round(adj_ypa, 1) if adj_ypa is not None else None,
                     'gp': None, 'sack_pct': None,
+                    # season_sel is always the last selected column, so r[-1] is
+                    # this row's year without depending on the view's column count
+                    'season': int(r[-1]) if all_time else season,
                 }
                 if view == 'advanced':
                     row['epa_pass']  = round(float(r[17]), 3) if r[17] is not None else None
@@ -2311,10 +2394,10 @@ def leaderboards(category='passing'):
             if not qualified:
                 min_att = '0'
 
-            ppa_join     = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
+            ppa_join     = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {join_season}' if view == 'advanced' else ''
             ppa_select   = ', pp.avg_ppa_rush as epa_rush, pp.total_ppa as total_epa' if view == 'advanced' else ''
             ppa_group    = ', pp.avg_ppa_rush, pp.total_ppa' if view == 'advanced' else ''
-            usage_join   = f'LEFT JOIN player_usage pu ON pu.player_id = p.id AND pu.season = {season}' if view == 'advanced' else ''
+            usage_join   = f'LEFT JOIN player_usage pu ON pu.player_id = p.id AND pu.season = {join_season}' if view == 'advanced' else ''
             usage_select = ', pu.rush as usage_rush' if view == 'advanced' else ''
             usage_group  = ', pu.rush' if view == 'advanced' else ''
 
@@ -2328,18 +2411,19 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='YPC'  THEN CAST(ps.stat AS REAL) END) as ypc,
                     MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_,
                     MAX(CASE WHEN pf.stat_type='FUM'  THEN CAST(pf.stat AS REAL) END) as fum
-                    {ppa_select}{usage_select}
+                    {ppa_select}{usage_select}{season_sel}
                 FROM players p
-                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing' AND ps.season = {season}
+                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing' {ps_season}
                 JOIN teams t ON ps.team = t.name
-                LEFT JOIN player_stats pf ON pf.player_id = p.id::text AND pf.category = 'fumbles' AND pf.season = {season}
+                LEFT JOIN player_stats pf ON pf.player_id = p.id::text AND pf.category = 'fumbles' AND pf.season = ps.season
                 {ppa_join}
                 {usage_join}
                 WHERE p.position IN ('RB','FB','QB','WR','ATH')
-                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
+                  AND t.conference NOT IN ('{fcs_in}') {excl}
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}{usage_group}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}{usage_group}{season_grp}
                 HAVING MAX(CASE WHEN ps.stat_type='CAR' THEN CAST(ps.stat AS REAL) END) >= {min_att}
+                {top_sql}
             ''', params)
             for r in cursor.fetchall():
                 row = {
@@ -2350,6 +2434,7 @@ def leaderboards(category='passing'):
                     'ypc': round(float(r[13] or 0), 1), 'long': int(r[14] or 0),
                     'fum': int(r[15] or 0),
                     'gp': None, 'ypg': None,
+                    'season': int(r[-1]) if all_time else season,
                 }
                 idx = 16
                 if view == 'advanced':
@@ -2369,7 +2454,7 @@ def leaderboards(category='passing'):
             if not qualified:
                 min_rec = '0'
 
-            ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
+            ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {join_season}' if view == 'advanced' else ''
             ppa_select = ', pp.avg_ppa_all as epa_play, pp.total_ppa as total_epa' if view == 'advanced' else ''
             ppa_group  = ', pp.avg_ppa_all, pp.total_ppa' if view == 'advanced' else ''
 
@@ -2382,16 +2467,17 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='REC'  THEN CAST(ps.stat AS REAL) END) as rec,
                     MAX(CASE WHEN ps.stat_type='YPR'  THEN CAST(ps.stat AS REAL) END) as ypr,
                     MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_
-                    {ppa_select}
+                    {ppa_select}{season_sel}
                 FROM players p
-                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving' AND ps.season = {season}
+                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving' {ps_season}
                 JOIN teams t ON ps.team = t.name
                 {ppa_join}
                 WHERE p.position IN ('WR','TE','RB','ATH')
-                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
+                  AND t.conference NOT IN ('{fcs_in}') {excl}
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{ppa_group}{season_grp}
                 HAVING MAX(CASE WHEN ps.stat_type='REC' THEN CAST(ps.stat AS REAL) END) >= {min_rec}
+                {top_sql}
             ''', params)
             for r in cursor.fetchall():
                 row = {
@@ -2401,6 +2487,7 @@ def leaderboards(category='passing'):
                     'yds': int(r[10] or 0), 'td': int(r[11] or 0), 'rec': int(r[12] or 0),
                     'ypr': round(float(r[13] or 0), 1), 'long': int(r[14] or 0),
                     'gp': None, 'tgt': None, 'cth_pct': None, 'ypg': None,
+                    'season': int(r[-1]) if all_time else season,
                 }
                 if view == 'advanced':
                     row['epa_play']  = round(float(r[15]), 3) if r[15] is not None else None
@@ -2424,26 +2511,39 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='PD'    THEN CAST(ps.stat AS REAL) END) as pd,
                     MAX(CASE WHEN ps.stat_type='TD'    THEN CAST(ps.stat AS REAL) END) as td,
                     MAX(CASE WHEN pi.stat_type='INT'   THEN CAST(pi.stat AS REAL) END) as int_
+                    {season_sel}
                 FROM players p
-                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive' AND ps.season = {season}
+                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive' {ps_season}
                 JOIN teams t ON ps.team = t.name
-                LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions' AND pi.season = {season}
+                LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions' AND pi.season = ps.season
                 WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
-                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
+                  AND t.conference NOT IN ('{fcs_in}') {excl}
                   {conf_sql} {team_sql} {pos_sql}
-                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color{season_grp}
                 HAVING MAX(CASE WHEN ps.stat_type='TOT' THEN CAST(ps.stat AS REAL) END) >= {min_tot}
+                {top_sql}
             ''', params)
             defense_rows = cursor.fetchall()
 
+            # Tackle share needs the player's own team-season total, so the map
+            # is keyed by (team, season) — in all-time mode one team appears
+            # once per year and a single team key would collide across them.
             team_tot_map = {}
             if view == 'advanced':
-                cursor.execute('''
-                    SELECT team, SUM(CAST(stat AS REAL))
-                    FROM player_stats WHERE category='defensive' AND stat_type='TOT' AND season=%s
-                    GROUP BY team
-                ''', (season,))
-                team_tot_map = {r[0]: r[1] for r in cursor.fetchall()}
+                if all_time:
+                    cursor.execute('''
+                        SELECT team, season, SUM(CAST(stat AS REAL))
+                        FROM player_stats WHERE category='defensive' AND stat_type='TOT'
+                        GROUP BY team, season
+                    ''')
+                else:
+                    cursor.execute('''
+                        SELECT team, season, SUM(CAST(stat AS REAL))
+                        FROM player_stats WHERE category='defensive' AND stat_type='TOT'
+                          AND season=%s
+                        GROUP BY team, season
+                    ''', (season,))
+                team_tot_map = {(r[0], r[1]): r[2] for r in cursor.fetchall()}
 
             for r in defense_rows:
                 tot, solo = int(r[10] or 0), int(r[11] or 0)
@@ -2458,28 +2558,32 @@ def leaderboards(category='passing'):
                     'td':    int(r[15] or 0),
                     'int':   int(r[16] or 0),
                     'gp': None, 'ff': None,
+                    'season': int(r[-1]) if all_time else season,
                 }
                 if view == 'advanced':
-                    team_tot = team_tot_map.get(r[3])
+                    team_tot = team_tot_map.get((r[3], row['season']))
                     row['tkl_pct']  = round(tot / team_tot * 100, 1) if team_tot else None
                     row['epa_play'] = None
                     row['prsh']     = None
                 players.append(row)
 
-        players, pagination = _sort_and_paginate(players, sort_col, sort_dir, page_raw)
+        players, pagination = _sort_and_paginate(
+            players, sort_col, sort_dir, page_raw,
+            top_n=ALL_TIME_TOP_N if all_time else None)
 
     finally:
         release_db(conn)
 
     current_filters = {
-        'mode': 'player', 'category': category, 'view': view, 'season': season,
+        'mode': 'player', 'category': category, 'view': view,
+        'season': ALL_TIME if all_time else season,
         'conf': conf_filter, 'team': team_filter, 'pos': pos_filter,
         'qualified': '1' if qualified else '0', 'sort': sort_col, 'dir': sort_dir,
     }
     has_advanced = len(PLAYER_COLUMNS[category]['advanced']) > 0
     return render_template('leaderboards.html',
         mode='player', players=players, category=category, view=view,
-        season=season, available_seasons=get_available_seasons(),
+        season=season, all_time=all_time, available_seasons=get_available_seasons(),
         conferences=conferences, all_teams=all_teams,
         conf_filter=conf_filter, team_filter=team_filter, pos_filter=pos_filter,
         min_filter=min_filter, sort_col=sort_col, sort_dir=sort_dir,
@@ -2634,7 +2738,7 @@ def leaderboards_teams(category='savant'):
     if category not in TEAM_CATEGORY_DEFAULTS:
         category = 'offense'
 
-    season      = requested_season()
+    season, all_time = requested_scope()
     conf_filter = request.args.get('conf', '')
     team_filter = request.args.get('team', '')
     sort_col    = request.args.get('sort', '')
@@ -2671,15 +2775,54 @@ def leaderboards_teams(category='savant'):
         if conf_filter: params.append(conf_filter)
         if team_filter: params.append(team_filter)
 
+        # ── Season scoping ──────────────────────────────────────────────────
+        # One season: one row per team, every stat table pinned to that year.
+        # All-time: one row per team-SEASON, drawn from the union of the
+        # per-season tables (a team only appears for years it actually has
+        # data), with each stat table joined on that row's year.
+        if all_time:
+            src = '''(SELECT team AS name, season FROM team_stats
+                      UNION SELECT team, season FROM savant_ratings
+                      UNION SELECT team, season FROM sp_ratings) tsn
+                     JOIN teams t ON t.name = tsn.name'''
+            js         = 'tsn.season'
+            excl       = _promoted_fbs_exclusion_all('t.name', 'tsn.season')
+            season_sel = 'tsn.season AS season,'
+            # One row per team per season: the final poll of each year.
+            ap_join = '''LEFT JOIN (
+                SELECT DISTINCT ON (season, team) season, team, rank
+                FROM ap_rankings
+                ORDER BY season, team, (season_type = 'postseason') DESC, week DESC
+            ) ar ON ar.team = t.name AND ar.season = tsn.season'''
+        else:
+            src        = 'teams t'
+            js         = str(season)
+            excl       = _promoted_fbs_exclusion(season, 't.name')
+            season_sel = f'{season} AS season,'
+            # ap_rankings holds every weekly poll (many rows per team), so pin
+            # to the FINAL poll — otherwise this join multiplies each ranked
+            # team into one row per week it was ranked. Matches get_ap_rankings().
+            ap_join = f'''LEFT JOIN (
+                SELECT team, rank FROM ap_rankings
+                WHERE season = {season}
+                  AND (season_type, week) = (
+                      SELECT season_type, week FROM ap_rankings WHERE season = {season}
+                      ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
+            ) ar ON ar.team = t.name'''
+
         cursor.execute(f'''
-            SELECT COUNT(*) FROM teams t
-            WHERE t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 't.name')}
+            SELECT COUNT(*) FROM {src}
+            WHERE t.conference NOT IN ('{fcs_in}') {excl}
             {conf_sql} {team_sql}
         ''', params)
-        page, offset, pagination = _pagination_ctx(page_raw, cursor.fetchone()[0])
+        total_rows = cursor.fetchone()[0]
+        if all_time:
+            total_rows = min(total_rows, ALL_TIME_TOP_N)
+        page, offset, pagination = _pagination_ctx(page_raw, total_rows)
 
         cursor.execute(f'''
             SELECT
+                {season_sel}
                 t.name, t.conference, t.logo_dark, t.color, ar.rank as ap_rank,
                 ts.off_ppa, ts.off_success_rate, ts.off_explosiveness, ts.off_power_success,
                 ts.off_line_yards, ts.off_second_level_yards, ts.off_open_field_yards,
@@ -2695,23 +2838,13 @@ def leaderboards_teams(category='savant'):
                 svr.games AS svr_games, svr.raw_off, svr.raw_def,
                 svr.drives_off, svr.drives_def, svr.net_ranking,
                 RANK() OVER (ORDER BY {sort_sql} {goodness_dir} NULLS LAST) as goodness_rank
-            FROM teams t
-            LEFT JOIN team_stats ts ON ts.team = t.name AND ts.season = {season}
-            LEFT JOIN team_advanced adv ON adv.team = t.name AND adv.season = {season}
-            LEFT JOIN sp_ratings sp ON sp.team = t.name AND sp.season = {season}
-            LEFT JOIN savant_ratings svr ON svr.team = t.name AND svr.season = {season}
-            -- ap_rankings now holds every weekly poll (many rows per team), so
-            -- pin to the FINAL poll (postseason if any, else latest regular
-            -- week) — otherwise this join multiplies each ranked team into one
-            -- leaderboard row per week it was ranked. Matches get_ap_rankings().
-            LEFT JOIN (
-                SELECT team, rank FROM ap_rankings
-                WHERE season = {season}
-                  AND (season_type, week) = (
-                      SELECT season_type, week FROM ap_rankings WHERE season = {season}
-                      ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
-            ) ar ON ar.team = t.name
-            WHERE t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 't.name')}
+            FROM {src}
+            LEFT JOIN team_stats ts ON ts.team = t.name AND ts.season = {js}
+            LEFT JOIN team_advanced adv ON adv.team = t.name AND adv.season = {js}
+            LEFT JOIN sp_ratings sp ON sp.team = t.name AND sp.season = {js}
+            LEFT JOIN savant_ratings svr ON svr.team = t.name AND svr.season = {js}
+            {ap_join}
+            WHERE t.conference NOT IN ('{fcs_in}') {excl}
             {conf_sql} {team_sql}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
             LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
@@ -2732,7 +2865,7 @@ def leaderboards_teams(category='savant'):
             teams_out.append({
                 'rank': offset + i + 1, 'name': d['name'], 'conf': d['conference'],
                 'logo': d['logo_dark'], 'color': d['color'], 'ap_rank': d['ap_rank'],
-                'sort_bg': bg,
+                'sort_bg': bg, 'season': d['season'],
                 'off_ppa': _r(d['off_ppa']), 'off_success_rate': _pct(d['off_success_rate']),
                 'off_explosiveness': _r(d['off_explosiveness']), 'off_power_success': _pct(d['off_power_success']),
                 'off_line_yards': _r(d['off_line_yards'], 2), 'off_second_level_yards': _r(d['off_second_level_yards'], 2),
@@ -2764,14 +2897,15 @@ def leaderboards_teams(category='savant'):
         release_db(conn)
 
     current_filters = {
-        'mode': 'team', 'category': category, 'view': view, 'season': season,
+        'mode': 'team', 'category': category, 'view': view,
+        'season': ALL_TIME if all_time else season,
         'conf': conf_filter, 'team': team_filter,
         'sort': sort_col, 'dir': sort_dir,
     }
     has_advanced = len(TEAM_COLUMNS[category]['advanced']) > 0
     return render_template('leaderboards.html',
         mode='team', teams=teams_out, category=category, view=view,
-        season=season, available_seasons=get_available_seasons(),
+        season=season, all_time=all_time, available_seasons=get_available_seasons(),
         conferences=conferences, all_teams=all_teams,
         conf_filter=conf_filter, team_filter=team_filter,
         sort_col=sort_col, sort_dir=sort_dir,

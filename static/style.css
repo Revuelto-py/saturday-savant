@@ -1199,6 +1199,15 @@ tr.postseason-row:hover {
 .lb-td-player { padding: 11px 16px; width: 160px; }
 .lb-td-team { padding: 11px 16px; width: 130px; }
 .lb-td-pos { padding: 11px 10px; text-align: center; width: 50px; }
+/* All-time boards: which year the season belongs to. Tabular figures so the
+   years stack in a straight column. */
+.lb-th-season { width: 68px; text-align: center; }
+.lb-td-season {
+    padding: 11px 10px; text-align: center; width: 68px;
+    font-family: var(--font-display); font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary); white-space: nowrap;
+}
 .lb-td-stat {
     padding: 11px 10px;
     text-align: right;
