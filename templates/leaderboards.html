@@ -2,7 +2,7 @@
 {% set _cat_label = {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) %}
 {% block title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} Leaderboards · {{ _cat_label }} · Saturday Savant{% endblock %}
 {% block og_title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} {{ _cat_label }} Leaders · Saturday Savant{% endblock %}
-{% block og_description %}{% if all_time %}All-time{% else %}{{ season }}{% endif %} FBS {% if mode == 'team' %}team{% else %}player{% endif %} {{ _cat_label }} leaders, ranked on Saturday Savant.{% endblock %}
+{% block og_description %}{{ season }} FBS {% if mode == 'team' %}team{% else %}player{% endif %} {{ _cat_label }} leaders, ranked on Saturday Savant.{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <div class="page-wrapper" style="padding-top:32px">
@@ -42,7 +42,7 @@
         {% else %}
             {% for c, l in PLAYER_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
         {% endif %}
-        <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {% if all_time %}All-time{% else %}{{ season }} Season{% endif %}</span>
+        <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} Season</span>
     </h1>
 </div>
 
@@ -70,9 +70,8 @@
             <div class="lb-filter-label">Season</div>
             {% if available_seasons and available_seasons|length > 1 %}
             <select name="season" class="lb-select" onchange="lbFilter(this)">
-                <option value="all" {{ 'selected' if all_time else '' }}>All-time</option>
                 {% for s in available_seasons %}
-                <option value="{{ s }}" {{ 'selected' if not all_time and s == season else '' }}>{{ s }}</option>
+                <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
                 {% endfor %}
             </select>
             {% else %}
@@ -144,7 +143,6 @@
             <th class="lb-th lb-th-player">Player</th>
             <th class="lb-th lb-th-pos">Pos</th>
             <th class="lb-th lb-th-team">Team</th>
-            {% if all_time %}<th class="lb-th lb-th-season">Season</th>{% endif %}
             {% for key, label, tooltip, sortable, fmt in column_defs %}
             <th class="lb-th lb-th-stat stat-header{{ ' lb-th-sorted' if sort_col == key else '' }}{{ ' lb-th-na' if fmt == 'na' else '' }}"
                 data-tooltip="{{ tooltip }}"
@@ -156,10 +154,10 @@
     </thead>
     <tbody>
         {% for p in players %}
-        <tr class="lb-row" onclick="window.location.href='{{ player_url(p.id, p.season or season) }}'">
+        <tr class="lb-row" onclick="window.location.href='{{ player_url(p.id, season) }}'">
             <td class="lb-td-rank">{{ p.rank }}</td>
             <td class="lb-td-player">
-                <a href="{{ player_url(p.id, p.season or season) }}" onclick="event.stopPropagation()" class="lb-player-link">
+                <a href="{{ player_url(p.id, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
                     {% if p.headshot %}
                     <img src="{{ p.headshot }}" alt="{{ p.name }} headshot" class="lb-headshot">
                     {% else %}
@@ -170,12 +168,11 @@
             </td>
             <td class="lb-td-pos"><span class="lb-pos-pill">{{ p.pos or '—' }}</span></td>
             <td class="lb-td-team">
-                <a href="{{ team_url(p.team, p.season or season) }}" onclick="event.stopPropagation()" class="lb-team-link">
+                <a href="{{ team_url(p.team, season) }}" onclick="event.stopPropagation()" class="lb-team-link">
                     {% if p.logo %}<img src="{{ p.logo }}" alt="{{ p.team }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-team-name">{{ p.team }}</span>
                 </a>
             </td>
-            {% if all_time %}<td class="lb-td-season">{{ p.season }}</td>{% endif %}
             {% for key, label, tooltip, sortable, fmt in column_defs %}
             {{ stat_cell(p.get(key), fmt, sort_col == key, p.rank <= 10) }}
             {% endfor %}
@@ -216,9 +213,8 @@
             <div class="lb-filter-label">Season</div>
             {% if available_seasons and available_seasons|length > 1 %}
             <select name="season" class="lb-select" onchange="lbFilter(this)">
-                <option value="all" {{ 'selected' if all_time else '' }}>All-time</option>
                 {% for s in available_seasons %}
-                <option value="{{ s }}" {{ 'selected' if not all_time and s == season else '' }}>{{ s }}</option>
+                <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
                 {% endfor %}
             </select>
             {% else %}
@@ -274,7 +270,6 @@
             <th class="lb-th lb-th-rank">RK</th>
             <th class="lb-th lb-th-player">Team</th>
             <th class="lb-th lb-th-pos">AP</th>
-            {% if all_time %}<th class="lb-th lb-th-season">Season</th>{% endif %}
             {% for key, label, tooltip, sortable, fmt in column_defs %}
             <th class="lb-th lb-th-stat stat-header{{ ' lb-th-sorted' if sort_col == key else '' }}{{ ' lb-th-na' if fmt == 'na' else '' }}"
                 data-tooltip="{{ tooltip }}"
@@ -287,10 +282,10 @@
     </thead>
     <tbody>
         {% for t in teams %}
-        <tr class="lb-row" onclick="window.location.href='{{ team_url(t.name, t.season or season) }}'">
+        <tr class="lb-row" onclick="window.location.href='{{ team_url(t.name, season) }}'">
             <td class="lb-td-rank">{{ t.rank }}</td>
             <td class="lb-td-player">
-                <a href="{{ team_url(t.name, t.season or season) }}" onclick="event.stopPropagation()" class="lb-player-link">
+                <a href="{{ team_url(t.name, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
                     {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-player-name">{{ t.name }}</span>
                 </a>
@@ -298,7 +293,6 @@
             <td class="lb-td-pos">
                 {% if t.ap_rank %}<span class="lb-ap-pill">#{{ t.ap_rank }}</span>{% endif %}
             </td>
-            {% if all_time %}<td class="lb-td-season">{{ t.season }}</td>{% endif %}
             {% for key, label, tooltip, sortable, fmt in column_defs %}
             {{ stat_cell(t.get(key), fmt, sort_col == key, t.rank <= 10) }}
             {% endfor %}
