@@ -356,6 +356,37 @@ def requested_season():
         return s
     return CURRENT_SEASON
 
+@cache.memoize(timeout=21600)
+def get_ranking_seasons():
+    """Seasons that have an AP poll loaded, newest first.
+
+    Deliberately NOT get_available_seasons(): that one keys off player_stats, so
+    a season only appears once it has produced game stats. The preseason poll
+    lands weeks before the first snap, so gating rankings on stats made the new
+    season's polls unreachable — the rows were in ap_rankings but the season was
+    neither offered in the selector nor accepted via ?season=."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT season FROM ap_rankings '
+                       'WHERE season IS NOT NULL ORDER BY season DESC')
+        return [r[0] for r in cursor.fetchall()] or get_available_seasons()
+    except Exception:
+        conn.rollback()          # ap_rankings absent on a fresh DB
+        return get_available_seasons()
+    finally:
+        release_db(conn)
+
+def requested_ranking_season():
+    """Season for the rankings page: ?season=YYYY when that year has a poll,
+    else the newest year that does — so the site follows the current poll
+    through the preseason instead of sitting on last season's final."""
+    seasons = get_ranking_seasons()
+    s = request.args.get('season', type=int)
+    if s and s in seasons:
+        return s
+    return seasons[0] if seasons else CURRENT_SEASON
+
 def get_ap_rankings(cursor, season=CURRENT_SEASON):
     """The FINAL AP poll for a season as {team: rank} — the postseason poll if
     it exists, else the latest regular-season week. ap_rankings now holds every
@@ -3857,7 +3888,7 @@ def api_players():
 @app.route('/rankings')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def rankings():
-    season = requested_season()
+    season = requested_ranking_season()
 
     def poll_label(wk, st):
         if st == 'postseason':
@@ -3912,7 +3943,7 @@ def rankings():
                            poll_options=poll_options,
                            sel_label=poll_label(sel_week, sel_type) if sel_week else None,
                            sel_is_final=(sel_type == 'postseason'),
-                           season=season, available_seasons=get_available_seasons())
+                           season=season, available_seasons=get_ranking_seasons())
 
 
 # ── Drives tab classification helpers ──────────────────────────────────────
