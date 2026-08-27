@@ -1955,6 +1955,21 @@ def format_kickoff(start_date_raw, time_tbd):
     except Exception:
         return (str(start_date_raw)[:10], 'TBD')
 
+def kickoff_et(start_date_raw):
+    """The stored (UTC) kickoff as an Eastern datetime, or None. Separate from
+    format_kickoff so callers can group and sort by the real instant instead of
+    parsing the display string back out."""
+    if not start_date_raw:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(str(start_date_raw).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(ZoneInfo('America/New_York'))
+    except Exception:
+        return None
+
+
 def build_game_card(row, ap_weekly, rivalry_map):
     """Turn a GAME_CARD_SELECT row into the dict the game_card macro consumes.
     Handles both completed games (scores, winner) and scheduled ones (kickoff
@@ -1965,6 +1980,7 @@ def build_game_card(row, ap_weekly, rivalry_map):
      home_logo, away_logo, completed, start_date, time_tbd,
      home_color, away_color) = row
     date_str, time_str = format_kickoff(start_date, time_tbd)
+    et = kickoff_et(start_date)
     is_post = 'POST' in str(season_type or '').upper()
     ap = ap_asof(ap_weekly, week, is_post) if ap_weekly else {}
     return {
@@ -1981,6 +1997,13 @@ def build_game_card(row, ap_weekly, rivalry_map):
         'away_rank': ap.get(away),
         'rivalry': rivalry_map.get((home, away), '') if rivalry_map else '',
         'kickoff_date': date_str, 'kickoff_time': time_str,
+        # Eastern calendar day, for grouping a week's slate by day. A CFB week
+        # spans up to ten days, so the day — not the week — is the unit anyone
+        # actually plans around.
+        'day_key': et.strftime('%Y-%m-%d') if et else None,
+        'day_name': et.strftime('%A') if et else 'Date TBD',
+        'day_date': et.strftime('%b %-d') if et else '',
+        'kickoff_hm': None if (time_tbd or not et) else et,
     }
 
 @app.route('/')
@@ -2141,6 +2164,37 @@ def games_hub():
         ap_weekly = get_ap_week_map(cursor, season)   # poll as-of each game's week
         games = [build_game_card(row, ap_weekly, rivalry_map) for row in raw_games]
 
+        # ── Group the slate by day ──────────────────────────────────────
+        # A week spans up to ten days (2026 week 1 runs Aug 29 - Sep 7), so one
+        # flat grid makes the reader check each card's corner to see what day
+        # it is. Games already arrive ordered by start_date, so a single pass
+        # groups them. Skipped for a team view, where the schedule is one game
+        # per day and a header per card would be pure overhead.
+        day_groups = []
+        if not sel_team:
+            for key, grp in groupby(games, key=lambda g: g['day_key']):
+                grp = list(grp)
+                # Kickoff window: the shape of the day at a glance — a Saturday
+                # running noon to midnight reads very differently from a
+                # three-game Thursday night. Only games with a confirmed time
+                # count; roughly half the slate is still TBD this far out.
+                times = sorted(g['kickoff_hm'] for g in grp if g['kickoff_hm'])
+                window = ''
+                if times:
+                    first, last = times[0], times[-1]
+                    fmt = lambda d: d.strftime('%-I:%M %p')
+                    window = fmt(first) if first == last else f'{fmt(first)} – {fmt(last)} ET'
+                    if first == last:
+                        window += ' ET'
+                day_groups.append({
+                    'key': key,
+                    'name': grp[0]['day_name'],
+                    'date': grp[0]['day_date'],
+                    'games': grp,
+                    'count': len(grp),
+                    'window': window,
+                })
+
         # Savant Forecast chips for upcoming games — one batch read of the
         # precomputed predictions (predict_games.py), keyed by game id.
         forecasts = {}
@@ -2187,7 +2241,7 @@ def games_hub():
         release_db(conn)
 
     return render_template('games.html',
-        games=games, seasons=seasons, season=season, forecasts=forecasts,
+        games=games, day_groups=day_groups, seasons=seasons, season=season, forecasts=forecasts,
         completed_forecasts=completed_forecasts,
         week_upsets=week_upsets, upsets_label=upsets_label,
         week_options=week_options, sel_week=sel_week, sel_stype=sel_stype,

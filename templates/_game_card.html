@@ -1,17 +1,24 @@
 {# Shared game card — used by the home page and the /games hub.
    Takes a dict built by build_game_card() in main.py. Renders a final score
    for completed games and a kickoff date/time for scheduled (future) ones. #}
-{% macro game_card(g, prob=None, forecast=None) %}
+{% macro game_card(g, prob=None, forecast=None, show_date=True) %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
 <a class="game-card-v2{{ ' is-upcoming' if not g.completed else '' }}" href="/game/{{ g.id }}">
+    {# Under a day header the week label is identical on every card and the date
+       is stated above, so both are dropped — a named event (bowl, kickoff
+       classic) still earns its line. With nothing left to say, the whole head
+       is omitted rather than left as an empty row with a rule under it. #}
+    {% set head_note = g.notes or ('Week ' ~ g.week if show_date else '') %}
+    {% if head_note or g.completed or show_date %}
     <div class="gc-head">
-        <span class="gc-note">{{ g.notes or 'Week ' ~ g.week }}</span>
+        <span class="gc-note">{{ head_note }}</span>
         <span class="gc-badges">
             {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
-            {% if g.completed %}<span class="gc-final">Final</span>{% else %}<span class="gc-upcoming">{{ g.kickoff_date }}</span>{% endif %}
+            {% if g.completed %}<span class="gc-final">Final</span>{% elif show_date %}<span class="gc-upcoming">{{ g.kickoff_date }}</span>{% endif %}
         </span>
     </div>
+    {% endif %}
 
     <div class="gc-team{{ ' winner' if away_won else '' }}">
         {% if g.away_logo %}<img src="{{ g.away_logo }}" alt="{{ g.away }} logo" loading="lazy">{% endif %}

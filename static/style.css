@@ -47,6 +47,11 @@
   /* Radius */
   --r-sm: 6px; --r-md: 10px; --r-lg: 14px; --r-pill: 999px;
 
+  /* Height of the sticky navbar (base.html sets .navbar { height: 64px }).
+     Anything that pins itself below the nav offsets by this. Mobile
+     (<768px) makes the navbar height:auto, so nothing pins there. */
+  --nav-h: 64px;
+
   /* Elevation + motion */
   --shadow-card: 0 2px 12px rgba(0,0,0,0.4);
   --shadow-hover: 0 8px 32px rgba(0,0,0,0.55);
@@ -313,6 +318,76 @@
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 10px;
     margin-top: var(--s4);
+}
+
+/* ── Games hub: the slate, grouped by day ──────────────────────────────────
+   A CFB "week" spans up to ten days, so the day is what actually organises a
+   slate. The band is sticky because the grid runs several thousand pixels and
+   the day is the one fact you lose track of while scrolling. It's the only
+   sticky element on the site — earned here by the length of the list. */
+.day-block + .day-block { margin-top: var(--s6); }
+.day-head {
+    /* Pinned just under the sticky navbar, not at 0 — at 0 the band slides
+       behind the nav (z-index 1000) and the day name is clipped. */
+    position: sticky;
+    top: var(--nav-h);
+    z-index: 5;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s3);
+    padding: var(--s3) 0 var(--s2);
+    /* Opaque: cards scroll under this, and a translucent band would let team
+       logos read through the day name. */
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--border);
+}
+.day-head .day-name {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: var(--text-lg);
+    line-height: 1;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-primary);
+}
+.day-head .day-date {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+.day-head .day-meta {
+    margin-left: auto;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s3);
+    font-size: var(--text-xs);
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+/* The kickoff window — the shape of the day. A Saturday running noon to
+   midnight reads very differently from a three-game Thursday night, and no
+   individual card carries that. */
+.day-head .day-window {
+    padding-left: var(--s3);
+    border-left: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+.day-block .games-grid { margin-top: var(--s3); }
+
+/* Below the navbar's own breakpoint it becomes height:auto (the search field
+   wraps to a second row), so there is no dependable offset to pin against —
+   and a ~118px nav plus a pinned band would eat a third of a phone viewport.
+   The day headers still divide the slate; they just scroll with it. */
+@media (max-width: 767.98px) {
+    .day-head { position: static; }
+}
+@media (max-width: 560px) {
+    .day-head { flex-wrap: wrap; gap: 0 var(--s2); }
+    /* The count survives; the window is the first thing to go when the band
+       would otherwise wrap onto a second line. */
+    .day-head .day-window { display: none; }
 }
 @media (max-width: 575.98px) {
     .games-grid { grid-template-columns: minmax(0, 1fr); }
