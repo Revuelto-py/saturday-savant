@@ -78,6 +78,34 @@ in the web service's in-process `SimpleCache`. A deploy or `/admin/clear-cache`
 wipes only the in-memory page cache; the precomputed stores persist and refresh
 **only on this cron schedule** (or self-heal on a cache miss).
 
+## Second Cron Job — game-day scores (`fetch_scores.py`)
+
+The weekly chain runs Mondays, so between Saturday kickoff and Monday 10:00 UTC
+the `games` table still says "Scheduled" with no score — about **30 hours** of
+stale results on the ticker, the /games grid and every game page.
+
+`fetch_scores.py` closes that window. It is deliberately NOT the weekly fetch:
+one CFBD call, then `UPDATE` only the rows whose score or completion changed.
+It never DELETEs or INSERTs, so unlike `fetch_data.py` it cannot wipe a season
+— the worst case is a no-op. Game pages need nothing further, because
+`/game/<id>` already falls back to a live ESPN summary fetch (and stores it)
+when a completed game has no stored summary.
+
+1. Render Dashboard → **New +** → **Cron Job** (a second one; the weekly job stays).
+2. Same repo/branch/runtime/build command as the weekly job.
+3. **Command:** `python3 fetch_scores.py`
+4. **Schedule (UTC):** `*/10 16-23,0-6 * * 4,5,6,0` — every 10 minutes across the
+   Thursday-through-Sunday game windows. A 10-minute floor is deliberate: a run
+   that changes nothing skips the cache clear entirely, and one that does change
+   something clears the whole page cache, so a tighter loop would keep the site
+   permanently cold.
+5. **Environment variables:** `DATABASE_URL`, `CFBD_API_KEY`, `ADMIN_KEY`
+   (`ADMIN_KEY` is what lets the run clear the live page cache — without it the
+   scores land in Postgres but the site keeps serving cached pages until the TTL
+   expires).
+
+Manual run: `python3 fetch_scores.py` (all weeks) or `--week 1` (smaller payload).
+
 ## Manual fallback
 
 If the cron is ever paused, run the whole chain by hand from the project root:
