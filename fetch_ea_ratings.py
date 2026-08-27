@@ -47,6 +47,14 @@ load_dotenv()
 UA = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/120 Safari/537.36')
 BASE = 'https://www.ea.com/games/ea-sports-college-football/ratings?page='
+# Sanity floor for an unattended run. The real set is ~9,000 players; the paging
+# loop stops on the first page that doesn't parse, so a blocked request or a
+# changed page shape yields a SHORT list rather than an error. Overwriting the
+# table with that would silently drop the starter model back to production-only
+# scoring — a wrong lineup with no failure anywhere. Same guard the player-stats
+# refetch uses: refuse the write instead of wiping good data.
+EA_MIN_ROWS = 5000
+EA_MIN_RETAINED = 0.90   # or a >10% drop vs what's already stored
 NEXT_RX = re.compile(r'__NEXT_DATA__[^>]*>(.*?)</script>', re.S)
 
 # The six attributes we persist (EA stat key -> our column). EA exposes ~50
@@ -225,6 +233,22 @@ def main():
         _known_teams.update(r[0] for r in cursor.fetchall())
 
         players = fetch_all()
+
+        # EA's list can carry the same ea_id twice (as of the 2026 preseason
+        # refresh, one exact duplicate row). ea_id is our primary key, so an
+        # un-deduped batch aborts the whole INSERT on a unique violation —
+        # which, unattended, means the ratings silently stop refreshing.
+        # First occurrence wins; the observed dupes are byte-identical anyway.
+        seen, deduped = set(), []
+        for it in players:
+            if it.get('id') in seen:
+                continue
+            seen.add(it.get('id'))
+            deduped.append(it)
+        if len(deduped) != len(players):
+            print(f'de-duplicated {len(players) - len(deduped)} repeated ea_id row(s)',
+                  flush=True)
+        players = deduped
         if not players:
             print('No players fetched — aborting without touching the table.')
             return
@@ -258,6 +282,16 @@ def main():
                 stat('changeOfDirection'), stat('injury'), stat('awareness'),
                 pid, method if pid else None,
             ))
+
+        # ── Refuse a suspect fetch (see EA_MIN_ROWS) ────────────────────
+        cursor.execute('SELECT COUNT(*) FROM ea_ratings')
+        existing = cursor.fetchone()[0]
+        if len(rows) < EA_MIN_ROWS or (existing and len(rows) < existing * EA_MIN_RETAINED):
+            print(f'REFUSING to overwrite ea_ratings: fetch returned {len(rows)} rows '
+                  f'(floor {EA_MIN_ROWS}, currently stored {existing}). '
+                  f'Leaving the existing table intact.', flush=True)
+            conn.rollback()
+            raise SystemExit(1)
 
         cursor.execute('TRUNCATE ea_ratings')
         execute_values(cursor, '''

@@ -24,7 +24,10 @@ from dotenv import load_dotenv
 
 from season_util import current_cfb_season
 
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
+# No override: a DATABASE_URL already in the environment wins, matching the rest
+# of the weekly chain (a stale .env otherwise redirects this step alone to a
+# different database than the twelve around it).
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 PROVIDER_PREF = ['consensus', 'Bovada', 'ESPN Bet', 'DraftKings', 'William Hill (New Jersey)']
 

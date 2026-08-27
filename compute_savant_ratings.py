@@ -97,7 +97,13 @@ from dotenv import load_dotenv
 
 from season_util import current_cfb_season
 
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
+# Load .env WITHOUT override: a DATABASE_URL already in the environment wins.
+# This was the only script of the thirteen in run_weekly.sh that overrode the
+# real environment from .env, so a stale .env silently redirected it to a
+# different database than the rest of the chain — mid-run, after eight steps had
+# already written elsewhere. On Render there is no .env and dashboard vars are
+# used either way; this only changes local/manual runs, making them consistent.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 # Season comes from the CLI (first numeric arg); the active season is the
 # default. Seasons with stored ESPN game summaries (2025+, kept fresh by the

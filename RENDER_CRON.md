@@ -9,19 +9,45 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 
 `run_weekly.sh` runs, in order (`set -e` aborts on any failure):
 
-1. `fetch_data.py` — player box scores + PPA
+1. `fetch_data.py` — games (incl. scores/completion) + player box scores + PPA
 2. `fetch_team_stats.py` — team stats
 3. `fetch_advanced.py` — advanced team stats
 4. `fetch_sp.py` — SP+ ratings
-5. `fetch_rankings.py` — AP rankings
-6. `fetch_game_summaries.py` — game summaries / drives
-7. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
-8. `backfill_pools.py` — percentile peer pools → `pool_store`
-9. `precompute.py` — team-page + returning-production precompute → `pool_store`
+5. `fetch_rankings.py` — AP rankings (every weekly poll, not just the final)
+6. `fetch_coaches.py` — head coaches, current season *(non-fatal)*
+7. `fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
+8. `fetch_game_summaries.py` — game summaries / drives
+9. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
+10. `backfill_pools.py` — percentile peer pools → `pool_store`
+11. `precompute.py` — team-page + returning-production precompute → `pool_store`
+12. `fetch_betting_lines.py` — Vegas lines, active season
+13. `predict_games.py` — Savant Forecast: score last week, predict upcoming
 
-Steps 8–9 **delete their stale `pool_store` keys before rebuilding**, so a
+Steps 10–11 **delete their stale `pool_store` keys before rebuilding**, so a
 re-run refreshes against the newly-fetched tables instead of reading last week's
 values back out.
+
+Two steps are deliberately **non-fatal** (`|| echo`), so a third-party hiccup
+can't abort the chain and leave the week half-refreshed:
+
+- **`fetch_coaches`** — CFBD publishes a new season's coaching records late, so
+  an empty response is expected in the preseason. It never wipes existing rows
+  on an empty fetch.
+- **`fetch_ea_ratings`** — an internal-only signal for lineup/starter selection,
+  never displayed. It scrapes a third-party page, so it refuses to overwrite the
+  table when a fetch comes back short or blocked (`EA_MIN_ROWS`), leaving last
+  week's ratings in place rather than silently dropping the starter model back
+  to production-only scoring.
+
+### Season rollover
+
+Every fetch script derives its season from `season_util.current_cfb_season()`
+(date-driven, rolls over in February), and the two precompute steps key off the
+seasons that actually have stats loaded. So the first run after a new season's
+opening weekend picks the new year up on its own — no edit needed. The site's
+*display* default is separate and only advances once the season has real stats,
+which is why the preseason shows last season while the pipeline already ingests
+the new one.
 
 Roster / transfer / NFL-status / offseason scripts are event-driven, not weekly
 — run them by hand during the portal windows, signing day, and the post-draft
