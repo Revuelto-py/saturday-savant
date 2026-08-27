@@ -94,11 +94,19 @@ when a completed game has no stored summary.
 1. Render Dashboard → **New +** → **Cron Job** (a second one; the weekly job stays).
 2. Same repo/branch/runtime/build command as the weekly job.
 3. **Command:** `python3 fetch_scores.py`
-4. **Schedule (UTC):** `*/10 16-23,0-6 * * 4,5,6,0` — every 10 minutes across the
-   Thursday-through-Sunday game windows. A 10-minute floor is deliberate: a run
-   that changes nothing skips the cache clear entirely, and one that does change
-   something clears the whole page cache, so a tighter loop would keep the site
-   permanently cold.
+4. **Schedule (UTC):** `*/10 * * * *` — every 10 minutes, all week.
+
+   Do **not** narrow this to "game days". The 2026 slate kicks off on every day
+   of the week (Sat 720, Sun 70, Fri 45, Wed 24, Thu 22, Tue 6, Mon 1 — Tuesday
+   and Wednesday are November MACtion, Monday is Labor Day), and kickoffs land in
+   every UTC hour except 06:00-14:00. A day-or-hour window has to be re-reasoned
+   every time the schedule shifts, and gets DST wrong twice a year; running
+   always has no gaps to get wrong.
+
+   The 10-minute floor is the part that matters: a run that changes nothing skips
+   the cache clear entirely (so an off-hours no-op costs the site nothing), while
+   one that does change something clears the whole page cache — a tighter loop
+   would keep every page permanently cold.
 5. **Environment variables:** `DATABASE_URL`, `CFBD_API_KEY`, `ADMIN_KEY`
    (`ADMIN_KEY` is what lets the run clear the live page cache — without it the
    scores land in Postgres but the site keeps serving cached pages until the TTL
