@@ -1938,6 +1938,22 @@ GAME_CARD_SELECT = '''
     t1.color, t2.color
 '''
 
+# CFBD's `notes` field mixes two unrelated things: real event titles ("Aflac
+# Kickoff", "ACC Championship", "Aer Lingus College Football Classic") and
+# broadcast-window placeholders ("FLEX: 3:30 - 4:30pm OR 6 - 8pm ET start").
+# For 2026 the placeholders dominate — 62 of 68 — and they are scheduling
+# scaffolding, not the name of anything, so they should never surface as a
+# game's title.
+_BROADCAST_NOTE = re.compile(
+    r'^(FLEX|EARLY|LATE|NIGHT|AFTERNOON|MORNING)\b|ET start|^Will be played', re.I)
+
+
+def event_name(notes):
+    """The note when it names an event, '' when it's a broadcast window."""
+    n = (notes or '').strip()
+    return '' if not n or _BROADCAST_NOTE.search(n) else n
+
+
 def format_kickoff(start_date_raw, time_tbd):
     """Format a stored (UTC) start_date as an Eastern (date, time) pair for
     scheduled games. time is 'TBD' when CFBD hasn't set a kickoff yet, which is
@@ -1989,7 +2005,7 @@ def build_game_card(row, ap_weekly, rivalry_map):
         'home_pts': home_pts, 'away_pts': away_pts,
         'home_logo': home_logo, 'away_logo': away_logo,
         'home_color': home_color, 'away_color': away_color,
-        'week': week, 'notes': notes,
+        'week': week, 'notes': event_name(notes),
         'completed': bool(completed),
         # Rank each team carried into this game — the weekly poll as-of its
         # week (upcoming games show ranks too once that week's poll is out).
@@ -4182,7 +4198,7 @@ def game_detail(game_id):
             kickoff_date=kick_date, kickoff_time=kick_time,
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
             season_year=game_info[17], game_season=game_season,
-            week_num=game_info[5], notes=game_info[7] or '',
+            week_num=game_info[5], notes=event_name(game_info[7]),
             game_date=kick_date, game_time=kick_time,
             records={}, espn_game_id=None,
             # Empty defaults so the shared template never references missing data
@@ -4865,7 +4881,7 @@ def game_detail(game_id):
     season_type_raw = game_info[6] or ''
     season_type_display = 'Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season'
     week_num = game_info[5]
-    notes = game_info[7] or ''
+    notes = event_name(game_info[7])
 
     # Frozen pre-kickoff Savant Forecast for this completed game (drives both
     # the recap line and, when it was a miss, the upset badge). None when the

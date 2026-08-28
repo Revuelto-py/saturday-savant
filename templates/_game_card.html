@@ -66,15 +66,23 @@
         <span class="gc-fc-recap{{ ' is-hit' if forecast.correct else '' }}">
             Savant: {{ forecast.favorite }} {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.correct %} ✓{% endif %}
         </span>
-    {% elif g.rivalry %}
-        <span class="gc-rivalry">{{ g.rivalry }}</span>
     {% endif %}
 
-    {# The event name, when the head isn't already carrying it. Last line rather
-       than first so it never shifts the matchup out of line with the cards
-       beside it. #}
-    {% if g.notes and not title_in_head %}
-        <span class="gc-event">{{ g.notes }}</span>
+    {# Footnote: what this game IS, beyond the two names — the rivalry it
+       settles and/or the event it belongs to. Rivalry used to hang off the
+       elif chain above, so it only appeared on a completed game that had no
+       forecast: with almost every game forecast, it was effectively never
+       shown. Here it always gets its line.
+
+       Last in the card rather than first, so a game carrying one still starts
+       its matchup on the same line as the cards beside it. #}
+    {% set foot_note = g.notes if (g.notes and not title_in_head) else '' %}
+    {% if g.rivalry or foot_note %}
+        <span class="gc-event">
+            {%- if g.rivalry %}<span class="gc-event-rivalry">{{ g.rivalry }}</span>{% endif -%}
+            {%- if g.rivalry and foot_note %}<span class="gc-event-sep">·</span>{% endif -%}
+            {{- foot_note -}}
+        </span>
     {% endif %}
 </a>
 {% endmacro %}

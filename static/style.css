@@ -226,6 +226,11 @@
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border);
 }
+/* The rivalry this game settles — gold, matching the hero's rivalry badge, so
+   it reads as a different KIND of fact from the event name beside it. */
+.gc-event-rivalry { color: #f0c66a; font-weight: 700; }
+.gc-event-sep { color: var(--border-strong); margin: 0 6px; }
+
 /* Event name (bowl, kickoff classic) on a day-grouped card — the foot, so a
    titled card's matchup still lines up with the untitled ones beside it. */
 .gc-event {
