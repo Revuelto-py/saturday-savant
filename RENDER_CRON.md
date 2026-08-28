@@ -16,14 +16,15 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 5. `fetch_rankings.py` — AP rankings (every weekly poll, not just the final)
 6. `fetch_coaches.py` — head coaches, current season *(non-fatal)*
 7. `fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
-8. `fetch_game_summaries.py` — game summaries / drives
-9. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
-10. `backfill_pools.py` — percentile peer pools → `pool_store`
-11. `precompute.py` — team-page + returning-production precompute → `pool_store`
-12. `fetch_betting_lines.py` — Vegas lines, active season
-13. `predict_games.py` — Savant Forecast: score last week, predict upcoming
+8. `refresh_headshots.py --active-only` — player headshots *(non-fatal)*
+9. `fetch_game_summaries.py` — game summaries / drives
+10. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
+11. `backfill_pools.py` — percentile peer pools → `pool_store`
+12. `precompute.py` — team-page + returning-production precompute → `pool_store`
+13. `fetch_betting_lines.py` — Vegas lines, active season
+14. `predict_games.py` — Savant Forecast: score last week, predict upcoming
 
-Steps 10–11 **delete their stale `pool_store` keys before rebuilding**, so a
+Steps 11–12 **delete their stale `pool_store` keys before rebuilding**, so a
 re-run refreshes against the newly-fetched tables instead of reading last week's
 values back out.
 
@@ -38,6 +39,17 @@ can't abort the chain and leave the week half-refreshed:
   table when a fetch comes back short or blocked (`EA_MIN_ROWS`), leaving last
   week's ratings in place rather than silently dropping the starter model back
   to production-only scoring.
+- **`refresh_headshots`** — ESPN publishes new photos through the season, so a
+  file that only ever gets backfilled goes stale (47% of the roster's images
+  changed at the 2026 preseason drop). `--active-only` sweeps the ~15k current
+  roster rather than all 44k, because historical images move ~1% a year. It
+  compares against **what is already in R2**, not a local mirror — the cron
+  container has no `static/headshots/`, and a local baseline would make every
+  player look new and re-push the whole 43k bucket weekly. A failure leaves last
+  week's photos: a stale image, not a broken page.
+
+  This is the step that needs the **R2 variables** below; without them it is the
+  one thing in the chain that cannot run.
 
 ### Season rollover
 
@@ -70,6 +82,14 @@ with the $1/mo CFBD tier). The Starter web service does not run cron itself.
      web service, so the precomputed `pool_store` rows are the ones the site
      reads).
    - `CFBD_API_KEY` — the CFBD API token.
+   - `ADMIN_KEY` — lets the run clear the live page cache when it finishes.
+     Without it the data lands in Postgres but the site serves cached pages
+     until the TTL expires.
+   - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+     `R2_BUCKET_NAME`, `R2_PUBLIC_URL` — the headshot bucket (step 8). Copy the
+     values from your local `.env`; note they are stored there as `KEY = value`
+     with spaces, which `python-dotenv` reads fine but a plain shell `grep` does
+     not.
 
 ## Why the stores survive deploys
 

@@ -20,15 +20,24 @@ Safety: a file is only ever replaced by a successful, non-empty download. If
 ESPN 404s or errors, the existing image is kept — a bad CDN day can degrade
 coverage to "unchanged", never to blank.
 
-Run:  python3 refresh_headshots.py --dry-run   # report what would change
-      python3 refresh_headshots.py             # apply
-      python3 refresh_headshots.py --limit 500 # cap the work (testing)
+The comparison baseline is R2, not the local mirror. That matters because the
+weekly cron runs in a fresh container with no static/headshots/ at all — against
+a local baseline every player would look new and the run would re-download and
+re-upload the entire 43k bucket every week. The local mirror is still kept in
+step when it exists, so a later upload_headshots_to_r2.py can't push stale
+images back over fresh ones.
+
+Run:  python3 refresh_headshots.py --dry-run     # report what would change
+      python3 refresh_headshots.py               # apply (whole roster + history)
+      python3 refresh_headshots.py --active-only # current roster only (weekly cron)
+      python3 refresh_headshots.py --limit 500   # cap the work (testing)
 """
 import os
 import sys
 import boto3
 import psycopg2
 import requests
+from psycopg2.extras import execute_values
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
@@ -43,12 +52,34 @@ WORKERS = 12          # polite to ESPN's CDN
 MIN_PNG_BYTES = 1000  # anything smaller isn't a real headshot
 
 DRY = '--dry-run' in sys.argv
+# Historical players' images change ~1% a year against ~47% for the current
+# roster at a season's photo drop, so the weekly run only sweeps the roster;
+# the full pass is worth doing by hand in the preseason.
+ACTIVE_ONLY = '--active-only' in sys.argv
 LIMIT = None
 if '--limit' in sys.argv:
     LIMIT = int(sys.argv[sys.argv.index('--limit') + 1])
 
 
 def main():
+    s3 = boto3.client(
+        's3',
+        endpoint_url=f"https://{os.getenv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com",
+        aws_access_key_id=os.getenv('R2_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('R2_SECRET_ACCESS_KEY'))
+    bucket = os.getenv('R2_BUCKET_NAME')
+    public_url = os.getenv('R2_PUBLIC_URL').rstrip('/')
+
+    # One listing gives every stored image's size — the baseline every player is
+    # compared against. Durable, unlike the local mirror, which the cron
+    # container doesn't have.
+    stored = {}
+    for page in s3.get_paginator('list_objects_v2').paginate(Bucket=bucket):
+        for o in page.get('Contents', []):
+            if o['Key'].endswith('.png'):
+                stored[o['Key'][:-4]] = o['Size']
+    print(f'{len(stored):,} images already in the bucket', flush=True)
+
     conn = psycopg2.connect(os.getenv('DATABASE_URL'))
     cur = conn.cursor()
     # Everyone we could hold an image for: the current roster (where the new
@@ -57,9 +88,9 @@ def main():
     # purged them, and re-asking 8k times a week earns nothing.
     cur.execute('''
         SELECT id FROM players
-        WHERE active_2026 = 1 OR headshot IS NOT NULL
+        WHERE active_2026 = 1 OR (headshot IS NOT NULL AND NOT %s)
         ORDER BY active_2026 DESC NULLS LAST, id
-    ''')
+    ''', (ACTIVE_ONLY,))
     ids = [r[0] for r in cur.fetchall()]
     if LIMIT:
         ids = ids[:LIMIT]
@@ -68,9 +99,8 @@ def main():
     session = requests.Session()
     session.headers['User-Agent'] = UA
 
-    def local_size(pid):
-        p = os.path.join(HEADSHOTS_DIR, f'{pid}.png')
-        return os.path.getsize(p) if os.path.exists(p) else None
+    def stored_size(pid):
+        return stored.get(str(pid))
 
     def check(pid):
         """(pid, verdict) — 'new', 'changed', 'same', 'absent', 'error'."""
@@ -81,7 +111,7 @@ def main():
         if r.status_code != 200:
             return pid, 'absent'
         remote = int(r.headers.get('content-length') or 0)
-        have = local_size(pid)
+        have = stored_size(pid)
         if have is None:
             return pid, 'new'
         return pid, ('same' if have == remote else 'changed')
@@ -132,14 +162,6 @@ def main():
     print(f'downloaded {len(done):,} of {len(todo):,}', flush=True)
 
     # ── upload the changed files to R2 (same key = overwrite) ───────────────
-    s3 = boto3.client(
-        's3',
-        endpoint_url=f"https://{os.getenv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com",
-        aws_access_key_id=os.getenv('R2_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.getenv('R2_SECRET_ACCESS_KEY'))
-    bucket = os.getenv('R2_BUCKET_NAME')
-    public_url = os.getenv('R2_PUBLIC_URL').rstrip('/')
-
     def push(pid):
         try:
             s3.upload_file(
@@ -159,16 +181,25 @@ def main():
                 print(f'  uploaded {i:,}/{len(done):,}', flush=True)
     print(f'uploaded {len(pushed):,} of {len(done):,}', flush=True)
 
-    # ── point newly-acquired images at their R2 URL ─────────────────────────
-    # Players who already had a headshot keep the identical URL; only the bytes
-    # behind it changed, so there is nothing to rewrite for them.
+    # ── stamp every changed image's URL with its new content hash ───────────
+    # Without this the URL is unchanged and a browser holding the year-long
+    # cached copy never re-fetches — the bytes update in R2 and the visitor
+    # still sees last season's photo.
     if pushed:
-        cur.execute('''
-            UPDATE players SET headshot = %s || '/' || id || '.png'
-            WHERE id = ANY(%s) AND headshot IS NULL
-        ''', (public_url, pushed))
-        conn.commit()
-        print(f'linked {cur.rowcount:,} newly-available headshots', flush=True)
+        stamps = []
+        for pid in pushed:
+            try:
+                et = s3.head_object(Bucket=bucket, Key=f'{pid}.png')['ETag'].strip('"')
+            except Exception:
+                continue
+            stamps.append((pid, f'{public_url}/{pid}.png?v={et[:8]}'))
+        if stamps:
+            execute_values(cur,
+                'UPDATE players SET headshot = d.url FROM (VALUES %s) AS d(id, url) '
+                'WHERE players.id = d.id', stamps, page_size=2000)
+            conn.commit()
+            print(f'stamped {len(stamps):,} headshot URLs with a new content hash',
+                  flush=True)
     conn.close()
 
     try:

@@ -23,38 +23,46 @@ cd "$(dirname "$0")"
 
 PY="${PYTHON:-python3}"
 
-echo "── [1/13] player box scores + PPA (fetch_data) ──"
+echo "── [1/14] player box scores + PPA (fetch_data) ──"
 $PY fetch_data.py
-echo "── [2/13] team stats (fetch_team_stats) ──"
+echo "── [2/14] team stats (fetch_team_stats) ──"
 $PY fetch_team_stats.py
-echo "── [3/13] advanced team stats (fetch_advanced) ──"
+echo "── [3/14] advanced team stats (fetch_advanced) ──"
 $PY fetch_advanced.py
-echo "── [4/13] SP+ ratings (fetch_sp) ──"
+echo "── [4/14] SP+ ratings (fetch_sp) ──"
 $PY fetch_sp.py
-echo "── [5/13] AP rankings (fetch_rankings) ──"
+echo "── [5/14] AP rankings (fetch_rankings) ──"
 $PY fetch_rankings.py
-echo "── [6/13] head coaches, current season (fetch_coaches) ──"
+echo "── [6/14] head coaches, current season (fetch_coaches) ──"
 # Supplementary (team-page hero only) and CFBD publishes the new season late, so
 # a failure/empty response must not abort the pipeline — keep going regardless.
 $PY fetch_coaches.py || echo "  coach fetch failed — non-critical, continuing"
-echo "── [7/13] EA ratings, starter-model input (fetch_ea_ratings) ──"
+echo "── [7/14] EA ratings, starter-model input (fetch_ea_ratings) ──"
 # Internal-only signal for lineup/starter selection, never displayed. EA
 # publishes roster updates through the season, so a stale table quietly means
 # wrong starters. Non-fatal by design: it scrapes a third-party page, and the
 # script refuses to overwrite on a short/blocked fetch (EA_MIN_ROWS), so the
 # worst case is last week's ratings — not a broken pipeline.
 $PY fetch_ea_ratings.py || echo "  EA ratings fetch failed — keeping previous ratings, continuing"
-echo "── [8/13] game summaries / drives (fetch_game_summaries) ──"
+echo "── [8/14] player headshots, current roster (refresh_headshots) ──"
+# Only the current roster: historical images change ~1% a year against ~47% for
+# the roster at a season's photo drop, so the weekly pass sweeps 15k players
+# rather than 44k. Compares ESPN against what's already in R2 (NOT a local
+# mirror — this container has none), so it moves bytes only where a photo
+# actually changed. Non-fatal: a CDN hiccup leaves last week's images, which is
+# a stale photo, not a broken page.
+$PY refresh_headshots.py --active-only || echo "  headshot refresh failed — keeping existing images, continuing"
+echo "── [9/14] game summaries / drives (fetch_game_summaries) ──"
 $PY fetch_game_summaries.py
-echo "── [9/13] Savant ratings (compute_savant_ratings) ──"
+echo "── [10/14] Savant ratings (compute_savant_ratings) ──"
 $PY compute_savant_ratings.py --write   # --write persists; without it the script only dry-runs
-echo "── [10/13] percentile peer pools (backfill_pools) ──"
+echo "── [11/14] percentile peer pools (backfill_pools) ──"
 $PY backfill_pools.py
-echo "── [11/13] team-page + returning-production precompute (precompute) ──"
+echo "── [12/14] team-page + returning-production precompute (precompute) ──"
 $PY precompute.py
-echo "── [12/13] Vegas lines, active season (fetch_betting_lines) ──"
+echo "── [13/14] Vegas lines, active season (fetch_betting_lines) ──"
 $PY fetch_betting_lines.py
-echo "── [13/13] Savant Forecast: score last week + predict upcoming (predict_games) ──"
+echo "── [14/14] Savant Forecast: score last week + predict upcoming (predict_games) ──"
 $PY predict_games.py
 
 echo "weekly pipeline complete"
