@@ -68,6 +68,10 @@ from flask_caching import Cache
 # Labels/units for the stored Savant Forecast feature breakdown. The DB holds
 # only the model's numbers; the wording is applied here at render time.
 from forecast_explain import describe as describe_contrib
+# Date-derived active season (rolls over in February) — the pipeline's notion of
+# which year it is ingesting. Used by forward_season() for pages that should
+# follow the new season before it has produced any stats.
+from season_util import current_cfb_season
 from collections import OrderedDict
 from itertools import groupby
 
@@ -355,6 +359,38 @@ def requested_season():
     if s and s in get_available_seasons():
         return s
     return CURRENT_SEASON
+
+@cache.memoize(timeout=21600)
+def get_scheduled_seasons():
+    """Seasons that have a schedule loaded, newest first."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT season FROM games WHERE season IS NOT NULL '
+                       'ORDER BY season DESC')
+        return [r[0] for r in cursor.fetchall()]
+    finally:
+        release_db(conn)
+
+
+def forward_season():
+    """The season to default to on forward-looking pages — team, roster,
+    starters, standings.
+
+    CURRENT_SEASON is derived from player_stats and so only advances once a
+    season has produced results. That is right for leaderboards, which would be
+    blank before then, and wrong here: a team page has the new year's schedule,
+    roster, coach, projected record and preseason poll long before week 1, and
+    showing last season instead is simply stale. So this follows the pipeline's
+    own notion of the active season (season_util.current_cfb_season, which rolls
+    over in February) as soon as that year actually has a schedule to show,
+    falling back to CURRENT_SEASON when it doesn't.
+
+    Once the new season produces stats the two agree, and this becomes a no-op.
+    """
+    active = current_cfb_season()
+    return active if active in get_scheduled_seasons() else CURRENT_SEASON
+
 
 @cache.memoize(timeout=21600)
 def get_ranking_seasons():
@@ -2893,7 +2929,9 @@ def teams():
     conn = get_db()
     try:
         cursor = conn.cursor()
-        ap_rankings = get_ap_rankings(cursor)
+        # The current season's poll (the preseason one before week 1), not last
+        # season's final — this grid is the league as it stands now.
+        ap_rankings = get_ap_rankings(cursor, forward_season())
         conf_logos = get_conference_logos(cursor)
         # Exclude FCS programs (present only for opponent-logo lookups on
         # schedule/game pages) so they never surface on this FBS-only grid.
@@ -2927,7 +2965,12 @@ STANDINGS_CONF_ORDER = ['SEC', 'Big Ten', 'Big 12', 'ACC', 'Pac-12',
 def standings():
     """Conference standings for every FBS conference in a season, ordered by
     CONFERENCE record (see conference_standings())."""
-    season = requested_season()
+    # Follows the new season as soon as it has a schedule — an all-0-0 table for
+    # the season being played beats last season's final table, and it fills in
+    # from week 1. ?season= still reaches any year with results.
+    _seasons = sorted(set(get_available_seasons()) | {forward_season()}, reverse=True)
+    _req = request.args.get('season', type=int)
+    season = _req if _req in _seasons else forward_season()
     all_st = conference_standings(season)
     conn = get_db()
     try:
@@ -2940,7 +2983,7 @@ def standings():
         {'conf': c, 'logo': conf_logos.get(c), 'teams': all_st[c]} for c in ordered
     ]
     return render_template('standings.html', season=season,
-                           seasons=sorted(get_available_seasons(), reverse=True),
+                           seasons=_seasons,
                            standings_by_conf=standings_by_conf)
 
 @app.route('/savant-rating')
@@ -3262,18 +3305,19 @@ def team(team_ref):
     # The team page can view the UPCOMING season (schedule/roster/projections
     # already ingested even before any game is played) in addition to every
     # season with stats — it's a first-class ?season= view, not the old
-    # "next season toggled onto the current view". Default stays the
-    # data-derived current season (the newest with actual results); it advances
-    # to the upcoming year on its own once that year produces stats.
+    # "next season toggled onto the current view". It DEFAULTS to that season
+    # once it has a schedule (forward_season): the page has the new year's
+    # schedule, roster, coach, projected record and preseason poll well before
+    # week 1, so waiting for stats would show a stale season all preseason.
     _team_seasons = [UPCOMING_SEASON] + get_available_seasons()   # newest (2026) first
-    _default_season = CURRENT_SEASON
+    _default_season = forward_season()
     # Programs newly promoted from FCS have no FBS data before their first FBS
     # season (they carry FCS-era player_stats that would render as garbage
     # per-game FBS numbers). Offer only their FBS-era seasons and default to the
     # newest one that has begun, so their page never shows a pre-FBS view.
     if team_ref in _PROMOTED_SLUGS:
         _team_seasons = [s for s in _team_seasons if s >= FBS_PROMOTED_START_SEASON]
-        _default_season = (CURRENT_SEASON if CURRENT_SEASON >= FBS_PROMOTED_START_SEASON
+        _default_season = (_default_season if _default_season >= FBS_PROMOTED_START_SEASON
                            else UPCOMING_SEASON)
     _req = request.args.get('season', type=int)
     season = _req if _req in _team_seasons else _default_season
@@ -3464,7 +3508,12 @@ def team(team_ref):
                 kd, kt = format_kickoff(r[11], r[12])
                 rivalry = rivalry_map.get((team_name, r[2]), '')
                 win_prob = float(r[13]) if r[13] is not None else None
-                out.append(r[:10] + (r[10], kd, kt, rivalry, win_prob))
+                # notes (index 8) carries broadcast windows as often as real
+                # event names for an upcoming season — "FLEX: 3:30 - 4:30pm OR
+                # 6 - 8pm ET start" beside an opponent is scheduling scaffolding,
+                # not a title. Positions are preserved for the template.
+                out.append(r[:8] + (event_name(r[8]), r[9], r[10],
+                                    kd, kt, rivalry, win_prob))
             return out
 
         # Each season view shows only its own schedule now (the upcoming season
