@@ -7,6 +7,12 @@ from dotenv import load_dotenv
 
 from season_util import current_cfb_season
 
+# Every CFBD call below uses SEASON, so this script follows the season on its
+# own — it runs weekly and must not still be pulling 2026 rosters in 2027.
+# NOTE: the players.active_2026 COLUMN name is still year-bound. It behaves as
+# "on the current roster" and is written from SEASON, so it stays correct; the
+# name just stops matching the year. Renaming it touches main.py,
+# fetch_ea_ratings.py and the sitemap, so it is left for a deliberate pass.
 SEASON = current_cfb_season()
 
 load_dotenv()
@@ -34,9 +40,9 @@ except Exception:
 with cfbd.ApiClient(configuration) as api_client:
     teams_api = cfbd.TeamsApi(api_client)
 
-    print("Probing 2026 roster availability...")
-    probe = teams_api.get_roster(team='Alabama', year=2026)
-    print(f"  Alabama 2026 roster: {len(probe)} players")
+    print(f"Probing {SEASON} roster availability...")
+    probe = teams_api.get_roster(team='Alabama', year=SEASON)
+    print(f"  Alabama {SEASON} roster: {len(probe)} players")
 
     # ── Fetch every roster BEFORE touching the database ─────────────────────
     # This used to reset active_2026 to 0 up front and fill it in as each team
@@ -46,13 +52,13 @@ with cfbd.ApiClient(configuration) as api_client:
     # ends with last week's roster intact instead of a corrupted one.
     roster_ok, roster_failed, all_players = 0, [], []
     if len(probe) > 0:
-        fbs_teams = teams_api.get_fbs_teams(year=2026)
-        print(f"Fetching 2026 rosters for {len(fbs_teams)} teams...")
+        fbs_teams = teams_api.get_fbs_teams(year=SEASON)
+        print(f"Fetching {SEASON} rosters for {len(fbs_teams)} teams...")
         for i, t in enumerate(fbs_teams):
             roster = None
             for attempt in range(4):          # CFBD 502s under load; back off
                 try:
-                    roster = teams_api.get_roster(team=t.school, year=2026)
+                    roster = teams_api.get_roster(team=t.school, year=SEASON)
                     break
                 except Exception as e:
                     if attempt == 3:
@@ -141,15 +147,15 @@ with cfbd.ApiClient(configuration) as api_client:
         conn.commit()
         print(f"rosters {SEASON}: {len(roster_rows):,} in step, {dropped:,} departed players removed",
               flush=True)
-        print(f"2026 roster: {updated:,} players marked active across {roster_ok} teams"
+        print(f"{SEASON} roster: {updated:,} players marked active across {roster_ok} teams"
               f"{f', {not_matched} without a usable id' if not_matched else ''}")
     else:
-        print("2026 rosters not yet published — leaving active_2026 as-is")
+        print(f"{SEASON} rosters not yet published — leaving active_2026 as-is")
 
     print("\nFetching NFL draft data...")
     try:
         draft_api = cfbd.DraftApi(api_client)
-        for yr in [2025, 2026]:
+        for yr in (SEASON - 1, SEASON):
             try:
                 picks = draft_api.get_draft_picks(year=yr)
                 marked = 0
@@ -179,7 +185,7 @@ cursor.execute('SELECT COUNT(*) FROM players WHERE active_2026=1')
 active_count = cursor.fetchone()[0]
 cursor.execute('SELECT COUNT(*) FROM players')
 total_count = cursor.fetchone()[0]
-print(f"\nActive 2026 before fallback: {active_count} / {total_count}")
+print(f"\nActive {SEASON} before fallback: {active_count} / {total_count}")
 
 # The fallback exists for the offseason window when CFBD hasn't published next
 # season's rosters at all. It must NOT fire when the team loop DID run — a

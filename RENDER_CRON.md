@@ -15,18 +15,24 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 4. `fetch_sp.py` — SP+ ratings
 5. `fetch_rankings.py` — AP rankings (every weekly poll, not just the final)
 6. `fetch_coaches.py` — head coaches, current season *(non-fatal)*
-7. `fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
-8. `refresh_headshots.py --active-only` — player headshots *(non-fatal)*
-9. `fetch_game_summaries.py` — game summaries / drives
-10. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
-11. `backfill_pools.py` — percentile peer pools → `pool_store`
-12. `precompute.py` — team-page + returning-production precompute → `pool_store`
-13. `fetch_betting_lines.py` — Vegas lines, active season
-14. `predict_games.py` — Savant Forecast: score last week, predict upcoming
+7. `fetch_2026_roster.py` — team rosters, current season *(non-fatal)*
+8. `fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
+9. `refresh_headshots.py --active-only` — player headshots *(non-fatal)*
+10. `fetch_game_summaries.py` — game summaries / drives
+11. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
+12. `backfill_pools.py` — percentile peer pools → `pool_store`
+13. `precompute.py` — team-page + returning-production precompute → `pool_store`
+14. `fetch_betting_lines.py` — Vegas lines, active season
+15. `predict_games.py` — Savant Forecast: score last week, predict upcoming
 
-Steps 11–12 **delete their stale `pool_store` keys before rebuilding**, so a
+Steps 12–13 **delete their stale `pool_store` keys before rebuilding**, so a
 re-run refreshes against the newly-fetched tables instead of reading last week's
 values back out.
+
+**Steps 7–9 are ordered, not interchangeable.** EA ratings are matched to
+players at ingest and headshots are fetched per active player, so both read the
+roster written by step 7. Run them the other way round and a newcomer waits a
+week for his rating and his photo.
 
 Two steps are deliberately **non-fatal** (`|| echo`), so a third-party hiccup
 can't abort the chain and leave the week half-refreshed:
@@ -39,6 +45,14 @@ can't abort the chain and leave the week half-refreshed:
   table when a fetch comes back short or blocked (`EA_MIN_ROWS`), leaving last
   week's ratings in place rather than silently dropping the starter model back
   to production-only scoring.
+- **`fetch_2026_roster`** — rosters churn all season (injuries, dismissals,
+  mid-year departures) and this is what removes a departed player: Trebor Pena
+  sat on Penn State's roster after signing with Jacksonville because nothing
+  refreshed it. It writes BOTH `players.active_2026` and the `rosters` table —
+  the team page's Roster tab reads the latter, and the two silently diverging is
+  what caused that bug. It fetches every team before writing anything and aborts
+  rather than storing a partial roster, so a CFBD outage leaves last week's
+  intact. Despite the filename it follows `current_cfb_season()`.
 - **`refresh_headshots`** — ESPN publishes new photos through the season, so a
   file that only ever gets backfilled goes stale (47% of the roster's images
   changed at the 2026 preseason drop). `--active-only` sweeps the ~15k current

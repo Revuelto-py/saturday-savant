@@ -310,14 +310,43 @@ ensure_indexes()
 # ?season=YYYY. The data pipeline's *ingest* season is separate and date-driven
 # (season_util.current_cfb_season) — it rolls over before the new season has any
 # data, which is exactly why the display default can't just mirror it.
+# Non-FBS conferences. Defined up here rather than beside the other team
+# constants because _newest_stats_season() runs at import time, well before
+# them — left below, it raised NameError, was swallowed by the except, and the
+# season would have silently never advanced.
+FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC',
+             'Big South-OVC','Southern','UAC','Patriot','NEC','Pioneer','Ivy',
+             'FCS Independents','SIAC')
+
+# A season only counts once it has a real week of FBS stats behind it. MAX(season)
+# alone is not enough: CFBD publishes lower-division box scores before the FBS
+# season starts, and on 2026-08-28 that was 8,162 rows — every one of them from an
+# FCS or D2 team, none from an FBS team — which was enough to flip the whole
+# site's default season to a year with nothing to show. A single FBS week is
+# ~5,600 rows against ~85,000 for a full season, so this floor clears on the
+# first real Saturday and ignores the pre-season trickle.
+_MIN_FBS_STAT_ROWS = 2000
+
+
 def _newest_stats_season(default=2025):
+    """Newest season with a real week of FBS player stats loaded."""
     try:
         conn = get_db()
         try:
             cur = conn.cursor()
-            cur.execute('SELECT MAX(season) FROM player_stats WHERE season IS NOT NULL')
-            row = cur.fetchone()
-            return row[0] if row and row[0] else default
+            cur.execute('SELECT DISTINCT season FROM player_stats WHERE season IS NOT NULL '
+                        'ORDER BY season DESC LIMIT 3')
+            candidates = [r[0] for r in cur.fetchall()]
+            for season in candidates:
+                cur.execute("""
+                    SELECT COUNT(*) FROM player_stats ps
+                    JOIN teams t ON t.name = ps.team
+                    WHERE ps.season = %s AND t.conference IS NOT NULL
+                      AND NOT (t.conference = ANY(%s))
+                """, (season, list(FCS_CONFS)))
+                if cur.fetchone()[0] >= _MIN_FBS_STAT_ROWS:
+                    return season
+            return candidates[0] if candidates else default
         finally:
             release_db(conn)
     except Exception:
@@ -1517,9 +1546,6 @@ def sort_players(cat_dict, sort_key, min_val=0):
 # here so those teams don't leak onto the Teams grid / Rankings / Leaderboards /
 # search. 'SIAC' is Division II (Savannah St, a historical FBS opponent) — not
 # FCS by name, but non-FBS and excluded on the same basis.
-FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC',
-             'Big South-OVC','Southern','UAC','Patriot','NEC','Pioneer','Ivy',
-             'FCS Independents','SIAC')
 
 # Programs promoted from FCS to FBS in the 2026 realignment (football-only:
 # Sacramento State -> Mid-American, North Dakota State -> Mountain West). CFBD
@@ -3012,8 +3038,12 @@ def savant_rating_methodology():
         top10 = [{'team': r[0], 'logo': r[1], 'conf': r[2], 'net': r[3], 'off': r[4],
                   'def': r[5], 'sos': r[6], 'rank': r[7], 'ap': r[8]}
                  for r in cursor.fetchall()]
-        cursor.execute('SELECT COUNT(*), SUM(drives_off), SUM(games)/2 FROM savant_ratings WHERE season = %s',
-                       (CURRENT_SEASON,))
+        # COALESCE: SUM() over a season with no rows returns NULL, and the
+        # template formats these with '{:,}' — which raised a TypeError and 500'd
+        # the page the moment CURRENT_SEASON pointed at a season without ratings.
+        cursor.execute('''SELECT COUNT(*), COALESCE(SUM(drives_off), 0),
+                                 COALESCE(SUM(games), 0) / 2
+                          FROM savant_ratings WHERE season = %s''', (CURRENT_SEASON,))
         n_teams, n_drives, n_games = cursor.fetchone()
     finally:
         release_db(conn)
