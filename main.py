@@ -5070,20 +5070,34 @@ class _SkipGameLog(Exception):
 
 @app.route('/player/<int:player_id>')
 def player_detail(player_id):
-    # No explicit ?season= defaults to the player's most recent recorded
-    # season — a departed player (e.g. 2016-19 career) lands on his final
-    # year instead of an empty current-season page.
+    # Which season a bare /player/<id> opens on — this is what search results,
+    # the dropdown and every unqualified link land on.
+    #
+    #   still playing  -> the season he is playing NOW, even before it has
+    #                     produced a stat line. Keying off MAX(player_stats)
+    #                     alone sent every current player to last season, and
+    #                     sent a true freshman to an empty page.
+    #   left the game  -> his final season, so a 2016-19 career lands on 2019
+    #                     rather than a current season he was never part of.
     s = request.args.get('season', type=int)
     if s and s in get_available_seasons():
         return _player_detail_cached(player_id, s)
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT MAX(season) FROM player_stats WHERE player_id = %s', (str(player_id),))
+        cur.execute('''
+            SELECT COALESCE(p.active_2026, 0),
+                   (SELECT MAX(season) FROM player_stats WHERE player_id = %s)
+            FROM players p WHERE p.id = %s
+        ''', (str(player_id), player_id))
         row = cur.fetchone()
     finally:
         release_db(conn)
-    return _player_detail_cached(player_id, row[0] if row and row[0] else CURRENT_SEASON)
+    if row and row[0]:
+        season = forward_season()
+    else:
+        season = row[1] if row and row[1] else CURRENT_SEASON
+    return _player_detail_cached(player_id, season)
 
 @cache.memoize(timeout=21600)  # memoize keys on (player_id, season)
 def _player_detail_cached(player_id, season):
