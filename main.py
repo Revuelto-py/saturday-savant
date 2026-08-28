@@ -2193,6 +2193,12 @@ def games_hub():
                     'games': grp,
                     'count': len(grp),
                     'window': window,
+                    # When every game that day is a named event — bowl season —
+                    # the name IS the game's identity and leads the card. It can
+                    # only sit on top when they all have one; a single titled
+                    # card in a row of unnamed ones would push its matchup out
+                    # of line, so mixed days show the name at the foot instead.
+                    'titles_lead': all(g['notes'] for g in grp),
                 })
 
         # Savant Forecast chips for upcoming games — one batch read of the

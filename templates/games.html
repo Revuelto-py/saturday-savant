@@ -86,7 +86,7 @@
             </span>
         </div>
         <div class="games-grid">
-            {% for g in d.games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id), show_date=False) }}{% endfor %}
+            {% for g in d.games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id), show_date=False, title_top=d.titles_lead) }}{% endfor %}
         </div>
     </section>
     {% endfor %}

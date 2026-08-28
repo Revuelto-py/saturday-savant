@@ -1,29 +1,33 @@
 {# Shared game card — used by the home page and the /games hub.
    Takes a dict built by build_game_card() in main.py. Renders a final score
    for completed games and a kickoff date/time for scheduled (future) ones. #}
-{% macro game_card(g, prob=None, forecast=None, show_date=True) %}
+{% macro game_card(g, prob=None, forecast=None, show_date=True, title_top=False) %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
 <a class="game-card-v2{{ ' is-upcoming' if not g.completed else '' }}" href="/game/{{ g.id }}">
     {# Under a day header the week label is identical on every card and the date
-       is stated above, so both are dropped — a named event (bowl, kickoff
-       classic) still earns its line.
+       is stated above, so both are dropped.
 
-       The row is ALWAYS rendered, even with nothing in it. Cards are grid items
-       stretched to a shared row height, so they can only line up if they hold
-       the same internal structure: drop the head on some and their teams,
-       kickoff and forecast bar sit ~37px above their neighbours'. When it's
-       empty it keeps its height but hides its rule, so it reads as spacing
-       rather than a divider to nothing. #}
-    {% set head_note = g.notes or ('Week ' ~ g.week if show_date else '') %}
+       A named event (bowl, kickoff classic) does NOT go here — it moves to the
+       foot of the card. Cards are grid items stretched to a shared row height,
+       so they only line up if they share an internal structure, and a title at
+       the top pushed one card's teams, kickoff and bar ~37px below its
+       neighbours'. Reserving the row on every card fixed the alignment but left
+       dead space above the teams on the ~90% that have no title. Keeping the
+       title out of the top gives both: identical top structure, nothing
+       wasted. #}
+    {% set title_in_head = show_date or title_top %}
+    {% set head_note = g.notes if (g.notes and title_in_head) else ('Week ' ~ g.week if show_date else '') %}
     {% set head_filled = head_note or g.completed or show_date %}
-    <div class="gc-head{{ '' if head_filled else ' is-empty' }}">
+    {% if head_filled %}
+    <div class="gc-head">
         <span class="gc-note">{{ head_note }}</span>
         <span class="gc-badges">
             {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
             {% if g.completed %}<span class="gc-final">Final</span>{% elif show_date %}<span class="gc-upcoming">{{ g.kickoff_date }}</span>{% endif %}
         </span>
     </div>
+    {% endif %}
 
     <div class="gc-team{{ ' winner' if away_won else '' }}">
         {% if g.away_logo %}<img src="{{ g.away_logo }}" alt="{{ g.away }} logo" loading="lazy">{% endif %}
@@ -64,6 +68,13 @@
         </span>
     {% elif g.rivalry %}
         <span class="gc-rivalry">{{ g.rivalry }}</span>
+    {% endif %}
+
+    {# The event name, when the head isn't already carrying it. Last line rather
+       than first so it never shifts the matchup out of line with the cards
+       beside it. #}
+    {% if g.notes and not title_in_head %}
+        <span class="gc-event">{{ g.notes }}</span>
     {% endif %}
 </a>
 {% endmacro %}

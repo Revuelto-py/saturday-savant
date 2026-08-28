@@ -226,13 +226,20 @@
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border);
 }
-/* Empty head: holds its height so every card in a row starts its teams,
-   kickoff and forecast bar on the same line, but shows no rule — a divider
-   with nothing above it reads as a mistake. The zero-width space is what
-   reserves the height: an empty span has no line box and would collapse,
-   leaving the titled card's content sitting lower than its neighbours'. */
-.gc-head.is-empty { border-bottom-color: transparent; }
-.gc-head.is-empty .gc-note::before { content: '\200b'; }
+/* Event name (bowl, kickoff classic) on a day-grouped card — the foot, so a
+   titled card's matchup still lines up with the untitled ones beside it. */
+.gc-event {
+    display: block;
+    margin-top: 8px;
+    padding-top: 7px;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .gc-note {
     color: var(--text-secondary);
     font-size: var(--text-xs);
