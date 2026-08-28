@@ -226,6 +226,13 @@
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border);
 }
+/* Empty head: holds its height so every card in a row starts its teams,
+   kickoff and forecast bar on the same line, but shows no rule — a divider
+   with nothing above it reads as a mistake. The zero-width space is what
+   reserves the height: an empty span has no line box and would collapse,
+   leaving the titled card's content sitting lower than its neighbours'. */
+.gc-head.is-empty { border-bottom-color: transparent; }
+.gc-head.is-empty .gc-note::before { content: '\200b'; }
 .gc-note {
     color: var(--text-secondary);
     font-size: var(--text-xs);
