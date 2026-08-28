@@ -2,7 +2,12 @@ import cfbd
 import psycopg2
 import os
 import time
+from psycopg2.extras import execute_values
 from dotenv import load_dotenv
+
+from season_util import current_cfb_season
+
+SEASON = current_cfb_season()
 
 load_dotenv()
 
@@ -74,7 +79,7 @@ with cfbd.ApiClient(configuration) as api_client:
 
     updated = inserted = not_matched = 0
     if all_players:
-        seen = []
+        seen, roster_rows = [], []
         for p, school in all_players:
             pid = int(p.id) if str(getattr(p, 'id', '') or '').isdigit() else None
             if pid is None:
@@ -104,11 +109,38 @@ with cfbd.ApiClient(configuration) as api_client:
                   p.jersey, p.height, p.weight,
                   str(p.year) if p.year is not None else None))
             seen.append(pid)
+            roster_rows.append((pid, SEASON, school, p.position, p.jersey,
+                                p.height, p.weight,
+                                str(p.year) if p.year is not None else None))
             updated += 1
         # Everyone not on a 2026 roster goes inactive — done in the same
         # transaction as the marking, so the flag is never briefly empty.
         cursor.execute('UPDATE players SET active_2026 = 0 WHERE NOT (id = ANY(%s))', (seen,))
+
+        # ── keep the `rosters` table in step ────────────────────────────────
+        # The team page's Roster tab reads `rosters`, not active_2026, so the
+        # two drifting apart put departed players back on a roster: Trebor Pena
+        # showed on Penn State's 2026 roster after signing with Jacksonville,
+        # along with ~4,800 others CFBD had already dropped. This is the same
+        # authoritative pull, so it writes both. Scoped to SEASON — 2016-2025
+        # history belongs to backfill_rosters.py and is untouched.
+        execute_values(cursor, '''
+            INSERT INTO rosters (player_id, season, team, position, jersey,
+                                 height, weight, class_year)
+            VALUES %s
+            ON CONFLICT (player_id, season) DO UPDATE SET
+                team=EXCLUDED.team, position=EXCLUDED.position,
+                jersey=EXCLUDED.jersey, height=EXCLUDED.height,
+                weight=EXCLUDED.weight, class_year=EXCLUDED.class_year
+        ''', roster_rows, page_size=1000)
+        # Anyone the fetch didn't see is off the roster now. Deleting rather
+        # than leaving them keeps "who is on this team" a single answer.
+        cursor.execute('DELETE FROM rosters WHERE season = %s AND NOT (player_id = ANY(%s))',
+                       (SEASON, seen))
+        dropped = cursor.rowcount
         conn.commit()
+        print(f"rosters {SEASON}: {len(roster_rows):,} in step, {dropped:,} departed players removed",
+              flush=True)
         print(f"2026 roster: {updated:,} players marked active across {roster_ok} teams"
               f"{f', {not_matched} without a usable id' if not_matched else ''}")
     else:

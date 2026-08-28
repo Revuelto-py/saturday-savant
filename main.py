@@ -3180,7 +3180,13 @@ def _team_nfl_talent(team):
                 FROM rosters
                 ORDER BY player_id, season DESC
             ) last ON last.player_id = p.id
+            -- A player on the CURRENT roster is playing college football, so
+            -- he is not NFL talent, whatever an older NFL record says. The
+            -- roster is refetched from all 138 teams weekly and is the fresher
+            -- signal; the stale side here was ESPN NFL athlete pages that now
+            -- 404 and CFBD draft rows that disagree with CFBD's own roster.
             WHERE last.team = %s AND p.nfl_status IN ('drafted', 'udfa')
+              AND COALESCE(p.active_2026, 0) = 0
         ''', (team,))
         rows = cur.fetchall()
     finally:
@@ -5162,7 +5168,10 @@ def _player_detail_cached(player_id, season):
             'height_fmt': f"{h // 12}'{h % 12}\"" if h else '',
             'year_fmt':   year_display,
             'redshirt':   is_redshirt,
-            'nfl_status':    row[16],
+            # Same rule as the team NFL Talent tab: someone on the current
+            # roster is a college player, so no NFL badge — an out-of-date NFL
+            # record shouldn't outrank a roster fetched this week.
+            'nfl_status':    None if row[14] else row[16],
             'nfl_team':      row[17],
             'nfl_team_logo': row[18],
             'draft_year':    row[19],
