@@ -5133,7 +5133,15 @@ def _player_detail_cached(player_id, season):
         # rosters table (player_stats' per-season team as fallback). The
         # current-season view keeps players.team so present-day transfer
         # moves still display the player's new team.
-        if season != CURRENT_SEASON:
+        # players.team is whatever the LATEST roster says, so for a player who
+        # transferred it is his NEXT team — TJ Dottery's row reads LSU while his
+        # 2025 season was played at Ole Miss. That row is only right for the
+        # season it describes, which is forward_season() (the year the roster
+        # fetch wrote). Every other season resolves the team he actually played
+        # for. This used to compare against CURRENT_SEASON, which broke the
+        # moment the two diverged: viewing 2025 (== CURRENT_SEASON) skipped the
+        # lookup entirely and the hero wore LSU's colours over Ole Miss stats.
+        if season != forward_season():
             cursor.execute('''
                 SELECT r.team, r.position, r.jersey, r.height, r.weight, r.class_year,
                        t.logo_dark, t.color, t.alt_color, t.conference
@@ -5141,18 +5149,27 @@ def _player_detail_cached(player_id, season):
                 WHERE r.player_id = %s AND r.season = %s
             ''', (player_id, season))
             season_row = cursor.fetchone()
-            if not season_row:
-                # No roster row that year (pre-2019 gaps) — fall back to the
-                # team the season's stats were recorded under, keeping the
-                # identity row's position/jersey/measurables.
-                cursor.execute('''
-                    SELECT ps.team, NULL, NULL, NULL, NULL, NULL,
-                           t.logo_dark, t.color, t.alt_color, t.conference
-                    FROM player_stats ps LEFT JOIN teams t ON t.name = ps.team
-                    WHERE ps.player_id = %s AND ps.season = %s AND ps.team IS NOT NULL
-                    LIMIT 1
-                ''', (str(player_id), season))
-                season_row = cursor.fetchone()
+
+            # The team he actually PLAYED for that year, which outranks the
+            # roster row: CFBD's historical roster endpoint hands back a
+            # transfer's current school, so Dottery's 2025 roster row also says
+            # LSU. Stats are recorded under the team he suited up for, so they
+            # are the authority on the team, logo and colours; the roster row
+            # still supplies jersey and measurables.
+            cursor.execute('''
+                SELECT ps.team, t.logo_dark, t.color, t.alt_color, t.conference
+                FROM player_stats ps LEFT JOIN teams t ON t.name = ps.team
+                WHERE ps.player_id = %s AND ps.season = %s AND ps.team IS NOT NULL
+                LIMIT 1
+            ''', (str(player_id), season))
+            stat_row = cursor.fetchone()
+            if stat_row and stat_row[0]:
+                if season_row:
+                    season_row = (stat_row[0],) + tuple(season_row[1:6]) + tuple(stat_row[1:5])
+                else:
+                    # No roster row that year (pre-2019 gaps) — keep the
+                    # identity row's position/jersey/measurables.
+                    season_row = (stat_row[0], None, None, None, None, None) + tuple(stat_row[1:5])
             if season_row and season_row[0]:
                 row = list(row)
                 row[3] = season_row[0]                              # team
