@@ -4191,3 +4191,15 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .upset-row-teams b { font-weight: 700; }
 .upset-row-note { color: var(--text-dim); font-size: var(--text-xs);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Home section heading: the season sits beside the week label, quieter, so
+   "Week 1" is never ambiguous about which year it belongs to. */
+.section-label-season {
+    color: var(--text-dim);
+    font-weight: 700;
+    margin-left: 8px;
+    letter-spacing: 0.06em;
+}
+/* Ticker: a game under way reads red like the game cards do */
+.ticker-live { color: #ff6b73; font-weight: 800; }
+.ticker-item.is-live { box-shadow: inset 2px 0 0 rgba(244,33,46,0.75); }

@@ -53,7 +53,8 @@
     <div class="col-lg-8">
         <div class="d-flex align-items-center justify-content-between mb-4">
             <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">
-                {% if season_type == 'postseason' %}Postseason Results{% else %}Week {{ selected_week }} Results{% endif %}
+                {% if season_type == 'postseason' %}Postseason{% else %}Week {{ selected_week }}{% endif %}{% if week_complete %} Results{% endif %}
+                <span class="section-label-season">{{ home_season }}</span>
             </h5>
             <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
                 {% for w, stype in all_weeks %}

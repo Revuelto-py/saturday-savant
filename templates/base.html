@@ -486,19 +486,26 @@
     <div class="score-ticker">
         <div class="ticker-week">
             <span class="ticker-week-label">{{ ticker.label }}</span>
-            <span class="ticker-week-season">{{ current_season }} Season</span>
+            <span class="ticker-week-season">{{ ticker.season }} Season</span>
         </div>
         <div class="ticker-scroll">
             {% for g in ticker.games %}
-            <a class="ticker-item" href="/game/{{ g.id }}">
-                <div class="ticker-status">{{ g.label }}</div>
+            <a class="ticker-item{{ ' is-live' if g.state == 'live' else '' }}" href="/game/{{ g.id }}">
+                {# Round name when the game has one (CFP), otherwise its state:
+                   a kickoff time before the game, Live during, Final after. #}
+                <div class="ticker-status">
+                    {%- if g.round %}{{ g.round }}
+                    {%- elif g.state == 'live' %}<span class="ticker-live">Live</span>
+                    {%- elif g.state == 'pre' %}{{ g.kickoff }}
+                    {%- else %}Final{% endif -%}
+                </div>
                 {% for side in [g.away, g.home] %}
                 <div class="ticker-team">
                     {% if side.logo %}<img src="{{ side.logo }}" alt="" loading="lazy" width="16" height="16">{% endif %}
                     <span class="ticker-name{{ ' won' if side.won else '' }}">
                         {% if side.rank %}<span class="ticker-rank">{{ side.rank }}</span>{% endif %}{{ side.abbr }}
                     </span>
-                    <span class="ticker-score{{ ' won' if side.won else '' }}">{{ side.pts }}</span>
+                    <span class="ticker-score{{ ' won' if side.won else '' }}">{{ side.pts if side.pts is not none else '' }}</span>
                 </div>
                 {% endfor %}
             </a>

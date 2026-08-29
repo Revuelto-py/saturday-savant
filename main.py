@@ -1884,74 +1884,115 @@ def get_cached_season_leaders():
         release_db(conn)
 
 def _ticker_game_label(notes):
-    """Short status line for a ticker item — CFP rounds get named, everything
-    else (bowls with sponsor-heavy names, regular season) just reads Final."""
+    """Round name for a ticker item — CFP rounds get named; everything else
+    (bowls with sponsor-heavy names, regular season) has no round to show and
+    falls back to the game's own state (Final / Live / kickoff time)."""
     if notes:
         if 'National Championship' in notes: return 'CFP Championship'
         if 'Semifinal' in notes: return 'CFP Semifinal'
         if 'Quarterfinal' in notes: return 'CFP Quarterfinal'
         if 'First Round' in notes: return 'CFP First Round'
         if 'Conference Championship' in notes: return 'Conf Championship'
-    return 'Final'
+    return ''
+
+
+def current_slate_week(cursor, season):
+    """The (week, season_type) a viewer means by "this week" — the week owning
+    the game closest in time to now, in either direction.
+
+    Picking the latest COMPLETED week (what the home page and ticker used to
+    do) is right in the offseason and wrong in season: on a Saturday it shows
+    last week's finals while the current slate is being played. Nearest-kickoff
+    handles both — mid-week it rolls forward to the upcoming slate, and during
+    a game day it stays on the day being played.
+
+    start_date is stored as text, hence the cast.
+    """
+    cursor.execute("""
+        SELECT week, season_type FROM games
+         WHERE season = %s AND start_date IS NOT NULL AND start_date <> ''
+         ORDER BY ABS(EXTRACT(EPOCH FROM (start_date::timestamptz - now())))
+         LIMIT 1
+    """, (season,))
+    row = cursor.fetchone()
+    return (row[0], row[1]) if row else (1, 'SeasonType.REGULAR')
 
 @cache.memoize(timeout=21600)
 def get_ticker_data():
-    """Sitewide scores ticker under the navbar: the most recent completed
-    week, with postseason outranking regular season so the offseason shows
-    playoff/bowl results instead of the last regular-season week."""
+    """Sitewide scores ticker under the navbar: the active season's current
+    week — the slate being played, not the last one that finished.
+
+    It carries games in every state, because during a week that is what a
+    scoreboard is for: live games first (with their running score), then what
+    is still to come, then what has finished.
+    """
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute('''
-            SELECT week, season_type FROM games
-            WHERE completed = 1 AND season = %s
-            ORDER BY CASE WHEN season_type = 'SeasonType.POSTSEASON' THEN 0 ELSE 1 END,
-                     week DESC
-            LIMIT 1
-        ''', (CURRENT_SEASON,))
-        row = cursor.fetchone()
-        if not row:
-            return None
-        week, stype = row
+        season = forward_season()
+        week, stype = current_slate_week(cursor, season)
         ranks = get_ap_rankings(cursor)
         cursor.execute('''
             SELECT g.away_team, g.away_points, g.home_team, g.home_points,
                    ta.abbreviation, th.abbreviation, ta.logo_dark, th.logo_dark,
-                   g.id, g.notes
+                   g.id, g.notes, g.completed, g.start_date, g.start_time_tbd
             FROM games g
             LEFT JOIN teams th ON g.home_team = th.name
             LEFT JOIN teams ta ON g.away_team = ta.name
-            WHERE g.completed = 1 AND g.season = %s AND g.week = %s AND g.season_type = %s
-            ORDER BY CASE WHEN g.notes LIKE '%%National Championship%%' THEN 1
-                          WHEN g.notes LIKE '%%Semifinal%%' THEN 2
-                          WHEN g.notes LIKE '%%Quarterfinal%%' THEN 3
-                          WHEN g.notes LIKE '%%First Round%%' THEN 4
-                          WHEN g.notes LIKE '%%Conference Championship%%' THEN 5
-                          ELSE 6 END, g.notes, g.id
-        ''', (CURRENT_SEASON, week, stype))
+            WHERE g.season = %s AND g.week = %s AND g.season_type = %s
+        ''', (season, week, stype))
         games = []
-        for away, apts, home, hpts, a_abbr, h_abbr, a_logo, h_logo, gid, notes in cursor.fetchall():
+        for (away, apts, home, hpts, a_abbr, h_abbr, a_logo, h_logo,
+             gid, notes, completed, start_date, time_tbd) in cursor.fetchall():
+            # Same rule the game cards use: points on a row that is not
+            # complete means the game is under way.
+            if completed:
+                state = 'final'
+            elif apts is not None and hpts is not None:
+                state = 'live'
+            else:
+                state = 'pre'
+            _, kick_time = format_kickoff(start_date, time_tbd)
+            et = kickoff_et(start_date)
             games.append({
                 'id': gid,
-                'label': _ticker_game_label(notes),
+                'state': state,
+                'round': _ticker_game_label(notes),
+                'kickoff': kick_time,
+                'sort_time': et.isoformat() if et else '',
                 'away': {'abbr': a_abbr or away, 'pts': apts, 'logo': a_logo,
-                         'rank': ranks.get(away), 'won': (apts or 0) > (hpts or 0)},
+                         'rank': ranks.get(away),
+                         'won': state == 'final' and (apts or 0) > (hpts or 0)},
                 'home': {'abbr': h_abbr or home, 'pts': hpts, 'logo': h_logo,
-                         'rank': ranks.get(home), 'won': (hpts or 0) > (apts or 0)},
+                         'rank': ranks.get(home),
+                         'won': state == 'final' and (hpts or 0) > (apts or 0)},
             })
-        # Cap the ticker so it doesn't render all ~46 postseason games at once.
-        # Postseason is already ordered by round (championship first); for a
-        # regular week, surface ranked matchups first. Overflow is reachable via
+
+        # Cap the ticker so a 99-game week (or ~46 postseason games) doesn't all
+        # render at once. Live first, then upcoming, then finished; within a
+        # state the highest-ranked matchup leads. Overflow stays reachable via
         # the ticker's existing horizontal scroll.
         TICKER_MAX = 10
-        if 'POSTSEASON' not in stype:
-            def _relevance(g):
-                present = [r for r in (g['away']['rank'], g['home']['rank']) if r]
-                return min(present) if present else 999
-            games.sort(key=_relevance)
+        _state_rank = {'live': 0, 'pre': 1, 'final': 2}
+
+        def _relevance(g):
+            present = [r for r in (g['away']['rank'], g['home']['rank']) if r]
+            return min(present) if present else 999
+
+        if 'POSTSEASON' in stype:
+            # Postseason has a meaningful round order (championship first)
+            _round_rank = ['CFP Championship', 'CFP Semifinal', 'CFP Quarterfinal',
+                           'CFP First Round', 'Conf Championship']
+            games.sort(key=lambda g: (_state_rank[g['state']],
+                                      _round_rank.index(g['round']) if g['round'] in _round_rank else 9,
+                                      g['sort_time']))
+        else:
+            games.sort(key=lambda g: (_state_rank[g['state']], _relevance(g), g['sort_time']))
         games = games[:TICKER_MAX]
+        if not games:
+            return None
         label = 'Postseason' if 'POSTSEASON' in stype else f'Week {week}'
-        return {'label': label, 'games': games}
+        return {'label': label, 'season': season, 'games': games}
     finally:
         release_db(conn)
 
@@ -2096,43 +2137,49 @@ def home(week=None, season_type='regular'):
     try:
         cursor = conn.cursor()
         ap_rankings = get_ap_rankings(cursor)                  # final poll (leaders/ticker)
-        ap_weekly = get_ap_week_map(cursor, CURRENT_SEASON)    # per-week, for game cards
+        # The home page opens on the ACTIVE season's current slate, not on the
+        # last season that produced stats. CURRENT_SEASON only advances once a
+        # season has results, so in-season it points a year behind: on the
+        # opening Saturday it showed last January's playoff instead of the
+        # games being played. forward_season() follows the pipeline's own
+        # notion of the active year as soon as it has a schedule.
+        home_season = forward_season()
+        ap_weekly = get_ap_week_map(cursor, home_season)        # per-week, for game cards
 
+        # Every week with a schedule, not just completed ones — otherwise the
+        # picker is empty for a season that has not finished a game yet.
         cursor.execute('''
             SELECT week, season_type FROM (
                 SELECT DISTINCT week, season_type,
                     CASE WHEN season_type = 'SeasonType.POSTSEASON' THEN 0 ELSE 1 END as sort_order
-                FROM games WHERE completed = 1 AND season = %s
+                FROM games WHERE season = %s
             ) sub
             ORDER BY sort_order, week DESC
-        ''', (CURRENT_SEASON,))
+        ''', (home_season,))
         all_weeks = cursor.fetchall()
 
         if week is None:
-            # Default to the current week: all_weeks sorts postseason first,
-            # so once bowls/playoffs complete the home page shows those
-            # instead of the last regular-season week.
-            if all_weeks:
-                week = all_weeks[0][0]
-                season_type = 'postseason' if 'POSTSEASON' in all_weeks[0][1] else 'regular'
-            else:
-                week, season_type = 1, 'regular'
+            week, _stype = current_slate_week(cursor, home_season)
+            season_type = 'postseason' if 'POSTSEASON' in _stype else 'regular'
 
         db_season_type = 'SeasonType.POSTSEASON' if season_type == 'postseason' else 'SeasonType.REGULAR'
 
+        # No completed filter: a week in progress is mostly unplayed, and the
+        # cards already render scheduled, live and final states.
         cursor.execute(f'''
             SELECT {GAME_CARD_SELECT}
             FROM games g
             LEFT JOIN teams t1 ON g.home_team = t1.name
             LEFT JOIN teams t2 ON g.away_team = t2.name
-            WHERE g.completed = 1 AND g.season = %s AND g.week = %s AND g.season_type = %s
+            WHERE g.season = %s AND g.week = %s AND g.season_type = %s
             ORDER BY CASE WHEN g.notes LIKE '%%National Championship%%' THEN 1
                           WHEN g.notes LIKE '%%Semifinal%%' THEN 2
                           WHEN g.notes LIKE '%%Quarterfinal%%' THEN 3
                           WHEN g.notes LIKE '%%First Round%%' THEN 4
                           WHEN g.notes LIKE '%%Conference Championship%%' THEN 5
-                          ELSE 6 END, g.notes, g.id
-        ''', (CURRENT_SEASON, week, db_season_type))
+                          ELSE 6 END,
+                     g.start_date, g.id
+        ''', (home_season, week, db_season_type))
         raw_games = cursor.fetchall()
 
         # One query for the whole rivalries table instead of one per game (N+1 fix)
@@ -2160,6 +2207,10 @@ def home(week=None, season_type='regular'):
     return render_template('home.html',
         games=games, grouped_games=grouped_games, all_weeks=all_weeks,
         selected_week=week, season_type=season_type,
+        home_season=home_season,
+        # "Results" only once the whole slate is in the books; a week still
+        # being played is a schedule, not a set of results.
+        week_complete=bool(games) and all(g['completed'] for g in games),
         leaders=leaders, ap_rankings=ap_rankings,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
 
