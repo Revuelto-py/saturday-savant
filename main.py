@@ -63,7 +63,7 @@ from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory
+from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory, url_for
 from flask_caching import Cache
 # Labels/units for the stored Savant Forecast feature breakdown. The DB holds
 # only the model's numbers; the wording is applied here at render time.
@@ -1931,7 +1931,12 @@ def get_ticker_data():
         cursor = conn.cursor()
         season = forward_season()
         week, stype = current_slate_week(cursor, season)
-        ranks = get_ap_rankings(cursor)
+        # The poll in effect for THIS week of THIS season — the same as-of-week
+        # lookup the game cards use. get_ap_rankings() returns a single season's
+        # FINAL poll and defaults to CURRENT_SEASON, so once the ticker moved to
+        # the active season it was labelling week-1 teams with last January's
+        # rankings (Indiana 1, Miami 2 instead of Ohio State 1, Oregon 2).
+        ranks = ap_asof(get_ap_week_map(cursor, season), week, 'POSTSEASON' in stype)
         cursor.execute('''
             SELECT g.away_team, g.away_points, g.home_team, g.home_points,
                    ta.abbreviation, th.abbreviation, ta.logo_dark, th.logo_dark,
@@ -7230,6 +7235,115 @@ def favicon_ico():
         mimetype='image/x-icon', max_age=60 * 60 * 24 * 30)
 
 
+# ── Live scores API ─────────────────────────────────────────────────────────
+# Freshness moved OFF the cron and ONTO the web service, deliberately: a Render
+# Cron Job is metered per run, while the web service is a fixed-price instance
+# whose CPU is already paid for. Polling here therefore costs nothing extra,
+# and it lets the score cron drop to a durability-only cadence.
+#
+# One CFBD scoreboard call covers every live game at once and is shared by every
+# viewer for LIVE_TTL seconds, so cost is bounded by the clock rather than by
+# traffic — a thousand viewers cost the same as one. Nobody watching costs zero,
+# because nothing runs unless a page asks.
+#
+# This is also why period/clock need no database columns: they are read live and
+# never stored.
+LIVE_TTL = 45
+
+
+def _live_status_text(state, period, clock):
+    """Short scoreboard status: Q2 8:21, Half, OT, Final."""
+    if state == 'final':
+        return 'Final'
+    if state != 'live':
+        return ''
+    if not period:
+        return 'Live'
+    if period > 4:
+        return 'OT' if period == 5 else f'{period - 4}OT'
+    # CFBD reports the break between halves as period 2 with an expired clock
+    if period == 2 and clock in ('00:00', '0:00'):
+        return 'Half'
+    q = f'Q{period}'
+    return f'{q} {clock.lstrip("0") or "0:00"}' if clock else q
+
+
+@cache.memoize(timeout=LIVE_TTL)
+def _live_board():
+    """CFBD's live scoreboard, keyed by game id. Memoized so at most one call
+    is made per LIVE_TTL regardless of how many people are watching.
+
+    Returns {} when the key is absent or the call fails — the caller then falls
+    back to what the score cron has already written to Postgres, so the endpoint
+    still works on a web service that has no CFBD credentials.
+    """
+    key = os.getenv('CFBD_API_KEY')
+    if not key:
+        return {}
+    try:
+        with cfbd.ApiClient(cfbd.Configuration(access_token=key)) as api:
+            board = cfbd.GamesApi(api).get_scoreboard()
+    except Exception as exc:
+        print(f'live board unavailable: {type(exc).__name__} {exc}', flush=True)
+        return {}
+    out = {}
+    for g in board:
+        status = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
+        state = {'in_progress': 'live', 'completed': 'final'}.get(status, 'pre')
+        home = getattr(g, 'home_team', None)
+        away = getattr(g, 'away_team', None)
+        out[str(g.id)] = {
+            'state': state,
+            'home': getattr(home, 'points', None),
+            'away': getattr(away, 'points', None),
+            'status': _live_status_text(state, getattr(g, 'period', None),
+                                        getattr(g, 'clock', None)),
+        }
+    return out
+
+
+@app.route('/api/live')
+def api_live():
+    """Scores for games currently in play, for in-page patching.
+
+    The page HTML stays cached for hours; only this tiny payload moves. That is
+    the point — it keeps a score change from invalidating the whole page cache.
+    """
+    board = _live_board()
+    if board:
+        games = {gid: g for gid, g in board.items() if g['state'] in ('live', 'final')}
+    else:
+        # No CFBD access from the web service: serve what the cron last wrote.
+        # Points on a row that is not complete is the same "under way" rule the
+        # cards and the game page use.
+        games = {}
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, away_points, home_points, completed
+                  FROM games
+                 WHERE season = %s AND home_points IS NOT NULL
+                   AND start_date::timestamptz > now() - interval '12 hours'
+                   AND start_date::timestamptz < now() + interval '1 hour'
+            """, (forward_season(),))
+            for gid, apts, hpts, done in cur.fetchall():
+                games[str(gid)] = {
+                    'state': 'final' if done else 'live',
+                    'away': apts, 'home': hpts,
+                    'status': 'Final' if done else 'Live',
+                }
+        except Exception:
+            conn.rollback()
+        finally:
+            release_db(conn)
+    resp = jsonify({'ttl': LIVE_TTL, 'games': games})
+    # Let the browser reuse it for one window, but never a shared proxy — this
+    # is the one response on the site that must not go stale behind a CDN.
+    resp.headers['Cache-Control'] = f'private, max-age={LIVE_TTL}'
+    return resp
+
+
 @app.route('/admin/clear-cache')
 def clear_cache():
     # Fail CLOSED: if ADMIN_KEY isn't configured, reject every request rather
@@ -7242,6 +7356,30 @@ def clear_cache():
     supplied = request.headers.get('X-Admin-Key') or request.args.get('key', '')
     if not admin_key or not hmac.compare_digest(supplied, admin_key):
         return 'Unauthorized', 401
+    # ?scope=scores drops ONLY the pages whose content changes when a score
+    # does. A score update has no bearing on leaderboards, team precompute or
+    # player pages, and flushing those made every score change cost a full
+    # site-wide recompute — the reason a tighter score cadence used to be
+    # expensive. The weekly chain still calls this with no scope and clears
+    # everything, which is correct: it rewrites nearly every table.
+    if request.args.get('scope') == 'scores':
+        cache.delete('view/%s' % url_for('home'))
+        cache.delete('view/%s' % url_for('games_hub'))
+        # /week/<n>/<type> caches per path; clear the weeks that exist rather
+        # than guessing a range.
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT DISTINCT week, season_type FROM games WHERE season = %s',
+                        (forward_season(),))
+            for wk, stype in cur.fetchall():
+                st = 'postseason' if 'POSTSEASON' in (stype or '') else 'regular'
+                cache.delete('view/%s' % url_for('home', week=wk, season_type=st))
+        except Exception:
+            conn.rollback()
+        finally:
+            release_db(conn)
+        return 'Score caches cleared', 200
     cache.clear()
     return 'Cache cleared', 200
 

@@ -22,13 +22,22 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), ov
 SITE_URL = os.getenv('SITE_URL', 'https://saturdaysavant.com').rstrip('/')
 
 
-def notify_cache_clear():
+def notify_cache_clear(scope=None):
+    """Drop the live site's page cache.
+
+    scope='scores' clears only the pages a score changes (home, /games, the
+    week views). A score has no bearing on leaderboards, team precompute or
+    player pages, so the score cron uses it to avoid making every goal cost a
+    site-wide recompute. The weekly chain passes no scope and clears
+    everything, which is right — it rewrites nearly every table.
+    """
     key = os.getenv('ADMIN_KEY')
     if not key:
         print('cache_notify: no ADMIN_KEY in environment — skipped', flush=True)
         return False
     try:
         r = requests.get(f'{SITE_URL}/admin/clear-cache',
+                         params={'scope': scope} if scope else None,
                          headers={'X-Admin-Key': key}, timeout=15)
         print(f'cache_notify: {SITE_URL} -> HTTP {r.status_code}', flush=True)
         return r.ok

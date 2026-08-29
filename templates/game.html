@@ -156,14 +156,15 @@
                lands here without a scroll. No forecast (FCS matchups) falls
                back to a plain VS rather than an empty slot. #}
             {% if is_live %}
-            {# Under way — running score, no winner emphasis, nothing is settled #}
-            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+            {# Under way — running score, no winner emphasis, nothing is settled.
+               data-gid lets /api/live patch these in place without a reload. #}
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0" data-gid="{{ game[0] }}">
                 <div class="gh-score" style="text-align:center">
-                    <div class="score">{{ game[4] if game[4] is not none else '—' }}</div>
+                    <div class="score" data-live-away>{{ game[4] if game[4] is not none else '—' }}</div>
                 </div>
                 <div class="gh-dash score-divider" style="padding:0 10px">–</div>
                 <div class="gh-score" style="text-align:center">
-                    <div class="score">{{ game[3] if game[3] is not none else '—' }}</div>
+                    <div class="score" data-live-home>{{ game[3] if game[3] is not none else '—' }}</div>
                 </div>
             </div>
             {% elif is_scheduled %}
@@ -210,7 +211,7 @@
         <div class="gh-footer">
             <div class="gh-pill-row">
                 {% if is_live %}
-                <span class="gh-status-pill gh-status-pill--live">Live</span>
+                <span data-gid="{{ game[0] }}"><span class="gh-status-pill gh-status-pill--live" data-live-status>Live</span></span>
                 {% elif is_scheduled %}
                 <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
                 {% else %}

@@ -490,10 +490,10 @@
         </div>
         <div class="ticker-scroll">
             {% for g in ticker.games %}
-            <a class="ticker-item{{ ' is-live' if g.state == 'live' else '' }}" href="/game/{{ g.id }}">
+            <a class="ticker-item{{ ' is-live' if g.state == 'live' else '' }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
                 {# Round name when the game has one (CFP), otherwise its state:
                    a kickoff time before the game, Live during, Final after. #}
-                <div class="ticker-status">
+                <div class="ticker-status" data-live-status>
                     {%- if g.round %}{{ g.round }}
                     {%- elif g.state == 'live' %}<span class="ticker-live">Live</span>
                     {%- elif g.state == 'pre' %}{{ g.kickoff }}
@@ -505,7 +505,7 @@
                     <span class="ticker-name{{ ' won' if side.won else '' }}">
                         {% if side.rank %}<span class="ticker-rank">{{ side.rank }}</span>{% endif %}{{ side.abbr }}
                     </span>
-                    <span class="ticker-score{{ ' won' if side.won else '' }}">{{ side.pts if side.pts is not none else '' }}</span>
+                    <span class="ticker-score{{ ' won' if side.won else '' }}" {{ 'data-live-away' if loop.first else 'data-live-home' }}>{{ side.pts if side.pts is not none else '' }}</span>
                 </div>
                 {% endfor %}
             </a>
@@ -528,6 +528,100 @@
             <span class="footer-credit">Created and Maintained by Diego Torres</span>
         </div>
     </footer>
+
+    <script>
+    // Live score patching.
+    //
+    // The page HTML is cached for hours and never re-rendered for a score; only
+    // this small JSON payload moves. That keeps a score change from invalidating
+    // the page cache, which is what made a fast update cadence expensive.
+    //
+    // Costs nothing when nothing is happening: it does not poll unless a live
+    // game is actually on the page, it stops while the tab is hidden, and it
+    // shuts down for good once every game on screen is final.
+    (function () {
+        var nodes = document.querySelectorAll('[data-gid]');
+        if (!nodes.length) return;
+
+        var timer = null, stopped = false;
+
+        function hasLive() {
+            return !!document.querySelector('.game-card-v2.is-live, .ticker-item.is-live');
+        }
+        // Games on this page that have not kicked off yet. Nothing live right
+        // now does NOT mean nothing will be: a noon game ending while a 3:30
+        // sits on the same page must not shut polling down for the day.
+        function hasUpcoming() {
+            return !!document.querySelector('.game-card-v2.is-upcoming');
+        }
+
+        function apply(games) {
+            var anyLive = false;
+            document.querySelectorAll('[data-gid]').forEach(function (el) {
+                var g = games[el.getAttribute('data-gid')];
+                if (!g) return;
+                var away = el.querySelector('[data-live-away]'),
+                    home = el.querySelector('[data-live-home]'),
+                    status = el.querySelector('[data-live-status]');
+                if (away && g.away !== null) away.textContent = g.away;
+                if (home && g.home !== null) home.textContent = g.home;
+                if (status && g.status) status.textContent = g.status;
+                var live = g.state === 'live';
+                if (live) anyLive = true;
+                el.classList.toggle('is-live', live);
+                if (g.state === 'final') el.classList.remove('is-upcoming');
+                // Only the game's OWN page changes shape when it ends (box score,
+                // drives, win probability appear), and that cannot be patched in.
+                // A card just becomes "Final" with its score, which we have already
+                // written — reloading the home page every time any of 99 games ended
+                // would reload it all afternoon.
+                if (g.state === 'final' && status && status.dataset.wasLive === '1'
+                    && location.pathname === '/game/' + el.getAttribute('data-gid')) {
+                    location.reload();
+                    return;
+                }
+                if (status) status.dataset.wasLive = live ? '1' : '0';
+            });
+            return anyLive;
+        }
+
+        var FAST = 45000,   // something is being played
+            SLOW = 300000,  // nothing live yet, but a kickoff is still to come
+            rate = 0;
+
+        function retune() {
+            var want = hasLive() ? FAST : (hasUpcoming() ? SLOW : 0);
+            if (want === 0) { stop(); return; }          // nothing left to watch today
+            if (want === rate && timer) return;
+            rate = want;
+            if (timer) clearInterval(timer);
+            timer = setInterval(tick, rate);
+        }
+
+        function tick() {
+            if (stopped || document.visibilityState !== 'visible') return;
+            fetch('/api/live', { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (d) { if (d) { apply(d.games); retune(); } })
+                .catch(function () { /* a failed poll just means the next one tries */ });
+        }
+
+        function start() {
+            if (stopped) return;
+            retune();
+            if (timer) tick();
+        }
+        function stop() { if (timer) { clearInterval(timer); timer = null; } stopped = true; }
+        function pause() { if (timer) { clearInterval(timer); timer = null; } rate = 0; }
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') { if (!stopped) start(); }
+            else { pause(); }
+        });
+
+        if (hasLive() || hasUpcoming()) start();
+    })();
+    </script>
 
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

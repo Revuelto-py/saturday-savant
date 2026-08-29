@@ -4,7 +4,7 @@
 {% macro game_card(g, prob=None, forecast=None, show_date=True, title_top=False) %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
-<a class="game-card-v2{{ ' is-upcoming' if not (g.completed or g.live) else '' }}{{ ' is-live' if g.live else '' }}" href="/game/{{ g.id }}">
+<a class="game-card-v2{{ ' is-upcoming' if not (g.completed or g.live) else '' }}{{ ' is-live' if g.live else '' }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
     {# Under a day header the week label is identical on every card and the date
        is stated above, so both are dropped.
 
@@ -24,7 +24,7 @@
         <span class="gc-note">{{ head_note }}</span>
         <span class="gc-badges">
             {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
-            {% if g.completed %}<span class="gc-final">Final</span>{% elif g.live %}<span class="gc-live">Live</span>{% elif show_date %}<span class="gc-upcoming">{{ g.kickoff_date }}</span>{% endif %}
+            {% if g.completed %}<span class="gc-final" data-live-status>Final</span>{% elif g.live %}<span class="gc-live" data-live-status>Live</span>{% elif show_date %}<span class="gc-upcoming" data-live-status>{{ g.kickoff_date }}</span>{% endif %}
         </span>
     </div>
     {% endif %}
@@ -34,7 +34,7 @@
         <span class="gc-name">
             {% if g.away_rank %}<span class="gc-rank">{{ g.away_rank }}</span>{% endif %}{{ g.away }}
         </span>
-        {% if g.completed or g.live %}<span class="gc-score">{{ g.away_pts }}</span>{% endif %}
+        <span class="gc-score" data-live-away>{% if g.completed or g.live %}{{ g.away_pts }}{% endif %}</span>
     </div>
 
     <div class="gc-team{{ ' winner' if home_won else '' }}">
@@ -42,7 +42,7 @@
         <span class="gc-name">
             {% if g.home_rank %}<span class="gc-rank">{{ g.home_rank }}</span>{% endif %}{{ g.home }}
         </span>
-        {% if g.completed or g.live %}<span class="gc-score">{{ g.home_pts }}</span>{% endif %}
+        <span class="gc-score" data-live-home>{% if g.completed or g.live %}{{ g.home_pts }}{% endif %}</span>
     </div>
 
     {% if not (g.completed or g.live) %}

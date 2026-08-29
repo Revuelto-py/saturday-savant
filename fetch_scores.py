@@ -141,7 +141,8 @@ def main():
     if changed:
         try:
             from cache_notify import notify_cache_clear
-            notify_cache_clear()
+            # Scores only — leave leaderboards and team precompute cached
+            notify_cache_clear(scope='scores')
         except Exception:
             pass
     return 0
