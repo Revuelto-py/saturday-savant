@@ -85,6 +85,13 @@ def main():
         # changed-count below is a real "what happened since last run".
         changed = 0
         for g in games:
+            # /games reports points=None for anything not yet final — including
+            # a game under way. Writing that back would null out the score the
+            # board pass below just wrote, so leave those rows alone entirely.
+            # Without this the two passes fight: a run whose scoreboard call
+            # fails, or an older build of this script, blanks a live score.
+            if g.home_points is None and g.away_points is None and not g.completed:
+                continue
             cur.execute('''
                 UPDATE games
                    SET home_points = %s, away_points = %s, completed = %s
