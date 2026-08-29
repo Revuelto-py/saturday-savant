@@ -83,7 +83,8 @@
 
     <!-- Leaders Section -->
     <div class="col-lg-4">
-        <h5 class="section-label" style="margin-bottom: var(--s6);font-size: var(--text-sm)">Season Leaders</h5>
+        <h5 class="section-label" style="margin-bottom: var(--s6);font-size: var(--text-sm)">Season Leaders
+            <span class="section-label-season">{{ current_season }}</span></h5>
 
         {% for label, href, players in leaders %}
         <div class="leader-card">

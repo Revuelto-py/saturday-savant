@@ -7344,6 +7344,116 @@ def api_live():
     return resp
 
 
+# ── Cross-worker cache invalidation ─────────────────────────────────────────
+# Flask-Caching's SimpleCache lives in the worker PROCESS and gunicorn runs
+# --workers 2, so an /admin/clear-cache request only ever clears the worker that
+# happens to serve it. The other kept serving stale pages until its TTL expired
+# or --max-requests recycled it, which meant the weekly chain's "HTTP 200 cache
+# cleared" was landing on roughly half the site.
+#
+# Rather than take on Redis for one counter, the clear is RECORDED in Postgres
+# and every worker picks it up on its next request. One small read per worker
+# per _EPOCH_POLL_SECONDS is far cheaper than serving a stale page for hours.
+_EPOCH_KEY = 'cache_epoch'
+_EPOCH_POLL_SECONDS = 15
+_epoch_seen = None        # epoch this worker has already applied
+_epoch_checked_at = 0.0   # monotonic clock of the last look
+
+
+def _purge_local(scope=None):
+    """Drop this worker's cached pages. scope='scores' keeps everything a score
+    cannot affect (leaderboards, team precompute, player pages)."""
+    if scope != 'scores':
+        cache.clear()
+        return
+    try:
+        cache.delete('view/%s' % url_for('home'))
+        cache.delete('view/%s' % url_for('games_hub'))
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT DISTINCT week, season_type FROM games WHERE season = %s',
+                        (forward_season(),))
+            for wk, stype in cur.fetchall():
+                st = 'postseason' if 'POSTSEASON' in (stype or '') else 'regular'
+                cache.delete('view/%s' % url_for('home', week=wk, season_type=st))
+        finally:
+            release_db(conn)
+    except Exception as exc:
+        # Never leave a worker serving stale pages because the narrow path
+        # failed — fall back to the blunt clear.
+        print(f'scoped purge failed ({exc}) — clearing everything', flush=True)
+        cache.clear()
+
+
+def _epoch_read():
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT payload FROM pool_store WHERE key = %s', (_EPOCH_KEY,))
+        row = cur.fetchone()
+        if not row or not row[0]:
+            return None
+        return json.loads(bytes(row[0]).decode())
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+
+def _epoch_bump(scope):
+    """Record a clear so the OTHER workers apply it too."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT payload FROM pool_store WHERE key = %s FOR UPDATE', (_EPOCH_KEY,))
+        row = cur.fetchone()
+        n = 0
+        if row and row[0]:
+            try:
+                n = int(json.loads(bytes(row[0]).decode()).get('n', 0))
+            except Exception:
+                n = 0
+        payload = json.dumps({'n': n + 1, 'scope': scope}).encode()
+        cur.execute("""
+            INSERT INTO pool_store (key, season, payload, updated_at)
+                 VALUES (%s, 0, %s, now())
+            ON CONFLICT (key) DO UPDATE
+                    SET payload = EXCLUDED.payload, updated_at = now()
+        """, (_EPOCH_KEY, psycopg2.Binary(payload)))
+        conn.commit()
+        return n + 1
+    except Exception as exc:
+        conn.rollback()
+        print(f'cache epoch bump failed: {exc}', flush=True)
+        return None
+    finally:
+        release_db(conn)
+
+
+@app.before_request
+def _apply_remote_cache_clear():
+    global _epoch_seen, _epoch_checked_at
+    # Static files and the admin endpoint itself never need this
+    if request.path.startswith('/static') or request.path.startswith('/admin'):
+        return
+    now = _time.monotonic()
+    if now - _epoch_checked_at < _EPOCH_POLL_SECONDS:
+        return
+    _epoch_checked_at = now
+    ep = _epoch_read()
+    if not ep:
+        return
+    n = ep.get('n')
+    if _epoch_seen is None:
+        _epoch_seen = n      # first sight after boot: adopt it, don't purge
+        return
+    if n != _epoch_seen:
+        _epoch_seen = n
+        _purge_local(ep.get('scope'))
+
+
 @app.route('/admin/clear-cache')
 def clear_cache():
     # Fail CLOSED: if ADMIN_KEY isn't configured, reject every request rather
@@ -7362,26 +7472,15 @@ def clear_cache():
     # site-wide recompute — the reason a tighter score cadence used to be
     # expensive. The weekly chain still calls this with no scope and clears
     # everything, which is correct: it rewrites nearly every table.
-    if request.args.get('scope') == 'scores':
-        cache.delete('view/%s' % url_for('home'))
-        cache.delete('view/%s' % url_for('games_hub'))
-        # /week/<n>/<type> caches per path; clear the weeks that exist rather
-        # than guessing a range.
-        conn = get_db()
-        try:
-            cur = conn.cursor()
-            cur.execute('SELECT DISTINCT week, season_type FROM games WHERE season = %s',
-                        (forward_season(),))
-            for wk, stype in cur.fetchall():
-                st = 'postseason' if 'POSTSEASON' in (stype or '') else 'regular'
-                cache.delete('view/%s' % url_for('home', week=wk, season_type=st))
-        except Exception:
-            conn.rollback()
-        finally:
-            release_db(conn)
-        return 'Score caches cleared', 200
-    cache.clear()
-    return 'Cache cleared', 200
+    scope = 'scores' if request.args.get('scope') == 'scores' else None
+    # Clear THIS worker now, and record it so the others follow within
+    # _EPOCH_POLL_SECONDS — a single request only ever reaches one worker.
+    _purge_local(scope)
+    global _epoch_seen
+    n = _epoch_bump(scope)
+    if n is not None:
+        _epoch_seen = n      # we have already applied it; don't purge again
+    return ('Score caches cleared' if scope else 'Cache cleared'), 200
 
 
 def _warm_cache():
