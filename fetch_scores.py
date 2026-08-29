@@ -8,10 +8,21 @@ drives the scoreboard ticker, the /games grid and each game page's state, so
 between Saturday kickoff and the Monday pipeline every result would otherwise
 sit at "Scheduled" with no score for ~30 hours.
 
-This does the narrow thing instead: one CFBD call, then UPDATE the rows whose
+This does the narrow thing instead: two CFBD reads, then UPDATE the rows whose
 score or completion actually changed. It never DELETEs and never INSERTs, so it
 cannot wipe a season the way the 2026-07-21 incident did — the worst case is a
 no-op. Safe to run every few minutes on game days.
+
+Two reads, because /games alone is not enough: it only populates home_points /
+away_points once a game is FINAL. Verified 2026-08-29 during UNC-TCU — every
+week-1 game carrying points had completed=True, and the in-progress game
+carried None. So a game sat at "Scheduled" with no score for its entire four
+hours. /scoreboard is the live endpoint and does carry an in-progress score,
+so it supplies scores for games under way; /games stays the sole authority on
+whether a game is COMPLETE, so a game can never be marked final early.
+
+A game with points but completed=0 is therefore "in progress", which is how
+the site renders a live state without needing to store a clock.
 
 Game pages need no extra step: /game/<id> already falls back to a live ESPN
 summary fetch (and stores it) when a completed game has no stored summary, so a
@@ -53,6 +64,13 @@ def main():
         games_api = cfbd.GamesApi(api)
         games = games_api.get_games(SEASON, week=WEEK) if WEEK \
             else games_api.get_games(SEASON)
+        # Live board for games under way. Non-fatal: if it fails we still apply
+        # the finals below, which is the behaviour this script had before.
+        try:
+            board = games_api.get_scoreboard()
+        except Exception as exc:
+            print(f'scoreboard unavailable ({exc}) — finals only', flush=True)
+            board = []
 
     if not WEEK and len(games) < MIN_GAMES:
         print(f'CFBD returned only {len(games)} games for {SEASON} '
@@ -77,6 +95,29 @@ def main():
             ''', (g.home_points, g.away_points, 1 if g.completed else 0, g.id,
                   g.home_points, g.away_points, 1 if g.completed else 0))
             changed += cur.rowcount
+
+        # Live pass. Scores only — completion is left to /games above so a game
+        # is never marked final on the strength of the board alone. Rows are
+        # matched by id, so a board entry for a game we do not carry is a no-op.
+        live = 0
+        for g in board:
+            status = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
+            if status != 'in_progress':
+                continue
+            hp = getattr(getattr(g, 'home_team', None), 'points', None)
+            ap = getattr(getattr(g, 'away_team', None), 'points', None)
+            if hp is None or ap is None:
+                continue
+            cur.execute("""
+                UPDATE games
+                   SET home_points = %s, away_points = %s
+                 WHERE id = %s
+                   AND completed = 0
+                   AND (home_points IS DISTINCT FROM %s
+                     OR away_points IS DISTINCT FROM %s)
+            """, (hp, ap, g.id, hp, ap))
+            live += cur.rowcount
+        changed += live
         conn.commit()
 
         cur.execute('SELECT COUNT(*) FROM games WHERE season = %s AND completed = 1',
@@ -84,7 +125,7 @@ def main():
         done = cur.fetchone()[0]
         scope = f'week {WEEK}' if WEEK else 'all weeks'
         print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
-              f'({done} completed this season)', flush=True)
+              f'({live} live) ({done} completed this season)', flush=True)
     finally:
         conn.close()
 

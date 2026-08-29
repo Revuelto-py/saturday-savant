@@ -130,7 +130,7 @@
                 </div>
             {% endif %}
             {% if game_date %}
-                <div class="game-date" style="margin-top:6px;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ game_date }}{% if is_scheduled and game_time %} · {{ game_time }}{% endif %}</div>
+                <div class="game-date" style="margin-top:6px;text-shadow:0 1px 4px rgba(0,0,0,0.6)">{{ game_date }}{% if is_scheduled and not is_live and game_time %} · {{ game_time }}{% endif %}</div>
             {% endif %}
         </div>
 
@@ -155,7 +155,18 @@
                scale. Before kickoff the win probability IS the number, and it
                lands here without a scroll. No forecast (FCS matchups) falls
                back to a plain VS rather than an empty slot. #}
-            {% if is_scheduled %}
+            {% if is_live %}
+            {# Under way — running score, no winner emphasis, nothing is settled #}
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+                <div class="gh-score" style="text-align:center">
+                    <div class="score">{{ game[4] if game[4] is not none else '—' }}</div>
+                </div>
+                <div class="gh-dash score-divider" style="padding:0 10px">–</div>
+                <div class="gh-score" style="text-align:center">
+                    <div class="score">{{ game[3] if game[3] is not none else '—' }}</div>
+                </div>
+            </div>
+            {% elif is_scheduled %}
                 {% if forecast %}
                 {% set gh_fav_home = forecast.home_prob >= 0.5 %}
                 <div class="gh-fc">
@@ -198,7 +209,9 @@
 
         <div class="gh-footer">
             <div class="gh-pill-row">
-                {% if is_scheduled %}
+                {% if is_live %}
+                <span class="gh-status-pill gh-status-pill--live">Live</span>
+                {% elif is_scheduled %}
                 <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
                 {% else %}
                 <span class="gh-status-pill">Final</span>

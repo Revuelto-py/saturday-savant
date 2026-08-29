@@ -265,6 +265,37 @@
     text-transform: uppercase;
     flex-shrink: 0;
 }
+/* A game under way: score on the card like a final, but flagged red so it
+   reads as moving rather than settled. */
+.gc-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(244,33,46,0.12);
+    border: 1px solid rgba(244,33,46,0.45);
+    border-radius: var(--r-pill);
+    padding: 2px 8px;
+    color: #ff6b73;
+    font-size: 0.56rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.gc-live::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ff6b73;
+    animation: gc-live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes gc-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) {
+    .gc-live::before { animation: none; }
+}
+.game-card-v2.is-live { border-left: 2px solid rgba(244,33,46,0.75); }
 .gc-team {
     display: flex;
     align-items: center;
@@ -3265,6 +3296,25 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
     text-transform: uppercase;
 }
 .gh-status-pill--scheduled { color: #7cc4f5; border-color: rgba(124,196,245,0.45); }
+.gh-status-pill--live {
+    color: #ff6b73;
+    border-color: rgba(244,33,46,0.5);
+    background: rgba(244,33,46,0.12);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.gh-status-pill--live::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ff6b73;
+    animation: gc-live-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .gh-status-pill--live::before { animation: none; }
+}
 
 /* ── Team page: Trends tab ──────────────────────────────────────────────── */
 .trend-card { margin-bottom: 28px; }

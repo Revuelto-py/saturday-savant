@@ -2069,6 +2069,10 @@ def build_game_card(row, ap_weekly, rivalry_map):
         'home_color': home_color, 'away_color': away_color,
         'week': week, 'notes': event_name(notes),
         'completed': bool(completed),
+        # In progress. /games only fills points once a game is FINAL, so the
+        # live pass in fetch_scores.py writes a score while leaving completed
+        # at 0 — points on an uncompleted game is exactly "under way".
+        'live': (not completed) and home_pts is not None and away_pts is not None,
         # Rank each team carried into this game — the weekly poll as-of its
         # week (upcoming games show ranks too once that week's poll is out).
         'home_rank': ap.get(home),
@@ -4211,6 +4215,11 @@ def game_detail(game_id):
         # "upcoming" page with the kickoff instead of doing the (fruitless,
         # multi-second) ESPN fetches the completed-game path relies on.
         is_scheduled = not game_info[15]
+        # Under way: CFBD /games only fills points once a game is FINAL, so
+        # points on a not-completed row means the live pass in fetch_scores.py
+        # wrote them. The page keeps the compact pre-kickoff body (there is no
+        # box score yet) but shows the running score instead of a kickoff time.
+        is_live = is_scheduled and game_info[3] is not None and game_info[4] is not None
 
         records = {}
         name_to_player_id = {}
@@ -4279,7 +4288,7 @@ def game_detail(game_id):
             # As-of-week ranks (per-season now) — empty until that week's poll
             # exists, so upcoming games show ranks once the poll is out.
             ap_rankings=ap_rankings, rivalry_name=rivalry_name,
-            is_scheduled=True,
+            is_scheduled=True, is_live=is_live,
             kickoff_date=kick_date, kickoff_time=kick_time,
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
             season_year=game_info[17], game_season=game_season,
@@ -4980,7 +4989,7 @@ def game_detail(game_id):
     return render_template('game.html',
         game=game_info,
         forecast=forecast,
-        is_scheduled=False,
+        is_scheduled=False, is_live=False,
         home_team=home_team,
         away_team=away_team,
         home_is_fbs=home_is_fbs,
