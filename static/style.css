@@ -686,39 +686,208 @@ a.leader-row:hover .leader-name { color: var(--gold); }
 
 /* Player Page */
 
-/* Hero — phone layout follows the ESPN player-page pattern: identity block
-   left with the headshot beside it on the right, then the season-stats banner
-   full-width beneath. display:contents on .ph-info promotes its identity /
-   label / cards children to grid items without touching the desktop layout. */
+/* Team mark shown inline beside the team name on phones only; the desktop
+   hero keeps its larger eyebrow logo above the name. */
+.ph-meta-logo { display: none; }
+
+/* Hero, phone (<=768px) — rebuilt on the ESPN player-page pattern: the headshot
+   bleeds off the left edge, the identity stacks to its right, and the season
+   stats become one dense strip beneath instead of five bordered cards.
+   display:contents on .ph-info promotes its identity / label / cards children
+   into the grid so none of this touches the desktop flex layout. */
 @media (max-width: 767.98px) {
     .ph-hero-row {
         display: grid !important;
-        grid-template-columns: minmax(0, 1fr) auto;
+        /* the auto track sizes to the photo's margin box, so the bleed below
+           adjusts the column automatically rather than needing a magic width */
+        grid-template-columns: auto minmax(0, 1fr);
         grid-template-areas:
-            "identity headshot"
+            "headshot identity"
             "label    label"
             "cards    cards";
         column-gap: 14px;
+        align-items: end;
+        padding-top: 16px;
         min-height: 0 !important;
     }
     .ph-info { display: contents; }
-    .ph-identity { grid-area: identity; padding-top: 20px; min-width: 0; }
+
+    /* Headshot: fixed box so the bleed is deterministic across source crops.
+       -30px against the wrapper's 16px padding runs it 14px past the viewport. */
     .ph-headshot {
         grid-area: headshot;
         align-self: end !important;
-        margin: 16px 0 0 !important;
+        margin: 0 0 0 -30px !important;
     }
-    .ph-headshot img { height: 130px !important; }
-    .ph-fallback { width: 96px !important; height: 130px !important; font-size: 2rem !important; }
-    .ph-name { font-size: var(--text-xl) !important; }
-    .ph-statlabel { grid-area: label; margin-top: 8px !important; }
+    .ph-headshot img,
+    .ph-fallback {
+        width: 134px !important;
+        height: 180px !important;
+    }
+    /* Our headshots carry a light backdrop, so a hard right edge would draw a
+       visible panel against the identity text. Fading the far edge lets the
+       photo emerge from the screen edge instead; the bottom stays square so it
+       sits on the stat divider. */
+    .ph-headshot img {
+        -webkit-mask-image: linear-gradient(to right, #000 70%, transparent 100%);
+        mask-image: linear-gradient(to right, #000 70%, transparent 100%);
+    }
+    /* The initials stand in for the photo, so they get the same soft falloff
+       rather than sitting in a hard-edged grey box. */
+    .ph-fallback {
+        font-size: 2.25rem !important;
+        background: linear-gradient(100deg, rgba(255,255,255,0.11), rgba(255,255,255,0.01)) !important;
+    }
+    /* the strip's own rule below becomes the divider, so drop the photo's */
+    .ph-accentbar, .ph-shadow { display: none !important; }
+
+    .ph-identity { grid-area: identity; min-width: 0; padding-bottom: 2px; }
+    .ph-teamlogo { display: none !important; }
+    .ph-meta-logo {
+        display: block;
+        height: 20px;
+        width: auto;
+        object-fit: contain;
+        margin-right: 7px;
+        flex-shrink: 0;
+    }
+
+    /* Name splits first-over-last: the condensed face carries a long surname at
+       display size on a 393px screen where one line never could.
+       font-size:0 on the h1 collapses the whitespace node between the spans. */
+    .ph-name { font-size: 0 !important; letter-spacing: normal !important; }
+    .ph-first, .ph-last { display: block; font-family: var(--font-display); text-transform: uppercase; }
+    .ph-first {
+        font-size: var(--text-md);
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        line-height: 1.1;
+        color: var(--text-secondary);
+    }
+    .ph-last {
+        font-size: clamp(1.55rem, 8.4vw, 2.45rem);
+        font-weight: 900;
+        letter-spacing: -0.005em;
+        line-height: 0.94;
+        color: var(--text-primary);
+    }
+
+    /* Separators ride on the preceding item so a stray "·" can never orphan
+       onto its own line, which is what broke the old "· #28" row. */
+    .ph-meta, .ph-bio { gap: 0 !important; margin-top: 6px !important; }
+    .ph-sep { display: none !important; }
+    .ph-meta-item:not(:last-child)::after,
+    .ph-bio-item:not(:last-child)::after {
+        content: "·";
+        margin: 0 7px;
+        color: var(--text-dim);
+        font-weight: 400;
+    }
+    .ph-meta-item { font-size: var(--text-base) !important; }
+    .ph-bio-item { font-size: var(--text-sm) !important; }
+
+    /* Roster status is a fact, not an error — state it quietly */
+    .ph-status-chip {
+        background: rgba(255, 255, 255, 0.06) !important;
+        border-color: var(--border-strong) !important;
+        /* --text-dim would fall under 4.5:1 against the hero at this size */
+        color: var(--text-secondary) !important;
+        font-weight: 600 !important;
+        padding: 2px 8px !important;
+        margin-top: 6px;
+        order: 1;
+    }
+    /* zero-height break so the chip starts its own line at its natural width,
+       instead of stretching across the column as flex-basis:100% would */
+    .ph-meta::after {
+        content: "";
+        flex-basis: 100%;
+        height: 0;
+    }
+    .ph-meta-item:not(:last-child):has(+ .ph-status-chip)::after { content: none; }
+
+    /* Season-stat banner: a full-bleed rule that picks up the team colour on
+       the left, under the photo, and fades out across the strip */
+    .ph-statlabel {
+        grid-area: label;
+        position: relative;
+        margin: 16px -14px 0 !important;
+        padding: 12px 14px 0;
+        border-top: 1px solid var(--border);
+    }
+    .ph-statlabel::before {
+        content: "";
+        position: absolute;
+        top: -1px; left: 0;
+        width: 45%; height: 1px;
+        background: linear-gradient(90deg, var(--ph-c1, var(--accent)), transparent);
+    }
+
+    /* One dense row of stats. Each column keeps its national rank underneath —
+       that standing is what the page is for, so it gets the accent. */
     .ph-statcards {
         grid-area: cards;
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        gap: 0 !important;
+        margin: 12px -14px 0;
+        padding: 0 14px 18px !important;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
     }
-    .ph-statcards .stat-card { min-width: 0 !important; padding: 10px 8px !important; }
+    .ph-statcards::-webkit-scrollbar { display: none; }
+    .ph-statcards .stat-card {
+        flex: 1 1 auto;
+        min-width: 60px !important;
+        background: none !important;
+        border: 0 !important;
+        border-left: 1px solid var(--border) !important;
+        border-radius: 0 !important;
+        padding: 0 10px !important;
+        text-align: left !important;
+        backdrop-filter: none !important;
+        box-shadow: none !important;
+    }
+    .ph-statcards .stat-card:first-child { border-left: 0 !important; padding-left: 0 !important; }
+    .ph-statcards .stat-card:hover { transform: none !important; }
+    .ph-statcards .sc-label {
+        font-size: 0.625rem !important;
+        letter-spacing: 0.05em !important;
+        color: var(--text-dim) !important;
+        margin-bottom: 4px !important;
+        white-space: nowrap;
+    }
+    .ph-statcards .sc-value {
+        font-size: 1.45rem !important;
+        font-variant-numeric: tabular-nums;
+        text-shadow: none !important;
+    }
+    .ph-statcards .sc-rank {
+        font-size: 0.625rem !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.02em;
+        color: var(--accent) !important;
+        margin-top: 4px !important;
+    }
+}
+
+/* Small phones (SE and narrower): give the identity column ~22px back from the
+   photo and tighten the strip so five stats still fit rather than clipping a
+   value mid-glyph or wrapping the number onto its own line. */
+@media (max-width: 360px) {
+    .ph-headshot img,
+    .ph-fallback {
+        width: 112px !important;
+        height: 150px !important;
+    }
+    .ph-meta-logo { height: 18px; margin-right: 5px; }
+    .ph-meta-item { font-size: var(--text-sm) !important; }
+    .ph-meta-item:not(:last-child)::after,
+    .ph-bio-item:not(:last-child)::after { margin: 0 5px; }
+    .ph-statcards .stat-card { min-width: 0 !important; padding: 0 6px !important; }
+    .ph-statcards .sc-value { font-size: 1.15rem !important; }
+    .ph-statcards .sc-label { font-size: 0.5625rem !important; letter-spacing: 0.02em !important; }
 }
 
 /* Player hero status badges — transfer history + NFL draft status share one
