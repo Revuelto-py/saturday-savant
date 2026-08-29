@@ -17,7 +17,7 @@
 {% block content %}
 
 <!-- HERO -->
-<div style="background:linear-gradient(135deg,{{ c1 }} 0%,#0a0b0d 50%,{{ c2 }}88 100%);padding:40px 0 0;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
+<div class="team-hero" style="background:linear-gradient(135deg,{{ c1 }} 0%,#0a0b0d 50%,{{ c2 }}88 100%);padding:40px 0 0;border-bottom: 1px solid var(--border);position:relative;overflow:hidden">
     <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,{{ c1 }}66 0%,transparent 55%),radial-gradient(ellipse at 100% 50%,{{ c2 }}44 0%,transparent 55%);pointer-events:none"></div>
     <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);pointer-events:none"></div>
     <div class="page-wrapper" style="padding-bottom:0;position:relative;z-index:1">
@@ -72,10 +72,10 @@
                 {% set stat_card_style = 'display:flex;flex-direction:column;justify-content:center;border-radius: var(--r-md);padding:14px 22px;text-align:center;min-width:124px;backdrop-filter:blur(4px)' %}
                 {% if svr %}
                 <div class="stat-card" style="{{ stat_card_style }};background:rgba(28, 156, 240,0.10);border: 1px solid rgba(28, 156, 240,0.5);box-shadow:0 4px 18px rgba(28,156,240,0.14)">
-                    <div style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
-                    <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">Net Savant</div>
-                    {% if svr.net_ranking %}<div style="color: var(--gold);font-size: var(--text-xs);font-weight:700;margin-top:4px;opacity:0.9">{{ ordinal(svr.net_ranking) }}</div>{% endif %}
-                    {% if svr_week %}<div style="color: var(--text-dim);font-size:0.62rem;font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
+                    <div class="sc-value" style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
+                    <div class="sc-label" style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">Net Savant</div>
+                    {% if svr.net_ranking %}<div class="sc-rank" style="color: var(--gold);font-size: var(--text-xs);font-weight:700;margin-top:4px;opacity:0.9">{{ ordinal(svr.net_ranking) }}</div>{% endif %}
+                    {% if svr_week %}<div class="sc-week" style="color: var(--text-dim);font-size:0.62rem;font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
                 </div>
                 {% endif %}
                 {% if has_games %}
@@ -85,9 +85,9 @@
                         ('PASS YDS/G',    season_stats.pass_yds_pg,    hero_ranks.pass_yds_pg),
                         ('RUSH YDS/G',    season_stats.rush_yds_pg,    hero_ranks.rush_yds_pg)] %}
                 <div class="stat-card" style="{{ stat_card_style }};background:rgba(255,255,255,0.045);border: 1px solid var(--border-strong)">
-                    <div style="color: var(--text-primary);font-size: var(--text-xl);font-weight:900;line-height:1">{{ val }}</div>
-                    <div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">{{ label }}</div>
-                    {% if rk %}<div style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;margin-top:4px;opacity:0.8">{{ ordinal(rk) }}</div>{% endif %}
+                    <div class="sc-value" style="color: var(--text-primary);font-size: var(--text-xl);font-weight:900;line-height:1">{{ val }}</div>
+                    <div class="sc-label" style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">{{ label }}</div>
+                    {% if rk %}<div class="sc-rank" style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600;margin-top:4px;opacity:0.8">{{ ordinal(rk) }}</div>{% endif %}
                 </div>
                 {% endfor %}
                 {% endif %}
