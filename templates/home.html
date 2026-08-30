@@ -71,12 +71,12 @@
             {% for label, games in grouped_games.items() %}
                 <div class="section-label mt-4">{{ label }}</div>
                 <div class="home-games-grid">
-                    {% for game in games %}{{ gc.game_card(game) }}{% endfor %}
+                    {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}{% endfor %}
                 </div>
             {% endfor %}
         {% else %}
             <div class="home-games-grid">
-                {% for game in games %}{{ gc.game_card(game) }}{% endfor %}
+                {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}{% endfor %}
             </div>
         {% endif %}
     </div>

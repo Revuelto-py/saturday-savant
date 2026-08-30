@@ -1,88 +1,103 @@
-{# Shared game card — used by the home page and the /games hub.
-   Takes a dict built by build_game_card() in main.py. Renders a final score
-   for completed games and a kickoff date/time for scheduled (future) ones. #}
-{% macro game_card(g, prob=None, forecast=None, show_date=True, title_top=False) %}
+{# Shared game card — home page and the /games hub.
+
+   ONE layout for all three states. A game is scheduled, live, or final, and
+   the card's shape does not change between them: every card is the same three
+   zones in the same order, and each zone is always rendered.
+
+       ┌──────────────────────────────────────┐
+       │ what this game is         STATE      │  head
+       ├──────────────────────────────────────┤
+       │ logo  rank  Away Team          score │  teams  (flex:1, centred)
+       │ logo  rank  Home Team          score │
+       ├──────────────────────────────────────┤
+       │ Savant Forecast                      │  foot
+       └──────────────────────────────────────┘
+
+   This replaced three divergent shapes. The head used to be dropped entirely
+   for a scheduled game under a day header, the kickoff time lived in the body
+   while Final/Live lived in the head, and the bottom held a different element
+   per state (kickoff + bar / recap / event note). Cards are grid items sharing
+   a row height, so those differences read as three unrelated designs.
+
+   The rules that keep it uniform — change these and the card stays uniform:
+
+     head  — ALWAYS rendered, because the state chip is always present. The
+             kickoff belongs here, in the same slot as Final and Live: the
+             right-hand chip answers "what is happening with this game". The
+             left is what the game IS (rivalry, bowl, event), which is why a
+             title never pushes the matchup down: the row exists regardless.
+     teams — ALWAYS two rows with a score slot. The slot is rendered empty
+             before kickoff rather than omitted, so names align across states.
+     foot  — ALWAYS the Savant Forecast, rendered in the form the state calls
+             for: the split bar before and during the game, the recap after.
+             One idea, one place, three renderings.
+#}
+{% macro game_card(g, prob=None, forecast=None, show_date=True) %}
+{% set state = 'final' if g.completed else ('live' if g.live else 'upcoming') %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
-<a class="game-card-v2{{ ' is-upcoming' if not (g.completed or g.live) else '' }}{{ ' is-live' if g.live else '' }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
-    {# Under a day header the week label is identical on every card and the date
-       is stated above, so both are dropped.
+{% set has_foot = (prob is not none and state != 'final') or (forecast and state == 'final') %}
+<a class="game-card-v2 is-{{ state }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
 
-       A named event (bowl, kickoff classic) does NOT go here — it moves to the
-       foot of the card. Cards are grid items stretched to a shared row height,
-       so they only line up if they share an internal structure, and a title at
-       the top pushed one card's teams, kickoff and bar ~37px below its
-       neighbours'. Reserving the row on every card fixed the alignment but left
-       dead space above the teams on the ~90% that have no title. Keeping the
-       title out of the top gives both: identical top structure, nothing
-       wasted. #}
-    {% set title_in_head = show_date or title_top %}
-    {% set head_note = g.notes if (g.notes and title_in_head) else ('Week ' ~ g.week if show_date else '') %}
-    {% set head_filled = head_note or g.completed or g.live or show_date %}
-    {% if head_filled %}
+    {# ── head ───────────────────────────────────────────────────────────── #}
     <div class="gc-head">
-        <span class="gc-note">{{ head_note }}</span>
+        {# What this game IS. Falls back to the date when the view is not
+           already grouped by day; the week is not repeated here because the
+           section heading above the grid already states it. #}
+        <span class="gc-note">
+            {%- if g.rivalry %}<span class="gc-note-rivalry">{{ g.rivalry }}</span>{% endif -%}
+            {%- if g.rivalry and g.notes %}<span class="gc-note-sep">·</span>{% endif -%}
+            {%- if g.notes %}{{ g.notes }}
+            {%- elif show_date and not g.rivalry %}{{ g.kickoff_date }}{% endif -%}
+        </span>
         <span class="gc-badges">
-            {% if g.completed and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
-            {% if g.completed %}<span class="gc-final" data-live-status>Final</span>{% elif g.live %}<span class="gc-live" data-live-status>Live</span>{% elif show_date %}<span class="gc-upcoming" data-live-status>{{ g.kickoff_date }}</span>{% endif %}
+            {% if state == 'final' and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
+            {%- if state == 'final' %}<span class="gc-final" data-live-status>Final</span>
+            {%- elif state == 'live' %}<span class="gc-live" data-live-status>Live</span>
+            {%- else %}<span class="gc-upcoming" data-live-status>{{ g.kickoff_time or 'TBD' }}</span>{% endif -%}
         </span>
     </div>
-    {% endif %}
 
-    <div class="gc-team{{ ' winner' if away_won else '' }}">
-        {% if g.away_logo %}<img src="{{ g.away_logo }}" alt="{{ g.away }} logo" loading="lazy">{% endif %}
-        <span class="gc-name">
-            {% if g.away_rank %}<span class="gc-rank">{{ g.away_rank }}</span>{% endif %}{{ g.away }}
-        </span>
-        <span class="gc-score" data-live-away>{% if g.completed or g.live %}{{ g.away_pts }}{% endif %}</span>
+    {# ── teams ──────────────────────────────────────────────────────────── #}
+    <div class="gc-teams">
+        <div class="gc-team{{ ' winner' if away_won else '' }}">
+            {% if g.away_logo %}<img src="{{ g.away_logo }}" alt="{{ g.away }} logo" loading="lazy">{% endif %}
+            <span class="gc-name">
+                {% if g.away_rank %}<span class="gc-rank">{{ g.away_rank }}</span>{% endif %}{{ g.away }}
+            </span>
+            <span class="gc-score" data-live-away>{% if state != 'upcoming' %}{{ g.away_pts }}{% endif %}</span>
+        </div>
+        <div class="gc-team{{ ' winner' if home_won else '' }}">
+            {% if g.home_logo %}<img src="{{ g.home_logo }}" alt="{{ g.home }} logo" loading="lazy">{% endif %}
+            <span class="gc-name">
+                {% if g.home_rank %}<span class="gc-rank">{{ g.home_rank }}</span>{% endif %}{{ g.home }}
+            </span>
+            <span class="gc-score" data-live-home>{% if state != 'upcoming' %}{{ g.home_pts }}{% endif %}</span>
+        </div>
     </div>
 
-    <div class="gc-team{{ ' winner' if home_won else '' }}">
-        {% if g.home_logo %}<img src="{{ g.home_logo }}" alt="{{ g.home }} logo" loading="lazy">{% endif %}
-        <span class="gc-name">
-            {% if g.home_rank %}<span class="gc-rank">{{ g.home_rank }}</span>{% endif %}{{ g.home }}
-        </span>
-        <span class="gc-score" data-live-home>{% if g.completed or g.live %}{{ g.home_pts }}{% endif %}</span>
-    </div>
-
-    {% if not (g.completed or g.live) %}
-        <span class="gc-kickoff">{{ g.kickoff_time }}</span>
-        {% if prob is not none %}
-        {# Savant Forecast chip: thin team-color split bar + the favorite's % #}
-        {% set hc = g.home_color if (g.home_color and g.home_color[0]=='#' and g.home_color|length==7) else '#2b3a55' %}
-        {% set ac = g.away_color if (g.away_color and g.away_color[0]=='#' and g.away_color|length==7) else '#5a2b2b' %}
-        {% set fav = g.home if prob >= 0.5 else g.away %}
-        {% set fav_pct = (prob if prob >= 0.5 else 1 - prob) * 100 %}
-        <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%">
-            <span class="fc-bar"><span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                {{ ac }}cc 0%, {{ ac }}cc {{ '%.1f' % ((1 - prob) * 100) }}%,
-                {{ hc }}cc {{ '%.1f' % ((1 - prob) * 100) }}%, {{ hc }}cc 100%)"></span></span>
-            <span class="gc-fc-pct">{{ fav }} {{ '%.0f' % fav_pct }}%</span>
-        </span>
+    {# ── foot ───────────────────────────────────────────────────────────── #}
+    <div class="gc-foot{{ '' if has_foot else ' is-empty' }}">
+        {% if state == 'final' %}
+            {% if forecast %}
+            {# The frozen pre-kickoff call, and whether it hit. #}
+            <span class="gc-fc-recap{{ ' is-hit' if forecast.correct else '' }}">
+                Savant: {{ forecast.favorite }} {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.correct %} ✓{% endif %}
+            </span>
+            {% endif %}
+        {% elif prob is not none %}
+            {# Split bar in the two team colours, favourite's share called out. #}
+            {% set hc = g.home_color if (g.home_color and g.home_color[0]=='#' and g.home_color|length==7) else '#2b3a55' %}
+            {% set ac = g.away_color if (g.away_color and g.away_color[0]=='#' and g.away_color|length==7) else '#5a2b2b' %}
+            {% set fav = g.home if prob >= 0.5 else g.away %}
+            {% set fav_pct = (prob if prob >= 0.5 else 1 - prob) * 100 %}
+            <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%">
+                <span class="fc-bar"><span class="fc-bar-fill" style="background:linear-gradient(90deg,
+                    {{ ac }}cc 0%, {{ ac }}cc {{ '%.1f' % ((1 - prob) * 100) }}%,
+                    {{ hc }}cc {{ '%.1f' % ((1 - prob) * 100) }}%, {{ hc }}cc 100%)"></span></span>
+                <span class="gc-fc-pct">{{ fav }} {{ '%.0f' % fav_pct }}%</span>
+            </span>
         {% endif %}
-    {% elif forecast %}
-        {# Completed + predicted: the frozen pre-kickoff call and whether it hit.
-           An upset also carries the red chip in the header (above). #}
-        <span class="gc-fc-recap{{ ' is-hit' if forecast.correct else '' }}">
-            Savant: {{ forecast.favorite }} {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.correct %} ✓{% endif %}
-        </span>
-    {% endif %}
-
-    {# Footnote: what this game IS, beyond the two names — the rivalry it
-       settles and/or the event it belongs to. Rivalry used to hang off the
-       elif chain above, so it only appeared on a completed game that had no
-       forecast: with almost every game forecast, it was effectively never
-       shown. Here it always gets its line.
-
-       Last in the card rather than first, so a game carrying one still starts
-       its matchup on the same line as the cards beside it. #}
-    {% set foot_note = g.notes if (g.notes and not title_in_head) else '' %}
-    {% if g.rivalry or foot_note %}
-        <span class="gc-event">
-            {%- if g.rivalry %}<span class="gc-event-rivalry">{{ g.rivalry }}</span>{% endif -%}
-            {%- if g.rivalry and foot_note %}<span class="gc-event-sep">·</span>{% endif -%}
-            {{- foot_note -}}
-        </span>
-    {% endif %}
+    </div>
 </a>
 {% endmacro %}

@@ -202,8 +202,12 @@
        page padding; shrink them so rows stay inside the viewport */
     .row.g-5 { --bs-gutter-x: 1rem; }
 }
+/* ONE card layout for scheduled / live / final. The three zones below are
+   always rendered, so a card's shape never depends on its state — see the
+   comment at the top of templates/_game_card.html for the rules. */
 .game-card-v2 {
-    display: block;
+    display: flex;
+    flex-direction: column;
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
@@ -212,6 +216,29 @@
     cursor: pointer;
     transition: all 0.18s ease;
 }
+/* The matchup takes the slack, so cards sharing a stretched grid row centre
+   their teams instead of one floating up because it has less below it. */
+.gc-teams {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+/* Reserved in every state. A card with no forecast keeps the space but drops
+   the rule, so a row stays aligned whether or not each game was predicted —
+   an unreserved foot is exactly what made finals and upcoming games look like
+   two different designs. */
+.gc-foot {
+    margin-top: 10px;
+    padding-top: 9px;
+    border-top: 1px solid var(--border);
+    /* enough for the bar + its label, no more — this space is reserved on
+       every card, so any slack here is slack on all of them */
+    min-height: 19px;
+    display: flex;
+    align-items: center;
+}
+.gc-foot.is-empty { border-top-color: transparent; }
 .game-card-v2:hover {
     transform: translateY(-2px);
     border-color: var(--text-dim);
@@ -228,23 +255,11 @@
 }
 /* The rivalry this game settles — gold, matching the hero's rivalry badge, so
    it reads as a different KIND of fact from the event name beside it. */
-.gc-event-rivalry { color: #f0c66a; font-weight: 700; }
-.gc-event-sep { color: var(--border-strong); margin: 0 6px; }
+.gc-note-rivalry { color: #f0c66a; font-weight: 700; }
+.gc-note-sep { color: var(--border-strong); margin: 0 6px; }
 
 /* Event name (bowl, kickoff classic) on a day-grouped card — the foot, so a
    titled card's matchup still lines up with the untitled ones beside it. */
-.gc-event {
-    display: block;
-    margin-top: 8px;
-    padding-top: 7px;
-    border-top: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
 .gc-note {
     color: var(--text-secondary);
     font-size: var(--text-xs);
@@ -348,16 +363,6 @@
     letter-spacing: 0.04em;
     white-space: nowrap;
     flex-shrink: 0;
-}
-.gc-kickoff {
-    margin-top: 8px;
-    display: inline-block;
-    color: var(--text-dim);
-    font-size: 0.62rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    font-variant-numeric: tabular-nums;
 }
 
 /* ── /games hub ─────────────────────────────────────────────────────────────
@@ -4099,7 +4104,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .fc-block-heads .fc-team { color: var(--text-secondary); font-size: var(--text-xs); display: block; }
 
 /* Compact chip on /games cards: thin split bar + favorite pct */
-.gc-forecast { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.gc-forecast { display: flex; align-items: center; gap: 8px; width: 100%; }
 .gc-forecast .fc-bar { height: 5px; flex: 1; }
 .gc-forecast .gc-fc-pct {
     color: var(--text-secondary); font-size: var(--text-xs);
@@ -4203,3 +4208,37 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 /* Ticker: a game under way reads red like the game cards do */
 .ticker-live { color: #ff6b73; font-weight: 800; }
 .ticker-item.is-live { box-shadow: inset 2px 0 0 rgba(244,33,46,0.75); }
+
+
+/* ── Game card: one skeleton for scheduled / live / final ─────────────────
+   Every card is head + teams + foot, and each zone holds CONSTANT metrics so
+   the three states are the same height with their matchups on the same line.
+   Anything added here has to keep that true — that is the whole point of the
+   single layout. See templates/_game_card.html for the structural rules. */
+
+/* The state chip is the same shape in all three states; only its colour says
+   which state it is. Before this the kickoff was plain text while Final was a
+   pill, which alone made the head 10px shorter on a scheduled card. */
+.gc-final, .gc-live, .gc-upcoming {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1;
+}
+.gc-upcoming {
+    background: rgba(28, 156, 240, 0.10);
+    border: 1px solid rgba(28, 156, 240, 0.35);
+    color: var(--accent);
+}
+/* A score must not drive the row height, or a final card's matchup sits lower
+   than a scheduled one's — the empty score slot has no line box. */
+.gc-team { min-height: 34px; }
+.gc-score { line-height: 1; }

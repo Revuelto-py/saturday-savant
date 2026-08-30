@@ -2215,6 +2215,21 @@ def home(week=None, season_type='regular'):
         leaders_season = _req_leaders if _req_leaders in leader_seasons else CURRENT_SEASON
         leaders = get_cached_season_leaders(leaders_season)
 
+        # Savant Forecast for these cards — the same two batched reads /games
+        # makes. The card reserves a slot for the forecast in every state, so
+        # without this the home grid would render that slot empty on every card
+        # and the two pages would disagree about what a game card shows.
+        forecasts = {}
+        upcoming_ids = [g['id'] for g in games if not g['completed']]
+        if upcoming_ids:
+            try:
+                cursor.execute('SELECT game_id, home_prob FROM game_predictions '
+                               'WHERE game_id = ANY(%s) AND scored = 0', (upcoming_ids,))
+                forecasts = {gid: p for gid, p in cursor.fetchall() if p is not None}
+            except Exception:
+                conn.rollback()   # table absent on a fresh DB — no chips
+        completed_forecasts = get_frozen_forecasts(cursor, [g['id'] for g in games if g['completed']])
+
         # Live count of FBS teams for the hero pill, so it stays accurate
         # through realignment instead of a hardcoded "130+".
         cursor.execute('SELECT COUNT(*) FROM teams WHERE conference NOT IN %s', (FCS_CONFS,))
@@ -2233,6 +2248,7 @@ def home(week=None, season_type='regular'):
         # being played is a schedule, not a set of results.
         week_complete=bool(games) and all(g['completed'] for g in games),
         leaders=leaders, ap_rankings=ap_rankings,
+        forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
 
