@@ -89,7 +89,9 @@
        column on mobile. Matches the site's card layering + accent-tinted hover. */
     .standings-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        /* min() so the track collapses below 400px instead of forcing the
+           page wider than the phone it is on */
+        grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr));
         gap: var(--s6) var(--s5);
         align-items: start;
     }

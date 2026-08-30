@@ -61,8 +61,11 @@
 /* ── Sitewide content width — desktop/large screens only, mobile (<992px) untouched ── */
 @media (min-width: 992px) {
     .page-wrapper {
-        padding-left: 16px;
-        padding-right: 16px;
+        /* 24px, not 16: a Bootstrap .row.g-5 pulls -24px on each side, so with
+           16px of padding the row escaped the wrapper and scrolled the page
+           sideways by 8px at 1024. The padding has to cover half the gutter. */
+        padding-left: 24px;
+        padding-right: 24px;
     }
     /* Compact resting width (fills up to 280px), expanding to 360px only
        while focused — keeps the now-shorter nav row balanced. */
@@ -73,6 +76,22 @@
         transition: max-width var(--t-base, 0.2s) ease;
     }
     .search-wrapper:focus-within { max-width: 360px; }
+}
+
+/* Tablet band (768–991px): the desktop navbar is in force here but the rule
+   above, which lets the search box flex, is not — so the box sat at a rigid
+   220px with flex-shrink:0. At exactly 768px the brand (83px), the links at
+   their nowrap content width (428px) and that box plus gaps need 767px inside
+   a 711px row, and since the box was the only child able to give and refused
+   to, it pushed 16px past the viewport. Every page scrolled sideways at that
+   one width. Letting it shrink to a usable floor absorbs the difference. */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .search-wrapper {
+        flex-shrink: 1;
+        min-width: 148px;
+    }
+    /* Without this the focus expansion re-inflates it past the row again */
+    .search-wrapper:focus-within { width: 220px; }
 }
 @media (min-width: 1200px) {
     /* fluid ceiling: the column keeps growing with the viewport (up to
