@@ -1,13 +1,19 @@
-{# Passing location chart — shared by the player, team and game pages.
+{# Passing location heatmap — shared by the player, team and game pages.
 
-   Six zones: deep on top, short beneath, left/middle/right across, which is the
-   field as the passer sees it. Each cell is yards per attempt, shaded against
-   the best zone in this profile, with completion rate and volume beneath — a
-   zone can be efficient and barely used, and that contrast is the point.
+   A field seen from behind the passer: air yards up the vertical axis with the
+   line of scrimmage marked, three directional bands across. Colour is this
+   subject's share of attempts MINUS the FBS average at the same spot, so red
+   reads as "goes here more than the field does" rather than merely "goes here
+   a lot" — plotting raw volume would draw the same short-middle blob for
+   everyone in the country.
 
-   Every profile carries an attempt count for its air-yard data because coverage
-   is uneven; the footnote states it rather than implying the whole sample is
-   measured. #}
+   This replaced a six-cell grid that collapsed depth into a short/deep switch
+   and threw away the only continuous measurement in the data. Direction really
+   is three buckets in the source, so the horizontal stays three bands; the
+   chart does not invent lateral precision CFBD does not carry.
+
+   Coverage is uneven, so the footnote states how many attempts are actually
+   located rather than implying the whole sample is measured. #}
 
 {% macro pass_summary(p) %}
 <div class="pc-summary">
@@ -43,56 +49,84 @@
 {% endmacro %}
 
 
-{% macro pass_grid(p) %}
-{# Shading runs against a FIXED reference (PC_SCALE yards per attempt), not this
-   chart's own maximum. Two reasons: scaling to self makes charts incomparable —
-   every profile would have one fully-saturated zone regardless of how good it
-   is — and with early-season samples a single 35-yard completion on one attempt
-   would set the peak and wash out six real zones beneath it. #}
-{% set PC_SCALE = 14.0 %}
-{# Fewer attempts than this and a zone is an anecdote, not a tendency; it still
-   shows its number but is muted so it does not read as a strength. #}
-{% set PC_THIN = 3 %}
-<div class="pc-grid">
-    {% for zone in ['deep left', 'deep middle', 'deep right', 'short left', 'short middle', 'short right'] %}
-    {% set z = p.zones.get(zone) %}
-    <div class="pc-zone{{ ' is-empty' if not z }}{{ ' is-thin' if z and z.att < PC_THIN }}"
-         {% if z %}title="{{ zone }} — {{ z.att }} attempt{{ '' if z.att == 1 else 's' }}, {{ z.comp }} completion{{ '' if z.comp == 1 else 's' }}, {{ z.yds }} yards{% if z.att < PC_THIN %} (too few to read as a tendency){% endif %}"{% endif %}>
-        <span class="pc-zone-name">{{ zone.split(' ')[1] }}</span>
-        {% if z and z.ypa is not none %}
-        {% set heat = [z.ypa / PC_SCALE, 1.0] | min if z.ypa > 0 else 0 %}
-        <span class="pc-zone-val" style="color: rgba(28,156,240,{{ '%.2f' % (0.45 + heat * 0.55) }})">{{ '%.1f' % z.ypa }}</span>
-        <span class="pc-zone-sub">{{ '%.0f' % z.comp_pct }}% · {{ z.att }} att</span>
-        <span class="pc-zone-bar"><span class="pc-zone-fill" style="width: {{ '%.0f' % (heat * 100) }}%"></span></span>
-        {% else %}
-        <span class="pc-zone-val pc-zone-none">—</span>
-        <span class="pc-zone-sub">no attempts</span>
-        <span class="pc-zone-bar"></span>
-        {% endif %}
+{% macro pass_heat(p) %}
+{# Continuous depth, three directional bands.
+
+   Air yards are exact per attempt, so the vertical axis is a real one — the
+   six-zone grid this replaces collapsed that into a short/deep switch and threw
+   the measurement away. Direction genuinely is three buckets in the source, so
+   the horizontal stays three bands rather than inventing lateral precision.
+
+   Cells are share-of-attempts MINUS the FBS average at the same depth and
+   direction: red where this passer goes more than the field, blue where less.
+   Raw volume would draw the same short-middle blob for everyone. The blur is
+   applied to the colour layer only, so the axis and labels above it stay
+   crisp. #}
+{% set h = p.heat %}
+{% if h %}
+<div class="ph-heat">
+    <div class="ph-heat-axis" aria-hidden="true">
+        {% for t in h.ticks %}
+        <span class="ph-heat-tick" style="top: {{ '%.2f' % (100 * (40 - t) / 50) }}%">{{ 'LoS' if t == 0 else t }}</span>
+        {% endfor %}
     </div>
-    {% endfor %}
-    <span class="pc-band pc-band-deep">Deep</span>
-    <span class="pc-band pc-band-short">Short</span>
+
+    <div class="ph-heat-field">
+        <div class="ph-heat-blur">
+            {% for row in h.rows %}
+            {% for c in row.cells %}
+            {% set v = c.v %}
+            {% set col = '244,33,46' if v > 0 else '28,156,240' %}
+            {# gamma < 1 lifts the mid-range so the field shows structure rather
+               than one hot cell against near-black everywhere else #}
+            <i style="background: rgba({{ col }}, {{ '%.3f' % (0.86 * (v | abs) ** 0.7) }})"></i>
+            {% endfor %}
+            {% endfor %}
+        </div>
+        {# Line of scrimmage and the hash marks, above the blur so they stay sharp #}
+        <span class="ph-heat-los" style="top: {{ '%.2f' % (100 * 40 / 50) }}%"></span>
+        <span class="ph-heat-vline" style="left: 33.333%"></span>
+        <span class="ph-heat-vline" style="left: 66.666%"></span>
+    </div>
+
+    <div class="ph-heat-dirs">
+        <span>Left</span><span>Middle</span><span>Right</span>
+    </div>
 </div>
-<div class="pc-foot">
-    Yards per attempt by location, shaded against {{ '%.0f' % PC_SCALE }} y/att ·
-    air-yard data on <strong>{{ p.air_att }}</strong> of {{ p.attempts }} attempts
-    {%- if p.coverage_pct < 90 %} <span class="pc-warn">({{ p.coverage_pct }}% measured)</span>{% endif %}
-    {%- if p.zones.values() | selectattr('att', 'lt', PC_THIN) | list %} · faded zones have
-    fewer than {{ PC_THIN }} attempts{% endif %}
-</div>
+{% endif %}
 {% endmacro %}
 
 
-{% macro passing_chart(p, title, subtitle='') %}
+{% macro pass_foot(p, subject) %}
+{# Kept out of pass_heat so the body grid holds exactly two children — the field
+   and the figures. With the caption inside, it took the second column and
+   pushed the figures onto a row of their own. #}
+{% if p.heat %}
+<div class="pc-foot">
+    Where {{ subject }} versus the FBS average, by air yards and direction ·
+    <span class="ph-key ph-key-hot"></span> more often ·
+    <span class="ph-key ph-key-cold"></span> less often ·
+    <strong>{{ p.heat.total }}</strong> located attempts
+    {%- if p.coverage_pct < 90 %} <span class="pc-warn">({{ p.coverage_pct }}% of attempts measured)</span>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{% macro passing_chart(p, title, subtitle='', subject='this passer went') %}
 {% if p %}
 <div class="pc-block">
     <div class="pc-head">
         <h5 class="section-label" style="margin:0">{{ title }}</h5>
         {% if subtitle %}<span class="pc-sub">{{ subtitle }}</span>{% endif %}
     </div>
-    {{ pass_summary(p) }}
-    {{ pass_grid(p) }}
+    {# Field and figures side by side. The heatmap is capped at a readable width,
+       so stacking them left the card mostly empty to the right. #}
+    <div class="pc-body">
+        {{ pass_heat(p) }}
+        {{ pass_summary(p) }}
+    </div>
+    {{ pass_foot(p, subject) }}
 </div>
 {% endif %}
 {% endmacro %}

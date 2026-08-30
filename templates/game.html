@@ -1028,7 +1028,7 @@ if (typeof Plotly !== 'undefined') {
 <div id="tab-content-passing" style="display:none">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:32px">
         {% for tm, prof in game_passing.items() %}
-        {{ pc.passing_chart(prof, tm, prof.completions ~ '/' ~ prof.attempts ~ ' · ' ~ prof.yards ~ ' yards') }}
+        {{ pc.passing_chart(prof, tm, prof.completions ~ '/' ~ prof.attempts ~ ' · ' ~ prof.yards ~ ' yards', tm ~ ' threw') }}
         {% endfor %}
     </div>
 </div>

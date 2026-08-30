@@ -624,7 +624,8 @@
             {% if target_profile %}
             {{ pc.passing_chart(target_profile,
                                 season ~ ' Target Chart',
-                                target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions') }}
+                                target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions',
+                                'this receiver was targeted') }}
             {% endif %}
         </div>
     </div>

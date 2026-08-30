@@ -5308,12 +5308,123 @@ def _passing_profile(cursor, where, params, min_attempts=MIN_PASS_ATTEMPTS,
     }
 
 
+# ── Passing heatmap ─────────────────────────────────────────────────────────
+# The six-zone grid this replaces threw away the one continuous measurement in
+# the data: air yards are exact per attempt, so depth deserves a real axis
+# rather than a short/deep switch. Direction genuinely is three buckets, so the
+# horizontal stays three bands — the chart does not invent lateral precision the
+# source does not carry.
+#
+# Cells hold the difference between this subject's share of attempts and the
+# FBS average share at the same depth and direction. Raw volume would just draw
+# the same short-middle blob for everyone; the difference is what says where a
+# passer actually goes that others do not.
+HEAT_MIN, HEAT_MAX, HEAT_BINS = -10, 40, 25      # 2-yard bins
+HEAT_DIRS = ['left', 'middle', 'right']
+
+
+def _heat_counts(cursor, where, params):
+    """{(direction, bin): count} over air-yard bins. Attempts outside the range
+    clamp into the end bins rather than vanish."""
+    cursor.execute(f"""
+        SELECT pass_direction,
+               LEAST(GREATEST(width_bucket(air_yards, {HEAT_MIN}, {HEAT_MAX}, {HEAT_BINS}), 1), {HEAT_BINS}),
+               count(*)
+          FROM passing_plays
+         WHERE {where} AND air_yards IS NOT NULL AND pass_direction IS NOT NULL
+         GROUP BY 1, 2
+    """, params)
+    return {(d, b): n for d, b, n in cursor.fetchall()}
+
+
+@cache.memoize(timeout=21600)
+def _league_heat(season):
+    """FBS-wide baseline for a season, as shares. Memoized — every heatmap on
+    the site subtracts this same grid."""
+    conn = get_db()
+    try:
+        counts = _heat_counts(conn.cursor(), 'season = %s', (season,))
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+    total = sum(counts.values())
+    if not total:
+        return None
+    return {k: v / total for k, v in counts.items()}
+
+
+def _smooth(col):
+    """Gaussian-ish blur down the depth axis. Without it a 300-attempt season
+    spread over 75 cells is four attempts a cell and the chart reads as noise
+    rather than tendency."""
+    k = [1, 3, 5, 3, 1]
+    out = []
+    for i in range(len(col)):
+        acc = wt = 0.0
+        for j, w in enumerate(k):
+            idx = i + j - 2
+            if 0 <= idx < len(col):
+                acc += col[idx] * w
+                wt += w
+        out.append(acc / wt if wt else 0.0)
+    return out
+
+
+def _passing_heatmap(cursor, where, params, season):
+    """Grid of (share − league share) in percentage points, deepest row first."""
+    league = _league_heat(season)
+    if not league:
+        return None
+    try:
+        counts = _heat_counts(cursor, where, params)
+    except Exception:
+        cursor.connection.rollback()
+        return None
+    total = sum(counts.values())
+    if not total:
+        return None
+
+    cols = {}
+    for d in HEAT_DIRS:
+        raw = [(counts.get((d, b), 0) / total) - league.get((d, b), 0.0)
+               for b in range(1, HEAT_BINS + 1)]
+        cols[d] = _smooth(raw)
+
+    peak = max((abs(v) for c in cols.values() for v in c), default=0) or 1e-9
+    rows = []
+    for b in range(HEAT_BINS, 0, -1):                     # deepest first
+        i = b - 1
+        lo = HEAT_MIN + (b - 1) * (HEAT_MAX - HEAT_MIN) / HEAT_BINS
+        rows.append({
+            'depth': int(lo),
+            'cells': [{
+                'dir': d,
+                # -1..1, so the template maps intensity without knowing the scale
+                'v': round(cols[d][i] / peak, 3),
+                'n': counts.get((d, b), 0),
+            } for d in HEAT_DIRS],
+        })
+    return {
+        'rows': rows,
+        'total': total,
+        'bin': (HEAT_MAX - HEAT_MIN) // HEAT_BINS,
+        # Ticks the axis actually labels, so the template does not hardcode them
+        'ticks': [40, 30, 20, 10, 0, -10],
+    }
+
+
 @cache.memoize(timeout=21600)
 def get_passer_profile(player_id, season):
     conn = get_db()
     try:
-        return _passing_profile(conn.cursor(), 'season = %s AND passer_id = %s',
-                                (season, player_id))
+        cur = conn.cursor()
+        prof = _passing_profile(cur, 'season = %s AND passer_id = %s', (season, player_id))
+        if prof:
+            prof['heat'] = _passing_heatmap(cur, 'season = %s AND passer_id = %s',
+                                            (season, player_id), season)
+        return prof
     finally:
         release_db(conn)
 
@@ -5325,8 +5436,13 @@ def get_target_profile(player_id, season):
     production he creates after the catch."""
     conn = get_db()
     try:
-        return _passing_profile(conn.cursor(), 'season = %s AND target_id = %s',
+        cur = conn.cursor()
+        prof = _passing_profile(cur, 'season = %s AND target_id = %s',
                                 (season, player_id), min_attempts=10)
+        if prof:
+            prof['heat'] = _passing_heatmap(cur, 'season = %s AND target_id = %s',
+                                            (season, player_id), season)
+        return prof
     finally:
         release_db(conn)
 
@@ -5339,10 +5455,14 @@ def get_team_passing_profile(team, season):
     conn = get_db()
     try:
         cur = conn.cursor()
-        return {
-            'offense': _passing_profile(cur, 'season = %s AND offense = %s', (season, team)),
-            'defense': _passing_profile(cur, 'season = %s AND defense = %s', (season, team)),
-        }
+        out = {}
+        for side, col in (('offense', 'offense'), ('defense', 'defense')):
+            prof = _passing_profile(cur, f'season = %s AND {col} = %s', (season, team))
+            if prof:
+                prof['heat'] = _passing_heatmap(cur, f'season = %s AND {col} = %s',
+                                                (season, team), season)
+            out[side] = prof
+        return out
     finally:
         release_db(conn)
 
@@ -5499,13 +5619,16 @@ def get_game_passing_profile(game_id):
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT DISTINCT offense FROM passing_plays WHERE game_id = %s', (game_id,))
-        teams = [r[0] for r in cur.fetchall()]
+        cur.execute('SELECT DISTINCT offense, season FROM passing_plays WHERE game_id = %s',
+                    (game_id,))
+        rows = cur.fetchall()
         out = {}
-        for t in teams:
+        for t, ssn in rows:
             prof = _passing_profile(cur, 'game_id = %s AND offense = %s', (game_id, t),
                                     min_attempts=0, min_coverage=0)
             if prof:
+                prof['heat'] = _passing_heatmap(cur, 'game_id = %s AND offense = %s',
+                                                (game_id, t), ssn)
                 out[t] = prof
         return out or None
     except Exception:

@@ -323,8 +323,8 @@
             </p>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:32px">
-            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown') }}
-            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed') }}
+            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw') }}
+            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense') }}
         </div>
     </div>
     {% endif %}
