@@ -322,7 +322,7 @@
                 what the scheme creates from what the receivers do.
             </p>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:32px">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:36px">
             {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw') }}
             {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense') }}
         </div>

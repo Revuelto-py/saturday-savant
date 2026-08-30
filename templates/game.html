@@ -1026,7 +1026,7 @@ if (typeof Plotly !== 'undefined') {
    much of the yardage each created after the catch rather than in it. #}
 {% if game_passing %}
 <div id="tab-content-passing" style="display:none">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:32px">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:36px">
         {% for tm, prof in game_passing.items() %}
         {{ pc.passing_chart(prof, tm, prof.completions ~ '/' ~ prof.attempts ~ ' · ' ~ prof.yards ~ ' yards', tm ~ ' threw') }}
         {% endfor %}

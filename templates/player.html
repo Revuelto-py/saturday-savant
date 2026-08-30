@@ -615,7 +615,7 @@
          to describe a tendency. -->
     {% if passer_profile or target_profile %}
     <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;margin-bottom:16px">
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:32px">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:36px">
             {% if passer_profile %}
             {{ pc.passing_chart(passer_profile,
                                 season ~ ' Passing Chart',

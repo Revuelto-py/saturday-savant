@@ -4328,28 +4328,34 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    stacking them left the card mostly empty beside it. */
 .pc-body {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: var(--s5);
+    /* An explicit first column, not `auto`. With `auto` the field's width was
+       derived from its min-height through aspect-ratio, so max-width never bound
+       and the chart stayed ~267px however large the card was. */
+    grid-template-columns: minmax(0, 470px) minmax(0, 1fr);
+    gap: var(--s6);
     align-items: start;
 }
+/* Two across rather than four: beside a 530px-tall field, a single row of four
+   narrow cards left most of the column empty. A 2x2 block fills it and gives the
+   figures room to be read at the same scale as the chart. */
 .pc-summary {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
-    gap: var(--s2);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s3);
     align-content: start;
 }
 .pc-stat {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    padding: 10px 12px;
+    padding: 16px 18px;
     display: flex;
     flex-direction: column;
     gap: 1px;
     min-width: 0;
 }
 .pc-stat-val {
-    font-size: var(--text-xl); font-weight: 900; line-height: 1.1;
+    font-size: var(--text-2xl); font-weight: 900; line-height: 1.1;
     color: var(--text-primary); font-variant-numeric: tabular-nums;
 }
 .pc-pct { font-size: 0.6em; font-weight: 800; color: var(--text-secondary); margin-left: 1px; }
@@ -4357,7 +4363,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--text-secondary);
 }
-.pc-stat-note { font-size: 0.68rem; color: var(--text-dim); line-height: 1.3; }
+.pc-stat-note { font-size: 0.72rem; color: var(--text-dim); line-height: 1.35; }
 
 .pc-foot {
     font-size: var(--text-xs); color: var(--text-dim); line-height: 1.5;
@@ -4404,13 +4410,14 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    field" rather than merely "goes here a lot". */
 .ph-heat {
     display: grid;
-    grid-template-columns: 30px minmax(0, 1fr);
+    grid-template-columns: 38px minmax(0, 1fr);
     grid-template-rows: auto auto;
     column-gap: 8px;
     row-gap: 6px;
-    /* Without a ceiling the field follows its container to ~1900px, which also
-       leaves the blur far too small relative to the chart to read as a surface. */
-    max-width: 330px;
+    /* Charts now stack one per row (see the callers), so each gets the full card
+       width and the field can be properly large. The ceiling lives on .pc-body's
+       first column; here it just fills it. */
+    width: 100%;
 }
 .ph-heat-axis {
     grid-column: 1; grid-row: 1;
@@ -4420,15 +4427,14 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .ph-heat-tick {
     position: absolute; right: 0;
     transform: translateY(-50%);
-    font-size: 0.62rem; font-weight: 700;
+    font-size: 0.7rem; font-weight: 700;
     color: var(--text-dim); white-space: nowrap;
 }
 
 .ph-heat-field {
     grid-column: 2; grid-row: 1;
     position: relative;
-    aspect-ratio: 5 / 6;
-    min-height: 200px;
+    aspect-ratio: 4 / 5;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     overflow: hidden;
@@ -4441,7 +4447,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-auto-rows: 1fr;
-    filter: blur(15px);
+    filter: blur(20px);
     will-change: filter;
 }
 .ph-heat-blur i { display: block; }
@@ -4460,7 +4466,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     grid-column: 2; grid-row: 2;
     display: grid; grid-template-columns: repeat(3, 1fr);
     text-align: center;
-    font-size: 0.6rem; font-weight: 800; letter-spacing: 0.1em;
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--text-dim);
 }
 
@@ -4479,7 +4485,8 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .ph-heat { max-width: 100%; }
 }
 @media (max-width: 767.98px) {
-    .ph-heat { grid-template-columns: 28px minmax(0, 1fr); }
-    .ph-heat-field { min-height: 190px; }
-    .ph-heat-blur { filter: blur(11px); }
+    .pc-stat { padding: 12px 13px; }
+    .pc-stat-val { font-size: var(--text-xl); }
+    .ph-heat { grid-template-columns: 30px minmax(0, 1fr); }
+    .ph-heat-blur { filter: blur(14px); }
 }
