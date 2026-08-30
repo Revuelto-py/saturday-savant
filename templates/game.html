@@ -134,7 +134,7 @@
             {% endif %}
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:center">
+        <div class="gh-matchup" style="display:flex;justify-content:center">
             {# Away (left) #}
             <div class="gh-side" style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:10px;padding-right:36px">
                 {% if game[10] %}
@@ -143,7 +143,11 @@
                 </div>
                 {% endif %}
                 <div style="text-align:right">
-                    {% if away_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ away_rank }}</div>{% endif %}
+                    {# The rank row is reserved on both sides when either team is
+                       ranked: without it the ranked side's name sits a row lower
+                       than its opponent's, which reads as a misalignment. #}
+                    {% if away_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ away_rank }}</div>
+                    {% elif home_rank %}<div class="ap-rank-badge is-placeholder" style="margin-bottom:2px" aria-hidden="true">&nbsp;</div>{% endif %}
                     <div class="gh-team-name team-name">{% if away_is_fbs %}<a href="{{ team_url(away_team, game_season) }}" class="{{ away_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ away_team }}</a>{% else %}<span class="{{ away_name_class }}">{{ away_team }}</span>{% endif %}</div>
                     {% if records.away %}<div class="team-record" style="margin-top:4px">({{ records.away[0] }}-{{ records.away[1] }})</div>{% endif %}
                 </div>
@@ -201,7 +205,8 @@
                 </div>
                 {% endif %}
                 <div style="text-align:left">
-                    {% if home_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ home_rank }}</div>{% endif %}
+                    {% if home_rank %}<div class="ap-rank-badge" style="margin-bottom:2px">#{{ home_rank }}</div>
+                    {% elif away_rank %}<div class="ap-rank-badge is-placeholder" style="margin-bottom:2px" aria-hidden="true">&nbsp;</div>{% endif %}
                     <div class="gh-team-name team-name">{% if home_is_fbs %}<a href="{{ team_url(home_team, game_season) }}" class="{{ home_name_class }}" style="text-decoration:none" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color=''">{{ home_team }}</a>{% else %}<span class="{{ home_name_class }}">{{ home_team }}</span>{% endif %}</div>
                     {% if records.home %}<div class="team-record" style="margin-top:4px">({{ records.home[0] }}-{{ records.home[1] }})</div>{% endif %}
                 </div>

@@ -1736,7 +1736,7 @@ a.t-label:hover { color: #60a5fa; }
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 20px 0;
+    padding: 28px 0;
 }
 .game-hero .week-label {
     font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem);
@@ -1790,24 +1790,36 @@ a.t-label:hover { color: #60a5fa; }
     text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 .game-hero .team-logo {
-    height: clamp(96px, 4.2vw + 76px, 152px);
+    height: clamp(118px, 5.4vw + 84px, 196px);
     width: auto;
 }
 .game-hero .gh-score { min-width: clamp(90px, 7vw, 150px); }
 
 /* ── Game page: subtle team-color glow behind hero logos ──────────────── */
+/* The glow used to be a fixed square LARGER than the mark inside it, and it is
+   the flex item the side aligns — so every logo sat inset from its team name by
+   half the difference (18px at desktop width). The wrapper now hugs the mark and
+   the glow spills outward from a pseudo-element, so logo and name share an edge. */
 .team-logo-glow {
-    width: clamp(160px, 5vw + 100px, 200px);
-    height: clamp(160px, 5vw + 100px, 200px);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at center, rgba(var(--glow-rgb), 0.15) 0%, transparent 70%);
+    position: relative;
 }
+.team-logo-glow::before {
+    content: '';
+    position: absolute;
+    inset: -30%;
+    background: radial-gradient(circle at center, rgba(var(--glow-rgb), 0.15) 0%, transparent 70%);
+    pointer-events: none;
+}
+.team-logo-glow > *, .team-logo-glow img { position: relative; }
 
 /* Game hero — phone scaling; !important overrides the inline desktop sizes */
 @media (max-width: 767.98px) {
-    .team-logo-glow { width: 96px; height: 96px; }
+    /* the wrapper hugs its mark now, so a fixed box here would reintroduce the
+       inset between logo and team name on phones */
+    .team-logo-glow::before { inset: -22%; }
     .gh-logo-img { height: 84px !important; }
     .gh-side { padding-left: 10px !important; padding-right: 10px !important; }
     .gh-score { min-width: 44px !important; }
@@ -4255,15 +4267,32 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    nothing on its own — the logos and score have to come down with it, or the
    hero fills the window and nothing indicates there is more below. */
 @media (max-height: 620px) and (min-width: 768px) {
-    .game-hero .team-logo { height: clamp(64px, 2.6vw + 46px, 88px); }
+    .game-hero .team-logo { height: clamp(80px, 3.2vw + 56px, 118px); }
     .game-hero .score { font-size: clamp(2.4rem, 1.7rem + 1.8vw, 3.6rem); }
     .game-hero .week-label { font-size: 0.75rem; }
 }
 @media (max-height: 780px) and (min-width: 768px) {
     .game-hero { padding: 14px 0; }
-    .game-hero .team-logo { height: clamp(76px, 3.4vw + 56px, 110px); }
+    .game-hero .team-logo { height: clamp(96px, 4.2vw + 70px, 150px); }
     .game-hero .score { font-size: clamp(2.9rem, 2rem + 2.4vw, 4.6rem); }
     .game-hero .game-date { font-size: 0.95rem; }
     .gh-pill-row { margin-top: 12px; }
     .gh-meta-row { margin-top: 10px; }
 }
+
+/* Holds the rank row's height on the unranked side so both team names share a
+   baseline; invisible, but it must occupy exactly what a real badge does. */
+.ap-rank-badge.is-placeholder {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* The two team columns must align to EACH OTHER, not each be centred on its own.
+   Centring them independently meant a wrapping name ("San José State" takes two
+   lines) made its column taller, which pushed that side's logo and name out of
+   line with its opponent's. Stretching the columns and starting their content at
+   the top puts both logos on one line and both names on one baseline; only the
+   score, which has no counterpart to align with, stays centred. */
+.gh-matchup { align-items: stretch; }
+.gh-matchup > .gh-side { justify-content: flex-start; }
+.gh-matchup > :not(.gh-side) { align-self: center; }
