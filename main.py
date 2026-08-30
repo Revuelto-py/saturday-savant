@@ -1856,7 +1856,7 @@ def leaders_query_all(cursor, season=CURRENT_SEASON):
     return out
 
 @cache.memoize(timeout=21600)
-def get_cached_season_leaders():
+def get_cached_season_leaders(season=None):
     """Season-wide leaders are identical no matter which week the home page
     is showing, so this is memoized independently of the /week/<n>/<type>
     route — otherwise the same queries would re-run for every distinct
@@ -1868,7 +1868,7 @@ def get_cached_season_leaders():
     conn = get_db()
     try:
         cursor = conn.cursor()
-        boards = leaders_query_all(cursor)
+        boards = leaders_query_all(cursor, season or CURRENT_SEASON)
         return [
             ('Passing Yards',   '/leaderboards/passing',   boards.get(('passing', 'YDS'), [])),
             ('Passing TDs',     '/leaderboards/passing',   boards.get(('passing', 'TD'), [])),
@@ -2136,7 +2136,9 @@ def build_game_card(row, ap_weekly, rivalry_map):
 
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
-@cache.cached(timeout=21600)  # keyed on path, so / and each /week/<n>/<type> cache separately
+# query_string=True so ?leaders=<year> caches as its own entry — without it the
+# first-rendered leaders season would be served for every other choice.
+@cache.cached(timeout=21600, query_string=True)
 def home(week=None, season_type='regular'):
     conn = get_db()
     try:
@@ -2197,7 +2199,14 @@ def home(week=None, season_type='regular'):
             grouped_games[get_game_label(game['notes'])].append(game)
         grouped_games = {k: v for k, v in grouped_games.items() if v}
 
-        leaders = get_cached_season_leaders()
+        # Leaders are stats-derived, so they run on their own season picker
+        # rather than following the games column — the season being played has
+        # no stat lines until games are recorded, and forcing them to match
+        # would just empty the panel.
+        leader_seasons = get_available_seasons()
+        _req_leaders = request.args.get('leaders', type=int)
+        leaders_season = _req_leaders if _req_leaders in leader_seasons else CURRENT_SEASON
+        leaders = get_cached_season_leaders(leaders_season)
 
         # Live count of FBS teams for the hero pill, so it stays accurate
         # through realignment instead of a hardcoded "130+".
@@ -2217,6 +2226,7 @@ def home(week=None, season_type='regular'):
         # being played is a schedule, not a set of results.
         week_complete=bool(games) and all(g['completed'] for g in games),
         leaders=leaders, ap_rankings=ap_rankings,
+        leaders_season=leaders_season, leader_seasons=leader_seasons,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
 
 @app.route('/games')
@@ -5145,7 +5155,11 @@ def player_detail(player_id):
     #   left the game  -> his final season, so a 2016-19 career lands on 2019
     #                     rather than a current season he was never part of.
     s = request.args.get('season', type=int)
-    if s and s in get_available_seasons():
+    # get_available_seasons() is derived from player_stats, so the season now
+    # being played is absent from it until someone records a stat line. Accept
+    # it explicitly, or ?season=<current year> silently falls through to the
+    # default branch instead of being honoured.
+    if s and (s in get_available_seasons() or s == forward_season()):
         return _player_detail_cached(player_id, s)
     conn = get_db()
     try:
@@ -5709,6 +5723,12 @@ def _player_detail_cached(player_id, season):
         release_db(conn2b)
     if season not in player_seasons:
         player_seasons = sorted(set(player_seasons) | {season}, reverse=True)
+    # The season a current player is playing NOW has no stat rows until he
+    # records one, so a list built from player_stats omits it. That left the
+    # picker one-way: opening on 2026 and choosing an earlier year dropped 2026
+    # from the options, with no way back to it.
+    if is_active_2026 and forward_season() not in player_seasons:
+        player_seasons = sorted(set(player_seasons) | {forward_season()}, reverse=True)
 
     # Significant stats per position group — mirrors the leaderboards'
     # standard column sets rather than inventing a new selection.
