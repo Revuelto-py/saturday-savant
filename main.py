@@ -1614,6 +1614,10 @@ PLAYER_COLUMNS = {
             ('epa_pass',  'EPA/P',  'EPA Per Play (passing)', True, 'epa'),
             ('total_epa', 'PPA',    'Total Predicted Points Added', True, 'float1'),
             ('adj_ypa',   'ADJ YPA','Adjusted Yards Per Attempt — (YDS + 20×TD − 45×INT) / ATT', True, 'float1'),
+            ('adot',      'ADOT',   'Average Depth of Target — mean air yards per attempt. Blank when too little of the season carries air-yard data', True, 'float1'),
+            ('air_share', 'AIR%',   'Share of passing yards gained before the catch rather than after it — scheme versus receivers', True, 'pct1'),
+            ('yac_rec',   'YAC/R',  'Yards After Catch per reception', True, 'float1'),
+            ('deep_pct',  'DEEP%',  'Share of attempts thrown deep', True, 'pct1'),
             ('sack_pct',  'SACK%',  'Sack Percentage — not available in current dataset', False, 'na'),
         ],
     },
@@ -1637,16 +1641,19 @@ PLAYER_COLUMNS = {
     'receiving': {
         'standard': [
             ('rec',     'REC',  'Receptions', True, 'int'),
-            ('tgt',     'TGT',  'Targets — not available in current dataset', False, 'na'),
+            ('tgt',     'TGT',  'Targets — passes thrown to this receiver. Counts identified targets only: the source records no receiver on an interception and leaves ~12% of incompletions unattributed, so this reads slightly low', True, 'int'),
             ('yds',     'YDS',  'Receiving Yards', True, 'int'),
             ('td',      'TD',   'Receiving Touchdowns', True, 'int'),
             ('ypr',     'YPR',  'Yards Per Reception', True, 'float1'),
-            ('cth_pct', 'CTH%', 'Catch Rate (REC/TGT) — not available (requires targets)', False, 'na'),
+            ('cth_pct', 'CTH%', 'Catch Rate — receptions per identified target. Reads slightly high, since unattributed incompletions and interceptions are missing from the denominator', True, 'pct1'),
             ('ypg',     'Y/G',  'Receiving Yards Per Game — not available (requires games played)', False, 'na'),
         ],
         'advanced': [
             ('epa_play',  'EPA/T', 'EPA Per Target/Play', True, 'epa'),
             ('total_epa', 'PPA',   'Total Predicted Points Added', True, 'float1'),
+            ('adot',      'ADOT',  'Average Depth of Target — how far downfield this receiver is used. Separates a possession slot from a vertical threat', True, 'float1'),
+            ('yac_rec',   'YAC/R', 'Yards After Catch per reception — production this receiver creates himself', True, 'float1'),
+            ('air_share', 'AIR%',  'Share of his receiving yards gained before the catch', True, 'pct1'),
             ('tgt_pct',   'TGT%',  'Target Share — not available in current dataset', False, 'na'),
         ],
     },
@@ -2511,6 +2518,14 @@ def leaderboards(category='passing'):
             pos_sql = f"AND p.position IN ('{pos_in}')"
 
         column_defs = PLAYER_COLUMNS[category][view]
+        _cov_note = (passing_coverage_note(season, category)
+                     if category in ('passing', 'receiving') else None)
+        # 2016-2024 carry no air-yard data at all, so those columns would render
+        # as a wall of dashes on every row. Drop them rather than offer a column
+        # that cannot have a value for the season being viewed.
+        if not season_has_passing(season):
+            _air_keys = {'adot', 'air_share', 'yac_rec', 'deep_pct'}
+            column_defs = [c for c in column_defs if c[0] not in _air_keys]
         ALLOWED = _sortable_keys(PLAYER_COLUMNS, category, view)
         if sort_col not in ALLOWED:
             sort_col = _default_sort_col(PLAYER_COLUMNS, category, view)
@@ -2520,6 +2535,7 @@ def leaderboards(category='passing'):
             if not qualified:
                 min_att = '0'
 
+            _passer_air = get_season_passer_metrics(season) if view == 'advanced' else {}
             ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
             ppa_select = ", pp.avg_ppa_pass as epa_pass, pp.total_ppa as total_epa" if view == 'advanced' else ''
             ppa_group  = ', pp.avg_ppa_pass, pp.total_ppa' if view == 'advanced' else ''
@@ -2566,6 +2582,10 @@ def leaderboards(category='passing'):
                 if view == 'advanced':
                     row['epa_pass']  = round(float(r[17]), 3) if r[17] is not None else None
                     row['total_epa'] = round(float(r[18]), 1) if r[18] is not None else None
+                    # Air-yard metrics share the player id, so this is a dict hit.
+                    # A missing player and an under-measured season both blank out.
+                    row.update(_passer_air.get(r[0]) or
+                               {'adot': None, 'air_share': None, 'yac_rec': None, 'deep_pct': None})
                 players.append(row)
 
         elif category == 'rushing':
@@ -2631,6 +2651,7 @@ def leaderboards(category='passing'):
             if not qualified:
                 min_rec = '0'
 
+            _recv_air = get_season_receiving_metrics(season)
             ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
             ppa_select = ', pp.avg_ppa_all as epa_play, pp.total_ppa as total_epa' if view == 'advanced' else ''
             ppa_group  = ', pp.avg_ppa_all, pp.total_ppa' if view == 'advanced' else ''
@@ -2662,12 +2683,30 @@ def leaderboards(category='passing'):
                     'logo': r[7], 'conf': r[8], 'color': r[9],
                     'yds': int(r[10] or 0), 'td': int(r[11] or 0), 'rec': int(r[12] or 0),
                     'ypr': round(float(r[13] or 0), 1), 'long': int(r[14] or 0),
-                    'gp': None, 'tgt': None, 'cth_pct': None, 'ypg': None,
+                    'gp': None, 'ypg': None,
                 }
+                # TGT and CTH% were dead columns until the play-level passing
+                # data arrived carrying a target on every attempt. They are NOT
+                # gated on air-yard coverage: whether the source parsed a pass's
+                # depth is independent of whether it named the receiver, so these
+                # work for 2025 even in the weeks where air yards are missing.
+                _rv = _recv_air.get(r[0]) or {}
+                row['tgt'] = _rv.get('tgt')
+                # Rate computed from the REC shown in this row, not from the play
+                # data's own completion count — those run ~2% lower because some
+                # catches carry no identified receiver, and a reader checking
+                # 88/155 against the column beside it should get the same number.
+                row['cth_pct'] = (round(row['rec'] / row['tgt'] * 100, 1)
+                                  if row['tgt'] else None)
                 if view == 'advanced':
                     row['epa_play']  = round(float(r[15]), 3) if r[15] is not None else None
                     row['total_epa'] = round(float(r[16]), 1) if r[16] is not None else None
                     row['tgt_pct']   = None
+                    # These DO depend on air-yard parsing, so they blank out
+                    # where the receiver's season is mostly unmeasured.
+                    row['adot']      = _rv.get('adot')
+                    row['yac_rec']   = _rv.get('yac_rec')
+                    row['air_share'] = _rv.get('air_share')
                 players.append(row)
 
         elif category == 'defense':
@@ -2746,6 +2785,7 @@ def leaderboards(category='passing'):
         conf_filter=conf_filter, team_filter=team_filter, pos_filter=pos_filter,
         min_filter=min_filter, sort_col=sort_col, sort_dir=sort_dir,
         qualified=qualified, column_defs=column_defs, current_filters=current_filters,
+        coverage_note=_cov_note,
         has_advanced=has_advanced, position_groups=list(POSITION_GROUPS.keys()),
         ap_rankings=ap_rankings, pagination=pagination,
     )
@@ -5303,6 +5343,151 @@ def get_team_passing_profile(team, season):
             'offense': _passing_profile(cur, 'season = %s AND offense = %s', (season, team)),
             'defense': _passing_profile(cur, 'season = %s AND defense = %s', (season, team)),
         }
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_season_passer_metrics(season):
+    """Every quarterback's air-yard metrics for a season, in one pass, keyed by
+    player id — the leaderboard needs 100+ of these and a per-player query would
+    be 100 round trips.
+
+    Air-derived values are None when too little of a passer's season is measured;
+    the leaderboard then shows a blank rather than an ADOT drawn from whichever
+    games happened to parse.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT passer_id,
+                   count(*)                                                          AS att,
+                   count(air_yards)                                                  AS air_att,
+                   COALESCE(sum(air_yards), 0)                                       AS air,
+                   COALESCE(sum(air_yards) FILTER (WHERE outcome = 'completion'), 0)  AS air_comp,
+                   count(yards_after_catch)                                          AS yac_att,
+                   COALESCE(sum(yards_after_catch), 0)                               AS yac,
+                   count(*) FILTER (WHERE pass_depth = 'deep')                       AS deep
+              FROM passing_plays
+             WHERE season = %s AND passer_id IS NOT NULL
+             GROUP BY passer_id
+        """, (season,))
+        out = {}
+        for pid, att, air_att, air, air_comp, yac_att, yac, deep in cur.fetchall():
+            measured = (air_att / att * 100) if att else 0
+            ok = measured >= MIN_PASS_COVERAGE
+            denom = (air_comp or 0) + (yac or 0)
+            out[pid] = {
+                'adot': round(air / air_att, 1) if (ok and air_att) else None,
+                'air_share': round(air_comp / denom * 100, 1) if (ok and denom) else None,
+                'yac_rec': round(yac / yac_att, 1) if (ok and yac_att) else None,
+                'deep_pct': round(deep / att * 100, 1) if (ok and att) else None,
+            }
+        return out
+    except Exception:
+        conn.rollback()      # table absent on a fresh DB — leaderboard just omits the columns
+        return {}
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_season_receiving_metrics(season):
+    """Every receiver's target metrics for a season, keyed by player id.
+
+    Targets and catch rate are deliberately NOT gated on air-yard coverage:
+    whether CFBD parsed a pass's depth is independent of whether it identified
+    the receiver, so 2025 has usable targets (98% on completions) even in the
+    weeks where air yards are missing entirely. The depth metrics beneath them
+    are gated, because those do depend on it.
+
+    Targets undercount by construction — an interception never carries a target
+    in the source and ~12% of incompletions are unattributed — so this is
+    receptions per IDENTIFIED target. The column tooltips say so.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT target_id,
+                   count(*)                                                          AS tgt,
+                   count(*) FILTER (WHERE outcome = 'completion')                    AS rec,
+                   count(air_yards)                                                  AS air_att,
+                   COALESCE(sum(air_yards), 0)                                       AS air,
+                   COALESCE(sum(air_yards) FILTER (WHERE outcome = 'completion'), 0)  AS air_comp,
+                   count(yards_after_catch)                                          AS yac_att,
+                   COALESCE(sum(yards_after_catch), 0)                               AS yac
+              FROM passing_plays
+             WHERE season = %s AND target_id IS NOT NULL
+             GROUP BY target_id
+        """, (season,))
+        out = {}
+        for pid, tgt, rec, air_att, air, air_comp, yac_att, yac in cur.fetchall():
+            measured = (air_att / tgt * 100) if tgt else 0
+            ok = measured >= MIN_PASS_COVERAGE
+            denom = (air_comp or 0) + (yac or 0)
+            out[pid] = {
+                'tgt': tgt,
+                'cth_pct': round(rec / tgt * 100, 1) if tgt else None,
+                'adot': round(air / air_att, 1) if (ok and air_att) else None,
+                'air_share': round(air_comp / denom * 100, 1) if (ok and denom) else None,
+                'yac_rec': round(yac / yac_att, 1) if (ok and yac_att) else None,
+            }
+        return out
+    except Exception:
+        conn.rollback()
+        return {}
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def passing_coverage_note(season, category):
+    """How many qualifying players actually have enough measured attempts for
+    the air-yard columns, so the leaderboard can explain its own blanks.
+
+    Without this a 2025 board shows ADOT populated for 25 passers and dashed
+    for 137, which reads as a broken column rather than as the honest answer to
+    a source that only parsed part of the season.
+    """
+    id_col = 'passer_id' if category == 'passing' else 'target_id'
+    floor = 100 if category == 'passing' else 25
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT count(*) FILTER (WHERE measured >= {MIN_PASS_COVERAGE}), count(*)
+              FROM (SELECT count(air_yards)::numeric / count(*) * 100 AS measured
+                      FROM passing_plays
+                     WHERE season = %s AND {id_col} IS NOT NULL
+                     GROUP BY {id_col}
+                    HAVING count(*) >= {floor}) x
+        """, (season,))
+        covered, total = cur.fetchone()
+        if not total or covered >= total:
+            return None            # fully covered — nothing to explain
+        return {'covered': covered, 'total': total}
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def season_has_passing(season):
+    """Whether a season carries enough air-yard data to be worth showing columns
+    for. 2016-2024 have none at all, so the columns are dropped rather than
+    rendered as a wall of dashes."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT count(air_yards) FROM passing_plays WHERE season = %s', (season,))
+        return (cur.fetchone()[0] or 0) > 0
+    except Exception:
+        conn.rollback()
+        return False
     finally:
         release_db(conn)
 

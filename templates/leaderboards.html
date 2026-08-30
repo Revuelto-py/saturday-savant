@@ -133,6 +133,18 @@
     </div>
 </div>
 
+{# When the source only parsed part of a season, the air-yard columns are blank
+   for most players. Saying so turns a column that looks broken into a column
+   that is honest about what it knows. #}
+{% if coverage_note %}
+<div class="lb-coverage-note">
+    <strong>{{ coverage_note.covered }}</strong> of {{ coverage_note.total }} qualifying players
+    have enough air-yard data for the depth columns this season. Where the source measured
+    fewer than 60% of a player's attempts, ADOT, AIR%, YAC/R and CTH-depth read blank rather
+    than describe only the games that happened to be parsed. Coverage is near-complete from 2026.
+</div>
+{% endif %}
+
 <!-- Table -->
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
