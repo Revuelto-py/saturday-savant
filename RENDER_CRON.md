@@ -19,13 +19,14 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 8. `fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
 9. `refresh_headshots.py --active-only` — player headshots *(non-fatal)*
 10. `fetch_game_summaries.py` — game summaries / drives
-11. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
-12. `backfill_pools.py` — percentile peer pools → `pool_store`
-13. `precompute.py` — team-page + returning-production precompute → `pool_store`
-14. `fetch_betting_lines.py` — Vegas lines, active season
-15. `predict_games.py` — Savant Forecast: score last week, predict upcoming
+11. `fetch_passing.py` — play-level passing: air yards / location / YAC *(non-fatal)*
+12. `compute_savant_ratings.py` — Savant ratings → `savant_ratings`
+13. `backfill_pools.py` — percentile peer pools → `pool_store`
+14. `precompute.py` — team-page + returning-production precompute → `pool_store`
+15. `fetch_betting_lines.py` — Vegas lines, active season
+16. `predict_games.py` — Savant Forecast: score last week, predict upcoming
 
-Steps 12–13 **delete their stale `pool_store` keys before rebuilding**, so a
+Steps 13–14 **delete their stale `pool_store` keys before rebuilding**, so a
 re-run refreshes against the newly-fetched tables instead of reading last week's
 values back out.
 
@@ -34,7 +35,7 @@ players at ingest and headshots are fetched per active player, so both read the
 roster written by step 7. Run them the other way round and a newcomer waits a
 week for his rating and his photo.
 
-Two steps are deliberately **non-fatal** (`|| echo`), so a third-party hiccup
+Several steps are deliberately **non-fatal** (`|| echo`), so a third-party hiccup
 can't abort the chain and leave the week half-refreshed:
 
 - **`fetch_coaches`** — CFBD publishes a new season's coaching records late, so
@@ -53,6 +54,14 @@ can't abort the chain and leave the week half-refreshed:
   what caused that bug. It fetches every team before writing anything and aborts
   rather than storing a partial roster, so a CFBD outage leaves last week's
   intact. Despite the filename it follows `current_cfb_season()`.
+- **`fetch_passing`** — feeds the air-yards / pass-location charts on the player,
+  team and game pages. Nothing downstream in the chain reads `passing_plays`, so a
+  failed fetch leaves last week's charts in place rather than aborting the ratings
+  and precompute that follow it. Coverage is uneven by design of the source: 2025
+  runs at 44% of attempts measured and is lopsided within the season, 2026 onward
+  at ~98%, so the site gates every season-level chart on a per-player coverage
+  floor rather than trusting that a row exists.
+
 - **`refresh_headshots`** — ESPN publishes new photos through the season, so a
   file that only ever gets backfilled goes stale (47% of the roster's images
   changed at the 2026 preseason drop). `--active-only` sweeps the ~15k current

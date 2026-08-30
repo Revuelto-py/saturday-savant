@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_passing_chart.html" as pc %}
 {% block title %}{{ away_team }} vs {{ home_team }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ away_team }} {{ game[4] if game[4] is not none else '' }} – {{ game[3] if game[3] is not none else '' }} {{ home_team }}{% if game[3] is not none %} (Final){% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ away_team }} at {{ home_team }}{% if notes %} · {{ notes }}{% endif %}{% if game_date %} · {{ game_date }}{% endif %}. Box score, win probability, drives, and play-by-play on Saturday Savant.{% endblock %}
@@ -375,6 +376,12 @@
         style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
         Drives
     </button>
+    {% if game_passing %}
+    <button id="tab-btn-passing" class="tab-btn" onclick="switchTab('passing')"
+        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
+        Passing
+    </button>
+    {% endif %}
 </div>
 
 {# ── OVERVIEW TAB ─────────────────────────────────────────────────────────── #}
@@ -1014,6 +1021,19 @@ if (typeof Plotly !== 'undefined') {
 </div>{# /tab-content-boxscore #}
 
 {# ── DRIVES TAB ────────────────────────────────────────────────────────────── #}
+{# ── PASSING TAB ──────────────────────────────────────────────────────────
+   Both teams' charts side by side: how each attacked through the air, and how
+   much of the yardage each created after the catch rather than in it. #}
+{% if game_passing %}
+<div id="tab-content-passing" style="display:none">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:32px">
+        {% for tm, prof in game_passing.items() %}
+        {{ pc.passing_chart(prof, tm, prof.completions ~ '/' ~ prof.attempts ~ ' · ' ~ prof.yards ~ ' yards') }}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div id="tab-content-drives" style="display:none">
 
 {% if drives %}
@@ -1207,7 +1227,7 @@ if (typeof Plotly !== 'undefined') {
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
 function switchTab(name) {
-    ['overview', 'boxscore', 'drives'].forEach(function(t) {
+    ['overview', 'boxscore', 'drives', 'passing'].forEach(function(t) {
         var el = document.getElementById('tab-content-' + t);
         if (el) el.style.display = t === name ? 'block' : 'none';
         var btn = document.getElementById('tab-btn-' + t);

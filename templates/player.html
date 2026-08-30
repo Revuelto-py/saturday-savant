@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_passing_chart.html" as pc %}
 {% block title %}{{ player.first_name }} {{ player.last_name }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ player.first_name }} {{ player.last_name }} · {{ player.team }}{% if player.position %} {{ player.position }}{% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ player.first_name }} {{ player.last_name }} — {{ player.team }}{% if player.position %} · {{ player.position }}{% endif %}{% if player.jersey %} · #{{ player.jersey }}{% endif %}. {{ season }} stats, advanced metrics, and game log on Saturday Savant.{% endblock %}
@@ -604,6 +605,27 @@
                 {% endif %}
                 {% endfor %}
             </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Passing / target chart — where this player throws it, or where he is
+         thrown to. A quarterback gets the passer view; anyone targeted gets the
+         receiving view. Both are omitted when the season has too few attempts
+         to describe a tendency. -->
+    {% if passer_profile or target_profile %}
+    <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:32px">
+            {% if passer_profile %}
+            {{ pc.passing_chart(passer_profile,
+                                season ~ ' Passing Chart',
+                                passer_profile.attempts ~ ' attempts · ' ~ passer_profile.completions ~ ' completions') }}
+            {% endif %}
+            {% if target_profile %}
+            {{ pc.passing_chart(target_profile,
+                                season ~ ' Target Chart',
+                                target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions') }}
+            {% endif %}
         </div>
     </div>
     {% endif %}

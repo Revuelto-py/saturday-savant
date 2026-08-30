@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_passing_chart.html" as pc %}
 {% block title %}{{ team[0] }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ team[0] }}{% if team_rank %} (AP #{{ team_rank }}){% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ team[0] }} — {{ team[1] }}{% if has_games %} · {{ record[0] }}-{{ record[1] }} in {{ season }}{% elif is_upcoming_season and projected_record %} · {{ season }} projection {{ projected_record.display }}{% endif %}{% if svr %} · Net Savant {{ '%+.1f'|format(svr.net_rating) }}{% endif %}. Ratings, stats, and roster on Saturday Savant.{% endblock %}
@@ -305,6 +306,27 @@
 
     {% if not has_games %}
     <div class="pending-panel">Savant Rating, SP+, and opponent-adjusted efficiency for {{ season }} will appear here once games are played. The roster-based <b>Returning Production</b> breakdown below is available now for a preseason read.</div>
+    {% endif %}
+
+    <!-- Pass offense vs pass defense. Side by side because the comparison is
+         the point: a team can throw deep and still surrender everything short.
+         The defensive half has no equivalent anywhere else on the site — the
+         opponent-adjusted metrics below are offense-only. -->
+    {% if passing_profile and (passing_profile.offense or passing_profile.defense) %}
+    <div class="dark-card" style="padding:24px;margin-bottom:24px">
+        <div style="margin-bottom:18px">
+            <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Passing Game</h5>
+            <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
+                Where {{ team[0] }} throws it, and where opponents throw on them. Depth of target
+                separates a vertical attack from a short-passing one; yards after catch separate
+                what the scheme creates from what the receivers do.
+            </p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:32px">
+            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown') }}
+            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed') }}
+        </div>
+    </div>
     {% endif %}
 
     <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->

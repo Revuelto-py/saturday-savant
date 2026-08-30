@@ -3993,7 +3993,10 @@ def team(team_ref):
                 season=season, is_current_season=is_current,
                 is_upcoming_season=is_upcoming, has_games=has_games,
                 roster_season=roster_season, next_season=UPCOMING_SEASON,
-                available_seasons=_team_seasons,
+                # Pass profile, both sides of the ball. The defensive half is the one
+        # the site had no answer for: the advanced metrics are offense-only.
+        passing_profile=get_team_passing_profile(team_name, season),
+        available_seasons=_team_seasons,
                 trends=trends,
                 standings=standings, team_conf_record=team_conf_record,
                 team_season_conf=team_season_conf,
@@ -4377,7 +4380,7 @@ def game_detail(game_id):
             # As-of-week ranks (per-season now) — empty until that week's poll
             # exists, so upcoming games show ranks once the poll is out.
             ap_rankings=ap_rankings, rivalry_name=rivalry_name,
-            is_scheduled=True, is_live=is_live,
+            is_scheduled=True, is_live=is_live, game_passing=None,
             kickoff_date=kick_date, kickoff_time=kick_time,
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
             season_year=game_info[17], game_season=game_season,
@@ -5079,6 +5082,7 @@ def game_detail(game_id):
         game=game_info,
         forecast=forecast,
         is_scheduled=False, is_live=False,
+        game_passing=get_game_passing_profile(game_id),
         home_team=home_team,
         away_team=away_team,
         home_is_fbs=home_is_fbs,
@@ -5161,6 +5165,169 @@ def shorten_game_label(season_type, week, notes):
         label = label[:26] + '…'
 
     return label
+
+
+# ── Passing profiles (air yards / location / YAC) ───────────────────────────
+# Built from passing_plays, which fetch_passing.py fills from CFBD's play-level
+# passing endpoints. One aggregator serves every surface — a quarterback, a
+# receiver, a team's offense, a team's defense, a single game — because they
+# differ only in the WHERE clause, not in what is computed.
+#
+# The attempt counts are not decoration. Air-yard coverage is uneven (2025 week
+# 5 carried one attempt out of 3,175), so every caller can see how much of a
+# total is actually backed by data instead of assuming a row's presence means
+# the row is complete.
+PASS_ZONES = ['short left', 'short middle', 'short right',
+              'deep left', 'deep middle', 'deep right']
+
+# Below this a season profile is noise — a chart drawn on eight attempts implies
+# a tendency that isn't there. Game views pass 0, where every attempt counts.
+MIN_PASS_ATTEMPTS = 20
+
+# ...and below this share of a subject's attempts carrying air-yard data, a
+# SEASON profile describes only the part of the season that happened to be
+# measured. 2025 is the live case: week 5 carried one measured attempt out of
+# 3,175 while weeks 10 and 14 ran at 98%, so a player who threw all year would
+# produce an ADOT drawn almost entirely from his November games and label it as
+# his season. Gating per subject rather than per season is self-correcting — it
+# suppresses exactly the profiles that are mostly guesswork and keeps the ones
+# that aren't. Single-game views pass 0: one game is either measured or absent.
+MIN_PASS_COVERAGE = 60
+
+
+def _passing_profile(cursor, where, params, min_attempts=MIN_PASS_ATTEMPTS,
+                     min_coverage=MIN_PASS_COVERAGE):
+    """Aggregate passing_plays into totals + a six-zone grid, or None when the
+    sample is too thin — or too sparsely measured — to mean anything."""
+    try:
+        cursor.execute(f"""
+            SELECT pass_depth, pass_direction,
+                   count(*)                                                   AS att,
+                   count(*) FILTER (WHERE outcome = 'completion')             AS comp,
+                   COALESCE(sum(total_yards) FILTER (WHERE outcome = 'completion'), 0) AS yds,
+                   count(air_yards)                                           AS air_att,
+                   COALESCE(sum(air_yards), 0)                                AS air,
+                   COALESCE(sum(air_yards) FILTER (WHERE outcome = 'completion'), 0) AS air_comp,
+                   count(yards_after_catch)                                   AS yac_att,
+                   COALESCE(sum(yards_after_catch), 0)                        AS yac,
+                   count(*) FILTER (WHERE outcome = 'interception')           AS ints
+              FROM passing_plays
+             WHERE {where}
+             GROUP BY pass_depth, pass_direction
+        """, params)
+        rows = cursor.fetchall()
+    except Exception:
+        cursor.connection.rollback()   # table absent on a fresh DB — no chart
+        return None
+    if not rows:
+        return None
+
+    zones, tot = {}, dict(att=0, comp=0, yds=0, air_att=0, air=0,
+                          air_comp=0, yac_att=0, yac=0, ints=0)
+    for depth, direction, att, comp, yds, air_att, air, air_comp, yac_att, yac, ints in rows:
+        for k, v in (('att', att), ('comp', comp), ('yds', yds), ('air_att', air_att),
+                     ('air', air), ('air_comp', air_comp), ('yac_att', yac_att),
+                     ('yac', yac), ('ints', ints)):
+            tot[k] += v or 0
+        if not depth or not direction:
+            continue           # unparsed location; counts toward totals, not the grid
+        zones[f'{depth} {direction}'] = {
+            'att': att, 'comp': comp, 'yds': yds,
+            'comp_pct': round(comp / att * 100, 1) if att else None,
+            'ypa': round(yds / att, 2) if att else None,
+        }
+    if tot['att'] < min_attempts:
+        return None
+    coverage = (tot['air_att'] / tot['att'] * 100) if tot['att'] else 0
+    if coverage < min_coverage:
+        return None      # mostly unmeasured; a chart here would invent a tendency
+
+    # Air share answers "is this offense scheme or playmaking?" — of the yards
+    # gained, how many came before the catch rather than after it.
+    air_plus_yac = (tot['air_comp'] or 0) + (tot['yac'] or 0)
+    return {
+        'attempts': tot['att'],
+        'completions': tot['comp'],
+        'interceptions': tot['ints'],
+        'comp_pct': round(tot['comp'] / tot['att'] * 100, 1) if tot['att'] else None,
+        'yards': tot['yds'],
+        # ADOT is per ATTEMPT with air-yard data, matching CFBD's own definition
+        'adot': round(tot['air'] / tot['air_att'], 1) if tot['air_att'] else None,
+        'air_yards': tot['air'],
+        'air_att': tot['air_att'],
+        'yac_total': tot['yac'],
+        'yac_avg': round(tot['yac'] / tot['yac_att'], 1) if tot['yac_att'] else None,
+        'yac_att': tot['yac_att'],
+        'air_share': round(tot['air_comp'] / air_plus_yac * 100) if air_plus_yac else None,
+        'deep_rate': round(sum(z['att'] for k, z in zones.items() if k.startswith('deep'))
+                           / tot['att'] * 100, 1) if tot['att'] else None,
+        'zones': zones,
+        # Coverage, so a caller can say "42 of 51 attempts" rather than implying
+        # the whole sample is measured.
+        'coverage_pct': round(tot['air_att'] / tot['att'] * 100) if tot['att'] else 0,
+    }
+
+
+@cache.memoize(timeout=21600)
+def get_passer_profile(player_id, season):
+    conn = get_db()
+    try:
+        return _passing_profile(conn.cursor(), 'season = %s AND passer_id = %s',
+                                (season, player_id))
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_target_profile(player_id, season):
+    """The receiving side. CFBD carries the TARGET on every attempt, so the same
+    grid describes how a receiver is used — depth, direction, and how much of his
+    production he creates after the catch."""
+    conn = get_db()
+    try:
+        return _passing_profile(conn.cursor(), 'season = %s AND target_id = %s',
+                                (season, player_id), min_attempts=10)
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_team_passing_profile(team, season):
+    """Offense and defense. The defensive half is the one the site could not
+    answer at all before — the advanced metrics are offense-only, with no
+    defensive EPA, so 'how does this team defend the pass' had no home."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        return {
+            'offense': _passing_profile(cur, 'season = %s AND offense = %s', (season, team)),
+            'defense': _passing_profile(cur, 'season = %s AND defense = %s', (season, team)),
+        }
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_game_passing_profile(game_id):
+    """Per-team passing for one game. No minimum — in a single game every
+    attempt is worth showing."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT DISTINCT offense FROM passing_plays WHERE game_id = %s', (game_id,))
+        teams = [r[0] for r in cur.fetchall()]
+        out = {}
+        for t in teams:
+            prof = _passing_profile(cur, 'game_id = %s AND offense = %s', (game_id, t),
+                                    min_attempts=0, min_coverage=0)
+            if prof:
+                out[t] = prof
+        return out or None
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
 
 
 class _SkipGameLog(Exception):
@@ -5848,6 +6015,11 @@ def _player_detail_cached(player_id, season):
         player_percentiles=player_percentiles,
         percentile_rows=percentile_rows,
         national_ranks=national_ranks,
+        # Air-yards profile. A quarterback gets the passer view, anyone who is
+        # thrown to gets the target view; a player can legitimately have both
+        # (a QB with a receiving attempt), so the template picks by position.
+        passer_profile=get_passer_profile(player_id, season),
+        target_profile=get_target_profile(player_id, season),
         usage=usage,
         is_active_2026=is_active_2026,
         draft_status=draft_status,
