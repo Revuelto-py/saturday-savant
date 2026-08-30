@@ -11,11 +11,18 @@
 #                                                     independently of week so it's computed
 #                                                     once instead of once per distinct week URL
 #   /admin/clear-cache clears the whole cache store, which covers both
-#   @cache.cached and @cache.memoize since they share the same backend — no
-#   changes needed there.
-# NOT cached (by design — no /live routes exist in this app; /game/<id> pulls
-# from ESPN and isn't cached here either, matching the rest of Pass 1's scope):
-#   /game/<game_id>, /
+#   @cache.cached and @cache.memoize since they share the same backend. It also
+#   accepts ?scope=scores for the narrow case (a score moved but nothing
+#   finished), and records every clear in pool_store so the OTHER gunicorn
+#   worker applies it too — SimpleCache is per-process, so a bare clear only
+#   ever reached the worker that served the request.
+# NOT cached: /api/live (it IS the freshness path; its CFBD read is memoized
+#   for LIVE_TTL instead, so the payload is shared without the page being).
+#
+# Both / and /game/<id> ARE cached, contrary to what this note used to claim —
+# / at 6h keyed on the query string, /game/<id> at 1h. The game page's hour is
+# why a finished game needs a real cache flush and not just a score write:
+# without one it keeps its live layout long after the whistle.
 #
 # Indexes (see ensure_indexes(), run once at startup, CREATE INDEX IF NOT
 # EXISTS so it's a no-op on repeat boots):
@@ -7288,6 +7295,55 @@ def _live_status_text(state, period, clock):
     return f'{q} {clock.lstrip("0") or "0:00"}' if clock else q
 
 
+def _persist_finals(board):
+    """Write through games the board reports as finished while our row still
+    calls them live, and flush the caches a finished game invalidates.
+
+    The score cron does this too, but only every ten minutes or so. Someone
+    watching a game end should not wait for the next run to see the page turn
+    into a played game — and the game's own page is cached for an hour, so
+    without this flush it could keep its live layout long after the whistle.
+
+    Guarded on completed = 0, so it is idempotent and can never touch a settled
+    row: with two workers both may try, and the second is simply a no-op.
+    """
+    finals = {gid: g for gid, g in board.items()
+              if g['state'] == 'final' and g['home'] is not None and g['away'] is not None}
+    if not finals:
+        return 0
+    n = 0
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT id FROM games WHERE completed = 0 AND id = ANY(%s)',
+                    ([int(g) for g in finals],))
+        for (gid,) in cur.fetchall():
+            g = finals[str(gid)]
+            cur.execute("""UPDATE games SET home_points = %s, away_points = %s, completed = 1
+                            WHERE id = %s AND completed = 0""", (g['home'], g['away'], gid))
+            n += cur.rowcount
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        print(f'live finals persist failed: {exc}', flush=True)
+        return 0
+    finally:
+        release_db(conn)
+    if n:
+        # A finished game moves records, standings and its own page's shape, so
+        # this is the full clear rather than the score-scoped one.
+        print(f'{n} game(s) finished — clearing caches', flush=True)
+        try:
+            _purge_local(None)
+            global _epoch_seen
+            e = _epoch_bump(None)
+            if e is not None:
+                _epoch_seen = e
+        except Exception as exc:
+            print(f'post-final purge failed: {exc}', flush=True)
+    return n
+
+
 @cache.memoize(timeout=LIVE_TTL)
 def _live_board():
     """CFBD's live scoreboard, keyed by game id. Memoized so at most one call
@@ -7319,6 +7375,9 @@ def _live_board():
             'status': _live_status_text(state, getattr(g, 'period', None),
                                         getattr(g, 'clock', None)),
         }
+    # Inside the memoized call on purpose: this reconciles at most once per
+    # LIVE_TTL per worker, instead of once per request.
+    _persist_finals(out)
     return out
 
 

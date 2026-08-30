@@ -103,27 +103,36 @@ def main():
                   g.home_points, g.away_points, 1 if g.completed else 0))
             changed += cur.rowcount
 
-        # Live pass. Scores only — completion is left to /games above so a game
-        # is never marked final on the strength of the board alone. Rows are
-        # matched by id, so a board entry for a game we do not carry is a no-op.
+        # Live pass. The board carries BOTH the running score and the moment a
+        # game ends, and it learns of the ending well before /games does — which
+        # is why completion is taken from here rather than waiting for the
+        # finals pass. A game sitting at "in progress" for an hour after it
+        # finished is a worse failure than the theoretical risk of trusting the
+        # board's own completed flag. Rows are matched by id, so a board entry
+        # for a game we do not carry is a no-op.
         live = 0
+        finals = 0
         for g in board:
             status = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
-            if status != 'in_progress':
+            if status not in ('in_progress', 'completed'):
                 continue
             hp = getattr(getattr(g, 'home_team', None), 'points', None)
             ap = getattr(getattr(g, 'away_team', None), 'points', None)
             if hp is None or ap is None:
                 continue
+            done = 1 if status == 'completed' else 0
             cur.execute("""
                 UPDATE games
-                   SET home_points = %s, away_points = %s
+                   SET home_points = %s, away_points = %s, completed = %s
                  WHERE id = %s
                    AND completed = 0
                    AND (home_points IS DISTINCT FROM %s
-                     OR away_points IS DISTINCT FROM %s)
-            """, (hp, ap, g.id, hp, ap))
-            live += cur.rowcount
+                     OR away_points IS DISTINCT FROM %s
+                     OR completed    IS DISTINCT FROM %s)
+            """, (hp, ap, done, g.id, hp, ap, done))
+            if cur.rowcount:
+                live += 1
+                finals += done
         changed += live
         conn.commit()
 
@@ -132,7 +141,8 @@ def main():
         done = cur.fetchone()[0]
         scope = f'week {WEEK}' if WEEK else 'all weeks'
         print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
-              f'({live} live) ({done} completed this season)', flush=True)
+              f'({live} live, {finals} just finished) '
+              f'({done} completed this season)', flush=True)
     finally:
         conn.close()
 
@@ -141,8 +151,11 @@ def main():
     if changed:
         try:
             from cache_notify import notify_cache_clear
-            # Scores only — leave leaderboards and team precompute cached
-            notify_cache_clear(scope='scores')
+            # A game FINISHING ripples much wider than a score moving: team
+            # records, its own page's layout, standings. That is rare enough
+            # (tens of times a week) to justify the full clear. A score merely
+            # moving is frequent and narrow, so it stays scoped.
+            notify_cache_clear(scope=None if finals else 'scores')
         except Exception:
             pass
     return 0
