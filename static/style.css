@@ -1725,12 +1725,18 @@ a.t-label:hover { color: #60a5fa; }
 .game-hero {
     /* Fixed height with vertically-centered content, so every game hero is the
        same height — the forecast recap, rivalry badge, and AP-rank badges no
-       longer change it (the min-height sits above the tallest content). */
-    min-height: clamp(540px, 40vw, 580px);
+       longer change it (the min-height sits above the tallest content).
+
+       The vh term is a guard, not a preference: the navbar and ticker already
+       take ~150px, so a hero sized only in px filled a short window edge to
+       edge and gave no sign anything followed it. Capping at 66vh keeps a
+       slice of the next section on screen at any window height, which is what
+       tells the reader to scroll. */
+    min-height: min(clamp(430px, 32vw, 500px), 56vh);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: 24px 0;
+    padding: 20px 0;
 }
 .game-hero .week-label {
     font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem);
@@ -1784,7 +1790,7 @@ a.t-label:hover { color: #60a5fa; }
     text-shadow: 0 1px 3px rgba(0,0,0,0.6);
 }
 .game-hero .team-logo {
-    height: clamp(120px, 5vw + 90px, 180px);
+    height: clamp(96px, 4.2vw + 76px, 152px);
     width: auto;
 }
 .game-hero .gh-score { min-width: clamp(90px, 7vw, 150px); }
@@ -4146,7 +4152,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    holds a reserved height so a game without either badge doesn't shift the
    layout (the .game-hero fixed height then keeps every hero identical). */
 .gh-footer { text-align: center; }
-.gh-pill-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
+.gh-pill-row { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
 .gh-meta-row {
     display: flex; justify-content: center; align-items: center;
     gap: 10px 14px; flex-wrap: wrap; margin-top: 14px;
@@ -4242,3 +4248,22 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    than a scheduled one's — the empty score slot has no line box. */
 .gc-team { min-height: 34px; }
 .gc-score { line-height: 1; }
+
+
+/* Short viewports (laptops, and any window that is not full height). The hero
+   is content-sized once the min-height stops binding, so capping it in vh does
+   nothing on its own — the logos and score have to come down with it, or the
+   hero fills the window and nothing indicates there is more below. */
+@media (max-height: 620px) and (min-width: 768px) {
+    .game-hero .team-logo { height: clamp(64px, 2.6vw + 46px, 88px); }
+    .game-hero .score { font-size: clamp(2.4rem, 1.7rem + 1.8vw, 3.6rem); }
+    .game-hero .week-label { font-size: 0.75rem; }
+}
+@media (max-height: 780px) and (min-width: 768px) {
+    .game-hero { padding: 14px 0; }
+    .game-hero .team-logo { height: clamp(76px, 3.4vw + 56px, 110px); }
+    .game-hero .score { font-size: clamp(2.9rem, 2rem + 2.4vw, 4.6rem); }
+    .game-hero .game-date { font-size: 0.95rem; }
+    .gh-pill-row { margin-top: 12px; }
+    .gh-meta-row { margin-top: 10px; }
+}
