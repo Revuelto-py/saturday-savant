@@ -4490,3 +4490,38 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .ph-heat { grid-template-columns: 30px minmax(0, 1fr); }
     .ph-heat-blur { filter: blur(14px); }
 }
+
+/* ── Scroll containment ───────────────────────────────────────────────────
+   Every horizontally-scrolling region on the site shipped with the default
+   overscroll-behavior:auto, which means that once the region hits its end the
+   gesture CHAINS to the page — you keep swiping a table and the whole page
+   starts moving. That is what makes these feel unfinished.
+
+   Constrained to the X axis on purpose. `overscroll-behavior: contain` sets
+   both axes, and on a wide table a vertical swipe must still scroll the page;
+   only the axis the element actually scrolls should be contained.
+
+   The attribute selectors catch the regions styled inline rather than by
+   class — several tables and the compare dropdown among them. */
+.ticker-scroll,
+.lb-table-scroll,
+.lb-mode-toggle,
+.tp-table-scroll,
+.tp-years,
+.bk-board-wrap,
+.game-tabs,
+.ph-statcards,
+.team-hero-stats,
+.ig-features,
+.nav-tabs,
+[style*="overflow-x:auto"],
+[style*="overflow-x: auto"],
+[style*="overflow:auto"],
+[style*="overflow: auto"] {
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* The one region that scrolls vertically: a dropdown list inside the page, so
+   reaching its end must not start scrolling the page behind it. */
+.cmp-dropdown { overscroll-behavior: contain; }

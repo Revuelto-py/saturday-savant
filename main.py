@@ -2040,6 +2040,12 @@ def add_cache_headers(resp):
 # badly, not the styling.
 _CLOCK_PREFIX = re.compile(r'^\s*\(\d{1,2}:\d{2}\)\s*')
 _CLOCK_TAIL   = re.compile(r',?\s*clock \d{1,2}:\d{2}\s*$')
+# Two mid-sentence forms, and they need different repairs:
+#   ", clock 02:28, 1ST Down #45 ..."  -> the following comma already
+#     separates the clauses, so the clock is simply removed
+#   ", clock 08:55 #45 C.Chittenden ..." -> nothing separates them, so a
+#     full stop goes in its place or the two clauses run together
+_CLOCK_MID_C  = re.compile(r',\s*clock \d{1,2}:\d{2}\s*,\s*')
 _CLOCK_MID    = re.compile(r',\s*clock \d{1,2}:\d{2}\s+')
 
 # Drive summaries lead with the scoring type — "Touchdown · 13 plays, 77 yds" —
@@ -2056,9 +2062,9 @@ def clean_play_text(text):
         return text
     t = _CLOCK_PREFIX.sub('', text)
     t = _CLOCK_TAIL.sub('', t)
-    # Mid-sentence the clock separates two clauses ("...Touchdown, clock 08:55
-    # #45 kick attempt good"), so removing it needs a full stop or the two run
-    # together.
+    # Comma-delimited form first — otherwise the looser pattern eats its comma
+    # and turns ", clock 02:28, 1ST Down" into a spurious sentence break.
+    t = _CLOCK_MID_C.sub(', ', t)
     t = _CLOCK_MID.sub('. ', t)
     return re.sub(r'\s{2,}', ' ', t).strip()
 
