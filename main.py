@@ -2033,6 +2033,49 @@ def add_cache_headers(resp):
         resp.cache_control.max_age = 180
     return resp
 
+# ── Scoring-play text ───────────────────────────────────────────────────────
+# CFBD's play text repeats the clock twice — once as a "(08:55)" prefix and
+# again as ", clock 08:55" mid-sentence — and the row already shows the clock
+# above it. Three copies of the same timestamp is what made these rows read
+# badly, not the styling.
+_CLOCK_PREFIX = re.compile(r'^\s*\(\d{1,2}:\d{2}\)\s*')
+_CLOCK_TAIL   = re.compile(r',?\s*clock \d{1,2}:\d{2}\s*$')
+_CLOCK_MID    = re.compile(r',\s*clock \d{1,2}:\d{2}\s+')
+
+# Drive summaries lead with the scoring type — "Touchdown · 13 plays, 77 yds" —
+# directly beneath a heading that already says Touchdown.
+_SCORE_TYPES = ('touchdown', 'field goal', 'safety', 'two-point', '2pt',
+                'extra point', 'kickoff return', 'punt return', 'interception return',
+                'fumble return', 'blocked')
+
+
+def clean_play_text(text):
+    """Drop the clock the row already displays, and split the run-on the
+    removal would otherwise leave."""
+    if not text:
+        return text
+    t = _CLOCK_PREFIX.sub('', text)
+    t = _CLOCK_TAIL.sub('', t)
+    # Mid-sentence the clock separates two clauses ("...Touchdown, clock 08:55
+    # #45 kick attempt good"), so removing it needs a full stop or the two run
+    # together.
+    t = _CLOCK_MID.sub('. ', t)
+    return re.sub(r'\s{2,}', ' ', t).strip()
+
+
+def drive_detail(summary):
+    """The drive line without its leading score type, which the heading above
+    already states. Anything that is not a score type is left alone."""
+    if not summary or ' · ' not in summary:
+        return summary
+    head, _, rest = summary.partition(' · ')
+    return rest.strip() if head.strip().lower() in _SCORE_TYPES else summary
+
+
+app.jinja_env.filters['clean_play_text'] = clean_play_text
+app.jinja_env.filters['drive_detail'] = drive_detail
+
+
 @app.context_processor
 def inject_seasons():
     return dict(current_season=CURRENT_SEASON, upcoming_season=UPCOMING_SEASON)
