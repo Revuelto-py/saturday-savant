@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ year }} NFL Draft · Saturday Savant{% endblock %}
+{% block og_title %}{{ year }} NFL Draft — every pick · Saturday Savant{% endblock %}
+{% block content %}
+
+{# Every pick of a class, in order.
+
+   The page leads with the PROGRAMS rather than the NFL teams. A draft board
+   anywhere else is organised around who did the picking; on a college site the
+   useful question is which programs produced them, so that strip sits above the
+   board and each pick row carries its college's colour rather than its NFL
+   team's. #}
+
+<div class="page-wrapper" style="padding-top:32px">
+
+    <div class="tp-head">
+        <div class="section-label">NFL Draft</div>
+        <h1 class="tp-title">{{ year }} NFL Draft</h1>
+        {% if total %}
+        <div class="tp-meta">
+            <span><strong>{{ '{:,}'.format(total) }}</strong> picks</span>
+            <span class="tp-meta-dot"></span><span><strong>{{ rounds|length }}</strong> rounds</span>
+            <span class="tp-meta-dot"></span><span><strong>{{ school_count }}</strong> programs</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if years %}
+    <nav class="tp-years" aria-label="Draft class">
+        {% for yr in years %}
+        <a href="/draft/{{ yr }}" class="tp-year{{ ' active' if yr == year }}"
+           {% if yr == year %}aria-current="page"{% endif %}>{{ yr }}</a>
+        {% endfor %}
+    </nav>
+    {% endif %}
+
+    {% if not rounds %}
+    <div class="pending-panel">
+        No draft picks are recorded yet. Selections appear here once the class is ingested.
+    </div>
+    {% else %}
+
+    {# ── Programs that produced the class ───────────────────────────────── #}
+    <section class="dr-schools" aria-label="Programs with the most picks">
+        <div class="dr-schools-head">
+            <h2 class="section-label" style="margin:0">Most picks produced</h2>
+            <span class="dr-schools-note">{{ school_count }} programs represented</span>
+        </div>
+        <div class="dr-school-rail">
+            {% set top = schools[0].n if schools else 1 %}
+            {% for s in schools %}
+            <a class="dr-school" href="/team/{{ s.slug }}"{% if not s.slug %} aria-disabled="true"{% endif %}>
+                {% if s.logo %}<img src="{{ s.logo }}" alt="" aria-hidden="true" loading="lazy" width="26" height="26">{% endif %}
+                <span class="dr-school-name">{{ s.name }}</span>
+                <span class="dr-school-n">{{ s.n }}</span>
+                {# The bar is the count against the class leader, so the rail
+                   reads as a ranking at a glance rather than a list of numbers. #}
+                <span class="dr-school-bar"><i style="width: {{ '%.0f' % (s.n / top * 100) }}%"></i></span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    {# ── The board ──────────────────────────────────────────────────────── #}
+    {% for rd in rounds %}
+    <section class="dr-round">
+        <div class="dr-round-head">
+            <h2 class="dr-round-label">Round {{ rd.round }}</h2>
+            <span class="dr-round-line" aria-hidden="true"></span>
+            <span class="dr-round-n">{{ rd.picks|length }} picks</span>
+        </div>
+
+        <ol class="dr-picks" start="{{ rd.picks[0].overall if rd.picks else 1 }}">
+            {% for p in rd.picks %}
+            <li class="dr-pick" style="--pc: {{ p.college_color }}">
+                <a class="dr-pick-link" href="/player/{{ p.id }}">
+                    <span class="dr-num">
+                        <span class="dr-num-overall">{{ p.overall }}</span>
+                        <span class="dr-num-rp">{{ p.round }}.{{ '%02d' % p.pick }}</span>
+                    </span>
+
+                    {% if p.headshot %}
+                    <img class="dr-shot" src="{{ p.headshot }}" alt="" aria-hidden="true" loading="lazy" width="46" height="46">
+                    {% else %}
+                    <span class="dr-shot dr-shot-blank" aria-hidden="true">{{ p.name[0] }}</span>
+                    {% endif %}
+
+                    <span class="dr-who">
+                        <span class="dr-name">{{ p.name }}</span>
+                        <span class="dr-pos">{{ p.pos or '—' }}</span>
+                    </span>
+
+                    <span class="dr-move">
+                        <span class="dr-side dr-from">
+                            {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
+                            <span class="dr-side-name">{{ p.college or '—' }}</span>
+                        </span>
+                        <span class="dr-arrow" aria-hidden="true">→</span>
+                        <span class="dr-side dr-to">
+                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
+                            <span class="dr-side-name">{{ p.nfl or '—' }}</span>
+                        </span>
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
+    </section>
+    {% endfor %}
+    {% endif %}
+
+</div>
+{% endblock %}

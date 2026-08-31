@@ -6396,6 +6396,89 @@ TRANSFER_SORTS = {
 }
 
 
+@app.route('/draft')
+@app.route('/draft/<int:year>')
+@cache.cached(timeout=21600, query_string=True)
+def draft(year=None):
+    """Every pick of a draft class, in order.
+
+    draft_pick is the pick WITHIN its round, not the overall selection, so the
+    overall number is derived: each round's size is taken from its highest pick
+    rather than its row count, because a class occasionally misses a row and a
+    count would then shift every later pick by one.
+    """
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT draft_year FROM players '
+                       'WHERE draft_year IS NOT NULL ORDER BY draft_year DESC')
+        years = [r[0] for r in cursor.fetchall()]
+        if not years:
+            return render_template('draft.html', years=[], year=None, rounds=[],
+                                   schools=[], total=0, school_count=0)
+        year = year if year in years else years[0]
+
+        cursor.execute("""
+            WITH sizes AS (
+                SELECT draft_round, MAX(draft_pick) AS n
+                  FROM players WHERE draft_year = %s AND draft_round IS NOT NULL
+                 GROUP BY draft_round
+            ), offsets AS (
+                SELECT draft_round,
+                       COALESCE(SUM(n) OVER (ORDER BY draft_round
+                                             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0) AS base
+                  FROM sizes
+            )
+            -- One row per slot. The players table carries duplicate records for
+            -- a handful of picks — the same person under a name variant
+            -- ("CJ Williams" / "C.J. Williams") or simply entered twice — which
+            -- would otherwise print the pick twice and double-count that
+            -- program. The most complete record wins, deterministically.
+            SELECT DISTINCT ON (p.draft_round, p.draft_pick)
+                   p.id, p.first_name, p.last_name, p.position, p.headshot,
+                   p.team, t.logo_dark, t.color, t.slug,
+                   p.nfl_team, p.nfl_team_logo,
+                   p.draft_round, p.draft_pick, o.base + p.draft_pick AS overall
+              FROM players p
+              JOIN offsets o ON o.draft_round = p.draft_round
+              LEFT JOIN teams t ON t.name = p.team
+             WHERE p.draft_year = %s AND p.draft_round IS NOT NULL AND p.draft_pick IS NOT NULL
+             ORDER BY p.draft_round, p.draft_pick,
+                      (p.headshot IS NOT NULL) DESC, (t.logo_dark IS NOT NULL) DESC, p.id
+        """, (year, year))
+
+        rounds, by_school = [], {}
+        for (pid, fn, ln, pos, shot, college, clogo, ccolor, cslug,
+             nfl, nfl_logo, rnd, pick, overall) in cursor.fetchall():
+            row = {
+                'id': pid, 'name': f'{fn} {ln}'.strip(), 'pos': pos,
+                'headshot': shot, 'college': college, 'college_logo': clogo,
+                'college_slug': cslug,
+                # Guard the inline colour the row border uses — a malformed value
+                # would otherwise emit broken CSS on every affected pick.
+                'college_color': ccolor if (ccolor and ccolor[0] == '#' and len(ccolor) == 7) else '#2b3a55',
+                'nfl': nfl, 'nfl_logo': nfl_logo,
+                'round': rnd, 'pick': pick, 'overall': overall,
+            }
+            if not rounds or rounds[-1]['round'] != rnd:
+                rounds.append({'round': rnd, 'picks': []})
+            rounds[-1]['picks'].append(row)
+            if college:
+                by_school.setdefault(college, {'name': college, 'logo': clogo,
+                                               'slug': cslug, 'n': 0})['n'] += 1
+
+        # The college angle is the point of this page — an NFL draft board
+        # anywhere else leads with the teams doing the picking.
+        schools = sorted(by_school.values(), key=lambda s: (-s['n'], s['name']))
+        total = sum(len(r['picks']) for r in rounds)
+    finally:
+        release_db(conn)
+
+    return render_template('draft.html', years=years, year=year, rounds=rounds,
+                           schools=schools[:12], total=total,
+                           school_count=len(by_school))
+
+
 @app.route('/transfers')
 @cache.cached(timeout=21600, query_string=True)
 def transfers():

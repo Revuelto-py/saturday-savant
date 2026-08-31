@@ -4525,3 +4525,187 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 /* The one region that scrolls vertically: a dropdown list inside the page, so
    reaching its end must not start scrolling the page behind it. */
 .cmp-dropdown { overscroll-behavior: contain; }
+
+/* ── NFL Draft board ──────────────────────────────────────────────────────
+   Picks in order, grouped by round. Each row is accented with its COLLEGE's
+   colour, not the drafting team's — the page is organised around which
+   programs produced the class, which is the question a college site is for. */
+
+.dr-schools { margin: 8px 0 34px; }
+.dr-schools-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--s4); margin-bottom: var(--s4);
+}
+.dr-schools-note { color: var(--text-dim); font-size: var(--text-xs); font-weight: 600; }
+.dr-school-rail {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+    gap: var(--s2);
+}
+.dr-school {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 10px; row-gap: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 11px 13px 9px;
+    text-decoration: none;
+    transition: transform var(--t-base), border-color var(--t-base);
+}
+.dr-school:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.dr-school:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dr-school img { grid-row: 1; object-fit: contain; }
+.dr-school-name {
+    grid-row: 1; color: var(--text-primary); font-size: var(--text-sm); font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.dr-school-n {
+    grid-row: 1; color: var(--text-primary); font-family: var(--font-display);
+    font-size: var(--text-lg); font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.dr-school-bar {
+    grid-row: 2; grid-column: 1 / -1;
+    height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.07);
+    overflow: hidden;
+}
+.dr-school-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+/* ── Round headers ── */
+.dr-round { margin-bottom: 26px; }
+.dr-round-head { display: flex; align-items: center; gap: var(--s4); margin-bottom: var(--s3); }
+.dr-round-label {
+    margin: 0; font-family: var(--font-display); font-weight: 800;
+    font-size: var(--text-lg); letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-secondary); white-space: nowrap;
+}
+.dr-round-line { flex: 1; height: 1px; background: var(--border); }
+.dr-round-n {
+    color: var(--text-dim); font-size: var(--text-xs); font-weight: 600;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+
+/* ── Pick rows ── */
+.dr-picks {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 5px;
+    /* A pick row carries a name and two team names. Left to fill a 1300px
+       column it strands ~700px of empty space between them, so the row is
+       capped at a width where the eye can travel from player to destination. */
+    max-width: 1040px;
+}
+.dr-pick { border-radius: var(--r-md); }
+.dr-pick-link {
+    display: grid;
+    grid-template-columns: 54px 46px minmax(0, 1fr) minmax(0, 1.15fr);
+    align-items: center;
+    gap: var(--s4);
+    padding: 9px 16px 9px 13px;
+    background: var(--bg-card);
+    /* The college's colour, which is what makes the board scannable by program */
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--pc, var(--border-strong));
+    border-radius: var(--r-md);
+    text-decoration: none;
+    transition: transform var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+.dr-pick-link:hover {
+    transform: translateX(2px);
+    background: color-mix(in srgb, var(--pc, #2b3a55) 9%, var(--bg-card));
+    border-color: var(--border-strong);
+    border-left-color: var(--pc, var(--border-strong));
+}
+.dr-pick-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.dr-num { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.dr-num-overall {
+    font-family: var(--font-display); font-weight: 800;
+    font-size: var(--text-2xl); line-height: 0.95; color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.dr-num-rp {
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+
+.dr-shot {
+    width: 46px; height: 46px; border-radius: 50%;
+    object-fit: cover; object-position: top center;
+    background: rgba(255, 255, 255, 0.05);
+}
+.dr-shot-blank {
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 800; font-size: var(--text-md);
+    color: var(--text-dim); border: 1px solid var(--border);
+}
+
+.dr-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dr-name {
+    color: var(--text-primary); font-size: var(--text-base); font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dr-pos {
+    color: var(--text-dim); font-size: 0.64rem; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+.dr-move { display: flex; align-items: center; gap: 10px; min-width: 0; justify-content: flex-end; }
+.dr-side { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.dr-side img { object-fit: contain; flex-shrink: 0; }
+/* Several NFL marks are near-black (the Jets, Ravens, Raiders) and disappear
+   against a dark row. A faint plate lifts those without touching bright ones. */
+.dr-to img {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    padding: 2px;
+    box-sizing: content-box;
+}
+.dr-side-name {
+    font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dr-from .dr-side-name { color: var(--text-secondary); font-weight: 600; }
+.dr-to   .dr-side-name { color: var(--text-primary); font-weight: 700; }
+.dr-arrow { color: var(--text-dim); font-size: var(--text-sm); flex-shrink: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dr-school, .dr-pick-link { transition: none; }
+    .dr-school:hover, .dr-pick-link:hover { transform: none; }
+}
+
+@media (max-width: 767.98px) {
+    /* The destination moves under the name: four columns cannot hold two team
+       names on a phone without both truncating to nothing. */
+    .dr-pick-link {
+        grid-template-columns: 42px 40px minmax(0, 1fr);
+        gap: var(--s3);
+        padding: 9px 12px 9px 10px;
+    }
+    .dr-num-overall { font-size: var(--text-xl); }
+    .dr-shot { width: 40px; height: 40px; }
+    /* Origin and destination stack. Side by side there is ~250px for two full
+       team names, two logos and an arrow, which truncated about half of them
+       ("Miami" to "Mia…", "Tampa Bay Buccaneers" to "Tampa Bay Buccane…").
+       A second line costs ~18px a row and every name reads in full. */
+    .dr-move {
+        grid-column: 3;
+        flex-direction: column; align-items: flex-start;
+        gap: 2px; margin-top: 4px;
+    }
+    .dr-who { grid-column: 3; }
+    .dr-side { max-width: 100%; }
+    .dr-side img { width: 19px; height: 19px; }
+    .dr-side-name { font-size: 0.74rem; }
+    /* The arrow moves onto the destination line; as a flex sibling in a column
+       it would otherwise sit alone on a row of its own. */
+    .dr-arrow { display: none; }
+    .dr-to::before {
+        content: '→';
+        color: var(--text-dim);
+        margin-right: 3px;
+        flex-shrink: 0;
+    }
+    .dr-school-rail { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
+}
