@@ -23,23 +23,41 @@
 
     <div class="row g-3">
         {% for team in teams %}
-        {# Same team-color gradient logic as the team/game hero — the primary
-           blooms behind the logo at full strength, the alt glows up from the
-           bottom, over a near-black base, so every card reads as its program
-           (dark-primary teams show their color + alt, not a flat box).
-           Fall back only when a color value is missing/malformed. #}
+        {# Team-colour card. Two things to preserve if this is ever touched:
+
+           Every fade ends at the SAME colour with zero alpha, never at
+           `transparent`. `transparent` is rgba(0,0,0,0), so a fade to it
+           interpolates through black and leaves a grey, muddy band — which is
+           exactly what these cards used to show.
+
+           And the lower glow's falloff has to complete INSIDE the card. It was
+           centred at 118% with the fade ending at 60%, so the bottom edge cut
+           through the ellipse's brightest region and drew a hard coloured line
+           across every card. #}
         {% set _c1 = team[3] if (team[3] and team[3][0] == '#' and team[3]|length == 7) else '#2b3a55' %}
-        {% set _c2 = team[4] if (team[4] and team[4][0] == '#' and team[4]|length == 7) else _c1 %}
+        {% set _alt = team[4] if (team[4] and team[4][0] == '#' and team[4]|length == 7) else '' %}
+        {# Reject a NEUTRAL alt colour, by chroma rather than brightness. A third
+           of programs list white or black as their second colour, and glowing
+           white up from the bottom of a dark card is a grey haze, not an accent.
+           Brightness alone cannot make this call — LSU's gold sits at luminance
+           202 and Mississippi State's grey at 197, but their chroma is 218 vs 7.
+           Neutral alt falls back to the primary, which always reads as the team. #}
+        {% set _ar = _alt[1:3]|int(base=16) if _alt else 0 %}
+        {% set _ag = _alt[3:5]|int(base=16) if _alt else 0 %}
+        {% set _ab = _alt[5:7]|int(base=16) if _alt else 0 %}
+        {% set _chroma = [_ar, _ag, _ab]|max - [_ar, _ag, _ab]|min %}
+        {% set _c2 = _alt if (_alt and _chroma >= 40) else _c1 %}
 
         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
         <a href="/team/{{ team[0] | team_slug }}" style="text-decoration:none;display:block;height:100%">
         <div class="team-card" style="--tc: {{ _c1 }};
             background:
-              radial-gradient(ellipse 132% 80% at 50% -8%, {{ _c1 }}e6 0%, {{ _c1 }}55 32%, transparent 64%),
-              radial-gradient(ellipse 130% 60% at 50% 118%, {{ _c2 }}82 0%, transparent 60%),
-              linear-gradient(180deg, transparent 48%, rgba(6,7,10,0.72) 100%),
-              #0a0b0e;
-            border: 1px solid {{ _c1 }}59;">
+              radial-gradient(ellipse 124% 74% at 50% -4%,
+                {{ _c1 }}f2 0%, {{ _c1 }}a8 26%, {{ _c1 }}42 52%, {{ _c1 }}00 76%),
+              radial-gradient(ellipse 150% 62% at 50% 104%,
+                {{ _c2 }}5e 0%, {{ _c2 }}22 46%, {{ _c2 }}00 82%),
+              linear-gradient(180deg, #12141a 0%, #0a0b0f 62%, #08090c 100%);
+            border: 1px solid {{ _c1 }}6b;">
 
             <!-- AP Rank badge -->
             {% set rank = ap_rankings.get(team[0]) %}
