@@ -4592,10 +4592,11 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .dr-picks {
     list-style: none; margin: 0; padding: 0;
     display: flex; flex-direction: column; gap: 5px;
-    /* A pick row carries a name and two team names. Left to fill a 1300px
-       column it strands ~700px of empty space between them, so the row is
-       capped at a width where the eye can travel from player to destination. */
-    max-width: 1040px;
+    /* No max-width here. Capping the rows to close the gap between player and
+       destination left them ending ~300px short of the school rail and round
+       rules above, and a board whose columns do not share a right edge reads
+       as broken far more than an airy row does. The destination column stays
+       right-aligned, which is what keeps it scannable down the page. */
 }
 .dr-pick { border-radius: var(--r-md); }
 .dr-pick-link {
