@@ -302,12 +302,19 @@
 {% set is_kicker   = pos == 'K' %}
 {% set is_punter   = pos == 'P' %}
 
-    <!-- ROW 1: Season Stats (left) + Percentile Rankings (right) -->
-    <div class="row g-4 align-items-stretch mb-4">
+    <!-- ROW 1: Season Stats (left) + Percentile Rankings (right)
+
+         align-items-start, not stretch. Stretching made the shorter card match
+         the taller one, and the stats card is only tall when a player HAS
+         several stat groups — a quarterback fills it with passing and rushing
+         tables, a defensive lineman has one defence table and the rest of the
+         card was empty space pretending to be a layout. Each card sizes to its
+         own content now. -->
+    <div class="row g-4 align-items-start mb-4">
 
         <!-- LEFT: Season Stats -->
         <div class="col-lg-8">
-        <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;height:100%">
+        <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px">
 
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
                 <h4 class="section-label" style="margin:0">{{ season }} Season Stats</h4>
@@ -508,7 +515,7 @@
 
         <!-- RIGHT: Percentile Rankings -->
         <div class="col-lg-4">
-        <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;height:100%">
+        <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px">
 
             {% if percentile_rows %}
 

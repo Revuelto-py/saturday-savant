@@ -360,7 +360,35 @@ def _newest_stats_season(default=2025):
         return default
 
 CURRENT_SEASON = _newest_stats_season()
-UPCOMING_SEASON = CURRENT_SEASON + 1
+
+
+def _upcoming_season():
+    """The next season the site can actually show — one that has a SCHEDULE.
+
+    This was CURRENT_SEASON + 1 unconditionally, which held only while the
+    current season had not yet produced stats. The moment 2026 games were
+    played, CURRENT_SEASON advanced to 2026 and this became 2027: a year with
+    no schedule, no roster and no games, offered in the team page's season
+    picker and — because the Starters tab is gated on it — quietly taking the
+    2026 depth chart off the page.
+
+    So it only advances when there is something on the other side. When no
+    later season has a schedule, the current one IS the leading edge.
+    """
+    nxt = CURRENT_SEASON + 1
+    try:
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT 1 FROM games WHERE season = %s LIMIT 1', (nxt,))
+            return nxt if cur.fetchone() else CURRENT_SEASON
+        finally:
+            release_db(conn)
+    except Exception:
+        return CURRENT_SEASON
+
+
+UPCOMING_SEASON = _upcoming_season()
 
 @cache.memoize(timeout=21600)
 def get_available_seasons():
@@ -3527,7 +3555,10 @@ def team(team_ref):
     # once it has a schedule (forward_season): the page has the new year's
     # schedule, roster, coach, projected record and preseason poll well before
     # week 1, so waiting for stats would show a stale season all preseason.
-    _team_seasons = [UPCOMING_SEASON] + get_available_seasons()   # newest (2026) first
+    # dict.fromkeys de-dupes while keeping order: once the upcoming season has
+    # produced stats it is already in get_available_seasons(), and prepending
+    # it blindly listed that year twice in the picker.
+    _team_seasons = list(dict.fromkeys([UPCOMING_SEASON] + get_available_seasons()))
     _default_season = forward_season()
     # Programs newly promoted from FCS have no FBS data before their first FBS
     # season (they carry FCS-era player_stats that would render as garbage
