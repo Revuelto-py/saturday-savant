@@ -1875,13 +1875,25 @@ def leaders_query_all(cursor, season=CURRENT_SEASON):
                            PARTITION BY ps.category, ps.stat_type
                            ORDER BY MAX(CAST(ps.stat AS REAL)) DESC NULLS LAST) AS rn
                 FROM player_stats ps
+                -- FBS is decided by the TEAM's conference, not the conference
+                -- string stored on the stat row. Those two drift: player_stats
+                -- records the CAA as "Coastal Athletic" while FCS_CONFS lists
+                -- it as "CAA", so the old `ps.conference NOT IN` test never
+                -- matched and eight FCS programs ranked among the FBS leaders.
+                -- teams.conference is the same source the leaderboards use, so
+                -- the home page and /leaderboards now agree by construction
+                -- rather than by two lists happening to stay in sync.
+                JOIN teams tf ON tf.name = ps.team
                 WHERE ps.season = %s
                   AND ((ps.category = 'passing'       AND ps.stat_type IN ('YDS','TD'))
                     OR (ps.category = 'rushing'       AND ps.stat_type IN ('YDS','TD'))
                     OR (ps.category = 'receiving'     AND ps.stat_type IN ('YDS','TD'))
                     OR (ps.category = 'defensive'     AND ps.stat_type IN ('TOT','SACKS'))
                     OR (ps.category = 'interceptions' AND ps.stat_type = 'INT'))
-                  AND ps.conference NOT IN {FCS_CONFS}
+                  AND tf.conference NOT IN {FCS_CONFS}
+                  -- and keep FCS-era stats of newly promoted programs out of
+                  -- seasons before their first FBS year, as the leaderboards do
+                  {_promoted_fbs_exclusion(season, 'ps.team')}
                 GROUP BY ps.category, ps.stat_type, ps.player_name, ps.team
             ) x WHERE rn <= 5
         )
