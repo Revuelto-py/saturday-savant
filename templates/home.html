@@ -20,7 +20,7 @@
         <div class="ig-eyebrow">College Football Analytics</div>
         <h1 class="ig-title">Saturday <span class="ig-title-gold">Savant</span></h1>
         <p class="ig-tagline">College football, quantified.</p>
-        <p class="ig-sub">Opponent-adjusted ratings, EPA-driven stats, and drive-level data for every FBS team.</p>
+        <p class="ig-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team.</p>
 
         <nav class="ig-features" aria-label="Site features">
             <a class="ig-feature" href="/teams">
@@ -33,14 +33,14 @@
                 Savant Ratings
             </a>
             <span class="ig-divider"></span>
-            <a class="ig-feature" href="{{ ('/game/' ~ featured_game_id) if featured_game_id else '/' }}">
+            <a class="ig-feature" href="{{ ('/game/' ~ featured_game_id) if featured_game_id else '/games' }}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Live Drive Tracking
+                Drive-by-Drive
             </a>
             <span class="ig-divider"></span>
             <a class="ig-feature" href="/compare">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
-                Player Compare Tool
+                Compare Players &amp; Teams
             </a>
         </nav>
     </div>

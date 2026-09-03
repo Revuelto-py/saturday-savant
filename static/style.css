@@ -263,6 +263,14 @@
     border-color: var(--text-dim);
     box-shadow: 0 6px 24px rgba(0,0,0,0.35);
 }
+/* The game grid is the main content of both the home page and /games, and it
+   was reachable by keyboard with nothing to show which card you were on. */
+.game-card-v2:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--text-dim);
+}
+.game-card-v2:active { transform: translateY(0); }
 .gc-head {
     display: flex;
     align-items: center;
@@ -547,7 +555,8 @@
     text-decoration: none;
     transition: color 0.15s;
 }
-.leader-viewall:hover { color: #60a5fa; }
+.leader-viewall:hover { color: var(--accent); }
+.leader-viewall:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; color: var(--accent); }
 .leader-row {
     display: flex;
     align-items: center;
@@ -558,6 +567,9 @@
     transition: background 0.15s;
 }
 .leader-row:last-child { border-bottom: none; padding-bottom: 0; }
+/* Only the linked rows are focusable — an unlinked leader renders as a div — so
+   this lands exactly where it should without a selector guard. */
+.leader-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r-sm); }
 .leader-rank {
     width: 14px;
     flex-shrink: 0;
@@ -2696,18 +2708,33 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     color: var(--text-dim);
     margin: 0 auto var(--s6);
     max-width: 52ch;
+    /* Even the ragged edge instead of letting the last line strand two words.
+       At 390px this sentence broke as ".../ for every / FBS team." */
+    text-wrap: balance;
 }
 .ig-features {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--s5);
+    /* Tighter than it looks: the links carry their own padding now (see below),
+       so the visual gap between two labels is this plus 2x that padding. */
+    gap: var(--s3);
     pointer-events: auto;
 }
 .ig-feature {
     display: flex;
     align-items: center;
     gap: var(--s2);
+    /* These were bare text — a ~16px-tall hit area on the site's biggest, most
+       prominent row of links, well under the 44px this codebase uses everywhere
+       else. The padding is the target; the row's gap came down to match so the
+       hero's spacing is unchanged. */
+    padding: 10px;
+    /* An explicit floor, not padding arithmetic: the label is --text-xs, which
+       is a clamp(), so padding alone lands at 38-40px depending on viewport and
+       goes under again if the user scales text up. */
+    min-height: 44px;
+    border-radius: var(--r-md);
     color: var(--text-secondary);
     font-family: var(--font-body);
     font-size: var(--text-xs);
@@ -2715,9 +2742,15 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     letter-spacing: 0.05em;
     white-space: nowrap;
     text-decoration: none;
-    transition: color var(--t-fast);
+    transition: color var(--t-fast), background var(--t-fast);
 }
-.ig-feature:hover { color: var(--gold); cursor: pointer; }
+.ig-feature:hover { color: var(--accent); background: rgba(255, 255, 255, 0.05); }
+.ig-feature:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    color: var(--accent);
+}
+.ig-feature:active { color: var(--accent); background: rgba(255, 255, 255, 0.09); }
 .ig-feature svg { flex-shrink: 0; opacity: 0.75; }
 .ig-divider {
     width: 1px;
@@ -2740,6 +2773,10 @@ table, .data-table { font-variant-numeric: tabular-nums; }
         overflow-x: auto;
         scrollbar-width: none;
         -ms-overflow-style: none;
+        /* The strip hid its own scrollability: the fourth link was cut mid-word
+           at the viewport edge with nothing to say more was there. The fade is
+           the affordance — a hard edge reads as the end of the list. */
+        mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 32px), transparent 100%);
     }
     .ig-features::-webkit-scrollbar { display: none; }
 }
