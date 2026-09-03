@@ -532,7 +532,7 @@ def ap_asof(ap_weekly, week, is_post):
 
 def get_conference_logos(cursor):
     """{conference_name: logo_url} for the Teams page and team-page standings.
-    Populated by fetch_conf_logos.py; empty dict if the table isn't present yet."""
+    Populated by tools/fetch_conf_logos.py; empty dict if the table isn't present yet."""
     try:
         cursor.execute('SELECT conference, logo FROM conference_logos')
         return {row[0]: row[1] for row in cursor.fetchall()}
@@ -1145,7 +1145,7 @@ def get_rivalry_map(cursor):
 def get_frozen_forecasts(cursor, game_ids):
     """Frozen pre-kickoff Savant Forecast + graded outcome for completed games
     that carry a scored prediction — the SAME rows the upset badge and accuracy
-    tracker read (scored=1, never rewritten by predict_games.py), so a completed
+    tracker read (scored=1, never rewritten by pipeline/predict_games.py), so a completed
     game's displayed forecast never changes after the fact.
 
     Returns {game_id: {home_prob, favorite, fav_prob, margin, correct,
@@ -1222,7 +1222,7 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         a production measure — the set of five is reasonable but the
         specific LT/LG/C/RG/RT labels are not individually verifiable.
 
-    EA Sports College Football 27 overall rating (fetch_ea_ratings.py) is the
+    EA Sports College Football 27 overall rating (pipeline/fetch_ea_ratings.py) is the
     SOLE signal for rated players: a rated player's score is exactly his EA
     overall, so at every position the higher EA grade always starts and
     production never reorders rated players. The 2025 production above is used
@@ -1267,7 +1267,7 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         yds[str(pid)] = float(total or 0)
 
     # EA Sports College Football 27 overall rating, matched to our players by
-    # name+team at ingest (see fetch_ea_ratings.py) — the PRIMARY talent signal.
+    # name+team at ingest (see pipeline/fetch_ea_ratings.py) — the PRIMARY talent signal.
     # Internal-only, never displayed. Table may not exist on a fresh DB, so a
     # missing table degrades gracefully to production-only scoring.
     ea = {}
@@ -1544,7 +1544,7 @@ def _team_percentiles_all(season):
     all-teams SELECTs are done once here and every team's percentiles derived
     from them — far cheaper than the team route re-fetching the field on each
     request. Precomputed weekly into pool_store (key `teampct:{season}`) by
-    precompute.py; on a miss it computes live and writes back (self-healing)."""
+    pipeline/precompute.py; on a miss it computes live and writes back (self-healing)."""
     key = f"teampct:{season}"
     stored = _pool_store_get(key)
     if stored is not None:
@@ -1576,7 +1576,7 @@ def sort_players(cat_dict, sort_key, min_val=0):
     return sorted(players, key=lambda x: float(x.get(sort_key, 0) or 0), reverse=True)
 
 # Non-FBS conferences excluded from FBS-only pages. Includes the CFBD labels
-# used by the FCS opponents added for logo display in fetch_fcs_logos.py —
+# used by the FCS opponents added for logo display in tools/fetch_fcs_logos.py —
 # notably 'Southern' (SoCon), 'Big South-OVC' and 'UAC', which must be listed
 # here so those teams don't leak onto the Teams grid / Rankings / Leaderboards /
 # search. 'SIAC' is Division II (Savannah St, a historical FBS opponent) — not
@@ -2219,7 +2219,7 @@ def build_game_card(row, ap_weekly, rivalry_map):
         'week': week, 'notes': event_name(notes),
         'completed': bool(completed),
         # In progress. /games only fills points once a game is FINAL, so the
-        # live pass in fetch_scores.py writes a score while leaving completed
+        # live pass in pipeline/fetch_scores.py writes a score while leaving completed
         # at 0 — points on an uncompleted game is exactly "under way".
         'live': (not completed) and home_pts is not None and away_pts is not None,
         # Rank each team carried into this game — the weekly poll as-of its
@@ -2469,7 +2469,7 @@ def games_hub():
                 })
 
         # Savant Forecast chips for upcoming games — one batch read of the
-        # precomputed predictions (predict_games.py), keyed by game id.
+        # precomputed predictions (pipeline/predict_games.py), keyed by game id.
         forecasts = {}
         upcoming_ids = [g['id'] for g in games if not g['completed']]
         if upcoming_ids:
@@ -3235,7 +3235,7 @@ def standings():
                            standings_by_conf=standings_by_conf)
 
 @app.route('/savant-rating')
-@cache.cached(timeout=86400)  # 24 hours — recomputed offline by compute_savant_ratings.py
+@cache.cached(timeout=86400)  # 24 hours — recomputed offline by pipeline/compute_savant_ratings.py
 def savant_rating_methodology():
     """Plain-language methodology page for the Savant Rating (SVR) system."""
     conn = get_db()
@@ -3292,7 +3292,7 @@ def _returning_production_ranks(season):
     for `season` (vs season-1), plus national ranks.
 
     Precomputed weekly into pool_store (key `returning:{season}`) by
-    precompute.py; on a miss (e.g. a brand-new season, or right after a store
+    pipeline/precompute.py; on a miss (e.g. a brand-new season, or right after a store
     reset) it computes live and writes back, the same self-healing pattern the
     percentile pools use. The @cache.memoize adds an in-process layer on top."""
     key = f"returning:{season}"
@@ -3413,7 +3413,7 @@ def _team_nfl_talent(team):
     first, earliest picks first within a class); UDFAs (which carry no draft
     year) are listed separately.
 
-    Precomputed weekly into pool_store (key `nfltalent:{team}`) by precompute.py;
+    Precomputed weekly into pool_store (key `nfltalent:{team}`) by pipeline/precompute.py;
     on a miss it computes live and writes back (self-healing, like the pools)."""
     key = f"nfltalent:{team}"
     stored = _pool_store_get(key)
@@ -3477,7 +3477,7 @@ def _projected_record(cursor, team, season, actual_wins, actual_losses):
     team's perspective — home_prob if home, else 1 - home_prob).
 
     Read LIVE from game_predictions on every call, never persisted or frozen:
-    predict_games.py rewrites each upcoming game's forecast weekly (rows freeze
+    pipeline/predict_games.py rewrites each upcoming game's forecast weekly (rows freeze
     only at kickoff), and its notify_cache_clear() drops the team-page cache, so
     the next render recomputes this from the current week's numbers. This is the
     deliberate difference from an individual prediction — the projection for a
@@ -3965,7 +3965,7 @@ def team(team_ref):
             }
 
         # Savant Rating (SVR) — the site's proprietary opponent-adjusted
-        # points-per-10-drives model (computed by compute_savant_ratings.py)
+        # points-per-10-drives model (computed by pipeline/compute_savant_ratings.py)
         cursor.execute('''
             SELECT off_rating, off_ranking, def_rating, def_ranking,
                    net_rating, net_ranking, sos, games
@@ -4440,7 +4440,7 @@ def game_detail(game_id):
         # multi-second) ESPN fetches the completed-game path relies on.
         is_scheduled = not game_info[15]
         # Under way: CFBD /games only fills points once a game is FINAL, so
-        # points on a not-completed row means the live pass in fetch_scores.py
+        # points on a not-completed row means the live pass in pipeline/fetch_scores.py
         # wrote them. The page keeps the compact pre-kickoff body (there is no
         # box score yet) but shows the running score instead of a kickoff time.
         is_live = is_scheduled and game_info[3] is not None and game_info[4] is not None
@@ -4475,7 +4475,7 @@ def game_detail(game_id):
             ''', (home_team, away_team))
             name_to_player_id = {row[0].lower(): row[1] for row in cursor.fetchall()}
 
-            # Stored ESPN summary (fetch_game_summaries.py) — completed games are
+            # Stored ESPN summary (pipeline/fetch_game_summaries.py) — completed games are
             # immutable, so pages render from Postgres with no ESPN call
             try:
                 cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
@@ -4489,7 +4489,7 @@ def game_detail(game_id):
         # Kickoff in Eastern; time is 'TBD' when CFBD hasn't set one yet.
         kick_date, kick_time = format_kickoff(game_info[8], game_info[16])
         season_type_raw = game_info[6] or ''
-        # Savant Forecast — precomputed weekly by predict_games.py; a game
+        # Savant Forecast — precomputed weekly by pipeline/predict_games.py; a game
         # without a row (e.g. FCS opponent) simply shows no forecast block.
         forecast = None
         conn2 = get_db()
@@ -5300,7 +5300,7 @@ def shorten_game_label(season_type, week, notes):
 
 
 # ── Passing profiles (air yards / location / YAC) ───────────────────────────
-# Built from passing_plays, which fetch_passing.py fills from CFBD's play-level
+# Built from passing_plays, which pipeline/fetch_passing.py fills from CFBD's play-level
 # passing endpoints. One aggregator serves every surface — a quarterback, a
 # receiver, a team's offense, a team's defense, a single game — because they
 # differ only in the WHERE clause, not in what is computed.
@@ -6116,7 +6116,7 @@ def _player_detail_cached(player_id, season):
         # The live ESPN scan (~13 blocking HTTP calls) is the only long
         # socket-wait in the app — under crawler traffic it can occupy every
         # worker thread and stall the whole site. Historical seasons are
-        # fully covered by backfill_game_logs.py (empty rows included), so
+        # fully covered by backfill/backfill_game_logs.py (empty rows included), so
         # live scanning is reserved for the current season, and only for
         # players who actually recorded stats that season.
         if season != CURRENT_SEASON or not stats:
@@ -7320,7 +7320,7 @@ def bracket_page():
     try:
         cursor = conn.cursor()
 
-        # Seasons with stored committee seeds (backfill_cfp.py) drive the
+        # Seasons with stored committee seeds (backfill/backfill_cfp.py) drive the
         # selector — the CFP itself predates our data, which starts 2016.
         try:
             cursor.execute('SELECT DISTINCT season FROM cfp_seeds ORDER BY season DESC')

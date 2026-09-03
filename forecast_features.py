@@ -138,7 +138,7 @@ def _load_reference(cur, seasons):
 def _feature_vector(season, week, neutral, post, home, away,
                     elo, stats, sp, savant, recruit, transfer, retprod, rest_h, rest_a):
     """The single feature-assembly path shared by training (build_dataset) and
-    serving (predict_games.py) so the two can never drift apart."""
+    serving (pipeline/predict_games.py) so the two can never drift apart."""
     hs = stats.get(home, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
     as_ = stats.get(away, {'g': 0, 'w': 0, 'pf': 0, 'pa': 0, 'last': None})
 
@@ -174,7 +174,7 @@ def _feature_vector(season, week, neutral, post, home, away,
 def build_dataset(first_season=2016, last_season=2025, return_state=False, collect_fcs=False):
     """Returns (rows, feature_names) — or (rows, names, state) with
     return_state, where `state` carries the Elo ratings, season-to-date stats,
-    and reference lookups as of the last completed game, so predict_games.py
+    and reference lookups as of the last completed game, so pipeline/predict_games.py
     can extend the exact same computation to upcoming games. With collect_fcs,
     also returns FBS-vs-FCS training rows (appended as a final element, or in
     state['fcs_rows']); collecting them never alters the FBS-vs-FBS rows.

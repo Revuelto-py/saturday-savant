@@ -1,0 +1,234 @@
+# This script lives one directory below the repo root; ROOT points back at it so
+# .env, the model artifacts and the shared modules resolve the same as before.
+import os as _os, sys as _sys
+ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if ROOT not in _sys.path:
+    _sys.path.insert(0, ROOT)
+import cfbd
+import psycopg2
+import os
+import time
+from psycopg2.extras import execute_values
+from dotenv import load_dotenv
+
+from season_util import current_cfb_season
+
+# Every CFBD call below uses SEASON, so this script follows the season on its
+# own — it runs weekly and must not still be pulling 2026 rosters in 2027.
+# NOTE: the players.active_2026 COLUMN name is still year-bound. It behaves as
+# "on the current roster" and is written from SEASON, so it stays correct; the
+# name just stops matching the year. Renaming it touches main.py,
+# pipeline/fetch_ea_ratings.py and the sitemap, so it is left for a deliberate pass.
+SEASON = current_cfb_season()
+
+load_dotenv(_os.path.join(ROOT, '.env'))
+
+configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
+conn = psycopg2.connect(os.getenv('DATABASE_URL'))
+cursor = conn.cursor()
+
+try:
+    cursor.execute('ALTER TABLE players ADD COLUMN active_2026 INTEGER DEFAULT 0')
+    conn.commit()
+    print("Added active_2026 column")
+except Exception:
+    conn.rollback()
+    print("active_2026 column already exists")
+
+try:
+    cursor.execute('ALTER TABLE players ADD COLUMN draft_status TEXT')
+    conn.commit()
+    print("Added draft_status column")
+except Exception:
+    conn.rollback()
+    print("draft_status column already exists")
+
+with cfbd.ApiClient(configuration) as api_client:
+    teams_api = cfbd.TeamsApi(api_client)
+
+    print(f"Probing {SEASON} roster availability...")
+    probe = teams_api.get_roster(team='Alabama', year=SEASON)
+    print(f"  Alabama {SEASON} roster: {len(probe)} players")
+
+    # ── Fetch every roster BEFORE touching the database ─────────────────────
+    # This used to reset active_2026 to 0 up front and fill it in as each team
+    # came back. When CFBD 502s partway through (it does), that left the flag
+    # mostly empty, which then tripped the <30% fallback below and marked the
+    # ENTIRE players table active. Collect first, write once: a bad CFBD day now
+    # ends with last week's roster intact instead of a corrupted one.
+    roster_ok, roster_failed, all_players = 0, [], []
+    if len(probe) > 0:
+        fbs_teams = teams_api.get_fbs_teams(year=SEASON)
+        print(f"Fetching {SEASON} rosters for {len(fbs_teams)} teams...")
+        for i, t in enumerate(fbs_teams):
+            roster = None
+            for attempt in range(4):          # CFBD 502s under load; back off
+                try:
+                    roster = teams_api.get_roster(team=t.school, year=SEASON)
+                    break
+                except Exception as e:
+                    if attempt == 3:
+                        print(f"  giving up on {t.school}: {str(e)[:70]}")
+                    else:
+                        time.sleep(2 ** attempt)
+            if roster is None:
+                roster_failed.append(t.school)
+                continue
+            roster_ok += 1
+            all_players.extend((p, t.school) for p in roster)
+            if i % 20 == 0:
+                print(f"  {i+1}/{len(fbs_teams)} teams done...")
+            time.sleep(0.3)
+
+        print(f"rosters fetched: {roster_ok} ok, {len(roster_failed)} failed")
+        # A partial roster is worse than none: it would silently drop every
+        # player on the teams that failed.
+        if roster_failed:
+            print(f"  ABORTING roster update — incomplete ({', '.join(roster_failed[:8])}"
+                  f"{' …' if len(roster_failed) > 8 else ''}). Existing roster left untouched.")
+            conn.rollback()
+            raise SystemExit(1)
+
+    updated = inserted = not_matched = 0
+    if all_players:
+        seen, roster_rows = [], []
+        for p, school in all_players:
+            pid = int(p.id) if str(getattr(p, 'id', '') or '').isdigit() else None
+            if pid is None:
+                not_matched += 1
+                continue
+            # Insert on the CFBD athlete id rather than only flagging names we
+            # already hold. The old loop UPDATEd by name+team and dropped anyone
+            # it couldn't find, which silently discarded every true freshman: a
+            # first-year player has no prior CFBD stats, so no players row to
+            # update, and therefore no headshot, no EA rating match and no shot
+            # at being named a starter. The id is the same athlete id
+            # player_stats, ea_ratings and the headshot mirror all key on.
+            cursor.execute('''
+                INSERT INTO players
+                    (id, first_name, last_name, team, position, jersey,
+                     height, weight, year, active_2026)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
+                ON CONFLICT (id) DO UPDATE SET
+                    active_2026 = 1,
+                    team     = EXCLUDED.team,
+                    position = COALESCE(EXCLUDED.position, players.position),
+                    jersey   = COALESCE(EXCLUDED.jersey,   players.jersey),
+                    height   = COALESCE(EXCLUDED.height,   players.height),
+                    weight   = COALESCE(EXCLUDED.weight,   players.weight),
+                    year     = COALESCE(EXCLUDED.year,     players.year)
+            ''', (pid, p.first_name, p.last_name, school, p.position,
+                  p.jersey, p.height, p.weight,
+                  str(p.year) if p.year is not None else None))
+            seen.append(pid)
+            roster_rows.append((pid, SEASON, school, p.position, p.jersey,
+                                p.height, p.weight,
+                                str(p.year) if p.year is not None else None))
+            updated += 1
+        # Everyone not on a 2026 roster goes inactive — done in the same
+        # transaction as the marking, so the flag is never briefly empty.
+        cursor.execute('UPDATE players SET active_2026 = 0 WHERE NOT (id = ANY(%s))', (seen,))
+
+        # ── keep the `rosters` table in step ────────────────────────────────
+        # The team page's Roster tab reads `rosters`, not active_2026, so the
+        # two drifting apart put departed players back on a roster: Trebor Pena
+        # showed on Penn State's 2026 roster after signing with Jacksonville,
+        # along with ~4,800 others CFBD had already dropped. This is the same
+        # authoritative pull, so it writes both. Scoped to SEASON — 2016-2025
+        # history belongs to backfill/backfill_rosters.py and is untouched.
+        execute_values(cursor, '''
+            INSERT INTO rosters (player_id, season, team, position, jersey,
+                                 height, weight, class_year)
+            VALUES %s
+            ON CONFLICT (player_id, season) DO UPDATE SET
+                team=EXCLUDED.team, position=EXCLUDED.position,
+                jersey=EXCLUDED.jersey, height=EXCLUDED.height,
+                weight=EXCLUDED.weight, class_year=EXCLUDED.class_year
+        ''', roster_rows, page_size=1000)
+        # Anyone the fetch didn't see is off the roster now. Deleting rather
+        # than leaving them keeps "who is on this team" a single answer.
+        cursor.execute('DELETE FROM rosters WHERE season = %s AND NOT (player_id = ANY(%s))',
+                       (SEASON, seen))
+        dropped = cursor.rowcount
+        conn.commit()
+        print(f"rosters {SEASON}: {len(roster_rows):,} in step, {dropped:,} departed players removed",
+              flush=True)
+        print(f"{SEASON} roster: {updated:,} players marked active across {roster_ok} teams"
+              f"{f', {not_matched} without a usable id' if not_matched else ''}")
+    else:
+        print(f"{SEASON} rosters not yet published — leaving active_2026 as-is")
+
+    print("\nFetching NFL draft data...")
+    try:
+        draft_api = cfbd.DraftApi(api_client)
+        for yr in (SEASON - 1, SEASON):
+            try:
+                picks = draft_api.get_draft_picks(year=yr)
+                marked = 0
+                for pick in picks:
+                    name = getattr(pick, 'name', '') or ''
+                    if not name:
+                        continue
+                    parts = name.strip().split(' ', 1)
+                    if len(parts) == 2:
+                        first, last = parts
+                        status = (f"Drafted {yr} (Rd {getattr(pick,'round',None)}, "
+                                  f"Pk {getattr(pick,'pick',None)}) - {getattr(pick,'nfl_team',None)}")
+                        cursor.execute('''
+                            UPDATE players SET draft_status=%s
+                            WHERE first_name=%s AND last_name=%s
+                        ''', (status, first, last))
+                        marked += cursor.rowcount
+                conn.commit()
+                print(f"  Draft {yr}: {len(picks)} picks, {marked} matched in DB")
+            except Exception as e:
+                print(f"  Draft {yr} error: {e}")
+    except Exception as e:
+        print(f"Draft API error: {e}")
+
+# Fallback
+cursor.execute('SELECT COUNT(*) FROM players WHERE active_2026=1')
+active_count = cursor.fetchone()[0]
+cursor.execute('SELECT COUNT(*) FROM players')
+total_count = cursor.fetchone()[0]
+print(f"\nActive {SEASON} before fallback: {active_count} / {total_count}")
+
+# The fallback exists for the offseason window when CFBD hasn't published next
+# season's rosters at all. It must NOT fire when the team loop DID run — a
+# transient CFBD outage once left the flag at 12% and this marked the entire
+# 54k-row table active, wiping the distinction between a current roster and
+# every player in history.
+if not all_players and active_count < total_count * 0.3:
+    print("Applying fallback: active = everyone except confirmed draft picks")
+    cursor.execute('UPDATE players SET active_2026 = 1 WHERE draft_status IS NULL')
+    cursor.execute('UPDATE players SET active_2026 = 0 WHERE draft_status IS NOT NULL')
+    conn.commit()
+    cursor.execute('SELECT COUNT(*) FROM players WHERE active_2026=0')
+    inactive = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM players WHERE active_2026=1')
+    active_final = cursor.fetchone()[0]
+    print(f"  active_2026=1: {active_final}  |  active_2026=0 (drafted): {inactive}")
+
+print("\nSpot checks:")
+for name in [('Drew', 'Allar'), ('Rocco', 'Becht'), ('Carson', 'Beck'), ('Nico', 'Iamaleava')]:
+    cursor.execute(
+        "SELECT first_name, last_name, team, active_2026, draft_status FROM players WHERE first_name=%s AND last_name=%s",
+        name
+    )
+    rows = cursor.fetchall()
+    for r in rows:
+        print(f"  {r}")
+    if not rows:
+        print(f"  {name[0]} {name[1]}: not found")
+
+conn.close()
+print("\nDone!")
+
+
+# Data changed — tell the live site to drop its in-memory page cache so the
+# update is visible immediately instead of after the cache TTL.
+try:
+    from cache_notify import notify_cache_clear
+    notify_cache_clear()
+except Exception:
+    pass
