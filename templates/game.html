@@ -215,31 +215,44 @@
         </div>
 
         <div class="gh-footer">
-            <div class="gh-pill-row">
+            {# ONE row, one chip shape. This was two rows — a lone status pill on
+               its own line above a pair of taller, wider badges — carrying four
+               shells, three heights and four type treatments for what is really
+               three facts about one game. Every chip below is the same capsule;
+               what differs is a leading marker and the weight of the text. #}
+            <div class="gh-chips">
                 {% if is_live %}
-                <span data-gid="{{ game[0] }}"><span class="gh-status-pill gh-status-pill--live" data-live-status>Live</span></span>
+                <span data-gid="{{ game[0] }}"><span class="gh-chip gh-chip--state is-live" data-live-status>Live</span></span>
                 {% elif is_scheduled %}
-                <span class="gh-status-pill gh-status-pill--scheduled">Scheduled</span>
+                <span class="gh-chip gh-chip--state is-scheduled">Scheduled</span>
                 {% else %}
-                <span class="gh-status-pill">Final</span>
-                {% if forecast and forecast.is_upset %}<span class="upset-badge">Upset</span>{% endif %}
+                <span class="gh-chip gh-chip--state">Final</span>
                 {% endif %}
-            </div>
-            {# Forecast recap + rivalry share ONE row (not stacked). The hero has a
-               fixed height with vertically-centered content, so a game carrying
-               these badges is exactly as tall as one without them — the row is
-               omitted entirely when empty so both cases stay optically centered. #}
-            {% if (not is_scheduled and forecast) or rivalry_name %}
-            <div class="gh-meta-row">
+
                 {% if not is_scheduled and forecast %}
-                <span class="fc-recap">
-                    <span class="fc-recap-lead">Savant Forecast</span>
-                    <span class="fc-recap-body">favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}</span>
-                    {% if forecast.correct %}<span class="fc-recap-hit"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>Hit</span>{% endif %}
+                <span class="gh-chip">
+                    <span class="gh-chip-label">Savant Forecast</span>
+                    <span class="gh-chip-text">favored <b>{{ forecast.favorite }}</b> at {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.margin is not none and forecast.margin|abs >= 1.5 %} · by ~{{ '%.0f' % (forecast.margin|abs) }}{% endif %}</span>
+                    {# The grade sits with the prediction it grades. A hit used to
+                       be a green capsule nested INSIDE this one, and a miss a
+                       separate red capsule up on the status row — the same fact
+                       in two different places wearing two different shapes.
+                       is_upset is defined as `not correct`, so these two branches
+                       are the whole outcome space, not a hit plus a silence. #}
+                    {% if forecast.correct %}
+                    <span class="gh-verdict is-hit">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Hit
+                    </span>
+                    {% else %}
+                    <span class="gh-verdict is-upset">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l8 15H4z"/></svg>Upset
+                    </span>
+                    {% endif %}
                 </span>
                 {% endif %}
+
                 {% if rivalry_name %}
-                <span class="rivalry-badge">
+                <span class="gh-chip">
                     {# Filled crossed-swords: the guard + pommel keep it reading as
                        swords at 16px, where a thin stroked icon turns to mush and a
                        bare diagonal cross reads as a multiplication sign. #}
@@ -247,11 +260,10 @@
                         <g transform="rotate(45 12 12)"><path d="M12 1.2 13.1 3.2 13.1 13.4 10.9 13.4 10.9 3.2Z"/><path d="M8.3 13.9h7.4v1.7H8.3z"/><path d="M11.2 15.6h1.6v4.1h-1.6z"/><circle cx="12" cy="20.9" r="1.3"/></g>
                         <g transform="rotate(-45 12 12)"><path d="M12 1.2 13.1 3.2 13.1 13.4 10.9 13.4 10.9 3.2Z"/><path d="M8.3 13.9h7.4v1.7H8.3z"/><path d="M11.2 15.6h1.6v4.1h-1.6z"/><circle cx="12" cy="20.9" r="1.3"/></g>
                     </svg>
-                    <span class="rivalry-name">{{ rivalry_name }}</span>
+                    <span class="gh-chip-strong">{{ rivalry_name }}</span>
                 </span>
                 {% endif %}
             </div>
-            {% endif %}
         </div>
 
     </div>
