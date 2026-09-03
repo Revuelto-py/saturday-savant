@@ -4710,3 +4710,74 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     }
     .dr-school-rail { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
 }
+
+/* ── Passing chart placement (player page) ────────────────────────────────
+   Below the game log, at supporting-detail scale. It sat above the career and
+   game logs at a 470px field with a 2x2 figure block — the right weight on the
+   team and game pages, where the chart IS the section, and too much on a player
+   page, where it pushed the logs most visitors come for below the fold.
+
+   Every size below is scoped to .pc-card, which only the player page uses, so
+   the team and game charts keep the headline scale set further up. */
+.pc-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 22px 24px;
+    margin-bottom: 16px;
+}
+/* A player with both a passing and a target chart shows them side by side
+   rather than stacked — at this scale two fit a row.
+
+   520px, not the field's own width: below that each chart's figures column is
+   squeezed to a few characters and "avg depth of target" wraps one word per
+   line. Dropping to one chart per row first — each then capped at 700 — keeps
+   both charts at the desktop layout and costs about half the height that
+   letting them narrow until their insides stack would. */
+.pc-pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+    gap: 28px;
+}
+/* A single chart in a full-width card left the right two-thirds of the card
+   empty, so the block is capped and centred and the leftover reads as padding.
+   A pair is narrower than the cap on ordinary widths, so it does not bind.
+
+   width:100% is load-bearing, not belt-and-braces: the block is a size container
+   (see below), so its contents contribute nothing to its intrinsic width, and a
+   grid item with auto inline margins stops stretching and shrink-wraps — which
+   for a size container means collapsing to 0. The explicit width is what the cap
+   has to clamp. */
+.pc-card .pc-block { width: 100%; max-width: 700px; margin-inline: auto; }
+.pc-card .pc-body { grid-template-columns: minmax(0, 310px) minmax(0, 1fr); gap: var(--s4); }
+/* One figure per row, not the 2x2 the wider charts use: four stacked rows come
+   out the same height as the field beside them, so the block ends square
+   instead of leaving a dead corner under the figures. */
+.pc-card .pc-summary { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.pc-card .pc-stat { padding: 10px 12px; }
+.pc-card .pc-stat-val { font-size: var(--text-lg); }
+.pc-card .pc-stat-note { font-size: 0.66rem; line-height: 1.3; }
+/* Blur is an absolute radius, so on a field a little over half the width it has
+   to come down with it or the surface smears into one colour. */
+.pc-card .ph-heat-blur { filter: blur(12px); }
+
+/* Whether the field and the figures sit side by side is a question about THIS
+   block's width, not the window's: on a player page the same viewport holds one
+   chart at 700px or two at 520 apiece. A viewport breakpoint answers it for one
+   of those and gets the other wrong — stacking at 900 made a lone tablet chart
+   845px tall (against 462 one pixel wider) and taller than the same chart on a
+   desktop, while a threshold set for the lone chart squeezed a pair's figures
+   to a 50px column. The container query asks the only question that matters. */
+.pc-card .pc-block { container-type: inline-size; }
+
+@container (max-width: 519.98px) {
+    .pc-card .pc-body { grid-template-columns: minmax(0, 1fr); }
+    /* Stacked, the field is the only thing needing a ceiling — it is 4:5, so one
+       running the full width of a 700px card comes out ~875px tall. The cap goes
+       on the FIELD, not the block: capping the block leaves the figures and the
+       caption standing in dead card either side of a narrowed column. */
+    .pc-card .ph-heat { max-width: 380px; margin-inline: auto; }
+    /* Two, not auto-fit: against a narrow block auto-fit fitted three and left
+       the fourth figure orphaned on a row of its own. */
+    .pc-card .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

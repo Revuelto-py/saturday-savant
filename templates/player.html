@@ -618,28 +618,6 @@
     </div>
     {% endif %}
 
-    <!-- Passing / target chart — where this player throws it, or where he is
-         thrown to. A quarterback gets the passer view; anyone targeted gets the
-         receiving view. Both are omitted when the season has too few attempts
-         to describe a tendency. -->
-    {% if passer_profile or target_profile %}
-    <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:24px;margin-bottom:16px">
-        <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:36px">
-            {% if passer_profile %}
-            {{ pc.passing_chart(passer_profile,
-                                season ~ ' Passing Chart',
-                                passer_profile.attempts ~ ' attempts · ' ~ passer_profile.completions ~ ' completions') }}
-            {% endif %}
-            {% if target_profile %}
-            {{ pc.passing_chart(target_profile,
-                                season ~ ' Target Chart',
-                                target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions',
-                                'this receiver was targeted') }}
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
     <!-- ROW 2: Career Log — one row per season, each credited to the team the
          season's stats were recorded under (transfers show each season under
          the team actually played for, not a new team not yet suited up for).
@@ -795,6 +773,31 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Passing / target chart — where this player throws it, or where he is
+         thrown to. A quarterback gets the passer view, anyone targeted gets the
+         receiving view, and a player with both shows them side by side.
+
+         Placed AFTER the game log: it is supporting detail about tendency, not
+         a headline number, and it was pushing the career and game logs — the
+         things most visitors come for — below the fold. -->
+    {% if passer_profile or target_profile %}
+    <div class="pc-card">
+        <div class="pc-pair">
+            {% if passer_profile %}
+            {{ pc.passing_chart(passer_profile,
+                                season ~ ' Passing Chart',
+                                passer_profile.attempts ~ ' attempts · ' ~ passer_profile.completions ~ ' completions') }}
+            {% endif %}
+            {% if target_profile %}
+            {{ pc.passing_chart(target_profile,
+                                season ~ ' Target Chart',
+                                target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions',
+                                'this receiver was targeted') }}
+            {% endif %}
         </div>
     </div>
     {% endif %}
