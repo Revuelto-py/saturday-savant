@@ -228,7 +228,16 @@
                 {% else %}
                 <span class="gh-chip gh-chip--state">Final</span>
                 {% endif %}
+            </div>
 
+            {# Second tier, guarded so an empty row never adds its margin. The
+               state is the game's headline and sits alone under the score; the
+               forecast and the rivalry are context and sit beneath it. One long
+               row instead ran wider than the gap between the two team columns,
+               so it cut across the composition and lined up with the records
+               rather than reading as a caption to the score. #}
+            {% if (not is_scheduled and forecast) or rivalry_name %}
+            <div class="gh-chips gh-chips-meta">
                 {% if not is_scheduled and forecast %}
                 <span class="gh-chip">
                     <span class="gh-chip-label">Savant Forecast</span>
@@ -264,6 +273,7 @@
                 </span>
                 {% endif %}
             </div>
+            {% endif %}
         </div>
 
     </div>

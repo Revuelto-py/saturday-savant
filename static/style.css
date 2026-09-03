@@ -1740,8 +1740,18 @@ a.t-label:hover { color: #60a5fa; }
        take ~150px, so a hero sized only in px filled a short window edge to
        edge and gave no sign anything followed it. Capping at 66vh keeps a
        slice of the next section on screen at any window height, which is what
-       tells the reader to scroll. */
-    min-height: min(clamp(430px, 32vw, 500px), 56vh);
+       tells the reader to scroll.
+
+       Raised once: the old footer overflowed the previous floor (content 499px
+       against a 461px min-height at 1440), so the "same height" promise above
+       only held because every game overflowed by a similar amount — a game with
+       no forecast and no rivalry came out ~38px shorter than one with both.
+       39vw puts the floor above the tallest state on ordinary desktops, so they
+       are genuinely equal there. On a SHORT window the 60vh cap still wins and
+       a little variance comes back, which is the right trade: the cap exists so
+       a slice of the next section stays on screen, and that matters more than
+       two heroes matching to the pixel on a 700px-tall window. */
+    min-height: min(clamp(460px, 39vw, 520px), 60vh);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -4253,10 +4263,15 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    holds a reserved height so a game without either badge doesn't shift the
    layout (the .game-hero fixed height then keeps every hero identical). */
 .gh-footer { text-align: center; }
-.gh-chips {
+/* Two tiers, one chip language. The state sits alone under the score and the
+   context sits beneath it, so the block narrows to a point and widens again
+   instead of running one bar the full width of both team columns. */
+.gh-chips, .gh-chips-meta {
     display: flex; justify-content: center; align-items: center;
-    gap: var(--s2) var(--s3); flex-wrap: wrap; margin-top: var(--s4);
+    gap: var(--s2) var(--s3); flex-wrap: wrap;
 }
+.gh-chips { margin-top: var(--s6); }
+.gh-chips-meta { margin-top: var(--s3); }
 
 /* "This Week's Upsets" strip on the /games hub */
 .upsets-strip {
@@ -4344,7 +4359,8 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .game-hero .team-logo { height: clamp(96px, 4.2vw + 70px, 150px); }
     .game-hero .score { font-size: clamp(2.9rem, 2rem + 2.4vw, 4.6rem); }
     .game-hero .game-date { font-size: 0.95rem; }
-    .gh-chips { margin-top: var(--s3); gap: var(--s2); }
+    .gh-chips { margin-top: var(--s4); }
+    .gh-chips-meta { margin-top: var(--s2); }
 }
 
 /* Holds the rank row's height on the unranked side so both team names share a
