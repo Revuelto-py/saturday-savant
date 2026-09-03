@@ -4776,9 +4776,9 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
     gap: 28px;
 }
-/* A single chart in a full-width card left the right two-thirds of the card
-   empty, so the block is capped and centred and the leftover reads as padding.
-   A pair is narrower than the cap on ordinary widths, so it does not bind.
+/* The cap keeps the block off the card's own padding edge; it is not there to
+   shrink the chart. At 700px it did: on a 1174px card that left ~240px of empty
+   card on EACH side, which read as an unfinished block rather than as padding.
 
    width:100% is load-bearing, not belt-and-braces: the block is a size container
    (see below), so its contents contribute nothing to its intrinsic width, and a
@@ -4786,6 +4786,12 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    for a size container means collapsing to 0. The explicit width is what the cap
    has to clamp. */
 .pc-card .pc-block { width: 100%; max-width: 700px; margin-inline: auto; }
+/* Only a chart with no sibling gets the card's full width. A passer who is also
+   a target renders two of these; when they are wide enough they sit side by side
+   and when they are not the pair collapses to one per row — and in THAT case
+   each block is as wide as a lone chart while still being one of two, so the cap
+   is what keeps the stacked pair from doubling the section's height. */
+.pc-card .pc-block:only-child { max-width: 1100px; }
 .pc-card .pc-body { grid-template-columns: minmax(0, 310px) minmax(0, 1fr); gap: var(--s4); }
 /* One figure per row, not the 2x2 the wider charts use: four stacked rows come
    out the same height as the field beside them, so the block ends square
@@ -4806,6 +4812,35 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    desktop, while a threshold set for the lone chart squeezed a pair's figures
    to a 50px column. The container query asks the only question that matters. */
 .pc-card .pc-block { container-type: inline-size; }
+
+/* Given the whole card to itself, the chart is sized to use it: a bigger field
+   AND bigger figures, rather than a small block marooned in the middle.
+
+   The field goes square here. Its 4:5 is a display choice, not a measurement —
+   the axes are 50 yards of depth against three direction bands, and a field seen
+   from behind the passer is about as wide as it is deep, so 1:1 is if anything
+   the more honest shape. It also spends the extra width on BOTH axes at once:
+   138px per direction band (was 88) and 16.5px per depth bin (was 13).
+
+   780px is chosen against the pair, not the single: two charts side by side are
+   (card - 28) / 2 apiece, which tops out at ~573 on this site's widest card, and
+   a collapsed pair is capped at 700 above. Both stay under the threshold, so the
+   compact layout survives for every two-chart case without the rule having to
+   know which case it is in. */
+@container (min-width: 780px) {
+    .pc-card .pc-block:only-child .pc-body { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); }
+    .pc-card .pc-block:only-child .ph-heat-field { aspect-ratio: 1 / 1; }
+    /* Blur is an absolute radius: the 12px below is scaled for a 264px field and
+       leaves visible seams between the direction bands on a 414px one. This is
+       the base chart's own value, which is what this field is now sized like. */
+    .pc-card .pc-block:only-child .ph-heat-blur { filter: blur(20px); }
+    /* The figures grow with it, so the column fills the field's height instead
+       of stopping two-thirds of the way down and leaving a dead corner. */
+    .pc-card .pc-block:only-child .pc-summary { gap: 14px; }
+    .pc-card .pc-block:only-child .pc-stat { padding: 16px 20px; }
+    .pc-card .pc-block:only-child .pc-stat-val { font-size: var(--text-xl); }
+    .pc-card .pc-block:only-child .pc-stat-note { font-size: 0.72rem; }
+}
 
 @container (max-width: 519.98px) {
     .pc-card .pc-body { grid-template-columns: minmax(0, 1fr); }
