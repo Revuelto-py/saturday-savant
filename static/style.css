@@ -5346,3 +5346,57 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .rv-card, .rvh-team { transition: none; }
     .rv-card:hover, .rv-card:focus-within, .rvh-team:hover { transform: none; }
 }
+
+/* ── Game Information rows ────────────────────────────────────────────────
+   Five rows that each repeated the same three-property inline style and used
+   an emoji as the icon (📅 📍 👥 📺 🏈). Emoji are font-dependent — they render
+   as a different glyph, weight and colour on every platform, and none of them
+   can take a design token — so they are stroked SVGs in the site's own icon
+   language now, and the row style lives here once. */
+.gi-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+.gi-row:last-child { border-bottom: none; }
+.gi-ico { flex-shrink: 0; width: 18px; height: 18px; color: var(--text-dim); }
+
+/* ── Touch targets ────────────────────────────────────────────────────────
+   Measured on the live site at 390px, not assumed: the leaderboard select came
+   in at 41px, its pagination and view buttons at 34-35, the transfer year tabs
+   at 38, against the 44px floor this codebase uses everywhere else. Scoped to
+   pointerless devices so desktop density is untouched — 34px is a fine mouse
+   target and growing it there would only cost information per screen. */
+@media (hover: none) {
+    .lb-select,
+    .lb-mode-btn,
+    .lb-page-btn,
+    .tp-year { min-height: 44px; }
+    .lb-page-btn { min-width: 44px; }
+    .lb-mode-btn,
+    .tp-year { display: inline-flex; align-items: center; }
+}
+
+/* Two links that sit alone in their row, measured at 19px and 16px tall. The
+   hit area is extended with an overlay rather than with padding: padding got
+   them to 40-42px, not 44, and it moved the rows they sit in. This changes no
+   geometry at all — the visual box is untouched and only the target grows.
+   Safe here because both links have vertical room around them; the inline links
+   inside data tables are deliberately left alone (see the commit note). */
+.footer-gh,
+.leader-viewall { position: relative; }
+.footer-gh::after,
+.leader-viewall::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 44px;
+    transform: translateY(-50%);
+}
+
+/* 0.62rem is 9.9px, and the depth-chart label was rendering at 8px inside its
+   scaled container — under any reasonable floor for text a reader has to
+   parse. */
+.lf-tag { font-size: 0.7rem; }
