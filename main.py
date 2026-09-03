@@ -79,7 +79,7 @@ from forecast_explain import describe as describe_contrib
 # which year it is ingesting. Used by forward_season() for pages that should
 # follow the new season before it has produced any stats.
 from season_util import current_cfb_season
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from itertools import groupby
 
 load_dotenv()
@@ -6640,8 +6640,58 @@ def transfers():
                            per_page=per_page)
 
 
+# ── Rivalries ───────────────────────────────────────────────────────────────
+# Every number on these two pages is derived from the `games` table, which
+# starts at 2016. The `rivalries` table is a hand-curated list of
+# (team1, team2, name) and carries no historical record of its own, so there is
+# no all-time series here to show — the pages used to claim one anyway
+# ("All-Time Series", "Full historical record"), which turned a 130-year series
+# into a handful of games under a label that said otherwise. Everything is now
+# scoped and labelled to the window the data actually covers.
+
+def _rivalry_series(games, ta, tb):
+    """Head-to-head summary for one pair, from its meetings ordered newest first.
+
+    Ties are counted rather than assumed away: college football has not had one
+    since overtime arrived in 1996, but a row with NULL points would otherwise
+    land silently in somebody's win column."""
+    def winner_of(g):
+        hp, ap = g['home_pts'], g['away_pts']
+        if hp is None or ap is None or hp == ap:
+            return None
+        return g['home_team'] if hp > ap else g['away_team']
+
+    a_wins = sum(1 for g in games if winner_of(g) == ta)
+    b_wins = sum(1 for g in games if winner_of(g) == tb)
+    ties = sum(1 for g in games if winner_of(g) is None
+               and g['home_pts'] is not None and g['away_pts'] is not None)
+    played = a_wins + b_wins + ties
+
+    # Current streak: how far the same winner runs from the most recent meeting
+    # before it changes. Anything under two in a row is not a streak.
+    streak_team, streak = None, 0
+    for g in games:
+        w = winner_of(g)
+        if w is None or (streak_team is not None and w != streak_team):
+            break
+        streak_team, streak = w, streak + 1
+
+    return {
+        'meetings': played,
+        'a_wins': a_wins,
+        'b_wins': b_wins,
+        'ties': ties,
+        # Share of the bar team A owns. A pair with no completed meeting in the
+        # window gets 50/50, and the template renders that bar as neutral.
+        'a_share': round(100 * a_wins / played, 1) if played else 50.0,
+        'leader': ta if a_wins > b_wins else (tb if b_wins > a_wins else None),
+        'streak_team': streak_team if streak >= 2 else None,
+        'streak': streak if streak >= 2 else 0,
+    }
+
+
 @app.route('/rivalries')
-@cache.cached(timeout=86400)  # 24 hours — static data
+@cache.cached(timeout=86400)  # 24 hours — the pairings are static, the games move weekly
 def rivalries_page():
     conn = get_db()
     try:
@@ -6656,7 +6706,8 @@ def rivalries_page():
                 CASE WHEN r.team1 < r.team2 THEN t2.logo_dark ELSE t1.logo_dark END,
                 CASE WHEN r.team1 < r.team2 THEN t1.color ELSE t2.color END,
                 CASE WHEN r.team1 < r.team2 THEN t2.color ELSE t1.color END,
-                t1.conference
+                CASE WHEN r.team1 < r.team2 THEN t1.conference ELSE t2.conference END,
+                CASE WHEN r.team1 < r.team2 THEN t2.conference ELSE t1.conference END
             FROM rivalries r
             LEFT JOIN teams t1 ON t1.name = r.team1
             LEFT JOIN teams t2 ON t2.name = r.team2
@@ -6665,61 +6716,58 @@ def rivalries_page():
         ''')
         rivalry_list = cursor.fetchall()
 
-        # Each rivalry's most recent meeting in ONE DISTINCT ON query keyed on the
-        # normalized (min,max) team pair, instead of a query per rivalry — this
-        # loop was 130 round-trips (~5s cold). Columns match the per-rivalry
-        # SELECT below so the mapping is unchanged.
+        # EVERY meeting for every pair in one query, aggregated in Python. This
+        # used to be a DISTINCT ON that fetched only the most recent game; the
+        # series record needs the whole set anyway, and ~130 pairs x a handful
+        # of meetings is a couple of thousand rows — one round trip either way.
         pairs = tuple((r[0], r[1]) for r in rivalry_list)
-        by_pair = {}
+        by_pair = defaultdict(list)
         if pairs:
             cursor.execute('''
-                SELECT DISTINCT ON (LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team))
-                    g.id, g.home_team, g.away_team, g.home_points, g.away_points,
-                    g.week, g.season_type, g.notes, g.start_date,
-                    t1.logo_dark, t2.logo_dark
+                SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points,
+                       g.week, g.season, g.season_type, g.notes, g.start_date,
+                       t1.logo_dark, t2.logo_dark
                 FROM games g
                 LEFT JOIN teams t1 ON t1.name = g.home_team
                 LEFT JOIN teams t2 ON t2.name = g.away_team
                 WHERE g.completed = 1
                   AND (LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team)) IN %s
-                ORDER BY LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team),
-                         g.start_date DESC NULLS LAST
+                ORDER BY g.start_date DESC NULLS LAST
             ''', (pairs,))
-            for lg in cursor.fetchall():
-                by_pair[(min(lg[1], lg[2]), max(lg[1], lg[2]))] = lg
+            for row in cursor.fetchall():
+                by_pair[(min(row[1], row[2]), max(row[1], row[2]))].append({
+                    'id': row[0], 'home_team': row[1], 'away_team': row[2],
+                    'home_pts': row[3], 'away_pts': row[4], 'week': row[5],
+                    'season': row[6], 'season_type': row[7], 'notes': row[8],
+                    'date': row[9][:10] if row[9] else '',
+                    'home_logo': row[10], 'away_logo': row[11],
+                })
 
         rivalry_data = []
         for r in rivalry_list:
             ta, tb = r[0], r[1]
-            last_game = by_pair.get((ta, tb))
-
+            games = by_pair.get((ta, tb), [])
+            series = _rivalry_series(games, ta, tb)
             rivalry_data.append({
-                'ta': ta,
-                'tb': tb,
-                'name': r[2],
-                'logo_a': r[3],
-                'logo_b': r[4],
-                'color_a': r[5],
-                'color_b': r[6],
-                'conference': r[7],
-                'last_game': {
-                    'id':          last_game[0],
-                    'home_team':   last_game[1],
-                    'away_team':   last_game[2],
-                    'home_pts':    last_game[3],
-                    'away_pts':    last_game[4],
-                    'week':        last_game[5],
-                    'season_type': last_game[6],
-                    'notes':       last_game[7],
-                    'date':        last_game[8][:10] if last_game[8] else '',
-                    'home_logo':   last_game[9],
-                    'away_logo':   last_game[10],
-                } if last_game else None,
+                'ta': ta, 'tb': tb, 'name': r[2],
+                'logo_a': r[3], 'logo_b': r[4],
+                'color_a': r[5], 'color_b': r[6],
+                'conf_a': r[7], 'conf_b': r[8],
+                'series': series,
+                'last_game': games[0] if games else None,
             })
 
+        # Conferences present, for the filter. Both sides count: a cross-league
+        # rivalry (Notre Dame, the service academies) should surface under
+        # either program's conference rather than only the alphabetically-first.
+        confs = sorted({c for r in rivalry_data for c in (r['conf_a'], r['conf_b'])
+                        if c and c not in FCS_CONFS})
     finally:
         release_db(conn)
-    return render_template('rivalries.html', rivalries=rivalry_data)
+
+    seasons = get_available_seasons()
+    return render_template('rivalries.html', rivalries=rivalry_data, conferences=confs,
+                           window_start=min(seasons), window_end=max(seasons))
 
 
 @app.route('/rivalry/<team_a>/<team_b>')
@@ -6735,41 +6783,62 @@ def rivalry_history(team_a, team_b):
 
         cursor.execute('''
             SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points,
-                   g.week, g.season_type, g.start_date, g.notes,
+                   g.week, g.season, g.season_type, g.notes, g.start_date,
                    t1.logo_dark, t2.logo_dark
             FROM games g
             LEFT JOIN teams t1 ON t1.name = g.home_team
             LEFT JOIN teams t2 ON t2.name = g.away_team
             WHERE ((g.home_team=%s AND g.away_team=%s) OR (g.home_team=%s AND g.away_team=%s))
-            AND g.completed=1
-            ORDER BY g.start_date DESC
+              AND g.completed=1
+            ORDER BY g.start_date DESC NULLS LAST
         ''', (team_a, team_b, team_b, team_a))
-        games = cursor.fetchall()
-
-        team_a_wins = sum(1 for g in games if
-            (g[1] == team_a and g[3] > g[4]) or (g[2] == team_a and g[4] > g[3]))
-        team_b_wins = len(games) - team_a_wins
+        games = [{
+            'id': r[0], 'home_team': r[1], 'away_team': r[2],
+            'home_pts': r[3], 'away_pts': r[4], 'week': r[5], 'season': r[6],
+            'season_type': r[7], 'notes': r[8], 'date': r[9][:10] if r[9] else '',
+            'home_logo': r[10], 'away_logo': r[11],
+        } for r in cursor.fetchall()]
 
         cursor.execute('SELECT logo_dark, color FROM teams WHERE name=%s', (team_a,))
         ta_info = cursor.fetchone()
         cursor.execute('SELECT logo_dark, color FROM teams WHERE name=%s', (team_b,))
         tb_info = cursor.fetchone()
-
     finally:
         release_db(conn)
 
+    series = _rivalry_series(games, team_a, team_b)
+
+    # Per-meeting detail the template renders directly. The route always loaded
+    # these rows; the page just never showed them, and said "coming soon"
+    # underneath a record built from the very games it was hiding.
+    for g in games:
+        hp, ap = g['home_pts'], g['away_pts']
+        g['winner'] = (g['home_team'] if hp > ap else g['away_team']) if (
+            hp is not None and ap is not None and hp != ap) else None
+        g['margin'] = abs(hp - ap) if hp is not None and ap is not None else None
+        g['a_pts'] = hp if g['home_team'] == team_a else ap
+        g['b_pts'] = ap if g['home_team'] == team_a else hp
+        g['a_home'] = g['home_team'] == team_a
+
+    decided = [g for g in games if g['margin'] is not None]
+    biggest = max(decided, key=lambda g: g['margin']) if decided else None
+    closest = min(decided, key=lambda g: g['margin']) if decided else None
+    avg_margin = round(sum(g['margin'] for g in decided) / len(decided), 1) if decided else None
+    avg_total = round(sum((g['home_pts'] + g['away_pts']) for g in decided) / len(decided), 1) if decided else None
+
+    seasons = get_available_seasons()
     return render_template('rivalry_history.html',
         team_a=team_a, team_b=team_b,
         rivalry_name=rivalry_name,
-        games=games,
-        team_a_wins=team_a_wins,
-        team_b_wins=team_b_wins,
+        games=games, series=series,
+        biggest=biggest, closest=closest,
+        avg_margin=avg_margin, avg_total=avg_total,
         ta_logo=ta_info[0] if ta_info else None,
         tb_logo=tb_info[0] if tb_info else None,
         ta_color=ta_info[1] if ta_info else '#1c9cf0',
         tb_color=tb_info[1] if tb_info else '#17181c',
+        window_start=min(seasons), window_end=max(seasons),
     )
-
 
 
 # ───────────────────────────── /compare page ─────────────────────────────
