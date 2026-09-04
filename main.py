@@ -917,10 +917,50 @@ QUAL_SOURCE_CATEGORY = {
     'DL': 'defensive', 'LB': 'defensive', 'DB': 'defensive',
 }
 
-def _qual_threshold(pos_group, category):
-    """(stat, minimum) qualification threshold for a position group + category, or (None, 0)."""
+FULL_SEASON_WEEKS = 12          # regular-season weeks the thresholds above assume
+
+
+@cache.memoize(timeout=3600)
+def _season_weeks_played(season):
+    """Completed regular-season weeks — how far through a season we are."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT count(DISTINCT week) FROM games
+                        WHERE season = %s AND completed = 1
+                          AND season_type ILIKE %s""", (season, '%regular%'))
+        return cur.fetchone()[0] or 0
+    except Exception:
+        conn.rollback()
+        return 0
+    finally:
+        release_db(conn)
+
+
+def _qual_threshold(pos_group, category, season=None):
+    """(stat, minimum) qualification threshold for a position group + category.
+
+    The minimums above are FULL-SEASON numbers: 100 pass attempts is most of a
+    year's work. Applied unscaled to a season in progress they qualify nobody —
+    in week 1 of 2026 the leading passer had 56 attempts, so every QB percentile
+    on the site was empty, not because the data was missing but because the bar
+    was set for a season that had not happened yet.
+
+    Pass `season` to scale the bar to how much football has been played. A
+    completed season is unaffected, so every historical page ranks exactly as it
+    did. The 25% floor stops week 1 qualifying every backup who threw twice.
+    Callers that do not pass a season keep the old behaviour untouched.
+    """
     q = QUALIFICATIONS.get(pos_group, {}).get(category, {})
-    return next(iter(q.items())) if q else (None, 0)
+    if not q:
+        return (None, 0)
+    stat, minimum = next(iter(q.items()))
+    if season is None:
+        return stat, minimum
+    weeks = _season_weeks_played(season)
+    if weeks == 0 or weeks >= FULL_SEASON_WEEKS:
+        return stat, minimum
+    return stat, int(round(max(minimum * 0.25, minimum * weeks / FULL_SEASON_WEEKS)))
 
 def _qualify_pool(pool, qual_source, qual_stat, qual_min):
     """Filter a pool dict down to player_ids meeting a counting-stat minimum,
@@ -976,6 +1016,17 @@ PERCENTILE_METRICS = {
         ('Total EPA',         'ppa',       'total_ppa',    True),
         ('Completion %',      'passing',   'PCT',          True),
         ('Yards / Attempt',   'passing',   'YPA',          True),
+        # Where he throws it. These come from passing_plays rather than the
+        # season stat line, and each is None until enough of a passer's season
+        # is actually measured — _rank_pct drops those, so a passer whose games
+        # CFBD did not parse shows the rest of his bars and none of these.
+        #
+        # YAC/reception is deliberately NOT here. It was on the chart these
+        # replace, but for a QB it measures what his receivers did after the
+        # catch, and a bar labelled "vs FBS QBs" would read as his.
+        ('Avg Depth of Target', 'air',     'adot',         True),
+        ('Air Yards Share',     'air',     'air_share',    True),
+        ('Deep Attempt Rate',   'air',     'deep_pct',     True),
         ('Interceptions',     'passing',   'INT',          False),
         ('Pass Yards',        'passing',   'YDS',          True),
         ('Pass TDs',          'passing',   'TD',           True),
@@ -1080,7 +1131,7 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
 
     # Qualify against the group's primary counting stat (playing-time proxy).
     primary_cat = _PRIMARY_CATEGORY[qgroup]
-    qstat, qmin = _qual_threshold(qgroup, primary_cat)
+    qstat, qmin = _qual_threshold(qgroup, primary_cat, season)
     primary_raw = _fetch_stats_pool(cursor, primary_cat, gp, season)
     qualified = {pid for pid, d in primary_raw.items() if (d.get(qstat) or 0) >= qmin}
 
@@ -1097,6 +1148,14 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
         elif src == 'usage':
             raw = _fetch_usage_pool(cursor, gp, season)
             sources['usage'] = ({pid: raw[pid] for pid in qualified if pid in raw}, False)
+        elif src == 'air':
+            # passing_plays.passer_id is an INTEGER; every stat pool here keys on
+            # the TEXT player_id. Without str() every lookup misses and the block
+            # silently renders nothing — the same shape of bug as the conference
+            # string that once let eight FCS teams into the FBS leaders.
+            raw = get_season_passer_metrics(season)
+            sources['air'] = ({str(pid): d for pid, d in raw.items()
+                               if str(pid) in qualified}, False)
         elif src == 'ints':
             raw = _fetch_stats_pool(cursor, 'interceptions', gp, season)
             sources['ints'] = ({pid: {'INT': (raw.get(pid, {}).get('INT') or 0)}
@@ -5563,20 +5622,6 @@ def _passing_heatmap(cursor, where, params, season):
 
 
 @cache.memoize(timeout=21600)
-def get_passer_profile(player_id, season):
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        prof = _passing_profile(cur, 'season = %s AND passer_id = %s', (season, player_id))
-        if prof:
-            prof['heat'] = _passing_heatmap(cur, 'season = %s AND passer_id = %s',
-                                            (season, player_id), season)
-        return prof
-    finally:
-        release_db(conn)
-
-
-@cache.memoize(timeout=21600)
 def get_target_profile(player_id, season):
     """The receiving side. CFBD carries the TARGET on every attempt, so the same
     grid describes how a receiver is used — depth, direction, and how much of his
@@ -6473,7 +6518,6 @@ def _player_detail_cached(player_id, season):
         # Air-yards profile. A quarterback gets the passer view, anyone who is
         # thrown to gets the target view; a player can legitimately have both
         # (a QB with a receiving attempt), so the template picks by position.
-        passer_profile=get_passer_profile(player_id, season),
         target_profile=get_target_profile(player_id, season),
         usage=usage,
         is_active_2026=is_active_2026,

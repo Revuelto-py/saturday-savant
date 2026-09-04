@@ -784,23 +784,22 @@
          Placed AFTER the game log: it is supporting detail about tendency, not
          a headline number, and it was pushing the career and game logs — the
          things most visitors come for — below the fold. -->
-    {% if passer_profile or target_profile %}
-    <div class="pc-card">
-        <div class="pc-pair">
-            {% if passer_profile %}
-            {{ pc.passing_chart(passer_profile,
-                                season ~ ' Passing Chart',
-                                passer_profile.attempts ~ ' attempts · ' ~ passer_profile.completions ~ ' completions') }}
-            {% endif %}
-            {% if target_profile %}
-            {{ pc.passing_chart(target_profile,
-                                season ~ ' Target Chart',
-                                target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions',
-                                'this receiver was targeted') }}
-            {% endif %}
-        </div>
+    {% if target_profile %}
+{# Target chart only. The PASSING chart is gone: where a quarterback throws is
+   now three percentile bars in the section above — average depth of target, air
+   yards share and deep attempt rate — ranked against the FBS field, which says
+   more than a heatmap of one player's season with nothing to compare it to.
+   A receiver's target chart stays: it describes how he is USED, which has no
+   equivalent in his stat line. #}
+<div class="pc-card">
+    <div class="pc-pair">
+        {{ pc.passing_chart(target_profile,
+                            season ~ ' Target Chart',
+                            target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions',
+                            'this receiver was targeted') }}
     </div>
-    {% endif %}
+</div>
+{% endif %}
 
     <!-- ROW 3: Player Info (full width, horizontal) -->
     <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:20px 28px">
