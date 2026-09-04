@@ -76,7 +76,15 @@ with ThreadPoolExecutor(max_workers=8) as ex:
             failed += 1
             continue
         cursor.execute(
-            'INSERT INTO game_summaries (game_id, summary_gz) VALUES (%s, %s) ON CONFLICT (game_id) DO NOTHING',
+            # DO UPDATE, not DO NOTHING — but only when the incoming blob is
+            # bigger. DO NOTHING meant a thin summary stored right after a game
+            # ended (ESPN answers with a header minutes before the drives and
+            # scoring plays land) could never be repaired by this job: the game
+            # page read that blob back forever and showed no scoring plays. The
+            # length test keeps the weekly run from rewriting 8k good rows.
+            'INSERT INTO game_summaries (game_id, summary_gz) VALUES (%s, %s) '
+            'ON CONFLICT (game_id) DO UPDATE SET summary_gz = EXCLUDED.summary_gz '
+            '  WHERE length(EXCLUDED.summary_gz) > length(game_summaries.summary_gz)',
             (gid, blob))
         ok += 1
         if ok % 100 == 0:

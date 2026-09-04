@@ -4565,13 +4565,27 @@ def game_detail(game_id):
                 # Store it (completed games are immutable) so no future
                 # request ever repeats this fetch — the live ESPN call was
                 # the game page's thread-blocking cost under crawler load.
-                if game_info[15] and data.get('header', {}).get('competitions'):
+                # Store only a summary that actually CARRIES the detail. ESPN
+                # answers with a valid header the moment a game ends, minutes
+                # before the drives and scoring plays land — and this row was
+                # written with ON CONFLICT DO NOTHING, so a thin blob stored in
+                # that window became permanent: every later request read it back
+                # and never re-fetched, and the weekly job could not replace it
+                # either. Colorado-Georgia Tech sat like that with 21 drives and
+                # 5 scoring plays sitting in ESPN's response.
+                _has_detail = bool(data.get('scoringPlays')
+                                   or (data.get('drives') or {}).get('previous'))
+                if game_info[15] and data.get('header', {}).get('competitions') and _has_detail:
                     connS = get_db()
                     try:
                         curS = connS.cursor()
                         curS.execute('''
                             INSERT INTO game_summaries (game_id, summary_gz)
-                            VALUES (%s, %s) ON CONFLICT (game_id) DO NOTHING
+                            VALUES (%s, %s)
+                            ON CONFLICT (game_id) DO UPDATE
+                               SET summary_gz = EXCLUDED.summary_gz
+                             WHERE length(EXCLUDED.summary_gz)
+                                 > length(game_summaries.summary_gz)
                         ''', (game_id, gzip.compress(json.dumps(data).encode())))
                         connS.commit()
                     except Exception:
@@ -8121,6 +8135,35 @@ def _live_board():
     return out
 
 
+@cache.memoize(timeout=LIVE_TTL)
+def _slate_state():
+    """Every game of the current slate that has a score, straight from the rows
+    the score cron writes. Memoized on the same TTL as the board so a page full
+    of viewers polling every 45s still costs one query."""
+    out = {}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, away_points, home_points, completed
+              FROM games
+             WHERE season = %s AND home_points IS NOT NULL
+               AND start_date::timestamptz > now() - interval '18 hours'
+               AND start_date::timestamptz < now() + interval '1 hour'
+        """, (forward_season(),))
+        for gid, apts, hpts, done in cur.fetchall():
+            out[str(gid)] = {
+                'state': 'final' if done else 'live',
+                'away': apts, 'home': hpts,
+                'status': 'Final' if done else 'Live',
+            }
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+    return out
+
+
 @app.route('/api/live')
 def api_live():
     """Scores for games currently in play, for in-page patching.
@@ -8128,34 +8171,20 @@ def api_live():
     The page HTML stays cached for hours; only this tiny payload moves. That is
     the point — it keeps a score change from invalidating the whole page cache.
     """
-    board = _live_board()
-    if board:
-        games = {gid: g for gid, g in board.items() if g['state'] in ('live', 'final')}
-    else:
-        # No CFBD access from the web service: serve what the cron last wrote.
-        # Points on a row that is not complete is the same "under way" rule the
-        # cards and the game page use.
-        games = {}
-        conn = get_db()
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT id, away_points, home_points, completed
-                  FROM games
-                 WHERE season = %s AND home_points IS NOT NULL
-                   AND start_date::timestamptz > now() - interval '12 hours'
-                   AND start_date::timestamptz < now() + interval '1 hour'
-            """, (forward_season(),))
-            for gid, apts, hpts, done in cur.fetchall():
-                games[str(gid)] = {
-                    'state': 'final' if done else 'live',
-                    'away': apts, 'home': hpts,
-                    'status': 'Final' if done else 'Live',
-                }
-        except Exception:
-            conn.rollback()
-        finally:
-            release_db(conn)
+    # Database FIRST, CFBD's board over the top of it.
+    #
+    # It used to be board-only whenever the board had anything at all, with the
+    # database as a fallback for no-CFBD-access. But CFBD drops a finished game
+    # off its scoreboard a while after the whistle, and the client skips any
+    # data-gid it gets no entry for — so a game that ended while others were
+    # still being played kept its is-live styling in the ticker until the
+    # six-hour ticker cache expired. Starting from the slate means every ticker
+    # item gets a definitive state on every poll, and the board is left to do
+    # what only it can: the running score and the clock.
+    games = dict(_slate_state())
+    for gid, g in (_live_board() or {}).items():
+        if g['state'] in ('live', 'final'):
+            games[gid] = g
     resp = jsonify({'ttl': LIVE_TTL, 'games': games})
     # Let the browser reuse it for one window, but never a shared proxy — this
     # is the one response on the site that must not go stale behind a CDN.

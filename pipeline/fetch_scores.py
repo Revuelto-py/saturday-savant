@@ -38,11 +38,14 @@ import os as _os, sys as _sys
 ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if ROOT not in _sys.path:
     _sys.path.insert(0, ROOT)
+import gzip
+import json
 import os
 import sys
 
 import cfbd
 import psycopg2
+import requests
 from dotenv import load_dotenv
 
 from season_util import current_cfb_season
@@ -59,6 +62,77 @@ if '--week' in sys.argv:
 # returned something partial/broken; with UPDATE-only writes that is harmless,
 # but bail loudly rather than silently doing a fraction of the work.
 MIN_GAMES = 100
+
+
+# A complete ESPN summary for an FBS game gzips to 40-50KB (measured: 48,713 for
+# Colorado-Georgia Tech, 40,722 for Georgia-Florida). A header-only response —
+# what ESPN answers with in the minutes between the final whistle and the box
+# score landing — is about 1.8KB. 8KB sits between them with room on both sides.
+THIN_SUMMARY_BYTES = 8000
+ESPN_SUMMARY = ('https://site.api.espn.com/apis/site/v2/sports/football/'
+                'college-football/summary')
+
+
+def fill_missing_summaries(conn, season, limit=12):
+    """Fetch the ESPN summary for games that have finished but whose detail the
+    site does not hold yet — scoring plays, drives, box score.
+
+    This is what makes a completed game's page fill in on the same timescale as
+    its score. The weekly chain also loads summaries, but a Thursday-night game
+    would otherwise show a bare final score until Monday, and the game page's
+    own on-demand fetch could poison itself: it stored whatever ESPN returned,
+    so a thin blob written seconds after the whistle became the permanent answer.
+
+    Bounded on purpose — recent games only, a handful per run — because this
+    runs every ten minutes and must stay cheap on a night with nothing to do.
+    """
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT g.id
+              FROM games g
+              LEFT JOIN game_summaries s ON s.game_id = g.id
+             WHERE g.season = %s AND g.completed = 1
+               AND g.start_date IS NOT NULL AND g.start_date <> ''
+               AND g.start_date::timestamptz > now() - interval '4 days'
+               AND (s.game_id IS NULL OR length(s.summary_gz) < %s)
+             ORDER BY g.start_date DESC
+             LIMIT %s
+        """, (season, THIN_SUMMARY_BYTES, limit))
+        ids = [r[0] for r in cur.fetchall()]
+    except Exception as exc:
+        conn.rollback()
+        print(f'summary scan skipped ({exc})', flush=True)
+        return 0
+
+    stored = 0
+    for gid in ids:
+        try:
+            r = requests.get(ESPN_SUMMARY, params={'event': gid}, timeout=10)
+            if not r.ok:
+                continue
+            data = r.json()
+        except Exception:
+            continue
+        # Only a summary that actually carries the detail. Without this the
+        # thin-blob problem just moves here.
+        if not (data.get('scoringPlays') or (data.get('drives') or {}).get('previous')):
+            continue
+        blob = gzip.compress(json.dumps(data).encode())
+        try:
+            cur.execute("""
+                INSERT INTO game_summaries (game_id, summary_gz) VALUES (%s, %s)
+                ON CONFLICT (game_id) DO UPDATE SET summary_gz = EXCLUDED.summary_gz
+                 WHERE length(EXCLUDED.summary_gz) > length(game_summaries.summary_gz)
+            """, (gid, blob))
+            conn.commit()
+            stored += 1
+        except Exception:
+            conn.rollback()
+    if ids:
+        print(f'summaries: {len(ids)} game(s) missing detail, {stored} stored', flush=True)
+    return stored
+
 
 
 def main():
@@ -84,6 +158,7 @@ def main():
               f'(expected >= {MIN_GAMES}) — not applying', flush=True)
         return 1
 
+    summaries = 0
     conn = psycopg2.connect(os.getenv('DATABASE_URL'))
     try:
         cur = conn.cursor()
@@ -146,6 +221,11 @@ def main():
         cur.execute('SELECT COUNT(*) FROM games WHERE season = %s AND completed = 1',
                     (SEASON,))
         done = cur.fetchone()[0]
+        # A finished game's page is only as good as its stored summary, so pull
+        # any that are missing while we are already here and already know the
+        # season. Non-fatal: scores are the job, this is the bonus.
+        summaries = fill_missing_summaries(conn, SEASON)
+
         scope = f'week {WEEK}' if WEEK else 'all weeks'
         print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
               f'({live} live, {finals} just finished) '
@@ -155,14 +235,14 @@ def main():
 
     # Only poke the live cache when something actually changed — this runs on a
     # tight loop during game days and a no-op run should cost the site nothing.
-    if changed:
+    if changed or summaries:
         try:
             from cache_notify import notify_cache_clear
             # A game FINISHING ripples much wider than a score moving: team
             # records, its own page's layout, standings. That is rare enough
             # (tens of times a week) to justify the full clear. A score merely
             # moving is frequent and narrow, so it stays scoped.
-            notify_cache_clear(scope=None if finals else 'scores')
+            notify_cache_clear(scope=None if (finals or summaries) else 'scores')
         except Exception:
             pass
     return 0
