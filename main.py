@@ -1008,21 +1008,25 @@ def compute_rank_and_percentile(cursor, player_id, stat_type, category, position
 #   • Usage rate (player_usage.overall) — involvement / target-share proxy.
 #   • Defense has no EPA or rate stats (no snap counts) — only disruption and
 #     coverage counting stats, led by the most differentiating ones.
-# Rates and efficiency only. Raw yards, touchdowns, receptions and interceptions
-# are gone: a percentile on a counting stat mostly ranks opportunity — the QB who
-# threw 500 times outranks the one who threw 300 before either has been better at
+# QB is rates and efficiency only. No raw yards, touchdowns or interceptions: a
+# percentile on a counting stat mostly ranks opportunity — the passer who threw
+# 500 times outranks the one who threw 300 before either has been better at
 # anything — and the season-stat cards above already carry those totals with
 # their national rank beside them.
 #
-# Total EPA stays and is the one volume metric left. It is advanced rather than
-# basic, and it is the only bar that says "how much did this player contribute in
-# total" rather than "per play". Say the word and it goes too.
+# EVERY OTHER GROUP KEEPS ITS COUNTING STATS, and that is a data limit rather
+# than a difference of opinion. A quarterback can afford the rule because he has
+# nine rate metrics to spend: three EPA splits, completion percentage, yards per
+# attempt, and the three air-yard measures. Nobody else does. Stripped to rates
+# a running back had five bars and a receiver four, and the defensive groups had
+# NONE — every metric available to them is a count, because CFBD publishes no
+# defensive EPA and this database holds no snap counts, so there is no
+# denominator to build a rate from.
 #
-# The DEFENSIVE groups below are untouched, and it is not an oversight: every
-# metric available for them is a count. There is no defensive EPA in CFBD and no
-# snap counts anywhere in this database, so there is no rate to divide by —
-# applying this rule to DL/LB/DB would leave those pages with no percentile
-# section at all rather than a better one.
+# The line to revisit is not this list; it is whether defenders and receivers can
+# be given real rate metrics at all. That is a sourcing problem.
+#
+# Total EPA is a volume metric too, and it stays in all three offensive groups.
 PERCENTILE_METRICS = {
     'QB': [
         ('EPA / Play',        'ppa',       'avg_ppa_all',  True),
@@ -1049,12 +1053,18 @@ PERCENTILE_METRICS = {
         ('Total EPA',         'ppa',       'total_ppa',    True),
         ('Yards / Carry',     'rushing',   'YPC',          True),
         ('Usage Rate',        'usage',     'overall',      True),
+        ('Rush Yards',        'rushing',   'YDS',          True),
+        ('Rush TDs',          'rushing',   'TD',           True),
+        ('Receiving Yards',   'receiving', 'YDS',          True),
     ],
     'WR': [
         ('EPA / Play',        'ppa',       'avg_ppa_all',  True),
         ('Total EPA',         'ppa',       'total_ppa',    True),
         ('Yards / Reception', 'receiving', 'YPR',          True),
         ('Usage Rate',        'usage',     'overall',      True),
+        ('Receiving Yards',   'receiving', 'YDS',          True),
+        ('Receptions',        'receiving', 'REC',          True),
+        ('Receiving TDs',     'receiving', 'TD',           True),
     ],
     'DL': [
         ('Sacks',             'defensive', 'SACKS',        True),
