@@ -64,11 +64,6 @@ if '--week' in sys.argv:
 MIN_GAMES = 100
 
 
-# A complete ESPN summary for an FBS game gzips to 40-50KB (measured: 48,713 for
-# Colorado-Georgia Tech, 40,722 for Georgia-Florida). A header-only response —
-# what ESPN answers with in the minutes between the final whistle and the box
-# score landing — is about 1.8KB. 8KB sits between them with room on both sides.
-THIN_SUMMARY_BYTES = 8000
 ESPN_SUMMARY = ('https://site.api.espn.com/apis/site/v2/sports/football/'
                 'college-football/summary')
 
@@ -88,22 +83,40 @@ def fill_missing_summaries(conn, season, limit=12):
     """
     cur = conn.cursor()
     try:
+        # Pull the stored blob and ask what it CONTAINS, rather than how big it
+        # is. A summary ESPN serves minutes after the whistle can carry the box
+        # score, leaders and win probability — tens of KB — while `drives` is
+        # still empty, and drives are what the game page builds its scoring
+        # plays and drive chart from. A size threshold called those healthy.
         cur.execute("""
-            SELECT g.id
+            SELECT g.id, s.summary_gz
               FROM games g
               LEFT JOIN game_summaries s ON s.game_id = g.id
              WHERE g.season = %s AND g.completed = 1
                AND g.start_date IS NOT NULL AND g.start_date <> ''
                AND g.start_date::timestamptz > now() - interval '4 days'
-               AND (s.game_id IS NULL OR length(s.summary_gz) < %s)
              ORDER BY g.start_date DESC
-             LIMIT %s
-        """, (season, THIN_SUMMARY_BYTES, limit))
-        ids = [r[0] for r in cur.fetchall()]
+             LIMIT 200
+        """, (season,))
+        rows = cur.fetchall()
     except Exception as exc:
         conn.rollback()
         print(f'summary scan skipped ({exc})', flush=True)
         return 0
+
+    ids = []
+    for gid, blob in rows:
+        if blob is None:
+            ids.append(gid)
+            continue
+        try:
+            d = json.loads(gzip.decompress(bytes(blob)))
+        except Exception:
+            ids.append(gid)          # unreadable is as good as missing
+            continue
+        if not (d.get('scoringPlays') or (d.get('drives') or {}).get('previous')):
+            ids.append(gid)
+    ids = ids[:limit]
 
     stored = 0
     for gid in ids:

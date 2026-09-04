@@ -4399,12 +4399,6 @@ def _classify_drive_result(display_result):
     return ('—', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
 
 
-# Below this a stored ESPN summary is a header and nothing else. Measured: a
-# complete FBS summary gzips to 40-50KB, a header-only response to ~1.8KB.
-# Kept in step with pipeline/fetch_scores.py's THIN_SUMMARY_BYTES.
-THIN_SUMMARY_BYTES = 8000
-
-
 @app.route('/game/<int:game_id>')
 @cache.cached(timeout=3600)
 def game_detail(game_id):
@@ -4486,13 +4480,6 @@ def game_detail(game_id):
             try:
                 cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
                 summary_row = cursor.fetchone()
-                # A stored blob this small is a header with no drives, scoring
-                # plays or box score — what ESPN answers with in the minutes
-                # after a whistle. Treat it as absent so the fetch below runs
-                # and replaces it, rather than rendering an empty page forever.
-                # Complete summaries measure 40-50KB gzipped; a header is ~1.8KB.
-                if summary_row and summary_row[0] is not None and len(bytes(summary_row[0])) < THIN_SUMMARY_BYTES:
-                    summary_row = None
             except Exception:
                 conn.rollback()  # table not created yet — fall back to live fetch
     finally:
@@ -4562,7 +4549,16 @@ def game_detail(game_id):
         data = {}
         if summary_row:
             data = json.loads(gzip.decompress(bytes(summary_row[0])))
-        else:
+        # Size is the wrong question. A summary ESPN serves minutes after the
+        # whistle can carry boxscore, leaders and winprobability — comfortably
+        # over any byte threshold — while `drives` is still empty, and the
+        # scoring plays on this page are built by walking drives. Colorado-
+        # Georgia Tech was stored exactly like that: big enough to look fine,
+        # with nothing the page renders. Ask what the page actually needs.
+        if not (data.get('scoringPlays') or (data.get('drives') or {}).get('previous')):
+            data = {}
+            summary_row = None
+        if not summary_row:
             # Not stored yet (e.g. game just completed) — fetch live. CFBD
             # game ids are ESPN event ids, so ask the summary endpoint
             # directly rather than scanning the scoreboard by date, which
