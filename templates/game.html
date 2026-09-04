@@ -5,11 +5,15 @@
 {% block og_description %}{{ away_team }} at {{ home_team }}{% if notes %} · {{ notes }}{% endif %}{% if game_date %} · {{ game_date }}{% endif %}. Box score, win probability, drives, and play-by-play on Saturday Savant.{% endblock %}
 
 {# team_hex rejects a colour that cannot show on this page, not merely a
-   missing one. The old test was truthiness, and "#000000" — what CFBD returns
-   for a programme with no colour on record, which is most of the FCS teams
-   carried here for opponent logos — passes it. The hero then painted a black
-   bloom on a near-black page and that half of the matchup lost its colour
-   entirely, along with the accent border under its box-score tables. #}
+   missing one: "#000000" — what CFBD and ESPN both return for a programme with
+   no colour on record — passes a truthiness test, and the hero then painted a
+   black bloom on a near-black page.
+
+   The fallbacks below are a last resort, not the answer. Real colours come from
+   teams.color, which tools/backfill_team_colors.py fills for every team that
+   lacks one: from the team's own alternate colour where there is one (Army's
+   gold), and otherwise from the dominant branded pixel in its logo (Merrimack's
+   navy). After that runs, these two values should never be reached. #}
 {% set home_color = game[11] | team_hex('#1e3a5f') %}
 {% set away_color = game[12] | team_hex('#7f1d1d') %}
 {% set home_rank  = ap_rankings.get(home_team) %}
