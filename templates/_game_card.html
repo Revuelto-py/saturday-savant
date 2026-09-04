@@ -87,8 +87,11 @@
             {% endif %}
         {% elif prob is not none %}
             {# Split bar in the two team colours, favourite's share called out. #}
-            {% set hc = g.home_color if (g.home_color and g.home_color[0]=='#' and g.home_color|length==7) else '#2b3a55' %}
-            {% set ac = g.away_color if (g.away_color and g.away_color[0]=='#' and g.away_color|length==7) else '#5a2b2b' %}
+            {# Same guard as the game hero: the old test checked the shape of the
+               value but not whether the colour can be seen, so a black brand
+               colour drew an invisible half to the forecast split bar. #}
+            {% set hc = g.home_color | team_hex('#2b3a55') %}
+            {% set ac = g.away_color | team_hex('#5a2b2b') %}
             {% set fav = g.home if prob >= 0.5 else g.away %}
             {% set fav_pct = (prob if prob >= 0.5 else 1 - prob) * 100 %}
             <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%">

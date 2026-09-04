@@ -2928,6 +2928,38 @@ TEAM_LOWER_BETTER = {
     'net_ranking',           # Savant national rank — #1 is best
 }
 
+# Team brand colours come from CFBD and are not guaranteed usable. A programme
+# carried only so its logo can appear on an opponent's schedule — every FCS team
+# on this site is one — often has no colour on record, and CFBD answers with
+# black or with nothing at all. The templates guarded that with a truthiness
+# test, which "#000000" passes: the game hero then painted a black bloom on a
+# near-black page, so one half of the matchup had no colour and no visible edge.
+#
+# Anything that cannot carry the design is replaced by a neutral that can. The
+# floor is luminance, not a blocklist, so it catches "#000", "#010101" and the
+# malformed values equally.
+_TEAM_HEX_RE = re.compile(r'^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+
+def team_hex(value, fallback='#334155'):
+    """A brand colour that will actually show on this site's surfaces, else the
+    fallback. Accepts 3- or 6-digit hex with or without the leading #."""
+    m = _TEAM_HEX_RE.match(str(value).strip()) if value else None
+    if not m:
+        return fallback
+    h = m.group(1)
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    # Relative luminance on 0-1. Real dark brand colours clear this easily —
+    # Auburn navy #0C2340 is 0.126, Texas A&M maroon #500000 is 0.067 — while
+    # black and its near neighbours do not.
+    if (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.045:
+        return fallback
+    return f'#{h}'
+
+app.jinja_env.filters['team_hex'] = team_hex
+
+
 def _hex_to_rgba(hex_color, alpha):
     if not hex_color:
         return None

@@ -4,8 +4,14 @@
 {% block og_title %}{{ away_team }} {{ game[4] if game[4] is not none else '' }} – {{ game[3] if game[3] is not none else '' }} {{ home_team }}{% if game[3] is not none %} (Final){% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ away_team }} at {{ home_team }}{% if notes %} · {{ notes }}{% endif %}{% if game_date %} · {{ game_date }}{% endif %}. Box score, win probability, drives, and play-by-play on Saturday Savant.{% endblock %}
 
-{% set home_color = '#' + game[11].lstrip('#') if game[11] else '#1e3a5f' %}
-{% set away_color = '#' + game[12].lstrip('#') if game[12] else '#7f1d1d' %}
+{# team_hex rejects a colour that cannot show on this page, not merely a
+   missing one. The old test was truthiness, and "#000000" — what CFBD returns
+   for a programme with no colour on record, which is most of the FCS teams
+   carried here for opponent logos — passes it. The hero then painted a black
+   bloom on a near-black page and that half of the matchup lost its colour
+   entirely, along with the accent border under its box-score tables. #}
+{% set home_color = game[11] | team_hex('#1e3a5f') %}
+{% set away_color = game[12] | team_hex('#7f1d1d') %}
 {% set home_rank  = ap_rankings.get(home_team) %}
 {% set away_rank  = ap_rankings.get(away_team) %}
 {% set is_post    = game[6] and 'postseason' in game[6].lower() %}
