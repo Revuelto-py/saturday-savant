@@ -521,14 +521,20 @@
 
             {% if percentile_rows %}
 
-            {% macro pct_bar(label, p) %}
+            {% macro pct_bar(label, p, n=none) %}
             {% if p is not none %}
                 {% if p >= 80 %}{% set bc = '#c0392b' %}
                 {% elif p >= 60 %}{% set bc = '#e74c3c' %}
                 {% elif p >= 45 %}{% set bc = '#95a5a6' %}
                 {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
                 {% else %}{% set bc = '#2980b9' %}{% endif %}
-            <div class="percentile-row" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
+            {# The n is per ROW, not per section: a metric is dropped for any peer
+               whose value is None, so the air-yard rows can rank against a much
+               smaller field than the counting stats beside them. Carried as a
+               title AND an aria-label so it reaches a screen reader too. #}
+            {% set n_txt = 'Ranked against ' ~ n ~ ' qualified FBS ' ~ player_percentiles.get('group','') ~ 's' if n else '' %}
+            <div class="percentile-row" title="{{ n_txt }}" aria-label="{{ label }}: {{ p }}th percentile. {{ n_txt }}"
+                 style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
                 <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:120px;text-align:right;flex-shrink:0">{{ label }}</div>
                 <div style="flex:1;height:18px;background:rgba(255,255,255,0.08);border-radius: var(--r-sm);position:relative;overflow:visible">
                     <div style="position:absolute;left:0;top:0;height:100%;width:{{ p }}%;background:{{ bc }};border-radius: var(--r-sm) 0 0 4px"></div>
@@ -544,7 +550,7 @@
 
             <h5 class="section-label" style="margin:0 0 var(--s1)">Percentile Rankings</h5>
             <div style="color: var(--text-dim);font-size: var(--text-xs);margin-bottom:14px">
-                vs FBS {{ player_percentiles.get('group','') }}s · {{ season }}
+                vs {% if player_percentiles.get('peer_count') %}{{ player_percentiles['peer_count'] }} {% endif %}qualified FBS {{ player_percentiles.get('group','') }}s · {{ season }}
             </div>
 
             <!-- Legend -->
@@ -568,7 +574,7 @@
             </div>
 
             {% for row in percentile_rows %}
-            {{ pct_bar(row.label, row.pct) }}
+            {{ pct_bar(row.label, row.pct, row.n) }}
             {% endfor %}
 
             {% else %}

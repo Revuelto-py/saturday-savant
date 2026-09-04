@@ -1180,7 +1180,12 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
     for label, src, stat_key, hb in specs:
         _, p, n = rank_one(src, stat_key, hb)
         if p is not None:
-            rows.append({'label': label, 'pct': p})
+            # n travels with the row. Rows are NOT all ranked against the same
+            # pool: a metric is dropped for any peer whose value is None, so in
+            # week 1 of 2026 the counting stats ranked against 40 qualified QBs
+            # while the air-yard rows ranked against the 12 whose season is
+            # measured enough to have one. The page has to be able to say so.
+            rows.append({'label': label, 'pct': p, 'n': n})
             peer = max(peer, n)
 
     return national, rows, qgroup, peer
