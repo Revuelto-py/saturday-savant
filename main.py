@@ -4913,15 +4913,29 @@ def game_detail(game_id):
                 except (ValueError, TypeError):
                     return 0
 
+            comp = {}
             try:
-                comp = data.get('header', {}).get('competitions', [{}])[0]
+                comp = data.get('header', {}).get('competitions', [{}])[0] or {}
                 for competitor in comp.get('competitors', []):
                     side = competitor.get('homeAway', 'home')
                     quarters[side] = [_score(ls) for ls in competitor.get('linescores', [])]
-                venue = comp.get('venue') or {}
-                attendance = comp.get('attendance')
-                venue_name = venue.get('fullName', '')
-                venue_address = venue.get('address', {})
+            except Exception as e:
+                print(f"Quarters error: {e}")
+
+            # Venue and attendance live in `gameInfo`, not on the header
+            # competition. This read the header for a long time and so the
+            # stadium row never rendered on any game page: across a sample of
+            # 120 stored summaries, header.competitions[0].venue was present 0
+            # times and gameInfo.venue 120. The header is kept as a fallback in
+            # case ESPN ever populates it, and this is its own try block —
+            # folded in with the quarters above, one linescore glitch took the
+            # stadium down with it.
+            try:
+                gi = data.get('gameInfo') or {}
+                venue = gi.get('venue') or comp.get('venue') or {}
+                attendance = gi.get('attendance') or comp.get('attendance')
+                venue_name = venue.get('fullName', '') or ''
+                venue_address = venue.get('address') or {}
                 venue_city = venue_address.get('city', '')
                 venue_state = venue_address.get('state', '')
                 if venue_city and venue_state:
@@ -4931,7 +4945,7 @@ def game_detail(game_id):
                 att = attendance or 0
                 attendance_fmt = f"{att:,}" if att else ''
             except Exception as e:
-                print(f"Quarters error: {e}")
+                print(f"Venue error: {e}")
 
             try:
                 for broadcast in data.get('broadcasts', []):
