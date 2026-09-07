@@ -133,6 +133,19 @@
     </div>
 </div>
 
+{# What "Qualified Only" currently means. The bar is a rate per team game, so
+   it moves every week — stating it beats leaving a reader to wonder why a
+   quarterback with seventeen attempts is on a leaderboard in September. #}
+{% if qual_note %}
+<p class="lb-qual-note">
+    <span class="lb-qual-note-bar">{{ qual_note.bar }} {{ qual_note.unit }}</span>
+    <span>Qualifying is a rate, not a season total — {{ qual_note.rate }} {{ qual_note.unit }} per team
+    game, the way baseball asks a hitter for 3.1 plate appearances. {{ qual_note.games }}
+    game{{ '' if qual_note.games == 1 else 's' }} in, that comes to {{ qual_note.bar }}; it reaches
+    {{ qual_note.full }} across a full season, and a team that has played fewer games is held to less.</span>
+</p>
+{% endif %}
+
 {# When the source only parsed part of a season, the air-yard columns are blank
    for most players. Saying so turns a column that looks broken into a column
    that is honest about what it knows. #}

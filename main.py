@@ -61,6 +61,7 @@ import psycopg2
 from psycopg2 import pool as pg_pool
 import gzip
 import json
+import math
 import os
 import re
 import datetime
@@ -865,7 +866,9 @@ def _rank_pct(player_id, pool, stat_key, higher_better=True):
 # Minimum qualification thresholds by position group and stat category.
 # These filter the peer pool to only "qualified" players before computing
 # ranks/percentiles, using counting stats as a proxy for meaningful playing
-# time (snap counts aren't in the database).
+# time (snap counts aren't in the database). They are FULL-SEASON numbers:
+# `_qual_threshold(..., season)` prorates them to the football actually played
+# so far, which is what keeps an in-progress season from qualifying nobody.
 QUALIFICATIONS = {
     'QB': {
         'passing': {'ATT': 100},   # min 100 pass attempts
@@ -899,6 +902,17 @@ QUALIFICATIONS = {
     },
 }
 
+# Full-season qualification minimums for the player leaderboards, with the
+# counting stat each one is measured in. Read them as rates: 100 attempts is
+# 8.3 per team game, and that rate is what actually gets applied (see
+# `_prorate`), so a leaderboard is populated in September as well as December.
+LEADERBOARD_QUALIFIERS = {
+    'passing':   ('ATT', 100, 'pass attempts'),
+    'rushing':   ('CAR',  50, 'carries'),
+    'receiving': ('REC',  20, 'receptions'),
+    'defense':   ('TOT',  15, 'tackles'),
+}
+
 # Map positions to their group for qualification lookup
 POS_GROUP_MAP = {
     'QB': 'QB',
@@ -917,24 +931,94 @@ QUAL_SOURCE_CATEGORY = {
     'DL': 'defensive', 'LB': 'defensive', 'DB': 'defensive',
 }
 
-FULL_SEASON_WEEKS = 12          # regular-season weeks the thresholds above assume
+FULL_SEASON_GAMES = 12          # team games the minimums above assume
 
 
 @cache.memoize(timeout=3600)
-def _season_weeks_played(season):
-    """Completed regular-season weeks — how far through a season we are."""
+def _team_games_played(season):
+    """team name -> completed regular-season games.
+
+    Teams are not level with each other while a season is running: byes and
+    Thursday openers mean one programme can have played twice before another
+    has played once. A qualification bar therefore has to be measured against
+    the games *that team* has played, not against the league's week number.
+    """
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute("""SELECT count(DISTINCT week) FROM games
-                        WHERE season = %s AND completed = 1
-                          AND season_type ILIKE %s""", (season, '%regular%'))
-        return cur.fetchone()[0] or 0
+        cur.execute("""
+            SELECT team, count(*) FROM (
+                SELECT home_team AS team FROM games
+                 WHERE season = %s AND completed = 1 AND season_type ILIKE %s
+                UNION ALL
+                SELECT away_team FROM games
+                 WHERE season = %s AND completed = 1 AND season_type ILIKE %s
+            ) g GROUP BY team
+        """, (season, '%regular%', season, '%regular%'))
+        return {t: int(n) for t, n in cur.fetchall()}
     except Exception:
         conn.rollback()
-        return 0
+        return {}
     finally:
         release_db(conn)
+
+
+@cache.memoize(timeout=3600)
+def _season_games_played(season):
+    """How far the league as a whole has got, in team games.
+
+    Two jobs. It stands in for a team's own count where the team isn't known —
+    the percentile pools carry player ids and stats, nothing else — and it sets
+    the floor under the per-team counts, because `games` holds FBS matchups
+    only: an FCS opponent shows up with the one game it played against this
+    division, not the twelve it actually played, and prorating on that would
+    hand it a bar of nine attempts. A team is allowed to be one game behind the
+    league for a bye; further behind than that is a gap in the data, not a
+    shorter season.
+
+    Median, not max, so a single Week 0 game in Ireland doesn't raise the bar
+    for the hundred-odd teams that haven't kicked off yet.
+    """
+    fbs = _fbs_team_names(season)
+    games = sorted(n for t, n in _team_games_played(season).items() if t in fbs)
+    if not games:
+        games = sorted(_team_games_played(season).values())
+    return games[len(games) // 2] if games else 0
+
+
+@cache.memoize(timeout=3600)
+def _fbs_team_names(season):
+    """Team names outside the FCS conferences — the pool the median is taken
+    over. Conference membership is current rather than historical, which is
+    close enough for a divisor."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT name, conference FROM teams WHERE conference IS NOT NULL')
+        return {n for n, c in cur.fetchall() if n and c not in FCS_CONFS}
+    except Exception:
+        conn.rollback()
+        return set()
+    finally:
+        release_db(conn)
+
+
+def _prorate(minimum, games):
+    """MLB's qualification rule, in football terms.
+
+    Baseball does not ask a hitter for 502 plate appearances; it asks for 3.1
+    per team game, and 502 is just what that comes to over 162. Applied to the
+    games actually played, the rule fills a leaderboard in April as honestly as
+    it does in September. `100 pass attempts` is the same number written the
+    other way round: 8.3 per team game across a 12-game year.
+
+    Prorating is the whole fix. At or past a full season this returns the
+    original minimum exactly, so every completed season ranks as it always did,
+    and the bar never climbs above it for a team that played thirteen.
+    """
+    if games <= 0:
+        return minimum
+    return min(minimum, max(1, math.ceil(minimum * games / FULL_SEASON_GAMES)))
 
 
 def _qual_threshold(pos_group, category, season=None):
@@ -946,10 +1030,10 @@ def _qual_threshold(pos_group, category, season=None):
     on the site was empty, not because the data was missing but because the bar
     was set for a season that had not happened yet.
 
-    Pass `season` to scale the bar to how much football has been played. A
-    completed season is unaffected, so every historical page ranks exactly as it
-    did. The 25% floor stops week 1 qualifying every backup who threw twice.
-    Callers that do not pass a season keep the old behaviour untouched.
+    Pass `season` to prorate the bar to how much football has been played (see
+    `_prorate`). A completed season is unaffected, so every historical page
+    ranks exactly as it did. Callers that do not pass a season keep the raw
+    full-season minimum.
     """
     q = QUALIFICATIONS.get(pos_group, {}).get(category, {})
     if not q:
@@ -957,10 +1041,7 @@ def _qual_threshold(pos_group, category, season=None):
     stat, minimum = next(iter(q.items()))
     if season is None:
         return stat, minimum
-    weeks = _season_weeks_played(season)
-    if weeks == 0 or weeks >= FULL_SEASON_WEEKS:
-        return stat, minimum
-    return stat, int(round(max(minimum * 0.25, minimum * weeks / FULL_SEASON_WEEKS)))
+    return stat, _prorate(minimum, _season_games_played(season))
 
 def _qualify_pool(pool, qual_source, qual_stat, qual_min):
     """Filter a pool dict down to player_ids meeting a counting-stat minimum,
@@ -976,7 +1057,7 @@ def _qualify_pool(pool, qual_source, qual_stat, qual_min):
 def compute_rank_and_percentile(cursor, player_id, stat_type, category, positions, higher_better=True, season=CURRENT_SEASON):
     """Single-stat rank, filtered to the qualified peer pool (kept for any legacy call sites)."""
     pos_group = POS_GROUP_MAP.get(positions[0], positions[0])
-    qual_stat, qual_min = _qual_threshold(pos_group, category)
+    qual_stat, qual_min = _qual_threshold(pos_group, category, season)
 
     if category == 'ppa':
         pool = _fetch_ppa_pool(cursor, positions, season)
@@ -2686,6 +2767,43 @@ def leaderboards(category='passing'):
             pos_in = "','".join(POSITION_GROUPS[pos_filter])
             pos_sql = f"AND p.position IN ('{pos_in}')"
 
+        # Qualification is a rate per team game, not a season total, so the bar
+        # a row has to clear depends on the games that row's team has played.
+        # That varies row to row, which is why it is computed in SQL rather than
+        # resolved to one number up front.
+        team_games_join = f"""
+                LEFT JOIN (
+                    SELECT team, count(*) AS gp FROM (
+                        SELECT home_team AS team FROM games
+                         WHERE season = {season} AND completed = 1
+                           AND season_type ILIKE '%%regular%%'
+                        UNION ALL
+                        SELECT away_team FROM games
+                         WHERE season = {season} AND completed = 1
+                           AND season_type ILIKE '%%regular%%'
+                    ) u GROUP BY team
+                ) tg ON tg.team = ps.team"""
+
+        # A bye puts a team one game behind the league; anything further behind
+        # is missing data rather than a shorter season (see _season_games_played),
+        # so the per-team count is floored there.
+        gp_floor = max(_season_games_played(season) - 1, 0)
+        gp_sql   = f'GREATEST(COALESCE(MAX(tg.gp), 0), {gp_floor})'
+
+        def qual_bar(full_min):
+            """The HAVING right-hand side: this team's share of a full-season
+            minimum, the SQL twin of `_prorate`. LEAST pins it at the full-season
+            number so a thirteen-game team is never asked for more than a
+            twelve-game one, and a season with nothing played falls back to the
+            unprorated bar rather than letting everybody through."""
+            if not qualified:
+                return '0'
+            if min_filter.isdigit():        # an explicit ?min= is taken literally
+                return min_filter
+            return (f"CASE WHEN {gp_sql} <= 0 THEN {full_min} ELSE "
+                    f"LEAST({full_min}, GREATEST(1, CEIL({full_min}::numeric "
+                    f"* {gp_sql} / {FULL_SEASON_GAMES}))) END")
+
         column_defs = PLAYER_COLUMNS[category][view]
         _cov_note = (passing_coverage_note(season, category)
                      if category in ('passing', 'receiving') else None)
@@ -2700,9 +2818,7 @@ def leaderboards(category='passing'):
             sort_col = _default_sort_col(PLAYER_COLUMNS, category, view)
 
         if category == 'passing':
-            min_att = min_filter if min_filter.isdigit() else '100'
-            if not qualified:
-                min_att = '0'
+            min_att = qual_bar(LEADERBOARD_QUALIFIERS['passing'][1])
 
             _passer_air = get_season_passer_metrics(season) if view == 'advanced' else {}
             ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
@@ -2724,7 +2840,7 @@ def leaderboards(category='passing'):
                 FROM players p
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'passing' AND ps.season = {season}
                 JOIN teams t ON ps.team = t.name
-                {ppa_join}
+                {ppa_join}{team_games_join}
                 WHERE p.position = 'QB'
                   AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
@@ -2758,9 +2874,7 @@ def leaderboards(category='passing'):
                 players.append(row)
 
         elif category == 'rushing':
-            min_att = min_filter if min_filter.isdigit() else '50'
-            if not qualified:
-                min_att = '0'
+            min_att = qual_bar(LEADERBOARD_QUALIFIERS['rushing'][1])
 
             ppa_join     = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
             ppa_select   = ', pp.avg_ppa_rush as epa_rush, pp.total_ppa as total_epa' if view == 'advanced' else ''
@@ -2785,7 +2899,7 @@ def leaderboards(category='passing'):
                 JOIN teams t ON ps.team = t.name
                 LEFT JOIN player_stats pf ON pf.player_id = p.id::text AND pf.category = 'fumbles' AND pf.season = {season}
                 {ppa_join}
-                {usage_join}
+                {usage_join}{team_games_join}
                 WHERE p.position IN ('RB','FB','QB','WR','ATH')
                   AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
@@ -2816,9 +2930,7 @@ def leaderboards(category='passing'):
                 players.append(row)
 
         elif category == 'receiving':
-            min_rec = min_filter if min_filter.isdigit() else '20'
-            if not qualified:
-                min_rec = '0'
+            min_rec = qual_bar(LEADERBOARD_QUALIFIERS['receiving'][1])
 
             _recv_air = get_season_receiving_metrics(season)
             ppa_join   = f'LEFT JOIN player_ppa pp ON pp.player_id = p.id::text AND pp.season = {season}' if view == 'advanced' else ''
@@ -2838,7 +2950,7 @@ def leaderboards(category='passing'):
                 FROM players p
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'receiving' AND ps.season = {season}
                 JOIN teams t ON ps.team = t.name
-                {ppa_join}
+                {ppa_join}{team_games_join}
                 WHERE p.position IN ('WR','TE','RB','ATH')
                   AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
@@ -2879,9 +2991,7 @@ def leaderboards(category='passing'):
                 players.append(row)
 
         elif category == 'defense':
-            min_tot = min_filter if min_filter.isdigit() else '15'
-            if not qualified:
-                min_tot = '0'
+            min_tot = qual_bar(LEADERBOARD_QUALIFIERS['defense'][1])
 
             cursor.execute(f'''
                 SELECT
@@ -2897,7 +3007,7 @@ def leaderboards(category='passing'):
                 FROM players p
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive' AND ps.season = {season}
                 JOIN teams t ON ps.team = t.name
-                LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions' AND pi.season = {season}
+                LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions' AND pi.season = {season}{team_games_join}
                 WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
                   AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
@@ -2947,6 +3057,22 @@ def leaderboards(category='passing'):
         'qualified': '1' if qualified else '0', 'sort': sort_col, 'dir': sort_dir,
     }
     has_advanced = len(PLAYER_COLUMNS[category]['advanced']) > 0
+
+    # The bar moves week to week now, so the page has to say what it currently
+    # is. Only while the season is short of a full one — in December "100 pass
+    # attempts" is the number everybody already expects, and repeating it is noise.
+    qual_note = None
+    _full_min, _unit = LEADERBOARD_QUALIFIERS[category][1], LEADERBOARD_QUALIFIERS[category][2]
+    _games = _season_games_played(season)
+    if qualified and not min_filter.isdigit() and 0 < _games < FULL_SEASON_GAMES:
+        qual_note = {
+            'unit':  _unit,
+            'full':  _full_min,
+            'games': _games,
+            'bar':   _prorate(_full_min, _games),
+            'rate':  round(_full_min / FULL_SEASON_GAMES, 1),
+        }
+
     return render_template('leaderboards.html',
         mode='player', players=players, category=category, view=view,
         season=season, available_seasons=get_available_seasons(),
@@ -2954,7 +3080,7 @@ def leaderboards(category='passing'):
         conf_filter=conf_filter, team_filter=team_filter, pos_filter=pos_filter,
         min_filter=min_filter, sort_col=sort_col, sort_dir=sort_dir,
         qualified=qualified, column_defs=column_defs, current_filters=current_filters,
-        coverage_note=_cov_note,
+        coverage_note=_cov_note, qual_note=qual_note,
         has_advanced=has_advanced, position_groups=list(POSITION_GROUPS.keys()),
         ap_rankings=ap_rankings, pagination=pagination,
     )
@@ -7089,7 +7215,12 @@ def _build_compare_group_rows(cursor, group_name, slots):
         return {yr: _fetch_ppa_pool(cursor, positions, yr) for yr in seasons}
 
     def qual_pools(full_by_yr, source_by_yr, qstat, qmin):
-        return {yr: _qualify_pool(full_by_yr[yr], source_by_yr[yr], qstat, qmin) for yr in seasons}
+        # qmin arrives as a full-season number. Each slot carries its own season,
+        # so each gets its own prorated bar — a 2026 slot is not held to a bar
+        # that December has not arrived at yet, and a 2021 slot is unaffected.
+        return {yr: _qualify_pool(full_by_yr[yr], source_by_yr[yr], qstat,
+                                  _prorate(qmin, _season_games_played(yr)))
+                for yr in seasons}
 
     if group_name == 'QB':
         sp = full_pools('passing', peer)
@@ -7820,7 +7951,7 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, conferenc
     ppa_pool = _fetch_ppa_pool(cursor, peer, season) if need_ppa else {}
 
     qcat = QUAL_SOURCE_CATEGORY[group]
-    qstat, qmin = _qual_threshold(group, qcat)
+    qstat, qmin = _qual_threshold(group, qcat, season)
     qpool = cat_pools.get(qcat) or _fetch_stats_pool(cursor, qcat, peer, season)
     qualified = {pid for pid, d in qpool.items() if (d.get(qstat) or 0) >= qmin}
 
@@ -7903,7 +8034,7 @@ def _explorer_radar(cursor, player_id, season):
     # Qualified peer set for this group (from the group's counting-stat pool),
     # applied to every stat pool so percentiles match the hero exactly.
     qcat = QUAL_SOURCE_CATEGORY[group]
-    qstat, qmin = _qual_threshold(group, qcat)
+    qstat, qmin = _qual_threshold(group, qcat, season)
     qsource = _fetch_stats_pool(cursor, qcat, peer, season)
     qualified_ids = {pid for pid, d in qsource.items() if (d.get(qstat) or 0) >= qmin}
 
