@@ -1880,8 +1880,9 @@ tr.player-row,
     cursor: pointer;
 }
 
-/* Team cards (/teams page) — box styling; the vibrant team-color gradient +
-   border are set inline per team (same hex+alpha logic as the hero). */
+/* Team cards (/teams page) — box styling; the team-colour tint + border are set
+   inline per team, at an alpha the template scales by the colour's luminance so
+   136 cards read as one calm grid rather than 136 competing blocks. */
 .team-card {
     border-radius: var(--r-lg);
     padding: 20px 12px 14px;
@@ -2568,10 +2569,15 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
    POLISH — accessibility + finishing details
    ══════════════════════════════════════════════════════════════════════ */
 
-/* Focus: one visible gold ring on everything interactive */
+/* Focus: one visible accent ring on everything interactive.
+   Solid --accent, not --border-gold. That token is a 35%-alpha BORDER colour,
+   and as a focus ring it composites to about 2.1:1 against the page — under the
+   3:1 WCAG 2.2 asks of a non-text indicator, and invisible on a dark card. Every
+   component that writes its own focus rule below already uses the solid accent;
+   this is the global rule catching up with them. */
 a:focus-visible, button:focus-visible, select:focus-visible,
 input:focus-visible, [tabindex]:focus-visible {
-    outline: 2px solid var(--border-gold);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: var(--r-sm);
 }

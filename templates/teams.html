@@ -48,16 +48,48 @@
         {% set _chroma = [_ar, _ag, _ab]|max - [_ar, _ag, _ab]|min %}
         {% set _c2 = _alt if (_alt and _chroma >= 40) else _c1 %}
 
+        {# How much of the team's colour the card is allowed to show.
+
+           A flat alpha across 136 cards is what made this page shout: it treats
+           Iowa's #FFCD00 and Penn State's navy as equally loud when they are
+           nothing of the sort. The gold arrives at more than three times the
+           perceived brightness, so at a shared alpha the golds and oranges
+           scream while the navies barely register — and a grid where a third of
+           the tiles are glowing is a grid with no hierarchy left to give the
+           logo and the name.
+
+           So the ceiling is set by luminance instead. Bright colours get less of
+           themselves, dark ones get more, and every card lands at roughly the
+           same weight — a dark surface carrying a tint of the team rather than a
+           block of it. Percentages, converted to hex alpha at the point of use. #}
+        {% set _r = _c1[1:3]|int(base=16) %}
+        {% set _g = _c1[3:5]|int(base=16) %}
+        {% set _b = _c1[5:7]|int(base=16) %}
+        {% set _bright = (299 * _r + 587 * _g + 114 * _b) // 1000 %}
+        {% set _k = 24 if _bright >= 150 else (30 if _bright >= 90 else 38) %}
+        {# A gentle falloff, not a steep one. The first pass dived to black by
+           mid-card, which left a bright colour surviving only in a thin cap and
+           turned Iowa's gold into an olive smear — at low alpha a hue needs area
+           to still read as that hue. Spreading the same small amount of colour
+           evenly across the card keeps it recognisably gold and is quieter than
+           the bright band was. #}
+        {% set _a0 = '%02x' | format(_k * 255 // 100) %}
+        {% set _a1 = '%02x' | format(_k * 78 * 255 // 10000) %}
+        {% set _a2 = '%02x' | format(_k * 45 * 255 // 10000) %}
+        {% set _b0 = '%02x' | format(_k * 34 * 255 // 10000) %}
+        {% set _b1 = '%02x' | format(_k * 14 * 255 // 10000) %}
+        {% set _bd = '%02x' | format(_k * 95 * 255 // 10000) %}
+
         <div class="col-6 col-sm-4 col-md-3 col-lg-2">
         <a href="/team/{{ team[0] | team_slug }}" style="text-decoration:none;display:block;height:100%">
         <div class="team-card" style="--tc: {{ _c1 }};
             background:
               radial-gradient(ellipse 124% 74% at 50% -4%,
-                {{ _c1 }}f2 0%, {{ _c1 }}a8 26%, {{ _c1 }}42 52%, {{ _c1 }}00 76%),
+                {{ _c1 }}{{ _a0 }} 0%, {{ _c1 }}{{ _a1 }} 30%, {{ _c1 }}{{ _a2 }} 58%, {{ _c1 }}00 88%),
               radial-gradient(ellipse 150% 62% at 50% 104%,
-                {{ _c2 }}5e 0%, {{ _c2 }}22 46%, {{ _c2 }}00 82%),
-              linear-gradient(180deg, #12141a 0%, #0a0b0f 62%, #08090c 100%);
-            border: 1px solid {{ _c1 }}6b;">
+                {{ _c2 }}{{ _b0 }} 0%, {{ _c2 }}{{ _b1 }} 46%, {{ _c2 }}00 82%),
+              linear-gradient(180deg, #14161d 0%, #0d0f14 62%, #0a0b10 100%);
+            border: 1px solid {{ _c1 }}{{ _bd }};">
 
             <!-- AP Rank badge -->
             {% set rank = ap_rankings.get(team[0]) %}
