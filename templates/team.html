@@ -15,6 +15,33 @@
 {%- else -%}{{ n }}th{%- endif -%}
 {%- endmacro %}
 
+{% block jsonld %}
+<script type="application/ld+json">
+{{ {
+    "@context": "https://schema.org",
+    "@graph": [
+        {
+            "@type": "SportsTeam",
+            "name": team[0],
+            "sport": "American Football",
+            "url": canonical_url(),
+            "logo": team[3] or none,
+            "memberOf": {"@type": "SportsOrganization", "name": team[1]},
+            "mainEntityOfPage": canonical_url()
+        },
+        {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "Teams",
+                 "item": site_origin() ~ "/teams"},
+                {"@type": "ListItem", "position": 2, "name": team[0]}
+            ]
+        }
+    ]
+} | tojson }}
+</script>
+{% endblock %}
+
 {% block content %}
 
 <!-- HERO -->

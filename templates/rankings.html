@@ -1,15 +1,20 @@
 {% extends "base.html" %}
 {% block title %}AP Top 25 Rankings · Saturday Savant{% endblock %}
+{% block og_description %}College football rankings — the AP poll week by week alongside Savant Ratings and SP+, so you can see where the polls and the numbers disagree.{% endblock %}
 
 {% block content %}
 <div class="page-wrapper">
 
 <div class="d-flex align-items-end justify-content-between mb-4 flex-wrap gap-3">
     <div>
-        <h2 style="color: var(--text-primary);font-weight:900;font-size: var(--text-xl);margin:0;letter-spacing:-0.01em">
+        {# h1, not h2: this is the page's own title, and it was the only heading
+           on the page — which left the document with no top-level heading at all
+           and every screen reader jumping straight into a level two. Styling is
+           inline and unchanged, so it renders identically. #}
+        <h1 style="color: var(--text-primary);font-weight:900;font-size: var(--text-xl);margin:0;letter-spacing:-0.01em">
             AP Top 25
             {% if sel_is_final %}<span class="ap-final-pill">Final</span>{% endif %}
-        </h2>
+        </h1>
         {% if sel_label %}
         <div style="color: var(--text-dim);font-size: var(--text-sm);margin-top:6px">
             {{ sel_label }} · {{ season }} Season

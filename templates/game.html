@@ -119,7 +119,35 @@
 </div>
 {% endmacro %}
 
+{% block jsonld %}
+{# A completed game is a SportsEvent with two competitors and a result. This is
+   the markup that lets a score surface in the result rather than a bare title. #}
+<script type="application/ld+json">
+{{ {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    "name": away_team ~ " at " ~ home_team,
+    "url": canonical_url(),
+    "sport": "American Football",
+    "startDate": game_iso_date or none,
+    "eventStatus": "https://schema.org/EventScheduled",
+    "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
+    "location": {"@type": "Place", "name": venue_name} if venue_name else none,
+    "competitor": [
+        {"@type": "SportsTeam", "name": away_team},
+        {"@type": "SportsTeam", "name": home_team}
+    ],
+    "mainEntityOfPage": canonical_url()
+} | tojson }}
+</script>
+{% endblock %}
+
 {% block content %}
+{# The hero states the matchup as two team columns and a score — there is no one
+   element that is the page's title, so the document had no h1 at all. This is
+   that title, for screen readers and for Google, carrying the same words the
+   hero says visually. #}
+<h1 class="sr-only">{{ away_team }} at {{ home_team }}{% if game_date and game_date != 'TBD' %} · {{ game_date }}{% endif %}</h1>
 
 {# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
 <div class="game-hero" style="background:

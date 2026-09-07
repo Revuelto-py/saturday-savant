@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
     <title>{% block title %}Saturday Savant · College Football Analytics{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#000000">
@@ -9,9 +10,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
     <link rel="apple-touch-icon" href="/static/logo-mark-180.png">
     <meta name="description" content="{{ self.og_description() }}">
+    {# One address per page. The filters this site runs on are all query strings,
+       so the same leaderboard answers to hundreds of URLs; this points every one
+       of them at the clean path. #}
+    <link rel="canonical" href="{{ canonical_url() }}">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Saturday Savant">
-    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:url" content="{{ canonical_url() }}">
     <meta property="og:title" content="{% block og_title %}Saturday Savant · College Football Analytics{% endblock %}">
     <meta property="og:description" content="{% block og_description %}College football analytics — advanced stats, EPA, SP+ ratings, player profiles, and game breakdowns for every FBS team.{% endblock %}">
     <meta property="og:image" content="{% block og_image %}{{ request.url_root }}static/logo-512.png{% endblock %}">
@@ -19,6 +24,32 @@
     <meta name="twitter:title" content="{{ self.og_title() }}">
     <meta name="twitter:description" content="{{ self.og_description() }}">
     <meta name="twitter:image" content="{{ self.og_image() }}">
+    {# Structured data. The site-wide identity lives here; pages that describe a
+       single thing — a game, a player, a team — add their own in this block. #}
+    <script type="application/ld+json">
+    {{ {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "@id": site_origin() ~ "/#organization",
+                "name": "Saturday Savant",
+                "url": site_origin() ~ "/",
+                "logo": site_origin() ~ "/static/logo-512.png"
+            },
+            {
+                "@type": "WebSite",
+                "@id": site_origin() ~ "/#website",
+                "name": "Saturday Savant",
+                "url": site_origin() ~ "/",
+                "publisher": {"@id": site_origin() ~ "/#organization"},
+                "inLanguage": "en-US"
+            }
+        ]
+    } | tojson }}
+    </script>
+    {% block jsonld %}{% endblock %}
+    {% block head_extra %}{% endblock %}
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">

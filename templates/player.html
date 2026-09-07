@@ -5,6 +5,40 @@
 {% block og_description %}{{ player.first_name }} {{ player.last_name }} — {{ player.team }}{% if player.position %} · {{ player.position }}{% endif %}{% if player.jersey %} · #{{ player.jersey }}{% endif %}. {{ season }} stats, advanced metrics, and game log on Saturday Savant.{% endblock %}
 {% block og_image %}{{ player.headshot or (request.url_root ~ 'static/logo-512.png') }}{% endblock %}
 
+{% block jsonld %}
+{# A player page is about a person. The breadcrumb is here because Google renders
+   one in the result in place of the raw URL, which is the difference between a
+   result that reads "saturdaysavant.com › player › 4869817" and one that reads
+   the team's name. #}
+<script type="application/ld+json">
+{{ {
+    "@context": "https://schema.org",
+    "@graph": [
+        {
+            "@type": "Person",
+            "name": player.first_name ~ " " ~ player.last_name,
+            "url": canonical_url(),
+            "jobTitle": player.position or "College Football Player",
+            "affiliation": {"@type": "SportsTeam", "name": player.team},
+            "image": player.headshot or none,
+            "mainEntityOfPage": canonical_url()
+        },
+        {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "Teams",
+                 "item": site_origin() ~ "/teams"},
+                {"@type": "ListItem", "position": 2, "name": player.team,
+                 "item": site_origin() ~ "/team/" ~ (player.team | team_slug)},
+                {"@type": "ListItem", "position": 3,
+                 "name": player.first_name ~ " " ~ player.last_name}
+            ]
+        }
+    ]
+} | tojson }}
+</script>
+{% endblock %}
+
 {% block content %}
 <!-- HERO -->
 <div style="

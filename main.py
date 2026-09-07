@@ -2326,6 +2326,23 @@ def event_name(notes):
     return '' if not n or _BROADCAST_NOTE.search(n) else n
 
 
+def _iso_kickoff(start_date_raw):
+    """Kickoff as an ISO 8601 timestamp for schema.org, or None.
+
+    Separate from format_kickoff, which returns the human strings: structured
+    data wants the machine form, and a date Google cannot parse is worse than
+    no date at all."""
+    if not start_date_raw:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(str(start_date_raw).replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(ZoneInfo('America/New_York')).isoformat()
+    except Exception:
+        return None
+
+
 def format_kickoff(start_date_raw, time_tbd):
     """Format a stored (UTC) start_date as an Eastern (date, time) pair for
     scheduled games. time is 'TBD' when CFBD hasn't set a kickoff yet, which is
@@ -4730,6 +4747,7 @@ def game_detail(game_id):
     if is_scheduled:
         # Kickoff in Eastern; time is 'TBD' when CFBD hasn't set one yet.
         kick_date, kick_time = format_kickoff(game_info[8], game_info[16])
+        kick_iso = _iso_kickoff(game_info[8])
         season_type_raw = game_info[6] or ''
         # Savant Forecast — precomputed weekly by pipeline/predict_games.py; a game
         # without a row (e.g. FCS opponent) simply shows no forecast block.
@@ -4759,7 +4777,7 @@ def game_detail(game_id):
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
             season_year=game_info[17], game_season=game_season,
             week_num=game_info[5], notes=event_name(game_info[7]),
-            game_date=kick_date, game_time=kick_time,
+            game_date=kick_date, game_time=kick_time, game_iso_date=kick_iso,
             records={}, espn_game_id=None,
             # Empty defaults so the shared template never references missing data
             quarters={'home': [], 'away': []}, venue={}, attendance=None,
@@ -5457,9 +5475,11 @@ def game_detail(game_id):
         et = dt.astimezone(ZoneInfo('America/New_York'))
         game_date = et.strftime('%A, %B %-d, %Y')
         game_time = et.strftime('%-I:%M %p ET')
+        game_iso_date = et.isoformat()   # schema.org SportsEvent.startDate
     except Exception:
         game_date = start_date_raw[:10] if start_date_raw else 'TBD'
         game_time = ''
+        game_iso_date = None
 
     season_type_raw = game_info[6] or ''
     season_type_display = 'Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season'
@@ -5505,7 +5525,7 @@ def game_detail(game_id):
         win_prob=win_prob,
         top_wpa=top_wpa,
         records=records,
-        game_date=game_date,
+        game_date=game_date, game_iso_date=game_iso_date,
         game_time=game_time,
         season_type_display=season_type_display,
         week_num=week_num,
@@ -8194,28 +8214,75 @@ def explorer():
                            available_seasons=get_available_seasons())
 
 
+# ── Canonical URLs ───────────────────────────────────────────────────────────
+# Every filter this site offers is a query string — ?season=, ?conf=, ?sort=,
+# ?view=, ?page= — so a single leaderboard is reachable at hundreds of URLs
+# carrying near-identical content. robots.txt already keeps crawlers out of that
+# space, but robots is about crawling, not indexing: a disallowed URL that
+# someone links to can still surface. A canonical is the part that consolidates
+# the signals onto one address, which is what the query-string variants of a
+# page should all resolve to.
+#
+# The host is pinned as well as the path. A Render service answers on its own
+# onrender.com hostname alongside the real domain, and left alone that is the
+# same site indexed twice.
+CANONICAL_HOST = os.environ.get('CANONICAL_HOST', 'saturdaysavant.com')
+
+
+@app.template_global()
+def site_origin():
+    """scheme://host for the canonical version of this site."""
+    host = request.host
+    if host.startswith(('localhost', '127.0.0.1')):
+        return f"http://{host}"
+    return f"https://{CANONICAL_HOST}"
+
+
+@app.template_global()
+def canonical_url():
+    """This page's one address: canonical host, path only, no query string."""
+    return f"{site_origin()}{request.path}"
+
+
 @app.route('/sitemap.xml')
 @cache.cached(timeout=86400)  # regenerated daily
 def sitemap():
     """XML sitemap of every indexable page, for search-engine discovery."""
-    base = f"https://{request.host}"
-    paths = ['/', '/teams', '/rankings', '/leaderboards', '/leaderboards/teams',
-             '/bracket', '/compare', '/transfers', '/rivalries', '/savant-rating',
-             '/explorer']
+    base = site_origin()
+    paths = ['/', '/teams', '/rankings', '/standings', '/games',
+             '/leaderboards', '/leaderboards/teams',
+             '/bracket', '/compare', '/transfers', '/draft', '/rivalries',
+             '/savant-rating', '/explorer']
     for cat in ('passing', 'rushing', 'receiving', 'defense'):
         paths.append(f'/leaderboards/{cat}')
+    lastmod = {}
     conn = get_db()
     try:
         cur = conn.cursor()
         cur.execute('SELECT slug FROM teams WHERE slug IS NOT NULL ORDER BY slug')
         paths += [f'/team/{r[0]}' for r in cur.fetchall()]
+        # Named rivalries — a bounded set of pages reachable only through
+        # internal links otherwise. Ordered pair, matching the page's own URLs.
+        from urllib.parse import quote as _q
+        cur.execute('''SELECT DISTINCT
+                         CASE WHEN team1 < team2 THEN team1 ELSE team2 END,
+                         CASE WHEN team1 < team2 THEN team2 ELSE team1 END
+                       FROM rivalries WHERE team1 IS NOT NULL AND team2 IS NOT NULL''')
+        paths += [f"/rivalry/{_q(a)}/{_q(b)}" for a, b in cur.fetchall()]
         # Current season's games and current-roster players only. The
         # historical expansion made every past player/game a real page, but
         # advertising all ~60k of them sent crawlers into a sustained frenzy
         # that saturated the instance — historical pages stay reachable
         # through internal links; the sitemap sticks to the fresh content.
-        cur.execute('SELECT id FROM games WHERE completed = 1 AND season = %s', (CURRENT_SEASON,))
-        paths += [f'/game/{r[0]}' for r in cur.fetchall()]
+        # A game page stops changing once the game is over, and its own date is
+        # the honest lastmod. Nothing else here gets one: a made-up timestamp on
+        # every URL is a signal Google learns to ignore.
+        cur.execute('SELECT id, start_date FROM games WHERE completed = 1 AND season = %s',
+                    (CURRENT_SEASON,))
+        for gid, sd in cur.fetchall():
+            paths.append(f'/game/{gid}')
+            if sd:
+                lastmod[f'/game/{gid}'] = str(sd)[:10]
         cur.execute('SELECT id FROM players WHERE active_2026 = 1 ORDER BY id')
         paths += [f'/player/{r[0]}' for r in cur.fetchall()]
     finally:
@@ -8223,7 +8290,11 @@ def sitemap():
     from xml.sax.saxutils import escape
     body = ['<?xml version="1.0" encoding="UTF-8"?>',
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-    body += [f'<url><loc>{escape(base + p)}</loc></url>' for p in paths]
+    for p in paths:
+        lm = lastmod.get(p)
+        body.append(f'<url><loc>{escape(base + p)}</loc>'
+                    + (f'<lastmod>{lm}</lastmod>' if lm else '')
+                    + '</url>')
     body.append('</urlset>')
     return Response('\n'.join(body), mimetype='application/xml')
 
