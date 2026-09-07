@@ -3061,10 +3061,14 @@ def leaderboards(category='passing'):
     # The bar moves week to week now, so the page has to say what it currently
     # is. Only while the season is short of a full one — in December "100 pass
     # attempts" is the number everybody already expects, and repeating it is noise.
+    #
+    # Not gated on `qualified`: the note explains what the toggle DOES, which is
+    # most worth reading when you are looking at All Players and deciding whether
+    # to switch. It hangs off the control, not off the control's current state.
     qual_note = None
     _full_min, _unit = LEADERBOARD_QUALIFIERS[category][1], LEADERBOARD_QUALIFIERS[category][2]
     _games = _season_games_played(season)
-    if qualified and not min_filter.isdigit() and 0 < _games < FULL_SEASON_GAMES:
+    if not min_filter.isdigit() and 0 < _games < FULL_SEASON_GAMES:
         qual_note = {
             'unit':  _unit,
             'full':  _full_min,

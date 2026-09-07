@@ -4473,37 +4473,106 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 }
 .lb-coverage-note strong { color: #f0c66a; font-weight: 800; }
 
-/* Qualification note. Deliberately not the amber of .lb-coverage-note above it:
-   that one is a caution about data the site is missing, this one explains how
-   the list in front of you was built, and two amber panels stacked would read
-   as two warnings. The current bar leads, because it is the number a reader is
-   actually checking the row against. */
-.lb-qual-note {
+/* Qualification popover. The bar this page filters on moves week to week, so
+   it has to be sayable — but as a paragraph above the table it was furniture in
+   the middle of the page's main flow. It hangs off the toggle instead.
+
+   Two triggers, because one is never enough: hovering "Qualified Only" opens it
+   for a mouse, and the icon opens it on focus for a keyboard and on tap for a
+   touch screen, neither of which has a hover to give. The pill itself can't be
+   the touch trigger — tapping it navigates. */
+.lb-qual-wrap {
+    position: relative;
     display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: var(--s1) var(--s3);
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
+    align-items: center;
+    gap: var(--s2);
+}
+.lb-qual-tip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* 16px of ink inside a 44px target — the icon should read as a footnote,
+       but a footnote still has to be tappable. */
+    width: 44px;
+    height: 44px;
+    margin: 0 -12px 20px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--text-dim);
+    cursor: help;
+    transition: color var(--t-fast);
+}
+.lb-qual-tip svg { width: 16px; height: 16px; display: block; }
+.lb-qual-tip:hover { color: var(--accent); }
+.lb-qual-tip:focus-visible {
+    color: var(--accent);
+    outline: 2px solid var(--accent);
+    outline-offset: -12px;
+    border-radius: var(--r-sm);
+}
+.lb-qual-pop {
+    position: absolute;
+    top: calc(100% - 4px);
+    /* Anchored to the right edge: this sits at the end of a space-between row,
+       so a left-anchored popover would hang off the page. */
+    right: 0;
+    z-index: 100;
+    width: max-content;
+    max-width: min(38ch, calc(100vw - 2 * var(--s4)));
+    padding: 10px 13px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
     border-left: 3px solid var(--accent);
     border-radius: var(--r-md);
-    padding: 10px 14px;
-    margin-bottom: var(--s4);
+    box-shadow: var(--shadow-hover);
     color: var(--text-secondary);
-    /* --text-sm, not the --text-xs of the caution note above: this is forty
-       words of prose a reader has to actually parse, and --text-xs bottoms out
-       at 10.9px on a 375px screen. */
     font-size: var(--text-sm);
+    font-weight: 400;
     line-height: 1.6;
-    max-width: 88ch;
+    text-align: left;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-fast);
 }
-.lb-qual-note > span:last-child { flex: 1 1 22ch; }
-/* On a phone the chip and the prose share a row only long enough to squeeze the
-   text to ~28 characters a line. Below that the number gets its own line and the
-   paragraph gets the full width. */
+.lb-qual-pop-bar {
+    display: block;
+    margin-bottom: var(--s1);
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+.lb-qual-wrap:has(.lb-qual-btn:hover) .lb-qual-pop,
+.lb-qual-wrap:has(.lb-qual-tip:hover) .lb-qual-pop,
+.lb-qual-wrap:has(.lb-qual-tip:focus) .lb-qual-pop {
+    opacity: 1;
+}
+/* Reading a popover often means pointing at it — a link in it, or just
+   following the line. It stays up while the pointer is inside. */
+.lb-qual-pop:hover { opacity: 1; pointer-events: auto; }
+
+/* On a phone the toggle is nowhere near the right edge, so anchoring the
+   popover to it pushed 72px of the panel off-screen. Below 600px it hangs off
+   the whole row instead and spans the content width — the one box on the line
+   whose position is predictable. */
 @media (max-width: 600px) {
-    .lb-qual-note { display: block; }
-    .lb-qual-note-bar { display: block; margin-bottom: var(--s1); }
+    .lb-view-row  { position: relative; }
+    .lb-qual-wrap { position: static; }
+    .lb-qual-pop {
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        width: auto;
+        max-width: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lb-qual-tip, .lb-qual-pop { transition: none; }
+}
 }
 .lb-qual-note-bar {
     flex-shrink: 0;
