@@ -11,7 +11,16 @@
 # depends on all of it. `set -e` aborts the chain if any step fails, leaving the
 # previous week's stores intact rather than half-refreshed.
 #
-# Cron: run weekly after CFBD has posted the week's data (see docs/RENDER_CRON.md).
+# Cron: Sundays 12:00 UTC (08:00 ET) — see docs/RENDER_CRON.md. Saturday's
+# latest kickoff is 23:59 ET, so the last game of a weekend ends around
+# 03:30 ET Sunday; this leaves CFBD roughly four hours to post the data and
+# still refreshes the site about a day earlier than the old Monday slot.
+#
+# AP rankings are step 5 here, but they ALSO have their own hourly cron.
+# The poll's release day moves (Sunday most weeks, Tuesday when week 1 runs
+# through Labor Day, January for the final), so this chain must not be the
+# only thing that can pick one up.
+#
 # Manual fallback:  bash run_weekly.sh
 #
 # NOTE: roster / transfer / NFL-status / offseason scripts are event-driven, not

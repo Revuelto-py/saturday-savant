@@ -14,6 +14,7 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 3. `pipeline/fetch_advanced.py` — advanced team stats
 4. `pipeline/fetch_sp.py` — SP+ ratings
 5. `pipeline/fetch_rankings.py` — AP rankings (every weekly poll, not just the final)
+   — *also runs hourly on its own cron; see below*
 6. `pipeline/fetch_coaches.py` — head coaches, current season *(non-fatal)*
 7. `pipeline/fetch_2026_roster.py` — team rosters, current season *(non-fatal)*
 8. `pipeline/fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
@@ -98,8 +99,22 @@ with the $1/mo CFBD tier). The Starter web service does not run cron itself.
 3. **Runtime:** Python 3.
 4. **Build Command:** `pip install -r requirements.txt`
 5. **Command:** `bash run_weekly.sh`
-6. **Schedule (UTC):** `0 10 * * 1` — Mondays 10:00 UTC (~5–6am ET), safely
-   after Sunday's late games and CFBD ingestion. Adjust if CFBD lags.
+6. **Schedule (UTC):** `0 12 * * 0` — **Sundays 12:00 UTC (08:00 ET).**
+
+   Moved off Mondays so the week's stats are derived the morning after the games
+   rather than a day and a half later. The hour is set by the latest Saturday
+   kickoff: in 2026 that is 23:59 ET (week 2), so the last game of a weekend ends
+   around 03:30 ET Sunday and this leaves CFBD roughly four hours to post before
+   the chain reads it. Do not move it earlier than ~10:00 UTC without checking
+   that week's last kickoff.
+
+   **The trade-off, stated:** games that kick off Sunday or Monday ET are not in
+   that morning's run, so their derived stats (Savant ratings, percentile pools,
+   team-page precompute) wait for the following Sunday. In 2026 that is **4 games
+   out of 888** — 3 Sunday, 1 Monday (the Labor Day opener). Scores and
+   completion are unaffected: the game-day cron below updates those every 10
+   minutes regardless. If a future schedule puts real weight on Sunday games,
+   revisit this rather than assuming it still holds.
 7. **Environment variables** — set the same two the web service uses:
    - `DATABASE_URL` — the Render Postgres connection string (shared with the
      web service, so the precomputed `pool_store` rows are the ones the site
@@ -123,9 +138,9 @@ wipes only the in-memory page cache; the precomputed stores persist and refresh
 
 ## Second Cron Job — game-day scores (`pipeline/fetch_scores.py`)
 
-The weekly chain runs Mondays, so between Saturday kickoff and Monday 10:00 UTC
-the `games` table still says "Scheduled" with no score — about **30 hours** of
-stale results on the ticker, the /games grid and every game page.
+The weekly chain runs once a week, so between Saturday kickoff and the next
+scheduled run the `games` table would still say "Scheduled" with no score —
+hours of stale results on the ticker, the /games grid and every game page.
 
 `pipeline/fetch_scores.py` closes that window. It is deliberately NOT the weekly fetch:
 one CFBD call, then `UPDATE` only the rows whose score or completion changed.
@@ -162,6 +177,41 @@ when a completed game has no stored summary.
    expires).
 
 Manual run: `python3 pipeline/fetch_scores.py` (all weeks) or `--week 1` (smaller payload).
+
+## Third Cron Job — AP rankings (`pipeline/fetch_rankings.py`)
+
+Rankings are step 5 of the weekly chain, and for a while that was the only thing
+that fetched them. It isn't enough, because **the AP poll's release day moves**:
+
+- Sunday afternoon most weeks,
+- **Tuesday** when week 1 runs through Labor Day (2026 week 1 ended with a
+  Monday 19:30 ET game, so the first in-season poll landed on the Tuesday),
+- January for the final poll.
+
+A once-a-week job that happens to run before the poll drops leaves the site
+showing the previous poll for another seven days. That is exactly what happened
+in September 2026: the fetch was working and the stored rows matched CFBD
+exactly — the poll simply hadn't been published yet when the chain last ran.
+
+Running it hourly removes the guesswork, the same way the scores job runs always
+rather than on a "game day" window.
+
+1. Render Dashboard → **New +** → **Cron Job** (a third one).
+2. Same repo/branch/runtime/build command as the others.
+3. **Command:** `python3 pipeline/fetch_rankings.py`
+4. **Schedule (UTC):** `0 * * * *` — hourly, all week.
+5. **Environment variables:** `DATABASE_URL`, `CFBD_API_KEY`, `ADMIN_KEY`.
+
+**Why hourly is safe.** The script compares what CFBD returns against what is
+stored and writes nothing when they match — one CFBD call and one `SELECT` for a
+no-op run. It also **skips the cache clear unless a season actually changed**,
+so the ~167 runs a week that find no new poll cost the site nothing; without that
+guard an hourly job would keep every page permanently cold. It never deletes on
+an empty CFBD response either, so an outage leaves the standing poll in place
+rather than blanking the rankings page.
+
+Manual run: `python3 pipeline/fetch_rankings.py` (active season) or
+`python3 pipeline/fetch_rankings.py 2016 2025` to backfill a range.
 
 ## Manual fallback
 
