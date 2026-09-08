@@ -44,6 +44,7 @@ import os
 import sys
 
 import cfbd
+import espn_board
 import psycopg2
 import requests
 from dotenv import load_dotenv
@@ -229,6 +230,42 @@ def main():
                 live += 1
                 finals += done
         changed += live
+
+        # ESPN pass — CFBD's gaps only. A late kickoff keeps `scheduled` on
+        # CFBD's board for the whole delay (SMU at Florida State, 2026-09-07:
+        # two hours late, no score on CFBD, already in the first quarter on
+        # ESPN), and both passes above skip a game in that state, so it stayed
+        # at "Scheduled" with no score for its entire duration.
+        #
+        # Guarded the same way the board pass is: `completed = 0` in the WHERE,
+        # so this can never touch a game CFBD has already finalised, and it
+        # writes completion only when ESPN says the game is over.
+        espn_live = 0
+        board_states = {}
+        for g in board:
+            st = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
+            board_states[str(g.id)] = st
+        for gid, g in (espn_board.fetch() or {}).items():
+            if g['state'] not in ('live', 'final'):
+                continue
+            if board_states.get(gid) in ('in_progress', 'completed'):
+                continue          # CFBD already has an opinion; it wins
+            if g['home'] is None or g['away'] is None:
+                continue
+            done = 1 if g['state'] == 'final' else 0
+            cur.execute("""
+                UPDATE games
+                   SET home_points = %s, away_points = %s, completed = %s
+                 WHERE id = %s
+                   AND completed = 0
+                   AND (home_points IS DISTINCT FROM %s
+                     OR away_points IS DISTINCT FROM %s
+                     OR completed    IS DISTINCT FROM %s)
+            """, (g['home'], g['away'], done, int(gid),
+                  g['home'], g['away'], done))
+            if cur.rowcount:
+                espn_live += 1
+        changed += espn_live
         conn.commit()
 
         cur.execute('SELECT COUNT(*) FROM games WHERE season = %s AND completed = 1',
@@ -241,7 +278,7 @@ def main():
 
         scope = f'week {WEEK}' if WEEK else 'all weeks'
         print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
-              f'({live} live, {finals} just finished) '
+              f'({live} live, {finals} just finished, {espn_live} via ESPN) '
               f'({done} completed this season)', flush=True)
     finally:
         conn.close()

@@ -80,6 +80,7 @@ from forecast_explain import describe as describe_contrib
 # which year it is ingesting. Used by forward_season() for pages that should
 # follow the new season before it has produced any stats.
 from season_util import current_cfb_season
+import espn_board
 from collections import OrderedDict, defaultdict
 from itertools import groupby
 
@@ -8587,6 +8588,17 @@ def _live_board():
             'status': _live_status_text(state, getattr(g, 'period', None),
                                         getattr(g, 'clock', None)),
         }
+    # ESPN fills CFBD's gaps, and only its gaps. A game that kicks off late
+    # keeps `scheduled` on CFBD's board for the whole delay — SMU at Florida
+    # State on 2026-09-07 was two hours late and sat there with no score while
+    # ESPN had it in the first quarter — and a state of neither live nor final
+    # is dropped by the caller, so the game simply never appeared. Applying
+    # this only where CFBD says nothing, or still says upcoming, leaves the
+    # primary source in charge everywhere it actually has an opinion.
+    for gid, g in (espn_board.fetch(timeout=4) or {}).items():
+        if g['state'] in ('live', 'final') and out.get(gid, {}).get('state', 'pre') == 'pre':
+            out[gid] = g
+
     # Inside the memoized call on purpose: this reconciles at most once per
     # LIVE_TTL per worker, instead of once per request.
     _persist_finals(out)
