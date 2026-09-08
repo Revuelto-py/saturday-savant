@@ -41,8 +41,11 @@
   --text-2xl: clamp(2.2rem, 1.8rem + 1.5vw, 3rem);
   --text-3xl: clamp(3.2rem, 2.5rem + 2.5vw, 5rem);
 
-  /* Spacing (use ONLY these values sitewide; s6+ are fluid) */
-  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px;
+  /* Spacing (use ONLY these values sitewide; s6+ are fluid).
+     s1-s5 are expressed in rem rather than px so they ride the root font
+     scale below — 0.25rem IS 4px at the 16px base, so nothing moves at or
+     under a laptop width; they only grow once the root does. */
+  --s1: 0.25rem; --s2: 0.5rem; --s3: 0.75rem; --s4: 1rem; --s5: 1.25rem;
   --s6:  clamp(20px, 1.2vw + 12px, 28px);
   --s8:  clamp(28px, 1.6vw + 16px, 40px);
   --s10: clamp(36px, 2vw + 20px, 52px);
@@ -66,6 +69,26 @@
   --shadow-hover: 0 8px 32px rgba(0,0,0,0.55);
   --t-fast: 0.15s ease; --t-base: 0.2s ease;
 }
+
+/* ── Large-display scale ──────────────────────────────────────────────────
+   Every type and spacing token on this site is already a clamp(), but each one
+   reaches its ceiling somewhere between 1066px and 1666px of viewport — so past
+   a laptop the layout stopped growing and simply accumulated margin. On a 2560px
+   monitor the content column froze at 1600px and the remaining ~950px was dead.
+
+   Rather than re-tune a dozen clamps, the root font size grows: every one of
+   those ceilings is expressed in rem, so raising the root raises all of them
+   together and the whole page scales as a set instead of drifting out of
+   proportion. The floor is pinned to exactly 16px until ~1500px, so laptops and
+   everything smaller render byte-identically to before.
+
+   16px at 1500 -> 17.2px at 1920 -> 19px at 2560, then held. */
+html {
+    font-size: clamp(16px, 11.75px + 0.283vw, 19px);
+}
+/* Radii and hairlines are deliberately NOT scaled: a 14px corner on a 2560px
+   display should still read as a 14px corner, and a scaled border stops being
+   a hairline. */
 
 /* ── Sitewide content width — desktop/large screens only, mobile (<992px) untouched ── */
 @media (min-width: 992px) {
@@ -103,15 +126,17 @@
     .search-wrapper:focus-within { width: 220px; }
 }
 @media (min-width: 1200px) {
-    /* fluid ceiling: the column keeps growing with the viewport (up to
-       1600px) instead of freezing at 1400px and accumulating dead margin */
+    /* Fluid ceiling. 82vw keeps a proportional margin at every size; the cap
+       is what a line of text and a stat table can still be read across, and
+       2040px lands a 1600px-era layout on a 2560px display with margins that
+       look intentional rather than abandoned. */
     .page-wrapper {
-        max-width: clamp(1320px, 82vw, 1600px);
+        max-width: clamp(1320px, 82vw, 2040px);
         padding-left: var(--s6);
         padding-right: var(--s6);
     }
     .navbar-inner {
-        max-width: clamp(1320px, 82vw, 1600px);
+        max-width: clamp(1320px, 82vw, 2040px);
     }
 }
 
@@ -168,8 +193,13 @@
 }
 .ticker-scroll::-webkit-scrollbar { display: none; }
 .ticker-item {
-    flex-shrink: 0;
-    min-width: clamp(148px, 9vw + 40px, 184px);
+    /* Grow into whatever the slate doesn't use. With a full Saturday the items
+       overflow and scroll, so there is no free space and this does nothing;
+       with the eleven games of a Thursday it is the difference between a bar
+       that ends two thirds of the way across a wide monitor and one that
+       doesn't. Shrinking is still refused — min-width is the floor either way. */
+    flex: 1 0 auto;
+    min-width: clamp(148px, 9vw + 40px, 230px);
     padding: var(--s2) var(--s4);
     white-space: nowrap;
     border-right: 1px solid var(--border);
@@ -1653,7 +1683,7 @@ tr.postseason-row:hover {
    drag off axis and leave there. None of these is ever taller than its content.
    See the .nav-tabs block in base.html, where that bug was found. */
 .lb-table-scroll { overflow-x: auto; overflow-y: hidden; }
-.lb-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.lb-table { width: 100%; border-collapse: collapse; min-width: 47.5rem; }
 .lb-th {
     background: rgba(255,255,255,0.05);
     color: var(--text-dim);
@@ -1661,17 +1691,17 @@ tr.postseason-row:hover {
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 12px 10px;
+    padding: 0.75rem 0.625rem;
     text-align: center;
     white-space: nowrap;
     border-bottom: 2px solid var(--border-strong);
 }
-.lb-th-rank { width: 40px; }
-.lb-th-player { width: 160px; text-align: left; padding-left: 16px; }
-.lb-th-team { width: 130px; text-align: left; padding-left: 16px; }
-.lb-th-pos { width: 50px; }
+.lb-th-rank { width: 2.5rem; }
+.lb-th-player { width: 10rem; text-align: left; padding-left: 16px; }
+.lb-th-team { width: 8.125rem; text-align: left; padding-left: 16px; }
+.lb-th-pos { width: 3.125rem; }
 .lb-th-stat {
-    min-width: 65px;
+    min-width: 4.06rem;
     cursor: pointer;
     border-left: 1px solid var(--border);
 }
@@ -1740,7 +1770,7 @@ tr.postseason-row:hover {
 /* Spanning group header. Lower contrast than the column labels beneath it —
    it names a neighbourhood, it is not itself a column. */
 .lb-grouprow .lb-th {
-    padding: 7px 10px 6px;
+    padding: 0.44rem 0.625rem 0.38rem;
     font-size: 0.64rem;
     letter-spacing: 0.14em;
     color: var(--text-secondary);
@@ -1764,7 +1794,7 @@ tr.postseason-row:hover {
 }
 .lb-avgrow .lb-td-avg-label {
     text-align: right;
-    padding: 9px 12px;
+    padding: 0.56rem 0.75rem;
     font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.1em;
@@ -1772,7 +1802,7 @@ tr.postseason-row:hover {
     color: var(--text-dim);
     white-space: nowrap;
 }
-.lb-avgrow .lb-td-avg { padding: 9px 10px; font-size: var(--text-sm); }
+.lb-avgrow .lb-td-avg { padding: 0.56rem 0.625rem; font-size: var(--text-sm); }
 
 /* ── Matrix controls ─────────────────────────────────────────────────── */
 .lb-matrix-bar {
@@ -1793,8 +1823,8 @@ tr.postseason-row:hover {
 .lb-mx-btn {
     display: inline-flex;
     align-items: center;
-    min-height: 34px;
-    padding: 0 12px;
+    min-height: 2.125rem;
+    padding: 0 0.75rem;
     border-radius: var(--r-sm);
     border: 1px solid var(--border-strong);
     background: var(--bg-card);
@@ -1823,7 +1853,7 @@ tr.postseason-row:hover {
 }
 .lb-heat-key { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lb-heat-key-ramp { display: inline-flex; border-radius: 3px; overflow: hidden; }
-.lb-heat-key-ramp i { display: block; width: 15px; height: 11px; }
+.lb-heat-key-ramp i { display: block; width: 0.94rem; height: 0.7rem; }
 .lb-heat-key-ramp .h0 { background: rgba(56,132,255,0.26); }
 .lb-heat-key-ramp .h1 { background: rgba(56,132,255,0.22); }
 .lb-heat-key-ramp .h2 { background: rgba(56,132,255,0.145); }
@@ -1844,7 +1874,7 @@ tr.postseason-row:hover {
 
 @media (hover: none) {
     /* 34px is comfortable for a pointer and short of the touch floor. */
-    .lb-mx-btn { min-height: 44px; padding: 0 14px; }
+    .lb-mx-btn { min-height: 44px; padding: 0 0.875rem; }
 }
 
 @media (max-width: 720px) {
@@ -1861,14 +1891,14 @@ tr.postseason-row:hover {
 .lb-row:nth-child(even) { background: rgba(255,255,255,0.015); }
 .lb-row:hover { background: rgba(255,255,255,0.04); }
 
-.lb-td-rank { padding: 11px 12px; text-align: center; color: var(--text-dim); font-size: var(--text-sm); font-weight: 700; width: 40px; }
-.lb-td-player { padding: 11px 16px; width: 160px; }
-.lb-td-team { padding: 11px 16px; width: 130px; }
-.lb-td-pos { padding: 11px 10px; text-align: center; width: 50px; }
+.lb-td-rank { padding: 0.7rem 0.75rem; text-align: center; color: var(--text-dim); font-size: var(--text-sm); font-weight: 700; width: 40px; }
+.lb-td-player { padding: 0.7rem 1rem; width: 160px; }
+.lb-td-team { padding: 0.7rem 1rem; width: 130px; }
+.lb-td-pos { padding: 0.7rem 0.625rem; text-align: center; width: 50px; }
 .lb-td-stat {
-    padding: 11px 10px;
+    padding: 0.7rem 0.625rem;
     text-align: right;
-    min-width: 65px;
+    min-width: 4.06rem;
     color: var(--text-primary);
     font-weight: 500;
     font-size: var(--text-base);

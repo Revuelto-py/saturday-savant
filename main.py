@@ -1824,6 +1824,11 @@ LEADERBOARD_PER_PAGE = 25
 # Columns where a low number is the good one. Everything else reads high-is-good.
 PLAYER_LOWER_BETTER = {'int', 'fum', 'sack_pct'}
 
+# Columns that get no percentile and no tint. Games played is context for
+# reading the rest of the row — a denominator, not an achievement — so ranking
+# players by it would say something the column doesn't mean.
+NO_HEAT_COLUMNS = {'gp'}
+
 
 def _percentiles(values, lower_better=False):
     """Percentile rank (0-100) for each value, ties sharing a midrank.
@@ -1875,6 +1880,11 @@ def _attach_heat(rows, column_defs, lower_better):
                 if '.' in d and 'e' not in d:
                     dp = max(dp, min(len(d.split('.')[1]), 3))
             averages[key] = round(sum(present) / len(present), dp)
+        if key in NO_HEAT_COLUMNS:
+            # Still averaged — the reference line is useful — but never ranked.
+            for r in rows:
+                r.setdefault('pctl', {})[key] = None
+            continue
         for r, p in zip(rows, _percentiles(vals, key in lower_better)):
             r.setdefault('pctl', {})[key] = p
     return averages
