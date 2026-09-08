@@ -1681,6 +1681,182 @@ tr.postseason-row:hover {
 .lb-th-na:hover { color: var(--text-dim); }
 .lb-sort-arrow { margin-left: 2px; }
 
+/* ══ Leaderboard matrix ══════════════════════════════════════════════════
+   The table's job changed: it used to rank on one column and leave the rest
+   as reference, so only the sorted column meant anything at a glance. Now
+   every cell is placed against the pool on screen, and the colour is that
+   placement. A number is only informative next to the field it came from.
+
+   The ramp is cold blue -> hot red through a neutral middle. That pair is the
+   safe one for the common colour-vision deficiencies (the red/green ramp a
+   heatmap usually reaches for is not), and it carries the "hotter is better"
+   metaphor without needing a legend to decode direction. The percentile is
+   printed in the cell as well, so the ranking survives with colour switched
+   off entirely — which is what the Heat control does.
+
+   Tints are backgrounds only. Text stays on the primary token at every step so
+   contrast never depends on where a player happens to rank. */
+.lb-matrix .lb-cell.h0 { background: rgba(56,132,255,0.26); }
+.lb-matrix .lb-cell.h1 { background: rgba(56,132,255,0.22); }
+.lb-matrix .lb-cell.h2 { background: rgba(56,132,255,0.145); }
+.lb-matrix .lb-cell.h3 { background: rgba(56,132,255,0.075); }
+.lb-matrix .lb-cell.h4 { background: rgba(255,255,255,0.012); }
+.lb-matrix .lb-cell.h5 { background: rgba(255,146,64,0.075); }
+.lb-matrix .lb-cell.h6 { background: rgba(255,146,64,0.15); }
+.lb-matrix .lb-cell.h7 { background: rgba(255,124,52,0.20); }
+.lb-matrix .lb-cell.h8 { background: rgba(255,96,48,0.28); }
+.lb-matrix .lb-cell.h9 { background: rgba(255,72,48,0.38); }
+.lb-matrix.no-heat .lb-cell { background: none; }
+
+/* Value over percentile. The percentile is the smaller of the two because the
+   stat is still what the reader came for — the rank is the annotation. */
+.lb-cell { line-height: 1.15; }
+.lb-cell-v {
+    display: block;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+.lb-cell-p {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    /* Bright enough to clear 4.5:1 on every step of the ramp — the secondary
+       token measured 3.26:1 against the hot end. */
+    color: #cfd4d6;
+    font-variant-numeric: tabular-nums;
+}
+.lb-matrix.cells-value .lb-cell-p { display: none; }
+.lb-matrix.cells-pct .lb-cell-v { display: none; }
+.lb-matrix.cells-pct .lb-cell-p {
+    margin-top: 0;
+    font-size: var(--text-base);
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+/* Spanning group header. Lower contrast than the column labels beneath it —
+   it names a neighbourhood, it is not itself a column. */
+.lb-grouprow .lb-th {
+    padding: 7px 10px 6px;
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+    border-left: 1px solid var(--border-strong);
+}
+.lb-grouprow .lb-th-grp-id,
+.lb-grouprow .lb-th-grp.is-empty { border-left: none; background: none; }
+.lb-grouprow .lb-th-grp-id { border-bottom-color: transparent; }
+
+/* The reference line, pinned under the header rather than floated above the
+   table — it reads as part of the same scale that way. */
+.lb-avgrow .lb-td-avg,
+.lb-avgrow .lb-td-avg-label {
+    background: rgba(255,255,255,0.045);
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.lb-avgrow .lb-td-avg-label {
+    text-align: right;
+    padding: 9px 12px;
+    font-size: var(--text-xs);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+.lb-avgrow .lb-td-avg { padding: 9px 10px; font-size: var(--text-sm); }
+
+/* ── Matrix controls ─────────────────────────────────────────────────── */
+.lb-matrix-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s3) var(--s4);
+    margin: 0 0 var(--s3);
+}
+.lb-mx-group { display: flex; align-items: center; gap: var(--s2); }
+.lb-mx-label {
+    font-size: var(--text-xs);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.lb-mx-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    transition-property: var(--t-ui);
+    transition-duration: var(--t-fast);
+    transition-timing-function: ease-out;
+}
+.lb-mx-btn:hover { color: var(--text-primary); border-color: var(--text-dim); }
+.lb-mx-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lb-mx-btn:active { transform: scale(0.97); }
+.lb-mx-btn.active {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+/* The heat switch reads in the ramp's own colour when it is on. */
+.lb-mx-heat.active {
+    background: rgba(255,96,48,0.16);
+    border-color: rgba(255,96,48,0.7);
+    color: #ff9a6e;
+}
+.lb-heat-key { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lb-heat-key-ramp { display: inline-flex; border-radius: 3px; overflow: hidden; }
+.lb-heat-key-ramp i { display: block; width: 15px; height: 11px; }
+.lb-heat-key-ramp .h0 { background: rgba(56,132,255,0.26); }
+.lb-heat-key-ramp .h1 { background: rgba(56,132,255,0.22); }
+.lb-heat-key-ramp .h2 { background: rgba(56,132,255,0.145); }
+.lb-heat-key-ramp .h3 { background: rgba(56,132,255,0.075); }
+.lb-heat-key-ramp .h4 { background: rgba(255,255,255,0.05); }
+.lb-heat-key-ramp .h5 { background: rgba(255,146,64,0.075); }
+.lb-heat-key-ramp .h6 { background: rgba(255,146,64,0.15); }
+.lb-heat-key-ramp .h7 { background: rgba(255,124,52,0.20); }
+.lb-heat-key-ramp .h8 { background: rgba(255,96,48,0.28); }
+.lb-heat-key-ramp .h9 { background: rgba(255,72,48,0.38); }
+.lb-heat-key-cap,
+.lb-heat-key-note {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    letter-spacing: 0.04em;
+}
+.lb-heat-key-note { color: var(--text-dim); }
+
+@media (hover: none) {
+    /* 34px is comfortable for a pointer and short of the touch floor. */
+    .lb-mx-btn { min-height: 44px; padding: 0 14px; }
+}
+
+@media (max-width: 720px) {
+    /* Two lines per cell in a table this wide is what pushes it past a phone
+       screen, so the compact reading is the default there. The control stays,
+       so Both is still one tap away. */
+    .lb-matrix .lb-cell-p { display: none; }
+    .lb-matrix.cells-pct .lb-cell-p { display: block; }
+    .lb-heat-key-note { display: none; }
+    .lb-matrix-bar { gap: var(--s2) var(--s3); }
+}
+
 .lb-row { border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.12s; }
 .lb-row:nth-child(even) { background: rgba(255,255,255,0.015); }
 .lb-row:hover { background: rgba(255,255,255,0.04); }

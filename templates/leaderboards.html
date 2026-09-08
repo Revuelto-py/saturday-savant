@@ -13,6 +13,26 @@
 {% macro player_path(cat) %}/leaderboards/{{ cat }}{% endmacro %}
 {% macro team_path(cat) %}/leaderboards/teams/{{ cat }}{% endmacro %}
 
+{# ── Matrix stat cell ──────────────────────────────────────────────────────
+   One cell carries two things: the number, and where that number stands in the
+   pool on screen. The percentile is what the heat encodes, and it is printed as
+   a figure too — colour alone can't be the only way to read this table. #}
+{% macro matrix_cell(row, key, fmt, is_sorted) %}
+{%- set val = row.get(key) -%}
+{%- set pctl = (row.pctl or {}).get(key) -%}
+{%- if fmt == 'na' -%}
+<td class="lb-td-stat lb-td-na">—</td>
+{%- elif val is none -%}
+<td class="lb-td-stat{{ ' lb-td-sorted' if is_sorted else '' }}">—</td>
+{%- else -%}
+<td class="lb-td-stat lb-cell{{ ' lb-td-sorted' if is_sorted else '' }}{{ ' h' ~ ([pctl // 10, 9] | min) if pctl is not none else '' }}"
+    {% if pctl is not none %}title="{{ pctl }}th percentile of the qualified pool"{% endif %}>
+    <span class="lb-cell-v">{% if fmt == 'epa' %}{{ '+' if val > 0 else '' }}{{ val }}{% else %}{{ val }}{{ '%' if fmt == 'pct1' else '' }}{% endif %}</span>
+    {%- if pctl is not none %}<span class="lb-cell-p">{{ pctl }}</span>{% endif -%}
+</td>
+{%- endif -%}
+{% endmacro %}
+
 {# ── Stat cell: renders a column_defs-driven value with the right format ── #}
 {% macro stat_cell(val, fmt, is_sorted, is_top10) %}
     {% if fmt == 'na' %}
@@ -168,24 +188,55 @@
 </div>
 {% endif %}
 
+{% include '_lb_matrix_bar.html' %}
+
 <!-- Table -->
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
-<table class="lb-table">
+<table class="lb-table lb-matrix cells-{{ cells }}{{ ' no-heat' if not heat else '' }}">
     <thead>
+        {% if column_groups %}
+        {# Statcast-style spanning row: says what each cluster of numbers is for,
+           so a reader isn't decoding eight abbreviations in a row unaided. #}
+        <tr class="lb-grouprow">
+            <th class="lb-th lb-th-grp-id" colspan="4"></th>
+            {% for label, span in column_groups %}
+            <th class="lb-th lb-th-grp{{ ' is-empty' if not label else '' }}" colspan="{{ span }}"
+                scope="colgroup">{{ label }}</th>
+            {% endfor %}
+        </tr>
+        {% endif %}
         <tr>
-            <th class="lb-th lb-th-rank">RK</th>
-            <th class="lb-th lb-th-player">Player</th>
-            <th class="lb-th lb-th-pos">Pos</th>
-            <th class="lb-th lb-th-team">Team</th>
+            <th class="lb-th lb-th-rank" scope="col">RK</th>
+            <th class="lb-th lb-th-player" scope="col">Player</th>
+            <th class="lb-th lb-th-pos" scope="col">Pos</th>
+            <th class="lb-th lb-th-team" scope="col">Team</th>
             {% for key, label, tooltip, sortable, fmt in column_defs %}
             <th class="lb-th lb-th-stat stat-header{{ ' lb-th-sorted' if sort_col == key else '' }}{{ ' lb-th-na' if fmt == 'na' else '' }}"
-                data-tooltip="{{ tooltip }}"
-                {% if sortable %}onclick="sortCol('{{ key }}')"{% endif %}>
+                scope="col" data-tooltip="{{ tooltip }}"
+                aria-sort="{{ ('ascending' if sort_dir == 'asc' else 'descending') if sort_col == key else 'none' }}"
+                {% if sortable %}tabindex="0" role="button"
+                onclick="sortCol('{{ key }}')"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortCol('{{ key }}')}"{% endif %}>
                 {{ label }}{% if sort_col == key %}<span class="lb-sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}
             </th>
             {% endfor %}
         </tr>
+        {% if pool_avg and players %}
+        {# The reference line. A number in this table only means something
+           against the field, and this is the field. #}
+        <tr class="lb-avgrow">
+            <th class="lb-td-avg-label" colspan="4" scope="row">FBS average</th>
+            {% for key, label, tooltip, sortable, fmt in column_defs %}
+            <td class="lb-td-stat lb-td-avg{{ ' lb-td-sorted' if sort_col == key else '' }}">
+                {%- if fmt == 'na' or pool_avg.get(key) is none -%}—
+                {%- elif fmt == 'epa' -%}{{ '+' if pool_avg[key] > 0 else '' }}{{ pool_avg[key] }}
+                {%- elif fmt == 'pct1' -%}{{ pool_avg[key] }}%
+                {%- else -%}{{ pool_avg[key] }}{%- endif -%}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endif %}
     </thead>
     <tbody>
         {% for p in players %}
@@ -194,9 +245,9 @@
             <td class="lb-td-player">
                 <a href="{{ player_url(p.id, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
                     {% if p.headshot %}
-                    <img src="{{ p.headshot }}" alt="{{ p.name }} headshot" class="lb-headshot">
+                    <img src="{{ p.headshot }}" alt="" class="lb-headshot" loading="lazy">
                     {% else %}
-                    <div class="lb-headshot-fallback">{{ p.first[0] if p.first else '?' }}{{ p.last[0] if p.last else '' }}</div>
+                    <div class="lb-headshot-fallback" aria-hidden="true">{{ p.first[0] if p.first else '?' }}{{ p.last[0] if p.last else '' }}</div>
                     {% endif %}
                     <span class="lb-player-name">{{ p.name }}</span>
                 </a>
@@ -204,12 +255,12 @@
             <td class="lb-td-pos"><span class="lb-pos-pill">{{ p.pos or '—' }}</span></td>
             <td class="lb-td-team">
                 <a href="{{ team_url(p.team, season) }}" onclick="event.stopPropagation()" class="lb-team-link">
-                    {% if p.logo %}<img src="{{ p.logo }}" alt="{{ p.team }} logo" class="lb-team-logo">{% endif %}
+                    {% if p.logo %}<img src="{{ p.logo }}" alt="" class="lb-team-logo" loading="lazy">{% endif %}
                     <span class="lb-team-name">{{ p.team }}</span>
                 </a>
             </td>
             {% for key, label, tooltip, sortable, fmt in column_defs %}
-            {{ stat_cell(p.get(key), fmt, sort_col == key, p.rank <= 10) }}
+            {{ matrix_cell(p, key, fmt, sort_col == key) }}
             {% endfor %}
         </tr>
         {% else %}
@@ -217,6 +268,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 </div>
 </div>
 
@@ -301,24 +353,53 @@
     </div>
 </div>
 
+{% include '_lb_matrix_bar.html' %}
+
 <!-- Team table -->
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
-<table class="lb-table">
+<table class="lb-table lb-matrix cells-{{ cells }}{{ ' no-heat' if not heat else '' }}">
     <thead>
+        {% if column_groups %}
+        <tr class="lb-grouprow">
+            <th class="lb-th lb-th-grp-id" colspan="3"></th>
+            {% for label, span in column_groups %}
+            <th class="lb-th lb-th-grp{{ ' is-empty' if not label else '' }}" colspan="{{ span }}"
+                scope="colgroup">{{ label }}</th>
+            {% endfor %}
+            <th class="lb-th lb-th-grp is-empty"></th>
+        </tr>
+        {% endif %}
         <tr>
-            <th class="lb-th lb-th-rank">RK</th>
-            <th class="lb-th lb-th-player">Team</th>
-            <th class="lb-th lb-th-pos">AP</th>
+            <th class="lb-th lb-th-rank" scope="col">RK</th>
+            <th class="lb-th lb-th-player" scope="col">Team</th>
+            <th class="lb-th lb-th-pos" scope="col">AP</th>
             {% for key, label, tooltip, sortable, fmt in column_defs %}
             <th class="lb-th lb-th-stat stat-header{{ ' lb-th-sorted' if sort_col == key else '' }}{{ ' lb-th-na' if fmt == 'na' else '' }}"
-                data-tooltip="{{ tooltip }}"
-                {% if sortable %}onclick="sortCol('{{ key }}')"{% endif %}>
+                scope="col" data-tooltip="{{ tooltip }}"
+                aria-sort="{{ ('ascending' if sort_dir == 'asc' else 'descending') if sort_col == key else 'none' }}"
+                {% if sortable %}tabindex="0" role="button"
+                onclick="sortCol('{{ key }}')"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();sortCol('{{ key }}')}"{% endif %}>
                 {{ label }}{% if sort_col == key %}<span class="lb-sort-arrow">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>{% endif %}
             </th>
             {% endfor %}
-            <th class="lb-th lb-th-team">Conf</th>
+            <th class="lb-th lb-th-team" scope="col">Conf</th>
         </tr>
+        {% if pool_avg and teams %}
+        <tr class="lb-avgrow">
+            <th class="lb-td-avg-label" colspan="3" scope="row">FBS average</th>
+            {% for key, label, tooltip, sortable, fmt in column_defs %}
+            <td class="lb-td-stat lb-td-avg{{ ' lb-td-sorted' if sort_col == key else '' }}">
+                {%- if fmt == 'na' or pool_avg.get(key) is none -%}—
+                {%- elif fmt == 'epa' -%}{{ '+' if pool_avg[key] > 0 else '' }}{{ pool_avg[key] }}
+                {%- elif fmt == 'pct1' -%}{{ pool_avg[key] }}%
+                {%- else -%}{{ pool_avg[key] }}{%- endif -%}
+            </td>
+            {% endfor %}
+            <td class="lb-td-avg"></td>
+        </tr>
+        {% endif %}
     </thead>
     <tbody>
         {% for t in teams %}
@@ -334,7 +415,7 @@
                 {% if t.ap_rank %}<span class="lb-ap-pill">#{{ t.ap_rank }}</span>{% endif %}
             </td>
             {% for key, label, tooltip, sortable, fmt in column_defs %}
-            {{ stat_cell(t.get(key), fmt, sort_col == key, t.rank <= 10) }}
+            {{ matrix_cell(t, key, fmt, sort_col == key) }}
             {% endfor %}
             <td class="lb-td-team"><span class="lb-team-name">{{ t.conf }}</span></td>
         </tr>

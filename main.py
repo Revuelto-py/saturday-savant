@@ -1814,19 +1814,114 @@ LEADERBOARD_PER_PAGE = 25
 # A handful of stats the spec asks for genuinely don't exist in this dataset
 # (targets, air yards, YAC/ADOT, snap counts, forced fumbles, defensive
 # pass/rush splits, games-played) — those are marked 'na' rather than faked.
+# ── Leaderboard heat: percentile within the qualified pool ──────────────────
+# Every stat cell is coloured by where it sits in the pool actually on screen,
+# not against some absolute scale — the same idea as a Statcast leaderboard,
+# where the number's meaning comes from the company it keeps. Percentiles are
+# computed over the WHOLE qualified pool before pagination, so page 4 is heated
+# against all 300 qualifiers rather than against its own 25 rows.
+
+# Columns where a low number is the good one. Everything else reads high-is-good.
+PLAYER_LOWER_BETTER = {'int', 'fum', 'sack_pct'}
+
+
+def _percentiles(values, lower_better=False):
+    """Percentile rank (0-100) for each value, ties sharing a midrank.
+
+    None stays None: a missing stat has no standing, and colouring it would
+    invent one. Returns a list parallel to `values`.
+    """
+    import bisect
+    present = sorted(v for v in values if v is not None)
+    n = len(present)
+    if n < 2:
+        return [None] * len(values)
+    out = []
+    for v in values:
+        if v is None:
+            out.append(None)
+            continue
+        below = bisect.bisect_left(present, v)
+        equal = bisect.bisect_right(present, v) - below
+        pct = (below + equal / 2) / n * 100
+        out.append(round(100 - pct if lower_better else pct))
+    return out
+
+
+def _attach_heat(rows, column_defs, lower_better):
+    """Give every row a `pctl` map {column key: percentile} and return the pool
+    average for each column.
+
+    Deliberately NOT called `pct` — passing rows already carry a `pct` column
+    (completion percentage), and the collision silently overwrote it.
+
+    Runs on the full pool, so it must stay linear-ish: one sort per column.
+    """
+    averages = {}
+    if not rows:
+        return averages
+    for key, _label, _tip, _sortable, fmt in column_defs:
+        if fmt == 'na':
+            continue
+        vals = [r.get(key) for r in rows]
+        present = [v for v in vals if v is not None]
+        if present:
+            # Round the average to the precision the column's own values carry,
+            # so the reference line doesn't print +1.752 under a column of
+            # one-decimal margins. Rows are already rounded per column upstream.
+            dp = 0
+            for v in present[:200]:
+                d = str(v)
+                if '.' in d and 'e' not in d:
+                    dp = max(dp, min(len(d.split('.')[1]), 3))
+            averages[key] = round(sum(present) / len(present), dp)
+        for r, p in zip(rows, _percentiles(vals, key in lower_better)):
+            r.setdefault('pctl', {})[key] = p
+    return averages
+
+
+@cache.memoize(timeout=21600)
+def _games_played_map(season):
+    """{player_id: games played} for one season, from the stored game logs.
+
+    player_stats carries no games-played figure — it is season totals only,
+    which is why the leaderboards have advertised "Y/G — not available" since
+    they were built. player_game_logs holds one entry per game a player
+    recorded anything in, so its length IS games played, and json_array_length
+    reads that without expanding the array (~0.7s for a live season, 2.4s for a
+    finished one). Memoized because every category and page asks for the same
+    map.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT player_id, json_array_length(log::json)
+                         FROM player_game_logs
+                        WHERE season = %s AND log IS NOT NULL""", (season,))
+        return {pid: n for pid, n in cur.fetchall() if n}
+    except Exception:
+        conn.rollback()      # table absent, or a row holding invalid JSON
+        return {}
+    finally:
+        release_db(conn)
+
+
 PLAYER_COLUMNS = {
     'passing': {
         'standard': [
+            ('gp',  'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
             ('cmp', 'CMP',  'Completions', True, 'int'),
             ('att', 'ATT',  'Attempts', True, 'int'),
-            ('pct', 'CMP%', 'Completion Percentage', True, 'pct1'),
             ('yds', 'YDS',  'Passing Yards', True, 'int'),
             ('td',  'TD',   'Passing Touchdowns', True, 'int'),
-            ('int', 'INT',  'Interceptions', True, 'int'),
+            ('int', 'INT',  'Interceptions — fewer is better, so the heat is inverted', True, 'int'),
+            ('pct', 'CMP%', 'Completion Percentage', True, 'pct1'),
             ('ypa', 'YPA',  'Yards Per Attempt', True, 'float1'),
+            ('ypg', 'Y/G',  'Passing Yards Per Game', True, 'float1'),
             ('rtg', 'RTG',  'Passer Rating — standard NCAA formula', True, 'float1'),
         ],
         'advanced': [
+            ('gp',        'GP',     'Games Played', True, 'int'),
             ('epa_pass',  'EPA/P',  'EPA Per Play (passing)', True, 'epa'),
             ('total_epa', 'PPA',    'Total Predicted Points Added', True, 'float1'),
             ('adj_ypa',   'ADJ YPA','Adjusted Yards Per Attempt — (YDS + 20×TD − 45×INT) / ATT', True, 'float1'),
@@ -1839,15 +1934,17 @@ PLAYER_COLUMNS = {
     },
     'rushing': {
         'standard': [
+            ('gp',   'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
             ('att',  'CAR',  'Carries', True, 'int'),
             ('yds',  'YDS',  'Rushing Yards', True, 'int'),
-            ('ypc',  'YPC',  'Yards Per Carry', True, 'float1'),
             ('td',   'TD',   'Rushing Touchdowns', True, 'int'),
-            ('fum',  'FUM',  'Fumbles', True, 'int'),
             ('long', 'LONG', 'Longest Run', True, 'int'),
-            ('ypg',  'Y/G',  'Rushing Yards Per Game — not available (requires games played)', False, 'na'),
+            ('fum',  'FUM',  'Fumbles — fewer is better, so the heat is inverted', True, 'int'),
+            ('ypc',  'YPC',  'Yards Per Carry', True, 'float1'),
+            ('ypg',  'Y/G',  'Rushing Yards Per Game', True, 'float1'),
         ],
         'advanced': [
+            ('gp',        'GP',    'Games Played', True, 'int'),
             ('epa_rush',  'EPA/R', 'EPA Per Rush', True, 'epa'),
             ('total_epa', 'PPA',   'Total Predicted Points Added', True, 'float1'),
             ('usage',     'USG%',  'Rush Usage Rate — share of team rush plays', True, 'pct1'),
@@ -1856,15 +1953,17 @@ PLAYER_COLUMNS = {
     },
     'receiving': {
         'standard': [
+            ('gp',      'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
             ('rec',     'REC',  'Receptions', True, 'int'),
             ('tgt',     'TGT',  'Targets — passes thrown to this receiver. Counts identified targets only: the source records no receiver on an interception and leaves ~12% of incompletions unattributed, so this reads slightly low', True, 'int'),
             ('yds',     'YDS',  'Receiving Yards', True, 'int'),
             ('td',      'TD',   'Receiving Touchdowns', True, 'int'),
             ('ypr',     'YPR',  'Yards Per Reception', True, 'float1'),
             ('cth_pct', 'CTH%', 'Catch Rate — receptions per identified target. Reads slightly high, since unattributed incompletions and interceptions are missing from the denominator', True, 'pct1'),
-            ('ypg',     'Y/G',  'Receiving Yards Per Game — not available (requires games played)', False, 'na'),
+            ('ypg',     'Y/G',  'Receiving Yards Per Game', True, 'float1'),
         ],
         'advanced': [
+            ('gp',        'GP',    'Games Played', True, 'int'),
             ('epa_play',  'EPA/T', 'EPA Per Target/Play', True, 'epa'),
             ('total_epa', 'PPA',   'Total Predicted Points Added', True, 'float1'),
             ('adot',      'ADOT',  'Average Depth of Target — how far downfield this receiver is used. Separates a possession slot from a vertical threat', True, 'float1'),
@@ -1875,22 +1974,39 @@ PLAYER_COLUMNS = {
     },
     'defense': {
         'standard': [
+            ('gp',    'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
             ('tot',   'TOT',  'Total Tackles', True, 'int'),
             ('solo',  'SOLO', 'Solo Tackles', True, 'int'),
             ('ast',   'AST',  'Assisted Tackles (TOT − SOLO)', True, 'int'),
+            ('tpg',   'T/G',  'Tackles Per Game', True, 'float1'),
             ('tfl',   'TFL',  'Tackles For Loss', True, 'float1'),
             ('sacks', 'SCK',  'Sacks', True, 'float1'),
             ('pd',    'PBU',  'Pass Breakups', True, 'int'),
-            ('ff',    'FF',   'Forced Fumbles — not available in current dataset', False, 'na'),
             ('int',   'INT',  'Interceptions', True, 'int'),
             ('td',    'TD',   'Defensive Touchdowns', True, 'int'),
+            ('ff',    'FF',   'Forced Fumbles — not available in current dataset', False, 'na'),
         ],
         'advanced': [
+            ('gp',       'GP',    'Games Played', True, 'int'),
             ('tkl_pct',  'TKL%',  'Share of team total tackles', True, 'pct1'),
             ('epa_play', 'EPA/P', 'Defensive EPA Per Play — not available in current dataset (PPA data only tracks offensive skill positions)', False, 'na'),
             ('prsh',     'PRSH',  'Pass Rush Win Rate — not available in current dataset', False, 'na'),
         ],
     },
+}
+
+# Statcast-style header groups: a spanning row above the column labels that says
+# what each cluster of numbers is FOR. Keyed (category, view); each entry is
+# (group label, number of columns it spans), in column order.
+PLAYER_COLUMN_GROUPS = {
+    ('passing', 'standard'):   [('', 1), ('Volume', 5), ('Efficiency', 4)],
+    ('passing', 'advanced'):   [('', 1), ('Value Added', 3), ('Throw Profile', 4), ('Pressure', 1)],
+    ('rushing', 'standard'):   [('', 1), ('Volume', 5), ('Rate', 2)],
+    ('rushing', 'advanced'):   [('', 1), ('Value Added', 2), ('Workload', 2)],
+    ('receiving', 'standard'): [('', 1), ('Volume', 4), ('Rate', 3)],
+    ('receiving', 'advanced'): [('', 1), ('Value Added', 2), ('Route Profile', 4)],
+    ('defense', 'standard'):   [('', 1), ('Tackles', 4), ('Behind the Line', 2), ('Ball Skills', 4)],
+    ('defense', 'advanced'):   [('', 1), ('Share', 1), ('Value Added', 2)],
 }
 
 # Position-group buckets for the filter-bar dropdown (maps a group label to
@@ -2825,6 +2941,12 @@ def leaderboards(category='passing'):
         view        = view if view in ('standard', 'advanced') else 'standard'
         qualified   = request.args.get('qualified', '1') != '0'
         page_raw    = request.args.get('page', '1')
+        # How each stat cell reads, and whether it is tinted. Both live in the
+        # query string so the AJAX nav and the per-combination page cache treat
+        # them like every other control.
+        heat        = request.args.get('heat', '1') != '0'
+        cells       = request.args.get('cells', 'both')
+        cells       = cells if cells in ('value', 'pct', 'both') else 'both'
 
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall() if r[0] not in FCS_CONFS]
@@ -3127,6 +3249,26 @@ def leaderboards(category='passing'):
                     row['prsh']     = None
                 players.append(row)
 
+        # Games played, and the per-game rates it unlocks. Both were columns the
+        # page had been rendering as "not available" since it was built, because
+        # player_stats holds season totals and nothing else.
+        _gp = _games_played_map(season)
+        for row in players:
+            g = _gp.get(row['id'])
+            row['gp'] = g
+            if g:
+                if category == 'defense':
+                    row['tpg'] = round(row['tot'] / g, 1)
+                else:
+                    row['ypg'] = round(row['yds'] / g, 1)
+            else:
+                row['tpg' if category == 'defense' else 'ypg'] = None
+
+        # Heat + the pool average line, over the FULL qualified pool — before
+        # pagination, so a percentile means the same thing on every page.
+        pool_avg = _attach_heat(players, column_defs, PLAYER_LOWER_BETTER)
+        pool_size = len(players)
+
         players, pagination = _sort_and_paginate(players, sort_col, sort_dir, page_raw)
 
     finally:
@@ -3136,6 +3278,7 @@ def leaderboards(category='passing'):
         'mode': 'player', 'category': category, 'view': view, 'season': season,
         'conf': conf_filter, 'team': team_filter, 'pos': pos_filter,
         'qualified': '1' if qualified else '0', 'sort': sort_col, 'dir': sort_dir,
+        'heat': '1' if heat else '0', 'cells': cells,
     }
     has_advanced = len(PLAYER_COLUMNS[category]['advanced']) > 0
 
@@ -3168,6 +3311,9 @@ def leaderboards(category='passing'):
         coverage_note=_cov_note, qual_note=qual_note,
         has_advanced=has_advanced, position_groups=list(POSITION_GROUPS.keys()),
         ap_rankings=ap_rankings, pagination=pagination,
+        column_groups=PLAYER_COLUMN_GROUPS.get((category, view)),
+        pool_avg=pool_avg, pool_size=pool_size,
+        heat=heat, cells=cells,
     )
 
 # ── Team leaderboards ───────────────────────────────────────────────────────
@@ -3195,6 +3341,19 @@ def _category_last_season(category):
     finally:
         release_db(conn)
 
+
+# Header groups for the team tables, same idea as PLAYER_COLUMN_GROUPS.
+TEAM_COLUMN_GROUPS = {
+    ('discipline', 'standard'): [('Turnovers', 4), ('Penalties', 2), ('Possession', 1)],
+    ('betting',    'standard'): [('Against the Spread', 5), ('Totals', 2)],
+    ('offense',    'standard'): [('Efficiency', 4), ('Rushing Lanes', 3)],
+    ('offense',    'advanced'): [('Passing', 3), ('Rushing', 3), ('Drives', 3)],
+    ('defense',    'standard'): [('Efficiency', 4), ('Rushing Lanes', 3)],
+    ('defense',    'advanced'): [('Passing Allowed', 3), ('Rushing Allowed', 3), ('Havoc', 3)],
+    ('sp',         'standard'): [('SP+ Ratings', 4), ('Rank', 1)],
+    ('savant',     'standard'): [('Savant Rating', 3), ('Context', 2)],
+    ('savant',     'advanced'): [('Unadjusted', 2), ('Drives', 2), ('Rank', 1)],
+}
 
 TEAM_CATEGORY_DEFAULTS = {
     'offense': ('off_ppa', 'desc'),
@@ -3390,6 +3549,9 @@ def leaderboards_teams(category='savant'):
     page_raw    = request.args.get('page', '1')
     view        = request.args.get('view', 'standard')
     view        = view if view in ('standard', 'advanced') else 'standard'
+    heat        = request.args.get('heat', '1') != '0'
+    cells       = request.args.get('cells', 'both')
+    cells       = cells if cells in ('value', 'pct', 'both') else 'both'
 
     column_defs = TEAM_COLUMNS[category][view] or TEAM_COLUMNS[category]['standard']
 
@@ -3525,13 +3687,17 @@ def leaderboards_teams(category='savant'):
             WHERE t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 't.name')}
             {conf_sql} {team_sql}
             ORDER BY {sort_sql} {dir_sql} NULLS LAST
-            LIMIT {LEADERBOARD_PER_PAGE} OFFSET {offset}
         ''', params)
         cols = [d[0] for d in cursor.description]
 
         def _r(v, nd=3): return round(v, nd) if v is not None else None
         def _pct(v): return round(v * 100, 1) if v is not None else None
 
+        # The page used to be sliced in SQL. It is fetched whole now — there are
+        # ~136 FBS teams, so this is a smaller result than a single page of
+        # players — because the heat has to be computed against the entire pool.
+        # A percentile taken from 25 visible rows would say something different
+        # on every page, which is exactly what it must not do.
         teams_out = []
         for i, row in enumerate(cursor.fetchall()):
             d = dict(zip(cols, row))
@@ -3541,7 +3707,7 @@ def leaderboards_teams(category='savant'):
             if bg is None:
                 bg = 'rgba(52,211,153,0.1)' if is_good else 'rgba(248,113,113,0.1)'
             teams_out.append({
-                'rank': offset + i + 1, 'name': d['name'], 'conf': d['conference'],
+                'rank': i + 1, 'name': d['name'], 'conf': d['conference'],
                 'logo': d['logo_dark'], 'color': d['color'], 'ap_rank': d['ap_rank'],
                 'sort_bg': bg,
                 'off_ppa': _r(d['off_ppa']), 'off_success_rate': _pct(d['off_success_rate']),
@@ -3579,6 +3745,12 @@ def leaderboards_teams(category='savant'):
                 'def_passing_plays_ppa': None, 'def_passing_success_rate': None, 'def_passing_explosiveness': None,
                 'def_rushing_plays_ppa': None, 'def_rushing_success_rate': None, 'def_rushing_explosiveness': None,
             })
+
+        # Heat over the whole pool, then slice the page out of it.
+        pool_avg = _attach_heat(teams_out, column_defs, TEAM_LOWER_BETTER)
+        pool_size = len(teams_out)
+        page, offset, pagination = _pagination_ctx(page_raw, pool_size)
+        teams_out = teams_out[offset:offset + LEADERBOARD_PER_PAGE]
     finally:
         release_db(conn)
 
@@ -3586,6 +3758,7 @@ def leaderboards_teams(category='savant'):
         'mode': 'team', 'category': category, 'view': view, 'season': season,
         'conf': conf_filter, 'team': team_filter,
         'sort': sort_col, 'dir': sort_dir,
+        'heat': '1' if heat else '0', 'cells': cells,
     }
     # Say why a borrowed-table category is empty rather than leaving a grid of
     # dashes to read as a bug.
@@ -3610,6 +3783,9 @@ def leaderboards_teams(category='savant'):
         column_defs=column_defs, current_filters=current_filters,
         has_advanced=has_advanced,
         pagination=pagination,
+        column_groups=TEAM_COLUMN_GROUPS.get((category, view)),
+        pool_avg=pool_avg, pool_size=pool_size,
+        heat=heat, cells=cells,
     )
 
 @app.route('/teams')
