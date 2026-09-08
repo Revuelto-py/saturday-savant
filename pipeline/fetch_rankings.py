@@ -36,6 +36,7 @@ import cfbd
 import psycopg2
 from dotenv import load_dotenv
 
+import espn_rankings
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -64,30 +65,83 @@ conn.commit()
 
 
 def ap_polls(rankings):
-    """All AP Top 25 weeks for one season, chronological (regular ascending,
-    then the postseason final): [(week, 'regular'|'postseason', ranks)]."""
+    """All AP Top 25 weeks CFBD holds for one season, chronological.
+
+    Normalised to plain dicts — [(week, 'regular'|'postseason', [{team, rank,
+    points, first_place_votes}])] — so ESPN-sourced weeks can sit beside these
+    in the same list.
+    """
     out = []
     for wd in rankings:
         stype = 'postseason' if 'post' in str(wd.season_type or '').lower() else 'regular'
         for poll in wd.polls:
             if poll.poll == 'AP Top 25':
-                out.append((wd.week, stype, poll.ranks))
+                out.append((wd.week, stype, [
+                    {'team': r.school, 'rank': r.rank,
+                     'points': getattr(r, 'points', None),
+                     'first_place_votes': getattr(r, 'first_place_votes', None)}
+                    for r in poll.ranks]))
     out.sort(key=lambda x: (0 if x[1] == 'regular' else 1, x[0]))
     return out
+
+
+def espn_id_map(cursor):
+    """{espn team id: our team name}, read out of the ESPN CDN logo URLs already
+    stored on `teams`. There is no espn_id column; the id is the logo filename."""
+    cursor.execute('SELECT name, logo, logo_dark FROM teams '
+                   'WHERE logo IS NOT NULL OR logo_dark IS NOT NULL')
+    out = {}
+    for name, logo, dark in cursor.fetchall():
+        for url in (logo, dark):
+            tid = espn_rankings.team_id_from_logo(url)
+            if tid:
+                out.setdefault(tid, name)
+    return out
+
+
+def merge_espn(season, polls, id_map):
+    """Fill weeks CFBD has no poll for from ESPN, and report what was added.
+
+    CFBD keeps precedence on every week it has an opinion about; this only adds
+    weeks that are missing entirely. A poll whose teams don't all resolve to a
+    name is SKIPPED rather than stored with a hole in it — CFBD will supply that
+    week later, and a top 25 missing its #17 looks broken in a way a one-week
+    delay does not.
+    """
+    have = {(wk, st) for wk, st, _ in polls}
+    added = []
+    for p in espn_rankings.ap_polls(season):
+        key = (p['week'], p['season_type'])
+        if key in have:
+            continue
+        names = [id_map.get(r['espn_id']) for r in p['ranks']]
+        missing = [r['espn_id'] for r, n in zip(p['ranks'], names) if not n]
+        if missing:
+            print(f"  ESPN {p['season_type']} week {p['week']}: skipped — "
+                  f"{len(missing)} team id(s) not in `teams`: {missing}", flush=True)
+            continue
+        polls.append((p['week'], p['season_type'], [
+            {'team': n, 'rank': r['rank'], 'points': r['points'],
+             'first_place_votes': r['first_place_votes']}
+            for r, n in zip(p['ranks'], names)]))
+        added.append(f"{p['season_type']} week {p['week']}")
+    polls.sort(key=lambda x: (0 if x[1] == 'regular' else 1, x[0]))
+    return added
 
 
 def poll_rows(season, polls):
     """Every row this season should hold, in insert order. prev_rank is the
     team's rank in the immediately preceding poll, so it is built by walking the
-    polls chronologically."""
+    polls chronologically — across BOTH sources, which is why ESPN's own
+    `previous` field is ignored (it disagrees with the stored preseason poll)."""
     rows = []
     prev_map = {}              # team -> rank in the previous poll
     for week, stype, ranks in polls:
         for r in ranks:
-            rows.append((r.school, r.rank, getattr(r, 'points', None),
-                         getattr(r, 'first_place_votes', None), week, season,
-                         prev_map.get(r.school), stype))
-        prev_map = {r.school: r.rank for r in ranks}
+            rows.append((r['team'], r['rank'], r['points'],
+                         r['first_place_votes'], week, season,
+                         prev_map.get(r['team']), stype))
+        prev_map = {r['team']: r['rank'] for r in ranks}
     return rows
 
 
@@ -100,14 +154,23 @@ def stored_rows(cursor, season):
 
 changed_seasons = []
 
+id_map = espn_id_map(cursor)
+
 with cfbd.ApiClient(configuration) as api_client:
     rankings_api = cfbd.RankingsApi(api_client)
     for season in SEASONS:
         rankings = rankings_api.get_rankings(year=season)
         polls = ap_polls(rankings)
+
+        # CFBD can lag the poll's release by days. Fill only the weeks it has
+        # nothing for; see espn_rankings for which ESPN endpoint to trust.
+        added = merge_espn(season, polls, id_map)
+        if added:
+            print(f"{season}: filled from ESPN — {', '.join(added)}", flush=True)
+
         if not polls:
-            # Never delete on an empty response — a CFBD hiccup in the preseason
-            # must leave last week's poll standing rather than blank the page.
+            # Never delete on an empty response — an outage at BOTH sources must
+            # leave last week's poll standing rather than blank the page.
             print(f"{season}: no AP poll data", flush=True)
             continue
 

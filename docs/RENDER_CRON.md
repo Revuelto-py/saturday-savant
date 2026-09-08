@@ -202,6 +202,26 @@ rather than on a "game day" window.
 4. **Schedule (UTC):** `0 * * * *` — hourly, all week.
 5. **Environment variables:** `DATABASE_URL`, `CFBD_API_KEY`, `ADMIN_KEY`.
 
+**CFBD is not the only source any more.** On 2026-09-08 the AP released its Week
+2 poll at 07:00 UTC and CFBD still had only the preseason poll hours later, so
+`fetch_rankings.py` now falls back to ESPN for any week CFBD has nothing for
+(`espn_rankings.py`, the same idea as `espn_board.py` for scores). CFBD keeps
+precedence on every week it does have.
+
+One trap is baked into that module: ESPN's two APIs disagreed. The familiar
+`site.api.espn.com/.../rankings` endpoint still returned "Preseason"; the poll
+was only on the core API, `sports.core.api.espn.com/v2/.../weeks/2/rankings/1`,
+which addresses each season/week/poll directly. Poll id 1 is the AP Top 25.
+Teams come back as `$ref` URLs carrying an ESPN team id, resolved to our names
+through the id already embedded in `teams.logo`. A week whose teams don't all
+resolve is skipped rather than stored with a hole in it. `prev_rank` is always
+derived by walking the merged CFBD+ESPN polls in order, never taken from ESPN's
+own `previous` field, which disagrees with the stored preseason poll.
+
+This means **rankings now self-correct even with no dashboard change**: the
+Sunday chain runs `fetch_rankings.py` and will pick up a CFBD-lagged poll from
+ESPN. The hourly job below just makes it minutes instead of up to a week.
+
 **Why hourly is safe.** The script compares what CFBD returns against what is
 stored and writes nothing when they match — one CFBD call and one `SELECT` for a
 no-op run. It also **skips the cache clear unless a season actually changed**,
