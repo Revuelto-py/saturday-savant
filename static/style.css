@@ -151,6 +151,7 @@
     flex: 1;
     min-width: 0;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
     -ms-overflow-style: none;
     /* trailing padding so the last score isn't clipped by the viewport edge */
@@ -900,6 +901,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
         margin: 12px -14px 0;
         padding: 0 14px 18px !important;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
     }
@@ -1030,6 +1032,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
         border-top: 1px solid var(--border);
         position: relative;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
     }
@@ -1375,6 +1378,7 @@ tr.postseason-row:hover {
        the page on phones */
     max-width: 100%;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
 }
@@ -1603,7 +1607,12 @@ tr.postseason-row:hover {
 .info-tip-pop:hover { opacity: 1; }
 
 /* ── Leaderboards: stat table ──────────────────────────────────────────── */
-.lb-table-scroll { overflow-x: auto; }
+/* overflow-y is pinned on every horizontal strip on purpose: declaring only
+   overflow-x makes the other axis compute from visible to auto, which turns a
+   strip one pixel taller than its box into a vertical scroller that a swipe can
+   drag off axis and leave there. None of these is ever taller than its content.
+   See the .nav-tabs block in base.html, where that bug was found. */
+.lb-table-scroll { overflow-x: auto; overflow-y: hidden; }
 .lb-table { width: 100%; border-collapse: collapse; min-width: 760px; }
 .lb-th {
     background: rgba(255,255,255,0.05);
@@ -2070,7 +2079,7 @@ tr.player-row:hover {
 }
 
 /* Board */
-.bk-board-wrap { overflow-x: auto; }
+.bk-board-wrap { overflow-x: auto; overflow-y: hidden; }
 .bk-board {
     position: relative;
     display: grid;
@@ -2809,6 +2818,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
         justify-content: flex-start;
         flex-wrap: nowrap;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
         -ms-overflow-style: none;
         /* The strip hid its own scrollability: the fourth link was cut mid-word
@@ -3505,7 +3515,8 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 /* Season rail */
 .tp-years {
     display: flex; align-items: center; gap: var(--s1);
-    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+    overflow-y: hidden; -webkit-overflow-scrolling: touch;
     padding-bottom: var(--s2); margin-bottom: var(--s5);
     scrollbar-width: none;
 }
@@ -3620,7 +3631,7 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 .tp-reset:hover { text-decoration: underline; }
 
 /* Table */
-.tp-table-scroll { overflow-x: auto; }
+.tp-table-scroll { overflow-x: auto; overflow-y: hidden; }
 .tp-table { min-width: 820px; border: none; border-radius: 0; width: 100%; }
 .tp-table--derived { min-width: 560px; }
 .tp-th-num, .tp-cell-num { text-align: center; }
@@ -4486,6 +4497,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    season toggles and team tabs already use. */
 .game-tabs {
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
 }

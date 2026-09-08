@@ -293,6 +293,13 @@
             .nav-tabs {
                 flex-wrap: nowrap !important;
                 overflow-x: auto;
+                /* Horizontal only. Declaring overflow-x alone makes overflow-y
+                   compute from visible to auto, and this strip is 46px of content
+                   in a 45px box — so a swipe with any vertical component dragged
+                   it one pixel down and it STAYED there, off its axis. Pinning
+                   overflow-y also stops it being a nested vertical scroll region,
+                   so an upward swipe starting on the tabs scrolls the page. */
+                overflow-y: hidden;
                 scrollbar-width: none;
                 -webkit-overflow-scrolling: touch;
             }
