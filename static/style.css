@@ -4554,7 +4554,9 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 
    Only the chip and card strips: a table's fade would land on a digit, and a
    half-faded number is worse than no hint. */
-@media (max-width: 767.98px) {
+@media (hover: none) {
+    /* Keyed on the pointer, not the width. A phone held sideways is 844px and
+       still a thumb — a width breakpoint left the cue off exactly there. */
     .ticker-scroll,
     .tp-years {
         -webkit-mask-image: linear-gradient(to right, #000 92%, transparent 100%);
