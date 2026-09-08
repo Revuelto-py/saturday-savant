@@ -2955,8 +2955,6 @@ def leaderboards(category='passing'):
         # query string so the AJAX nav and the per-combination page cache treat
         # them like every other control.
         heat        = request.args.get('heat', '1') != '0'
-        cells       = request.args.get('cells', 'both')
-        cells       = cells if cells in ('value', 'pct', 'both') else 'both'
 
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall() if r[0] not in FCS_CONFS]
@@ -3288,7 +3286,7 @@ def leaderboards(category='passing'):
         'mode': 'player', 'category': category, 'view': view, 'season': season,
         'conf': conf_filter, 'team': team_filter, 'pos': pos_filter,
         'qualified': '1' if qualified else '0', 'sort': sort_col, 'dir': sort_dir,
-        'heat': '1' if heat else '0', 'cells': cells,
+        'heat': '1' if heat else '0',
     }
     has_advanced = len(PLAYER_COLUMNS[category]['advanced']) > 0
 
@@ -3323,7 +3321,7 @@ def leaderboards(category='passing'):
         ap_rankings=ap_rankings, pagination=pagination,
         column_groups=PLAYER_COLUMN_GROUPS.get((category, view)),
         pool_avg=pool_avg, pool_size=pool_size,
-        heat=heat, cells=cells,
+        heat=heat,
     )
 
 # ── Team leaderboards ───────────────────────────────────────────────────────
@@ -3560,8 +3558,6 @@ def leaderboards_teams(category='savant'):
     view        = request.args.get('view', 'standard')
     view        = view if view in ('standard', 'advanced') else 'standard'
     heat        = request.args.get('heat', '1') != '0'
-    cells       = request.args.get('cells', 'both')
-    cells       = cells if cells in ('value', 'pct', 'both') else 'both'
 
     column_defs = TEAM_COLUMNS[category][view] or TEAM_COLUMNS[category]['standard']
 
@@ -3768,7 +3764,7 @@ def leaderboards_teams(category='savant'):
         'mode': 'team', 'category': category, 'view': view, 'season': season,
         'conf': conf_filter, 'team': team_filter,
         'sort': sort_col, 'dir': sort_dir,
-        'heat': '1' if heat else '0', 'cells': cells,
+        'heat': '1' if heat else '0',
     }
     # Say why a borrowed-table category is empty rather than leaving a grid of
     # dashes to read as a bug.
@@ -3795,7 +3791,7 @@ def leaderboards_teams(category='savant'):
         pagination=pagination,
         column_groups=TEAM_COLUMN_GROUPS.get((category, view)),
         pool_avg=pool_avg, pool_size=pool_size,
-        heat=heat, cells=cells,
+        heat=heat,
     )
 
 @app.route('/teams')

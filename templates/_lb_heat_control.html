@@ -1,0 +1,18 @@
+{# ── Heat switch + key ─────────────────────────────────────────────────────
+   Sits with the Standard/Advanced tabs because it is the same kind of control:
+   both change how the table reads rather than what is in it. Colour is doing
+   real work here, so it needs a key and an off switch — the percentile printed
+   in every cell is what carries the ranking when the colour is off. #}
+<div class="lb-heat-control">
+    <a href="?{{ dict(current_filters, heat='0' if heat else '1') | urlencode }}" onclick="return lbGo(this)"
+       class="lb-mx-btn lb-mx-heat {{ 'active' if heat else '' }}"
+       aria-pressed="{{ 'true' if heat else 'false' }}">Heat</a>
+    {% if heat %}
+    <span class="lb-heat-key" role="img"
+          aria-label="Cell colour runs from cold at the 0th percentile to hot at the 100th, within this pool of {{ pool_size }}">
+        <span class="lb-heat-key-cap">Cold</span>
+        <span class="lb-heat-key-ramp">{% for i in range(10) %}<i class="h{{ i }}"></i>{% endfor %}</span>
+        <span class="lb-heat-key-cap">Hot</span>
+    </span>
+    {% endif %}
+</div>

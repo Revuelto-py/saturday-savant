@@ -146,6 +146,7 @@
         <a href="{{ player_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
            class="lb-view-tab {{ 'active' if view == 'advanced' else '' }}">Advanced</a>
         {% endif %}
+        {% include '_lb_heat_control.html' %}
     </div>
     {# The bar moves week to week, so it still has to be sayable — but as forty
        words of prose above the table it was furniture. It hangs off the toggle
@@ -188,12 +189,10 @@
 </div>
 {% endif %}
 
-{% include '_lb_matrix_bar.html' %}
-
 <!-- Table -->
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
-<table class="lb-table lb-matrix cells-{{ cells }}{{ ' no-heat' if not heat else '' }}">
+<table class="lb-table lb-matrix{{ ' no-heat' if not heat else '' }}">
     <thead>
         {% if column_groups %}
         {# Statcast-style spanning row: says what each cluster of numbers is for,
@@ -350,15 +349,14 @@
         <a href="{{ team_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
            class="lb-view-tab {{ 'active' if view == 'advanced' else '' }}">Advanced</a>
         {% endif %}
+        {% include '_lb_heat_control.html' %}
     </div>
 </div>
-
-{% include '_lb_matrix_bar.html' %}
 
 <!-- Team table -->
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
-<table class="lb-table lb-matrix cells-{{ cells }}{{ ' no-heat' if not heat else '' }}">
+<table class="lb-table lb-matrix{{ ' no-heat' if not heat else '' }}">
     <thead>
         {% if column_groups %}
         <tr class="lb-grouprow">
@@ -496,8 +494,12 @@ function lbNavigate(url, scrollToTable, pushHistory = true) {
     // reset scrollY to 0 before the async fetch resolves, so reading it later
     // would pin us to the top.
     const y = window.scrollY;
+    // Skeleton rather than a dim: the header, the column widths and the row
+    // rhythm all stay exactly where they are, and only the values read as
+    // pending — so nothing shifts when the new rows land.
     const tbl = document.getElementById('lb-table');
-    if (tbl) tbl.style.opacity = '0.5';
+    const tblEl = tbl && tbl.querySelector('.lb-table');
+    if (tblEl) tblEl.classList.add('is-loading');
     fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
         .then(html => {
