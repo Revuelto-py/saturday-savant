@@ -97,7 +97,14 @@
                    card centers its content vertically so a taller card (Net
                    Savant with a "through week" line) never leaves the others
                    top-aligned. #}
-                {% set stat_card_style = 'display:flex;flex-direction:column;justify-content:center;border-radius: var(--r-md);padding:14px 22px;text-align:center;min-width:124px;backdrop-filter:blur(4px)' %}
+                {# flex-start, not center. The cards are stretched to a common height, and the
+   Net Savant one carries a fourth line ("THROUGH WEEK n") that the other four
+   don't. Centring each card's content independently therefore floated that
+   card's number 9px above the rest of the row — measured on every team that
+   has a Savant rating, which is nearly all of them. Aligning from the top puts
+   all five numbers on one baseline and collects the leftover at the bottom of
+   the shorter cards, where it reads as padding. #}
+{% set stat_card_style = 'display:flex;flex-direction:column;justify-content:flex-start;border-radius: var(--r-md);padding:14px 22px;text-align:center;min-width:124px;backdrop-filter:blur(4px)' %}
                 {% if svr %}
                 <div class="stat-card" style="{{ stat_card_style }};background:rgba(28, 156, 240,0.10);border: 1px solid rgba(28, 156, 240,0.5);box-shadow:0 4px 18px rgba(28,156,240,0.14)">
                     <div class="sc-value" style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
