@@ -7931,6 +7931,128 @@ def _project_cfp_field(cursor, season):
     return {e['team']: e['seed'] for e in entries}, entries
 
 
+@cache.memoize(timeout=21600)
+def _model_vs_market():
+    """Score the Savant Forecast against the closing spread on the games where
+    both exist.
+
+    The two sources disagree about sign: betting_lines stores the spread from
+    the home side with negative meaning home is favoured, while predicted_margin
+    is already a home margin. So the market's implied home margin is -spread,
+    and everything below compares like with like.
+
+    This is written to be able to say the model lost. It currently does.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT p.home_prob, p.predicted_margin, b.spread,
+                   g.home_points - g.away_points AS actual
+              FROM game_predictions p
+              JOIN betting_lines b ON b.game_id = p.game_id AND b.spread IS NOT NULL
+              JOIN games g ON g.id = p.game_id
+             WHERE g.completed = 1 AND g.home_points IS NOT NULL
+               AND p.home_prob IS NOT NULL AND p.predicted_margin IS NOT NULL
+        """)
+        rows = cur.fetchall()
+    except Exception:
+        conn.rollback()
+        rows = []
+    finally:
+        release_db(conn)
+
+    if not rows:
+        return None
+
+    n = len(rows)
+    m_hits = k_hits = agree = dis = dis_model = 0
+    mae_m = mae_k = brier = 0.0
+    for hp, pm, spread, actual in rows:
+        mkt = -float(spread)
+        home_won = actual > 0
+        m_home, k_home = float(hp) > 0.5, mkt > 0
+        m_hits += m_home == home_won
+        k_hits += k_home == home_won
+        if m_home == k_home:
+            agree += 1
+        else:
+            dis += 1
+            dis_model += m_home == home_won
+        mae_m += abs(float(pm) - actual)
+        mae_k += abs(mkt - actual)
+        brier += (float(hp) - (1 if home_won else 0)) ** 2
+
+    return {
+        'n': n,
+        'model_acc':  round(100 * m_hits / n, 1),
+        'market_acc': round(100 * k_hits / n, 1),
+        'model_mae':  round(mae_m / n, 2),
+        'market_mae': round(mae_k / n, 2),
+        'brier':      round(brier / n, 4),
+        'agree': agree,
+        'agree_pct': round(100 * agree / n),
+        'dis': dis,
+        'dis_model': dis_model,
+        'dis_market': dis - dis_model,
+        'dis_model_pct': round(100 * dis_model / dis, 1) if dis else None,
+        # The verdict, stated by the numbers rather than by the author.
+        'model_ahead_acc': m_hits > k_hits,
+        'model_ahead_mae': mae_m < mae_k,
+    }
+
+
+@cache.memoize(timeout=1800)
+def _forecast_edges(limit=12):
+    """Games still to be played where the model and the market are furthest
+    apart — the page's reason to come back each week."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT g.id, g.season, g.week, p.away_team, p.home_team,
+                   p.home_prob, p.predicted_margin, -b.spread AS mkt,
+                   ta.logo_dark, th.logo_dark, g.start_date
+              FROM game_predictions p
+              JOIN betting_lines b ON b.game_id = p.game_id AND b.spread IS NOT NULL
+              JOIN games g ON g.id = p.game_id
+              LEFT JOIN teams ta ON ta.name = p.away_team
+              LEFT JOIN teams th ON th.name = p.home_team
+             WHERE g.completed = 0 AND p.predicted_margin IS NOT NULL
+             ORDER BY abs(p.predicted_margin - (-b.spread)) DESC
+             LIMIT %s
+        """, (limit,))
+        out = []
+        for r in cur.fetchall():
+            gap = float(r[6]) - float(r[7])
+            out.append({
+                'id': r[0], 'season': r[1], 'week': r[2],
+                'away': r[3], 'home': r[4],
+                'home_prob': round(float(r[5]) * 100) if r[5] is not None else None,
+                'model': round(float(r[6]), 1), 'market': round(float(r[7]), 1),
+                'gap': round(abs(gap), 1),
+                # Who the model likes relative to the market — the actual claim.
+                'leans': r[4] if gap > 0 else r[3],
+                'away_logo': r[8], 'home_logo': r[9], 'start': r[10],
+            })
+        return out
+    except Exception:
+        conn.rollback()
+        return []
+    finally:
+        release_db(conn)
+
+
+@app.route('/forecast')
+@cache.cached(timeout=1800)
+def forecast_page():
+    """How the site's own forecast has held up against the betting market."""
+    return render_template('forecast.html',
+                           score=_model_vs_market(),
+                           edges=_forecast_edges(),
+                           season=CURRENT_SEASON)
+
+
 @app.route('/bracket')
 @cache.cached(timeout=21600, query_string=True)
 def bracket_page():
@@ -8548,7 +8670,7 @@ def sitemap():
     paths = ['/', '/teams', '/rankings', '/standings', '/games',
              '/leaderboards', '/leaderboards/teams',
              '/bracket', '/compare', '/transfers', '/draft', '/rivalries',
-             '/savant-rating', '/explorer']
+             '/savant-rating', '/explorer', '/forecast']
     for cat in ('passing', 'rushing', 'receiving', 'defense'):
         paths.append(f'/leaderboards/{cat}')
     lastmod = {}
