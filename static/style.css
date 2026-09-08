@@ -18,7 +18,11 @@
   --border-gold:    rgba(28,156,240,0.35);
   --text-primary:   #e7e9ea;    /* foreground */
   --text-secondary: #9aa0a6;
-  --text-dim:       #72767a;    /* muted-foreground */
+  /* #72767a cleared 4.5:1 only against pure black — 3.88:1 on a card, 3.51:1
+     on a hovered one. It is the token most of the site's supporting text uses,
+     so that single value was ~600 failing elements. This clears 4.5:1 on every
+     surface in the palette, the lightest included. */
+  --text-dim:       #85898d;    /* muted-foreground */
   --gold:           var(--accent);  /* legacy alias — accent is blue now */
   --green:          #00b87a;
   --red:            #f4212e;    /* destructive */
@@ -53,6 +57,11 @@
   --nav-h: 64px;
 
   /* Elevation + motion */
+  /* What a hover/active state is actually allowed to animate. `transition: all`
+     asks the browser to watch every property including the layout ones, so a
+     width or top that changes for any reason animates too and drags a reflow
+     with it. This is the same set every interactive surface here uses. */
+  --t-ui: color, background-color, border-color, box-shadow, transform, opacity;
   --shadow-card: 0 2px 12px rgba(0,0,0,0.4);
   --shadow-hover: 0 8px 32px rgba(0,0,0,0.55);
   --t-fast: 0.15s ease; --t-base: 0.2s ease;
@@ -234,7 +243,9 @@
     padding: 12px 16px 12px;
     text-decoration: none;
     cursor: pointer;
-    transition: all 0.18s ease;
+    transition-property: var(--t-ui);
+    transition-duration: 0.18s;
+    transition-timing-function: ease;
 }
 /* The matchup takes the slack, so cards sharing a stretched grid row centre
    their teams instead of one floating up because it has less below it. */
@@ -672,7 +683,9 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     text-decoration: none;
     position: relative;
     overflow: hidden;
-    transition: all 0.18s ease;
+    transition-property: var(--t-ui);
+    transition-duration: 0.18s;
+    transition-timing-function: ease;
 }
 .ap-rank-row::before {
     /* team-color spine on the left edge */
@@ -1262,7 +1275,9 @@ tr.postseason-row:hover {
     width: 26px; height: 26px; border-radius: var(--r-sm);
     background: rgba(255,255,255,0.06); border: 1px solid var(--border-strong);
     color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: var(--text-sm); padding: 0; transition: all var(--t-fast);
+    cursor: pointer; font-size: var(--text-sm); padding: 0; transition-property: var(--t-ui);
+    transition-duration: var(--t-fast);
+    transition-timing-function: ease;
 }
 .cmp-slot-btn:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
 .cmp-slot-btn.remove:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #f87171; }
@@ -1274,7 +1289,9 @@ tr.postseason-row:hover {
     width: 100%; background: var(--bg-card); border: 1px dashed var(--border-strong);
     color: var(--text-primary); border-radius: var(--r-lg);
     padding: 0 14px 0 40px; height: 68px; font-size: var(--text-base);
-    outline: none; transition: all var(--t-fast);
+    outline: none; transition-property: var(--t-ui);
+    transition-duration: var(--t-fast);
+    transition-timing-function: ease;
 }
 .cmp-search-input::placeholder { color: var(--text-dim); }
 .cmp-search-input:focus {
@@ -1408,7 +1425,9 @@ tr.postseason-row:hover {
     font-weight: 800;
     color: var(--text-secondary);
     text-decoration: none;
-    transition: all 0.15s;
+    transition-property: var(--t-ui);
+    transition-duration: 0.15s;
+    transition-timing-function: ease;
 }
 .lb-mode-btn:hover { color: var(--text-primary); }
 .lb-mode-btn.active {
@@ -1470,7 +1489,9 @@ tr.postseason-row:hover {
     font-size: var(--text-sm);
     font-weight: 700;
     text-decoration: none;
-    transition: all 0.15s;
+    transition-property: var(--t-ui);
+    transition-duration: 0.15s;
+    transition-timing-function: ease;
 }
 .lb-page-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
 .lb-page-btn.active {
@@ -1543,7 +1564,9 @@ tr.postseason-row:hover {
     text-decoration: none;
     padding: 7px 16px;
     border-radius: var(--r-sm);
-    transition: all 0.15s;
+    transition-property: var(--t-ui);
+    transition-duration: 0.15s;
+    transition-timing-function: ease;
 }
 .lb-view-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
 .lb-view-tab.active {
@@ -1895,7 +1918,9 @@ a.t-label:hover { color: #60a5fa; }
 .data-table tbody tr,
 tr.player-row,
 .search-result-item {
-    transition: all 0.18s ease;
+    transition-property: var(--t-ui);
+    transition-duration: 0.18s;
+    transition-timing-function: ease;
 }
 
 /* Game cards (home page) */
@@ -2211,7 +2236,8 @@ tr.player-row:hover {
     padding: 1px 6px;
     border-radius: var(--r-sm);
     background: rgba(255,255,255,0.06);
-    color: var(--text-dim);
+    /* Its own lighter chip background puts --text-dim at 4.30:1 here. */
+    color: var(--text-secondary);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     text-align: center;
@@ -3664,7 +3690,10 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 .tp-year:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tp-year:active { transform: translateY(1px); }
 .tp-year.active {
-    color: #fff; background: var(--accent); border-color: var(--accent);
+    /* #1a1200, not #fff: white on the accent measures 2.97:1. Every other active
+       pill on the site (.lb-mode-btn, .lb-view-tab) already uses this dark ink
+       for the same reason — 6.4:1 — so this is the convention catching up. */
+    color: #1a1200; background: var(--accent); border-color: var(--accent);
     font-weight: 700;
 }
 .tp-years-divider {
@@ -3824,7 +3853,8 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     white-space: nowrap;
 }
 .tp-move-status--withdrawn {
-    color: var(--red); border-color: rgba(244,33,46,0.4); border-style: solid;
+    /* The lifted red, as on the live pill: var(--red) measures 4.31:1 here. */
+    color: #ff6b73; border-color: rgba(244,33,46,0.4); border-style: solid;
 }
 .tp-rating {
     display: inline-block; min-width: 58px;
@@ -4505,6 +4535,94 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 }
 .ticker-item.is-live { box-shadow: inset 2px 0 0 rgba(244,33,46,0.75); }
 
+
+/* ── Press feedback on touch ─────────────────────────────────────────────
+   The card surfaces answer a press with a hover-lift reset — .game-card-v2 and
+   .rv-card both set transform:translateY(0) on :active, which undoes the lift a
+   pointer gave them. On a phone there is no lift to undo, so tapping the
+   largest targets on the site produced nothing at all until the next page
+   painted. The smaller controls already do this properly (.lb-mode-btn presses
+   to .96, .sp-submit likewise); this is the same idea for the big ones.
+
+   Scale and brightness only: no layout property moves, so a press cannot
+   reflow the grid around it. The global reduced-motion block already collapses
+   the duration, which leaves the brightness change as the feedback. */
+@media (hover: none) {
+    .game-card-v2, .rv-card, .team-card, .leader-row, .bk-match-link, .dr-school {
+        transition-property: var(--t-ui), filter;
+        transition-duration: var(--t-fast);
+        transition-timing-function: ease-out;
+    }
+    .game-card-v2:active,
+    .rv-card:active,
+    .team-card:active,
+    .leader-row:active,
+    .bk-match-link:active,
+    .dr-school:active {
+        transform: scale(0.985);
+        filter: brightness(1.12);
+    }
+    /* The navbar's home link came in at 42px — two short. */
+    .navbar-inner > a[aria-label] { min-height: 44px; }
+}
+
+/* ── Touch targets ───────────────────────────────────────────────────────
+   Scoped to pointers that cannot be precise. Everything here measured under
+   44px on a 390px screen with no larger clickable ancestor to stand in for it.
+
+   Two techniques, chosen by context. Standalone controls simply grow: they sit
+   in their own space and a taller control costs nothing. Links inside dense
+   rows keep their visual size and gain the height through a pseudo-element,
+   because the rows are already 59-64px tall — there is room to reach 44px
+   inside one without touching the row's rhythm or overlapping its neighbours. */
+@media (hover: none) {
+    .leader-viewall,
+    .footer-gh,
+    .lb-view-tab,
+    .rv-last,
+    .tp-flow-row {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+    }
+    /* One pixel short, which is still short. */
+    .leader-row, .lb-team-tab { min-height: 44px; }
+
+    .lb-team-link,
+    .lb-player-link,
+    .tp-move-to,
+    .tp-player { position: relative; }
+    .lb-team-link::after,
+    .lb-player-link::after,
+    .tp-move-to::after,
+    .tp-player::after {
+        content: "";
+        position: absolute;
+        left: 0; right: 0; top: 50%;
+        height: 44px;
+        transform: translateY(-50%);
+    }
+}
+
+/* Prose floor on small screens. --text-xs bottoms out at 10.88px at 390px,
+   which is fine for the uppercase micro-labels and chips it mostly dresses —
+   those are glanced, not read. It is not fine for the handful of places that
+   carry an actual sentence: a forecast recap, a chart footnote, a game note.
+   Those get 12px, the floor for text meant to be read, and only where the
+   viewport is small enough for the clamp to have bottomed out. */
+@media (max-width: 600px) {
+    /* body-scoped so this outranks the component rules that set these smaller
+       still (.pc-card .pc-foot at 0.66rem, for one) without reaching for
+       !important. */
+    body .gc-fc-recap,
+    body .gc-note,
+    body .gc-note-rivalry,
+    body .upset-row-note,
+    body .fc-basis,
+    body .fc-why-note,
+    body .pc-foot,
+    body .day-head .day-meta { font-size: 0.75rem; }
+}
 
 /* ── Game card: one skeleton for scheduled / live / final ─────────────────
    Every card is head + teams + foot, and each zone holds CONSTANT metrics so

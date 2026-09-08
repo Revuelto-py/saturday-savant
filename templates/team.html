@@ -600,11 +600,14 @@
         {% macro pct_bar(label, val, metric, suffix='') %}
         {% set p = percentiles.get(metric) %}
         {% if p is not none %}
-            {% if p >= 80 %}{% set bc = '#c0392b' %}
+            {# Same five bands as the player page, and lifted for the same reason: the
+               knob prints its number on the band, and the deepest red and the blue
+               could carry neither light nor dark ink at 4.5:1. #}
+            {% if p >= 80 %}{% set bc = '#d44f41' %}
             {% elif p >= 60 %}{% set bc = '#e74c3c' %}
             {% elif p >= 45 %}{% set bc = '#95a5a6' %}
             {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
-            {% else %}{% set bc = '#2980b9' %}{% endif %}
+            {% else %}{% set bc = '#2a83bd' %}{% endif %}
         {% else %}{% set bc = 'rgba(255,255,255,0.08)' %}{% endif %}
         <div class="percentile-row" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
             <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:160px;text-align:right;flex-shrink:0">{{ label }}</div>
@@ -615,7 +618,7 @@
                             width:28px;height:28px;border-radius:50%;background:{{ bc }};
                             border: 2px solid var(--border-strong);
                             display:flex;align-items:center;justify-content:center;
-                            font-size: var(--text-xs);font-weight:900;color: var(--text-primary);
+                            font-size: var(--text-xs);font-weight:900;color:#0b0f14;
                             box-shadow:0 2px 8px rgba(0,0,0,0.6);z-index:3">{{ p }}</div>
                 {% endif %}
             </div>
@@ -627,9 +630,9 @@
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0 6px;margin-bottom:4px;border-bottom: 1px solid var(--border)">
             <div style="min-width:160px;flex-shrink:0"></div>
             <div style="flex:1;display:flex;justify-content:space-between;padding:0 4px">
-                <span style="color:#2980b9;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">POOR</span>
+                <span style="color:#2b88c4;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">POOR</span>
                 <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">AVERAGE</span>
-                <span style="color:#c0392b;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">GREAT</span>
+                <span style="color:#d7594c;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">GREAT</span>
             </div>
             <div style="min-width:50px;flex-shrink:0"></div>
         </div>

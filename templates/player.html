@@ -557,11 +557,17 @@
 
             {% macro pct_bar(label, p, n=none) %}
             {% if p is not none %}
-                {% if p >= 80 %}{% set bc = '#c0392b' %}
+                {# The knob prints the percentile ON the band colour, so each band has to
+                   carry legible ink. Three of these already took dark ink; the deepest
+                   red and the blue took neither — white measured 4.47:1 and 3.53:1, dark
+                   3.53:1 and 4.47:1, so the number on a 99th-percentile knob was the least
+                   readable thing in the block. Both are lifted just far enough that the
+                   one dark ink below clears 4.5:1 on all five. #}
+                {% if p >= 80 %}{% set bc = '#d44f41' %}
                 {% elif p >= 60 %}{% set bc = '#e74c3c' %}
                 {% elif p >= 45 %}{% set bc = '#95a5a6' %}
                 {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
-                {% else %}{% set bc = '#2980b9' %}{% endif %}
+                {% else %}{% set bc = '#2a83bd' %}{% endif %}
             {# The n is per ROW, not per section: a metric is dropped for any peer
                whose value is None, so the air-yard rows can rank against a much
                smaller field than the counting stats beside them. Carried as a
@@ -575,7 +581,7 @@
                     <div style="position:absolute;top:50%;left:{{ p }}%;transform:translate(-50%,-50%);
                                 width:28px;height:28px;border-radius:50%;background:{{ bc }};
                                 border:2px solid white;display:flex;align-items:center;justify-content:center;
-                                font-size: var(--text-xs);font-weight:900;color: var(--text-primary);
+                                font-size: var(--text-xs);font-weight:900;color:#0b0f14;
                                 box-shadow:0 2px 8px rgba(0,0,0,0.6);z-index:3">{{ p }}</div>
                 </div>
             </div>
@@ -601,9 +607,9 @@
             <div style="display:flex;margin-bottom:8px">
                 <div style="min-width:120px;flex-shrink:0"></div>
                 <div style="flex:1;display:flex;justify-content:space-between">
-                    <span style="color:#2980b9;font-size: var(--text-xs);font-weight:700">POOR</span>
+                    <span style="color:#2b88c4;font-size: var(--text-xs);font-weight:700">POOR</span>
                     <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700">AVG</span>
-                    <span style="color:#c0392b;font-size: var(--text-xs);font-weight:700">GREAT</span>
+                    <span style="color:#d7594c;font-size: var(--text-xs);font-weight:700">GREAT</span>
                 </div>
             </div>
 
@@ -645,10 +651,16 @@
                 <div class="col-6 col-sm-4 col-lg-3">
                     <div style="margin-bottom:4px;display:flex;justify-content:space-between;align-items:baseline">
                         <span style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:600">{{ label }}</span>
-                        <span style="color:{{ color }};font-weight:800;font-size: var(--text-base)">{{ val }}%</span>
+                        {# The number is not the place for the colour. Seven of these eight
+                           are fixed palette values, but "Overall" takes the team's own, and a
+                           team whose colour is a dark navy printed 13.8% at 1.52:1 — invisible.
+                           The bar below still carries the colour, where a large block only
+                           needs 3:1; the figure itself reads in the primary ink whatever
+                           programme the player belongs to. #}
+                        <span style="color: var(--text-primary);font-weight:800;font-size: var(--text-base)">{{ val }}%</span>
                     </div>
                     <div style="height:5px;background:rgba(255,255,255,0.07);border-radius: 3px;overflow:hidden">
-                        <div style="height:100%;width:{{ [val * 3, 100] | min }}%;background:{{ color }};border-radius: 3px;transition:width 0.5s"></div>
+                        <div style="height:100%;width:{{ [val * 3, 100] | min }}%;background:{{ color | team_hex('#1c9cf0') if color == c1 else color }};border-radius: 3px;transition:width 0.5s"></div>
                     </div>
                 </div>
                 {% endif %}
