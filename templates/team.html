@@ -356,26 +356,6 @@
     <div class="pending-panel">Savant Rating, SP+, and opponent-adjusted efficiency for {{ season }} will appear here once games are played. The roster-based <b>Returning Production</b> breakdown below is available now for a preseason read.</div>
     {% endif %}
 
-    <!-- Pass offense vs pass defense. Side by side because the comparison is
-         the point: a team can throw deep and still surrender everything short.
-         The defensive half has no equivalent anywhere else on the site — the
-         opponent-adjusted metrics below are offense-only. -->
-    {% if passing_profile and (passing_profile.offense or passing_profile.defense) %}
-    <div class="dark-card" style="padding:24px;margin-bottom:24px">
-        <div style="margin-bottom:18px">
-            <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Passing Game</h5>
-            <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
-                Where {{ team[0] }} throws it, and where opponents throw on them. Depth of target
-                separates a vertical attack from a short-passing one; yards after catch separate
-                what the scheme creates from what the receivers do.
-            </p>
-        </div>
-        <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:36px">
-            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw') }}
-            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense') }}
-        </div>
-    </div>
-    {% endif %}
 
     <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
     {% if svr %}
@@ -701,6 +681,27 @@
                     {{ pct_bar('Opponent Starting Field Position', havoc.def_fp if havoc else none, 'def_field_pos_avg_start', ' yd') }}
                 </div>
             </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Pass offense vs pass defense. Side by side because the comparison is
+         the point: a team can throw deep and still surrender everything short.
+         The defensive half has no equivalent anywhere else on the site — the
+         opponent-adjusted metrics below are offense-only. -->
+    {% if passing_profile and (passing_profile.offense or passing_profile.defense) %}
+    <div class="dark-card tp-passing" style="padding:24px;margin-bottom:24px">
+        <div style="margin-bottom:18px">
+            <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Passing Game</h5>
+            <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
+                Where {{ team[0] }} throws it, and where opponents throw on them. Depth of target
+                separates a vertical attack from a short-passing one; yards after catch separate
+                what the scheme creates from what the receivers do.
+            </p>
+        </div>
+        <div class="pc-grid">
+            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw') }}
+            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense') }}
         </div>
     </div>
     {% endif %}

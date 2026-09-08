@@ -4583,6 +4583,37 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .pc-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
 .pc-sub { color: var(--text-dim); font-size: var(--text-xs); font-weight: 600; }
 
+/* ── Team stats: the passing charts, at supporting scale ──────────────────
+   These are a supporting read on the team stats tab, not its subject. At the
+   shared size the pair measured 1443px — a third of the whole tab, sitting
+   above everything a reader actually came for. Scoped to .tp-passing so the
+   player page's copy of the same chart, where it IS the subject, is untouched.
+
+   Two across on a wide screen rather than stacked, and a smaller field: the
+   heatmap is read for its shape, which survives being smaller far better than
+   the figures beside it would survive being narrower. */
+.tp-passing .pc-grid { display: grid; gap: var(--s6); }
+/* The cap is unconditional, and that is the point. Below 900px the shared rule
+   releases .ph-heat to max-width:100%, which on the player page is right — the
+   chart is the page. Here it meant a 743px-wide field and a 2750px card at
+   900px, worse than the desktop layout this change set out to shrink. */
+.tp-passing .ph-heat { max-width: 340px; margin-inline: auto; }
+@media (min-width: 1100px) {
+    .tp-passing .pc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* Field over figures inside each half: at ~560px a column cannot hold a
+       readable field beside a 2x2 of stat cards. */
+    .tp-passing .pc-body { grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
+    .tp-passing .pc-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+/* Lower bound matters as much as the upper one. Below 900px the shared rule
+   stacks .pc-body, but `.tp-passing .pc-body` outranks it on specificity, so
+   without the min-width this kept a 300px field column next to the figures on a
+   390px phone and pushed the page sideways. */
+@media (min-width: 901px) and (max-width: 1099.98px) {
+    /* One per row, but still smaller than the player page's. */
+    .tp-passing .pc-body { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+}
+
 /* Field left, figures right — the heatmap has a fixed readable width, so
    stacking them left the card mostly empty beside it. */
 .pc-body {
