@@ -1880,6 +1880,27 @@ tr.player-row,
     cursor: pointer;
 }
 
+/* Team hero row: keep the stat cards beside the logo, not beneath it.
+
+   The row is identity on the left, stat cards on the right, and it wraps as a
+   whole the moment the two halves exceed it — dropping all five cards under the
+   logo. Trimming the cards bought room, but the left half keeps growing: a long
+   programme name, a long conference, a long coach, and a third record item once
+   a team has a conference record. Chasing that with card padding is a losing
+   game, because the text has no upper bound.
+
+   So above 1400px the row is not allowed to wrap and the identity block is
+   allowed to shrink instead. Pressure now lands on the text, which wraps a long
+   name onto a second line — a far better failure than ejecting the whole stat
+   row. Below 1400px the old wrap stands: there genuinely isn't room for both,
+   and the cards sitting underneath is the honest narrow layout. */
+@media (min-width: 1400px) {
+    .team-hero-row   { flex-wrap: nowrap !important; }
+    .team-hero-id    { min-width: 0; }
+    .team-hero-id > div { min-width: 0; }
+    .team-hero-stats { flex: 0 0 auto; }
+}
+
 /* Team cards (/teams page) — box styling; the team-colour tint + border are set
    inline per team, at an alpha the template scales by the colour's luminance so
    136 cards read as one calm grid rather than 136 competing blocks. */
