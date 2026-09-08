@@ -1880,6 +1880,37 @@ POSITION_GROUPS = {
 }
 
 TEAM_COLUMNS = {
+    # Turnovers, penalties and possession — from game_boxstats, which carries one
+    # row per team per game. Margin is the season total, because that is how the
+    # number is quoted; the per-game rate sits beside it for comparability across
+    # teams that have played a different number of games.
+    'discipline': {
+        'standard': [
+            ('tov_margin',    'TO MGN',  'Turnover margin, season total', True, 'epa'),
+            ('tov_margin_pg', 'TO/G',    'Turnover margin per game', True, 'epa'),
+            ('tov_pg',        'GIVE',    'Giveaways per game', False, 'float2'),
+            ('takeaways_pg',  'TAKE',    'Takeaways per game', True, 'float2'),
+            ('pen_pg',        'PEN',     'Penalties per game', False, 'float2'),
+            ('pen_yds_pg',    'PEN YDS', 'Penalty yards per game', False, 'float1'),
+            ('top_pg',        'TOP',     'Time of possession per game, minutes', True, 'float1'),
+        ],
+        'advanced': [],
+    },
+    # Against the spread — from betting_lines. The spread is stored from the home
+    # team's perspective and negative means the home side is favoured, so a home
+    # cover is (home margin + spread) > 0 and the away side is its mirror.
+    'betting': {
+        'standard': [
+            ('ats_pct',      'ATS%',   'Percentage of games covered, pushes excluded', True, 'pct1'),
+            ('ats_w',        'W',      'Games covered', True, 'int'),
+            ('ats_l',        'L',      'Games failed to cover', False, 'int'),
+            ('ats_p',        'P',      'Pushes', False, 'int'),
+            ('cover_margin', 'MGN',    'Average margin against the spread', True, 'epa'),
+            ('ou_over',      'OVER',   'Games that went over the total', True, 'int'),
+            ('ou_under',     'UNDER',  'Games that stayed under the total', True, 'int'),
+        ],
+        'advanced': [],
+    },
     'offense': {
         'standard': [
             ('off_ppa', 'PPA', 'Avg Predicted Points Added Per Play', True, 'epa'),
@@ -3110,11 +3141,37 @@ def leaderboards(category='passing'):
 # ── Team leaderboards ───────────────────────────────────────────────────────
 # Categories reconciled to Offense/Defense/SP+ — Havoc and Scoring (formerly
 # standalone categories) are now folded into the Defense/Offense Advanced views.
+@cache.memoize(timeout=86400)
+def _category_last_season(category):
+    """Newest season a borrowed-table category actually covers.
+
+    game_boxstats stops at 2025 and betting_lines runs into the current year, so
+    a reader who opens Turnovers on the live season gets a grid of dashes. This
+    is what lets the page say why instead of looking broken."""
+    sql = ('SELECT max(g.season) FROM games g JOIN game_boxstats b ON b.game_id = g.id'
+           if category == 'discipline' else
+           'SELECT max(g.season) FROM games g JOIN betting_lines b ON b.game_id = g.id '
+           'AND b.spread IS NOT NULL WHERE g.completed = 1')
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return cur.fetchone()[0]
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+
 TEAM_CATEGORY_DEFAULTS = {
     'offense': ('off_ppa', 'desc'),
     'defense': ('def_ppa', 'asc'),   # lower is better, so ascending = best first
     'sp':      ('rating', 'desc'),
     'savant':  ('net_rating', 'desc'),
+    # Both of these come from tables the site collected and never read.
+    'discipline': ('tov_margin', 'desc'),
+    'betting':    ('ats_pct', 'desc'),
 }
 
 # Columns fetched from team_stats — offense is always-higher-better.
@@ -3124,6 +3181,12 @@ TEAM_CATEGORY_DEFAULTS = {
 #  in BOTH team_stats and team_advanced, so an unqualified ORDER BY is ambiguous
 #  once both tables are joined — every sortable column must be qualified.
 TEAM_SORTABLE_COLS = {
+    'tov_margin': 'bx.tov_margin', 'tov_margin_pg': 'bx.tov_margin_pg',
+    'tov_pg': 'bx.tov_pg', 'takeaways_pg': 'bx.takeaways_pg',
+    'pen_pg': 'bx.pen_pg', 'pen_yds_pg': 'bx.pen_yds_pg', 'top_pg': 'bx.top_pg',
+    'ats_pct': 'ats.ats_pct', 'ats_w': 'ats.ats_w', 'ats_l': 'ats.ats_l',
+    'ats_p': 'ats.ats_p', 'cover_margin': 'ats.cover_margin',
+    'ou_over': 'ats.ou_over', 'ou_under': 'ats.ou_under',
     'off_ppa': 'ts.off_ppa', 'off_success_rate': 'ts.off_success_rate',
     'off_explosiveness': 'ts.off_explosiveness', 'off_power_success': 'ts.off_power_success',
     'off_line_yards': 'ts.off_line_yards', 'off_second_level_yards': 'ts.off_second_level_yards',
@@ -3154,6 +3217,8 @@ TEAM_LOWER_BETTER = {
     'ranking',  # SP+ national rank — #1 is best
     'def_rating','raw_def',  # Savant points allowed per 10 drives — lower is better
     'net_ranking',           # Savant national rank — #1 is best
+    # Giving the ball away and being penalised are things you want less of.
+    'tov_pg', 'pen_pg', 'pen_yds_pg', 'ats_l',
 }
 
 # Team brand colours come from CFBD and are not guaranteed usable. A programme
@@ -3345,12 +3410,75 @@ def leaderboards_teams(category='savant'):
                 svr.net_rating, svr.off_rating, svr.def_rating, svr.sos,
                 svr.games AS svr_games, svr.raw_off, svr.raw_def,
                 svr.drives_off, svr.drives_def, svr.net_ranking,
+                bx.tov_margin, bx.tov_margin_pg, bx.tov_pg, bx.takeaways_pg,
+                bx.pen_pg, bx.pen_yds_pg, bx.top_pg,
+                ats.ats_pct, ats.ats_w, ats.ats_l, ats.ats_p,
+                ats.cover_margin, ats.ou_over, ats.ou_under,
                 RANK() OVER (ORDER BY {sort_sql} {goodness_dir} NULLS LAST) as goodness_rank
             FROM teams t
             LEFT JOIN team_stats ts ON ts.team = t.name AND ts.season = {season}
             LEFT JOIN team_advanced adv ON adv.team = t.name AND adv.season = {season}
             LEFT JOIN sp_ratings sp ON sp.team = t.name AND sp.season = {season}
             LEFT JOIN savant_ratings svr ON svr.team = t.name AND svr.season = {season}
+            -- Turnovers / penalties / possession. game_boxstats carries one row
+            -- per team per game, but its `team` column is ESPN's full name
+            -- ("Connecticut Huskies") and matches none of teams.name — so the
+            -- side is taken from is_home and the identity from games instead.
+            -- Every one of the 8,631 covered games has exactly one row per side.
+            LEFT JOIN (
+                SELECT team, sum(opp_tov - tov) AS tov_margin,
+                       avg(opp_tov - tov) AS tov_margin_pg,
+                       avg(tov) AS tov_pg, avg(opp_tov) AS takeaways_pg,
+                       avg(pen) AS pen_pg, avg(pen_yds) AS pen_yds_pg,
+                       avg(poss) / 60.0 AS top_pg
+                  FROM (
+                    SELECT g.home_team AS team, bh.turnovers AS tov, ba.turnovers AS opp_tov,
+                           bh.penalties AS pen, bh.penalty_yards AS pen_yds,
+                           bh.poss_seconds AS poss
+                      FROM games g
+                      JOIN game_boxstats bh ON bh.game_id = g.id AND bh.is_home = 1
+                      JOIN game_boxstats ba ON ba.game_id = g.id AND ba.is_home = 0
+                     WHERE g.season = {season} AND g.completed = 1
+                    UNION ALL
+                    SELECT g.away_team, ba.turnovers, bh.turnovers,
+                           ba.penalties, ba.penalty_yards, ba.poss_seconds
+                      FROM games g
+                      JOIN game_boxstats bh ON bh.game_id = g.id AND bh.is_home = 1
+                      JOIN game_boxstats ba ON ba.game_id = g.id AND ba.is_home = 0
+                     WHERE g.season = {season} AND g.completed = 1
+                  ) bs GROUP BY team
+            ) bx ON bx.team = t.name
+            -- Against the spread. betting_lines stores the spread from the home
+            -- side's perspective with negative meaning the home team is favoured,
+            -- so the home team covers when (home margin + spread) > 0 and the away
+            -- team's result is the negation. Checked against a decade: the two
+            -- sides come out 8504-8504, which is the shape a spread should have.
+            LEFT JOIN (
+                SELECT team,
+                       sum(CASE WHEN cover > 0 THEN 1 ELSE 0 END)::float
+                         / NULLIF(sum(CASE WHEN cover <> 0 THEN 1 ELSE 0 END), 0) AS ats_pct,
+                       sum(CASE WHEN cover > 0 THEN 1 ELSE 0 END) AS ats_w,
+                       sum(CASE WHEN cover < 0 THEN 1 ELSE 0 END) AS ats_l,
+                       sum(CASE WHEN cover = 0 THEN 1 ELSE 0 END) AS ats_p,
+                       avg(cover) AS cover_margin,
+                       sum(CASE WHEN ou IS NOT NULL AND tot > ou THEN 1 ELSE 0 END) AS ou_over,
+                       sum(CASE WHEN ou IS NOT NULL AND tot < ou THEN 1 ELSE 0 END) AS ou_under
+                  FROM (
+                    SELECT g.home_team AS team,
+                           (g.home_points - g.away_points) + b.spread AS cover,
+                           b.over_under AS ou, (g.home_points + g.away_points) AS tot
+                      FROM games g JOIN betting_lines b ON b.game_id = g.id
+                     WHERE g.season = {season} AND g.completed = 1
+                       AND g.home_points IS NOT NULL AND b.spread IS NOT NULL
+                    UNION ALL
+                    SELECT g.away_team,
+                           -((g.home_points - g.away_points) + b.spread),
+                           b.over_under, (g.home_points + g.away_points)
+                      FROM games g JOIN betting_lines b ON b.game_id = g.id
+                     WHERE g.season = {season} AND g.completed = 1
+                       AND g.home_points IS NOT NULL AND b.spread IS NOT NULL
+                  ) bl GROUP BY team
+            ) ats ON ats.team = t.name
             -- ap_rankings now holds every weekly poll (many rows per team), so
             -- pin to the FINAL poll (postseason if any, else latest regular
             -- week) — otherwise this join multiplies each ranked team into one
@@ -3397,6 +3525,14 @@ def leaderboards_teams(category='savant'):
                 'def_second_level_yards': _r(d['def_second_level_yards'], 2), 'def_open_field_yards': _r(d['def_open_field_yards'], 2),
                 'def_havoc_total': _pct(d['def_havoc_total']), 'def_havoc_front7': _pct(d['def_havoc_front7']),
                 'def_havoc_db': _pct(d['def_havoc_db']),
+                'tov_margin': int(d['tov_margin']) if d['tov_margin'] is not None else None,
+                'tov_margin_pg': _r(d['tov_margin_pg'], 2), 'tov_pg': _r(d['tov_pg'], 2),
+                'takeaways_pg': _r(d['takeaways_pg'], 2), 'pen_pg': _r(d['pen_pg'], 2),
+                'pen_yds_pg': _r(d['pen_yds_pg'], 1), 'top_pg': _r(d['top_pg'], 1),
+                'ats_pct': _pct(d['ats_pct']),
+                'ats_w': d['ats_w'], 'ats_l': d['ats_l'], 'ats_p': d['ats_p'],
+                'cover_margin': _r(d['cover_margin'], 1),
+                'ou_over': d['ou_over'], 'ou_under': d['ou_under'],
                 'off_scoring_opps': d['off_scoring_opps'], 'off_pts_per_opp': _r(d['off_pts_per_opp'], 2),
                 'off_field_pos_avg_start': _r(d['off_field_pos_avg_start'], 1),
                 'rating': _r(d['rating'], 1), 'offense_rating': _r(d['offense_rating'], 1),
@@ -3419,9 +3555,22 @@ def leaderboards_teams(category='savant'):
         'conf': conf_filter, 'team': team_filter,
         'sort': sort_col, 'dir': sort_dir,
     }
+    # Say why a borrowed-table category is empty rather than leaving a grid of
+    # dashes to read as a bug.
+    category_note = None
+    if category in ('discipline', 'betting') and teams_out:
+        key = 'tov_margin' if category == 'discipline' else 'ats_pct'
+        if all(t.get(key) is None for t in teams_out):
+            last = _category_last_season(category)
+            src = ('Turnover, penalty and possession data' if category == 'discipline'
+                   else 'Betting lines')
+            category_note = (f'{src} runs through {last}. Nothing is recorded for {season} '
+                             f'yet, so this table is empty for the season selected.')
+
     has_advanced = len(TEAM_COLUMNS[category]['advanced']) > 0
     return render_template('leaderboards.html',
         mode='team', teams=teams_out, category=category, view=view,
+        category_note=category_note,
         season=season, available_seasons=get_available_seasons(),
         conferences=conferences, all_teams=all_teams,
         conf_filter=conf_filter, team_filter=team_filter,
