@@ -529,7 +529,11 @@ def ap_asof(ap_weekly, week, is_post):
     regular, final = ap_weekly
     if is_post:
         return final
-    weeks = [w for w in regular if w <= (week or 0)]
+    # Poll weeks start at 1 (the preseason poll) while game weeks now start at
+    # 0, and no poll is published between Week 0 and Week 1 — the first
+    # in-season poll covers both. So a Week 0 game carries the preseason poll,
+    # which is what the floor below does.
+    weeks = [w for w in regular if w <= max(week or 0, 1)]
     return regular[max(weeks)] if weeks else {}
 
 def get_conference_logos(cursor):
@@ -2600,7 +2604,13 @@ def games_hub():
         match = next((o for o in week_options
                       if o['week'] == sel_week and o['stype'] == sel_stype), None)
         if not match:
-            match = week_options[0] if week_options else {'week': 1, 'stype': 'regular'}
+            # Week 0 is a real week and gets its own tab, but it is a handful of
+            # August games — landing there by default for the rest of the season
+            # would be wrong, so the unselected default stays Week 1.
+            match = (next((o for o in week_options
+                           if o['stype'] == 'regular' and o['week'] == 1), None)
+                     or (week_options[0] if week_options
+                         else {'week': 1, 'stype': 'regular'}))
         sel_week, sel_stype = match['week'], match['stype']
         db_stype = 'SeasonType.POSTSEASON' if sel_stype == 'postseason' else 'SeasonType.REGULAR'
 
@@ -4823,7 +4833,11 @@ def rankings():
                 LEFT JOIN sp_ratings sp ON a.team = sp.team AND sp.season = a.season
                 LEFT JOIN games g ON (g.home_team=a.team OR g.away_team=a.team)
                     AND g.completed=1 AND g.season = a.season
-                    AND (%(post)s OR (g.season_type='SeasonType.REGULAR' AND g.week < %(wk)s))
+                    AND (%(post)s OR (g.season_type='SeasonType.REGULAR'
+                         -- The preseason poll (ranking week 1) is published before
+                         -- anyone has played, and Week 0 games are week 0, so a bare
+                         -- `week < 1` would start crediting them to it.
+                         AND %(wk)s > 1 AND g.week < %(wk)s))
                 WHERE a.season = %(season)s AND a.week = %(wk)s AND a.season_type = %(stype)s
                 GROUP BY a.rank, a.team, a.points, a.first_place_votes, a.week, a.prev_rank,
                          t.logo, t.conference, t.color, t.logo_dark, t.alt_color,

@@ -10,28 +10,53 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 `run_weekly.sh` runs, in order (`set -e` aborts on any failure):
 
 1. `pipeline/fetch_data.py` — games (incl. scores/completion) + player box scores + PPA
-2. `pipeline/fetch_team_stats.py` — team stats
-3. `pipeline/fetch_advanced.py` — advanced team stats
-4. `pipeline/fetch_sp.py` — SP+ ratings
-5. `pipeline/fetch_rankings.py` — AP rankings (every weekly poll, not just the final)
+2. `pipeline/apply_week_zero.py` — label Week 0 *(non-fatal)*
+3. `pipeline/fetch_team_stats.py` — team stats
+4. `pipeline/fetch_advanced.py` — advanced team stats
+5. `pipeline/fetch_sp.py` — SP+ ratings
+6. `pipeline/fetch_rankings.py` — AP rankings (every weekly poll, not just the final)
    — *also runs hourly on its own cron; see below*
-6. `pipeline/fetch_coaches.py` — head coaches, current season *(non-fatal)*
-7. `pipeline/fetch_2026_roster.py` — team rosters, current season *(non-fatal)*
-8. `pipeline/fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
-9. `pipeline/refresh_headshots.py --active-only` — player headshots *(non-fatal)*
-10. `pipeline/fetch_game_summaries.py` — game summaries / drives
-11. `pipeline/fetch_passing.py` — play-level passing: air yards / location / YAC *(non-fatal)*
-12. `pipeline/compute_savant_ratings.py` — Savant ratings → `savant_ratings`
-13. `pipeline/backfill_pools.py` — percentile peer pools → `pool_store`
-14. `pipeline/precompute.py` — team-page + returning-production precompute → `pool_store`
-15. `pipeline/fetch_betting_lines.py` — Vegas lines, active season
-16. `pipeline/predict_games.py` — Savant Forecast: score last week, predict upcoming
+7. `pipeline/fetch_coaches.py` — head coaches, current season *(non-fatal)*
+8. `pipeline/fetch_2026_roster.py` — team rosters, current season *(non-fatal)*
+9. `pipeline/fetch_ea_ratings.py` — EA ratings, starter-model input *(non-fatal)*
+10. `pipeline/refresh_headshots.py --active-only` — player headshots *(non-fatal)*
+11. `pipeline/fetch_game_summaries.py` — game summaries / drives
+12. `pipeline/fetch_passing.py` — play-level passing: air yards / location / YAC *(non-fatal)*
+13. `pipeline/compute_savant_ratings.py` — Savant ratings → `savant_ratings`
+14. `pipeline/backfill_pools.py` — percentile peer pools → `pool_store`
+15. `pipeline/precompute.py` — team-page + returning-production precompute → `pool_store`
+16. `pipeline/fetch_betting_lines.py` — Vegas lines, active season
+17. `pipeline/predict_games.py` — Savant Forecast: score last week, predict upcoming
+18. `pipeline/apply_week_zero.py` — again, for the tables written since *(non-fatal)*
 
-Steps 13–14 **delete their stale `pool_store` keys before rebuilding**, so a
+**Week 0 runs twice, and that is deliberate.** College football opens with a
+handful of games the Saturday before the real opening weekend. **No upstream
+source labels them:** CFBD returns them as week 1 and ignores a `week=0`
+argument, so every season arrived with those games folded into week 1 — a team
+that played both showed two "WK 1" rows on its schedule, and the duplication ran
+through every player's game log. `pipeline/apply_week_zero.py` derives the split
+from the calendar (`season_util.week_zero_dates`: sort the opening kickoff dates,
+split at the first gap of 3+ days) and writes week 0 onto `games`, onto every
+table that keeps its own copy of the week, and into the JSON in
+`player_game_logs`.
+
+- **Step 2** runs right after the only step that writes `games`, so everything
+  derived below — Savant snapshots, precompute, forecasts — sees the corrected
+  week.
+- **Step 18** runs at the end because `betting_lines`, `passing_plays` and
+  `game_predictions` are written *after* step 2, from CFBD, which calls a Week 0
+  game week 1.
+
+It is idempotent: it recomputes the same target set from weeks 0 **and** 1, and
+skips the cache clear when nothing moved, so the ~50 weeks a year with no new
+Week 0 cost nothing. `ap_rankings` is deliberately untouched — its `week` is a
+*poll* week, and the preseason poll is week 1 by AP's own numbering.
+
+Steps 14–15 **delete their stale `pool_store` keys before rebuilding**, so a
 re-run refreshes against the newly-fetched tables instead of reading last week's
 values back out.
 
-**Steps 7–9 are ordered, not interchangeable.** EA ratings are matched to
+**Steps 8–10 are ordered, not interchangeable.** EA ratings are matched to
 players at ingest and headshots are fetched per active player, so both read the
 roster written by step 7. Run them the other way round and a newcomer waits a
 week for his rating and his photo.

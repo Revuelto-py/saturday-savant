@@ -32,21 +32,27 @@ cd "$(dirname "$0")"
 
 PY="${PYTHON:-python3}"
 
-echo "── [1/16] player box scores + PPA (fetch_data) ──"
+echo "── [1/18] player box scores + PPA (fetch_data) ──"
 $PY pipeline/fetch_data.py
-echo "── [2/16] team stats (fetch_team_stats) ──"
+# Week 0 is derived, not fetched: CFBD returns those games as week 1 and ignores
+# a week=0 argument. This runs immediately after the only step that writes
+# `games`, so everything derived below (Savant snapshots, precompute, forecasts)
+# sees the corrected week. It runs again at the end for the tables written later.
+echo "── [2/18] label week 0 (apply_week_zero) ──"
+$PY pipeline/apply_week_zero.py || echo "  week 0 pass failed — weeks unchanged, continuing"
+echo "── [3/18] team stats (fetch_team_stats) ──"
 $PY pipeline/fetch_team_stats.py
-echo "── [3/16] advanced team stats (fetch_advanced) ──"
+echo "── [4/18] advanced team stats (fetch_advanced) ──"
 $PY pipeline/fetch_advanced.py
-echo "── [4/16] SP+ ratings (fetch_sp) ──"
+echo "── [5/18] SP+ ratings (fetch_sp) ──"
 $PY pipeline/fetch_sp.py
-echo "── [5/16] AP rankings (fetch_rankings) ──"
+echo "── [6/18] AP rankings (fetch_rankings) ──"
 $PY pipeline/fetch_rankings.py
-echo "── [6/16] head coaches, current season (fetch_coaches) ──"
+echo "── [7/18] head coaches, current season (fetch_coaches) ──"
 # Supplementary (team-page hero only) and CFBD publishes the new season late, so
 # a failure/empty response must not abort the pipeline — keep going regardless.
 $PY pipeline/fetch_coaches.py || echo "  coach fetch failed — non-critical, continuing"
-echo "── [7/16] team rosters, current season (fetch_2026_roster) ──"
+echo "── [8/18] team rosters, current season (fetch_2026_roster) ──"
 # Rosters churn all season (injuries, dismissals, mid-year departures), and this
 # is what removes a departed player: Trebor Pena sat on Penn State's roster
 # after signing with Jacksonville because nothing refreshed it. Runs BEFORE the
@@ -55,14 +61,14 @@ echo "── [7/16] team rosters, current season (fetch_2026_roster) ──"
 # rating and a photo in the same run. Non-fatal, and it aborts internally
 # rather than writing a partial roster if CFBD drops teams mid-fetch.
 $PY pipeline/fetch_2026_roster.py || echo "  roster fetch failed — keeping last week's roster, continuing"
-echo "── [8/16] EA ratings, starter-model input (fetch_ea_ratings) ──"
+echo "── [9/18] EA ratings, starter-model input (fetch_ea_ratings) ──"
 # Internal-only signal for lineup/starter selection, never displayed. EA
 # publishes roster updates through the season, so a stale table quietly means
 # wrong starters. Non-fatal by design: it scrapes a third-party page, and the
 # script refuses to overwrite on a short/blocked fetch (EA_MIN_ROWS), so the
 # worst case is last week's ratings — not a broken pipeline.
 $PY pipeline/fetch_ea_ratings.py || echo "  EA ratings fetch failed — keeping previous ratings, continuing"
-echo "── [9/16] player headshots, current roster (refresh_headshots) ──"
+echo "── [10/18] player headshots, current roster (refresh_headshots) ──"
 # Only the current roster: historical images change ~1% a year against ~47% for
 # the roster at a season's photo drop, so the weekly pass sweeps 15k players
 # rather than 44k. Compares ESPN against what's already in R2 (NOT a local
@@ -70,23 +76,28 @@ echo "── [9/16] player headshots, current roster (refresh_headshots) ──"
 # actually changed. Non-fatal: a CDN hiccup leaves last week's images, which is
 # a stale photo, not a broken page.
 $PY pipeline/refresh_headshots.py --active-only || echo "  headshot refresh failed — keeping existing images, continuing"
-echo "── [10/16] game summaries / drives (fetch_game_summaries) ──"
+echo "── [11/18] game summaries / drives (fetch_game_summaries) ──"
 $PY pipeline/fetch_game_summaries.py
 # Play-level passing (air yards / pass location / YAC). Sits after the box-score
 # fetch because it only carries games already marked complete.
 # Non-fatal: these feed additive charts that nothing downstream reads, so a CFBD
 # hiccup here must not abort the ratings and precompute below.
-echo "── [11/16] play-level passing: air yards / location / YAC (fetch_passing) ──"
+echo "── [12/18] play-level passing: air yards / location / YAC (fetch_passing) ──"
 $PY pipeline/fetch_passing.py || echo "  (passing fetch failed — charts keep last week's data)"
-echo "── [12/16] Savant ratings (compute_savant_ratings) ──"
+echo "── [13/18] Savant ratings (compute_savant_ratings) ──"
 $PY pipeline/compute_savant_ratings.py --write   # --write persists; without it the script only dry-runs
-echo "── [13/16] percentile peer pools (backfill_pools) ──"
+echo "── [14/18] percentile peer pools (backfill_pools) ──"
 $PY pipeline/backfill_pools.py
-echo "── [14/16] team-page + returning-production precompute (precompute) ──"
+echo "── [15/18] team-page + returning-production precompute (precompute) ──"
 $PY pipeline/precompute.py
-echo "── [15/16] Vegas lines, active season (fetch_betting_lines) ──"
+echo "── [16/18] Vegas lines, active season (fetch_betting_lines) ──"
 $PY pipeline/fetch_betting_lines.py
-echo "── [16/16] Savant Forecast: score last week + predict upcoming (predict_games) ──"
+echo "── [17/18] Savant Forecast: score last week + predict upcoming (predict_games) ──"
 $PY pipeline/predict_games.py
+# Second pass. betting_lines, passing plays and predictions keep their own copy
+# of the week and are written above from CFBD, which calls a Week 0 game week 1
+# — so they need relabelling after those steps, not before.
+echo "── [18/18] label week 0 in the tables written since (apply_week_zero) ──"
+$PY pipeline/apply_week_zero.py || echo "  week 0 pass failed — weeks unchanged, continuing"
 
 echo "weekly pipeline complete"
