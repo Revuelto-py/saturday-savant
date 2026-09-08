@@ -8559,22 +8559,22 @@ def _persist_finals(board):
 
 @cache.memoize(timeout=LIVE_TTL)
 def _live_board():
-    """CFBD's live scoreboard, keyed by game id. Memoized so at most one call
-    is made per LIVE_TTL regardless of how many people are watching.
+    """The live scoreboard, keyed by game id: CFBD first, ESPN for its gaps.
+    Memoized so at most one call to each is made per LIVE_TTL regardless of how
+    many people are watching.
 
-    Returns {} when the key is absent or the call fails — the caller then falls
-    back to what the score cron has already written to Postgres, so the endpoint
-    still works on a web service that has no CFBD credentials.
+    Returns {} only when BOTH sources come back empty — the caller then falls
+    back to what the score cron has written to Postgres, so the endpoint still
+    works on a web service with no CFBD credentials.
     """
+    board = []
     key = os.getenv('CFBD_API_KEY')
-    if not key:
-        return {}
-    try:
-        with cfbd.ApiClient(cfbd.Configuration(access_token=key)) as api:
-            board = cfbd.GamesApi(api).get_scoreboard()
-    except Exception as exc:
-        print(f'live board unavailable: {type(exc).__name__} {exc}', flush=True)
-        return {}
+    if key:
+        try:
+            with cfbd.ApiClient(cfbd.Configuration(access_token=key)) as api:
+                board = cfbd.GamesApi(api).get_scoreboard()
+        except Exception as exc:
+            print(f'live board unavailable: {type(exc).__name__} {exc}', flush=True)
     out = {}
     for g in board:
         status = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
@@ -8595,6 +8595,11 @@ def _live_board():
     # is dropped by the caller, so the game simply never appeared. Applying
     # this only where CFBD says nothing, or still says upcoming, leaves the
     # primary source in charge everywhere it actually has an opinion.
+    #
+    # This runs whether or not CFBD answered, which is the whole point: the
+    # first cut of it sat below an early `return {}` on the missing-key and
+    # request-failure paths, so the fallback was dead in exactly the two cases
+    # that need a fallback. `board` stays an empty list instead.
     for gid, g in (espn_board.fetch(timeout=4) or {}).items():
         if g['state'] in ('live', 'final') and out.get(gid, {}).get('state', 'pre') == 'pre':
             out[gid] = g
