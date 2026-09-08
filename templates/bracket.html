@@ -59,7 +59,14 @@
   <header class="bk-header">
     <img class="bk-watermark" src="/static/logo-128.png" alt="">
     <h1 class="bk-title">College Football Playoff</h1>
-    <div class="bk-subtitle">{{ season }} Season · {{ '4-Team' if four_team else '12-Team' }} Bracket</div>
+    <div class="bk-subtitle">
+      {{ season }} Season · {{ '4-Team' if four_team else '12-Team' }} Bracket
+      {# Dashed purple is already this site's mark for a number that is an
+         estimate rather than a fact — the team hero uses it for a projected
+         record. Same device here, and the word is spelled out: a colour alone
+         should never be what tells you a bracket has not happened. #}
+      {% if projection %}<span class="bk-projected">Projected</span>{% endif %}
+    </div>
     {% if bracket_seasons and bracket_seasons|length > 1 %}
     <div style="margin-top:12px">
         <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
@@ -71,6 +78,36 @@
     </div>
     {% endif %}
   </header>
+
+  {% if projection %}
+  {# What the projection rests on, stated before the board rather than under it.
+     The assumption about conference champions is the load-bearing one and is
+     named first. #}
+  <div class="bk-proj-note">
+      <p class="bk-proj-lede">
+          Nobody has been seeded yet. This is the bracket the current AP poll would produce
+          under the College Football Playoff's {{ season }} rules — twelve teams, straight
+          seeding, byes to the top four. No games are simulated, so the first round is filled
+          and every round after it is left open.
+      </p>
+      <ul class="bk-proj-bids">
+          {% for e in projection if e.auto %}
+          <li>
+              <span class="bk-proj-seed">{{ e.seed }}</span>
+              <span class="bk-proj-why">
+                  <a class="bk-proj-team" href="{{ team_url(e.team, season) }}">{{ e.team }}</a>
+                  <span class="bk-proj-basis">{{ e.basis }}{% if not e.ranked %} · unranked, taken on SP+{% endif %}</span>
+              </span>
+          </li>
+          {% endfor %}
+      </ul>
+      <p class="bk-proj-caveat">
+          A conference champion is assumed to be that conference's highest-ranked team, which
+          is all a poll can tell you in {{ 'September' if season >= 2026 else 'season' }}. The
+          remaining places go to the highest-ranked teams left over.
+      </p>
+  </div>
+  {% endif %}
 
   {% if unsupported_season %}
   <div class="dark-card" style="max-width:560px;margin:24px auto;text-align:center;padding:40px 28px">

@@ -7670,6 +7670,117 @@ def _cfp_seed_teams(poll, fr_games, qf_games):
 
 FIRST_12_TEAM_SEASON = 2024  # the CFP expanded to 12 teams in 2024
 
+# ── Projected bracket ────────────────────────────────────────────────────────
+# The CFP's 2026 rules, which is what a projection has to encode:
+#   * 12 teams, and STRAIGHT SEEDING — the four first-round byes go to the four
+#     highest-ranked teams outright. They are no longer reserved for conference
+#     champions, which is how the 2024 bracket ended up seeding a 12th-ranked
+#     champion 4th.
+#   * Five automatic bids: the champion of each of the four power conferences,
+#     plus the highest-ranked Group of Six team. That last one changed for 2026
+#     — it no longer has to be a conference champion — and the relaunched Pac-12
+#     sits in the Group of Six pool, not with the power conferences.
+#   * Notre Dame takes an automatic bid as an independent if it finishes in the
+#     top twelve.
+#   * Everything left is at-large, by ranking.
+CFP_POWER_CONFS = ('ACC', 'Big 12', 'Big Ten', 'SEC')
+CFP_GROUP_OF_SIX = ('American Athletic', 'Conference USA', 'Mid-American',
+                    'Mountain West', 'Pac-12', 'Sun Belt')
+CFP_FIELD_SIZE = 12
+
+
+def _project_cfp_field(cursor, season):
+    """The bracket this season's AP poll would produce, under the 2026 rules.
+
+    A projection, not a forecast: it reads the poll as it stands and applies the
+    selection rules to it. No games are simulated and nothing is predicted about
+    who wins — the first round is filled and every later round is left open,
+    because that is genuinely all the poll can tell you.
+
+    Conference champions are taken to be each conference's highest-ranked team,
+    which is the assumption the request specifies and the only one the AP poll
+    supports. Where a conference has nobody ranked at all — true of all six
+    Group of Six leagues in September — the site's own Savant rating breaks the
+    tie rather than the slot going empty; those picks are marked so the page can
+    say which ones rest on the poll and which don't.
+
+    Returns (seeds, entries): seeds is {team: seed} in the shape the bracket
+    builder already consumes, entries carries the reasoning per team.
+    """
+    ap = get_ap_rankings(cursor, season)
+    if not ap:
+        return {}, []
+
+    fcs = set(FCS_CONFS)
+    cursor.execute('SELECT name, conference FROM teams WHERE conference IS NOT NULL')
+    conf_of = {n: c for n, c in cursor.fetchall() if c not in fcs}
+
+    # The tie-break for unranked teams, in order of how much it can be trusted
+    # this early: SP+ first, because it is a full-season rating carrying
+    # preseason priors, then the site's own Savant rating. Savant alone would
+    # have handed the Group of Six slot to a 1-0 Massachusetts on the strength
+    # of a single game — the same one-game-sample trap the leaderboard bar had.
+    sp = {}
+    try:
+        cursor.execute('SELECT team, rating FROM sp_ratings WHERE season = %s', (season,))
+        sp = {t: r for t, r in cursor.fetchall() if r is not None}
+    except Exception:
+        cursor.connection.rollback()
+    savant = {}
+    try:
+        cursor.execute('SELECT team, net_rating FROM savant_ratings WHERE season = %s',
+                       (season,))
+        savant = {t: r for t, r in cursor.fetchall() if r is not None}
+    except Exception:
+        cursor.connection.rollback()
+
+    def rank_of(team):
+        """Poll position. Unranked teams sort after every ranked one, ordered
+        among themselves by SP+ and then by Savant."""
+        if team in ap:
+            return (0, ap[team])
+        if team in sp:
+            return (1, -sp[team])
+        return (2, -savant.get(team, -99))
+
+    def best_in(conferences):
+        pool = [t for t, c in conf_of.items() if c in conferences]
+        return min(pool, key=rank_of) if pool else None
+
+    entries, taken = [], set()
+
+    def claim(team, basis, auto=True):
+        if not team or team in taken:
+            return
+        taken.add(team)
+        entries.append({'team': team, 'conference': conf_of.get(team),
+                        'ap_rank': ap.get(team), 'basis': basis, 'auto': auto,
+                        'ranked': team in ap})
+
+    for conf in CFP_POWER_CONFS:
+        champ = best_in((conf,))
+        claim(champ, f'Projected {conf} champion')
+
+    claim(best_in(CFP_GROUP_OF_SIX), 'Highest-ranked Group of Six team')
+
+    # Notre Dame's independent bid. Top twelve only, and it is the poll that
+    # decides — an unranked independent has no claim.
+    nd_rank = ap.get('Notre Dame')
+    if nd_rank and nd_rank <= CFP_FIELD_SIZE:
+        claim('Notre Dame', 'Independent, ranked in the top twelve')
+
+    for team in sorted(ap, key=ap.get):
+        if len(entries) >= CFP_FIELD_SIZE:
+            break
+        claim(team, 'At-large', auto=False)
+
+    entries.sort(key=lambda e: rank_of(e['team']))
+    entries = entries[:CFP_FIELD_SIZE]
+    for i, e in enumerate(entries, start=1):
+        e['seed'] = i
+    return {e['team']: e['seed'] for e in entries}, entries
+
+
 @app.route('/bracket')
 @cache.cached(timeout=21600, query_string=True)
 def bracket_page():
@@ -7686,6 +7797,17 @@ def bracket_page():
         except Exception:
             conn.rollback()
             bracket_seasons = [s for s in get_available_seasons() if s >= FIRST_12_TEAM_SEASON]
+        # A season the committee hasn't seeded yet gets a projection rather than
+        # a dead end, provided there is a poll to build one from. The season is
+        # then added to the selector — it used to show a subtitle for a season
+        # the dropdown had no option for, so the header said 2026 while the
+        # control underneath it said 2025.
+        projection, proj_seeds = [], {}
+        if season not in bracket_seasons and season >= FIRST_12_TEAM_SEASON:
+            proj_seeds, projection = _project_cfp_field(cursor, season)
+            if projection:
+                bracket_seasons = sorted(set(bracket_seasons) | {season}, reverse=True)
+
         if bracket_seasons and season not in bracket_seasons:
             return render_template('bracket.html', unsupported_season=season,
                                    season=season, bracket_seasons=bracket_seasons,
@@ -7697,11 +7819,14 @@ def bracket_page():
         # final AP poll can't seed a bracket (it re-ranks after the playoff,
         # which is exactly how the 2024 bracket ended up scrambled).
         seeds = {}
-        try:
-            cursor.execute('SELECT team, seed FROM cfp_seeds WHERE season = %s', (season,))
-            seeds = {r[0]: r[1] for r in cursor.fetchall()}
-        except Exception:
-            conn.rollback()
+        if projection:
+            seeds = proj_seeds
+        else:
+            try:
+                cursor.execute('SELECT team, seed FROM cfp_seeds WHERE season = %s', (season,))
+                seeds = {r[0]: r[1] for r in cursor.fetchall()}
+            except Exception:
+                conn.rollback()
 
         cursor.execute('''
             SELECT id, home_team, away_team, home_points, away_points,
@@ -7827,7 +7952,7 @@ def bracket_page():
                      for s in range(1, 5) if team_by_seed.get(s)]
         return render_template('bracket.html', bracket=bracket,
                                season=season, bracket_seasons=bracket_seasons,
-                               four_team=True,
+                               four_team=True, projection=projection,
                                cfp_teams=cfp_teams, champion=champion)
 
     # First round — slot letter, high seed, low seed
@@ -7884,7 +8009,7 @@ def bracket_page():
 
     return render_template('bracket.html', bracket=bracket,
                            season=season, bracket_seasons=bracket_seasons,
-                           four_team=False,
+                           four_team=False, projection=projection,
                            cfp_teams=cfp_teams, champion=champion)
 
 
