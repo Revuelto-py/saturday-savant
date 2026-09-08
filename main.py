@@ -8661,9 +8661,17 @@ def api_live():
         if g['state'] in ('live', 'final'):
             games[gid] = g
     resp = jsonify({'ttl': LIVE_TTL, 'games': games})
-    # Let the browser reuse it for one window, but never a shared proxy — this
-    # is the one response on the site that must not go stale behind a CDN.
-    resp.headers['Cache-Control'] = f'private, max-age={LIVE_TTL}'
+    # Let the browser reuse it briefly, but never a shared proxy — this is the
+    # one response on the site that must not go stale behind a CDN.
+    #
+    # Half the poll interval, not the whole of it. At max-age == LIVE_TTL the
+    # window and the poll are the same length, so a tick landing a moment before
+    # the entry expires is answered from the browser's cache and the score sits
+    # still for another 45 seconds. Anything strictly shorter than the interval
+    # guarantees every poll reaches the server — which costs nothing, because
+    # _live_board and _slate_state are themselves memoized for LIVE_TTL, so an
+    # early request is served from the same computed payload.
+    resp.headers['Cache-Control'] = f'private, max-age={LIVE_TTL // 2}'
     return resp
 
 
