@@ -470,7 +470,7 @@
             </a>
 
             {% set path = request.path %}
-            {% set more_active = path.startswith('/standings') or path.startswith('/rankings') or path.startswith('/bracket') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') or path.startswith('/forecast') %}
+            {% set more_active = path.startswith('/standings') or path.startswith('/rankings') or path.startswith('/bracket') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') %}
             <div class="nav-links" id="navLinks">
                 <a href="/games" {% if path.startswith('/games') or path.startswith('/game/') %}class="active"{% endif %}>Games</a>
                 <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active"{% endif %}>Teams</a>
@@ -493,7 +493,6 @@
                         <a href="/draft" role="menuitem" {% if path.startswith('/draft') %}class="active"{% endif %}>NFL Draft</a>
                         <a href="/rivalries" role="menuitem" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
                         <a href="/explorer" role="menuitem" {% if path.startswith('/explorer') %}class="active"{% endif %}>Explorer</a>
-                        <a href="/forecast" role="menuitem" {% if path.startswith('/forecast') %}class="active"{% endif %}>Model vs. Market</a>
                     </div>
                 </div>
             </div>

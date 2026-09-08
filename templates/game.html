@@ -119,19 +119,6 @@
 </div>
 {% endmacro %}
 
-{# ── Model vs. market helpers ──────────────────────────────────────────────
-   Both numbers below are home-perspective margins: positive favours the home
-   side. The betting line is stored the other way round (negative = home
-   favoured), so the route flips it once into market.home_margin and every
-   reference here is already in the same convention as forecast.margin. #}
-{% macro mkt_num(v) %}{{ (v|round|int) if (v|round(1)) == (v|round|int) else '%.1f'|format(v) }}{% endmacro %}
-{% macro mkt_side(m) %}
-{%- if m is none -%}—
-{%- elif m|abs < 0.5 -%}Pick'em
-{%- else -%}{{ home_team if m > 0 else away_team }} by {{ mkt_num(m|abs) }}
-{%- endif -%}
-{% endmacro %}
-
 {% block jsonld %}
 {# A completed game is a SportsEvent with two competitors and a result. This is
    the markup that lets a score surface in the result rather than a bare title. #}
@@ -375,44 +362,6 @@
     </div>
     {% endif %}
 
-    {% if market %}
-    {# The forecast on its own has nothing to be measured against until the game
-       is played. The closing spread is the standing benchmark, so it goes
-       beside the model here — before kickoff, when the disagreement is still
-       an open question rather than a settled one. #}
-    <div class="dark-card sched-card gmm">
-        <div class="section-header">Model vs. market</div>
-        {% set m_model = forecast.margin if forecast and forecast.margin is not none else none %}
-        {% set m_mkt = market.home_margin %}
-        <div class="gmm-pair">
-            <div class="gmm-side">
-                <span class="gmm-lab">Savant Forecast</span>
-                <span class="gmm-val">{{ mkt_side(m_model) }}</span>
-            </div>
-            <div class="gmm-side">
-                <span class="gmm-lab">Closing spread</span>
-                <span class="gmm-val">{{ mkt_side(m_mkt) }}</span>
-            </div>
-        </div>
-        {% if m_model is not none %}
-        {% set gap = (m_model - m_mkt)|abs %}
-        <p class="gmm-note">
-            {% if (m_model > 0) != (m_mkt > 0) and gap >= 1 %}
-                They disagree on the winner — {{ mkt_num(gap) }} points apart.
-            {% elif gap < 1 %}
-                They land on the same number.
-            {% else %}
-                Same side, {{ mkt_num(gap) }} points apart.
-            {% endif %}
-        </p>
-        {% endif %}
-        {% if market.total %}
-        <p class="gmm-total">Market total <b>{{ mkt_num(market.total) }}</b></p>
-        {% endif %}
-        <a class="gmm-link" href="/forecast">How the model has scored against the market</a>
-    </div>
-    {% endif %}
-
     <div class="dark-card sched-empty">
         Box score, drives, win probability, and game leaders will appear here once the game is played.
     </div>
@@ -424,58 +373,6 @@
 {% if forecast and forecast.contrib %}
 <div class="dark-card mb-4" style="padding:14px 24px">
     {{ forecast_why(forecast, forecast.favorite, True) }}
-</div>
-{% endif %}
-
-{# ── MODEL VS. MARKET, settled ─────────────────────────────────────────────
-   The same two numbers the upcoming-game card shows, now with the result
-   next to them. Both the model and the spread are stated before kickoff and
-   neither is re-picked here, so this is a scored comparison, not a recap. #}
-{% if market and game[3] is not none and game[4] is not none %}
-{% set final_m = game[3] - game[4] %}
-{% set m_mkt = market.home_margin %}
-{% set m_model = forecast.margin if forecast and forecast.margin is not none else none %}
-<div class="dark-card mb-4 gmm gmm-done">
-    <div class="section-header">Model vs. market</div>
-    <div class="gmm-grid">
-        <div class="gmm-side">
-            <span class="gmm-lab">Closing spread</span>
-            <span class="gmm-val">{{ mkt_side(m_mkt) }}</span>
-        </div>
-        {% if m_model is not none %}
-        <div class="gmm-side">
-            <span class="gmm-lab">Savant Forecast</span>
-            <span class="gmm-val">{{ mkt_side(m_model) }}</span>
-        </div>
-        {% endif %}
-        <div class="gmm-side gmm-final">
-            <span class="gmm-lab">Final</span>
-            {# mkt_side reads a zero margin as "Pick'em", which is right for a
-               projection and wrong for a result. #}
-            <span class="gmm-val">{{ 'Tied' if final_m == 0 else mkt_side(final_m) }}</span>
-        </div>
-    </div>
-    <p class="gmm-note">
-        {% if (final_m - m_mkt)|abs < 0.01 %}
-            The game landed exactly on the number — a push.
-        {% else %}
-            <b>{{ home_team if final_m > m_mkt else away_team }}</b> covered.
-        {% endif %}
-        {% if m_model is not none %}
-            {% set e_model = (m_model - final_m)|abs %}
-            {% set e_mkt = (m_mkt - final_m)|abs %}
-            {% if (e_model - e_mkt)|abs < 0.05 %}
-                Model and market finished the same distance from the final margin.
-            {% elif e_model < e_mkt %}
-                The Savant Forecast came {{ mkt_num(e_mkt - e_model) }} points closer to the
-                final margin than the spread did.
-            {% else %}
-                The spread came {{ mkt_num(e_model - e_mkt) }} points closer to the final
-                margin than the Savant Forecast did.
-            {% endif %}
-        {% endif %}
-    </p>
-    <a class="gmm-link" href="/forecast">The model's full record against the market</a>
 </div>
 {% endif %}
 
@@ -774,7 +671,7 @@
     {# These came from the stored box-score table rather than the live ESPN
        summary, which is why the card is shorter than usual. Saying so beats
        leaving the reader to wonder where the missing rows went. #}
-    <p class="gmm-source">Stored box score — turnovers, penalties, possession and total yards only.</p>
+    <p class="tstats-source">Stored box score — turnovers, penalties, possession and total yards only.</p>
     {% endif %}
 </div>
 {% endif %}
