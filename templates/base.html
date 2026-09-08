@@ -534,7 +534,7 @@
                    a kickoff time before the game, Live during, Final after. #}
                 <div class="ticker-status" data-live-status>
                     {%- if g.round %}{{ g.round }}
-                    {%- elif g.state == 'live' %}<span class="ticker-live">Live</span>
+                    {%- elif g.state == 'live' %}Live
                     {%- elif g.state == 'pre' %}{{ g.kickoff }}
                     {%- else %}Final{% endif -%}
                 </div>

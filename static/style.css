@@ -308,36 +308,53 @@
     text-transform: uppercase;
     flex-shrink: 0;
 }
-/* A game under way: score on the card like a final, but flagged red so it
-   reads as moving rather than settled. */
-.gc-live {
+/* ── The live pill ────────────────────────────────────────────────────────
+   One definition, three sizes. A game under way is flagged the same way on the
+   game page, on a game card and in the ticker, because they are the same fact
+   and a reader who learns the shape in one place should not have to learn it
+   again in the next. Only the metrics differ, and each context sets its own
+   below.
+
+   The red is #ff6b73 rather than var(--red): the pill tints its own background
+   red, and the token measures 4.12:1 against that tint. This value was tuned
+   against it. The dot is what carries "moving" — the colour alone would leave a
+   live game and a final one distinguished by hue only. */
+.gh-chip--state.is-live,
+.gc-live,
+.ticker-item.is-live .ticker-status {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    background: rgba(244,33,46,0.12);
-    border: 1px solid rgba(244,33,46,0.45);
+    gap: var(--live-gap, 5px);
     border-radius: var(--r-pill);
-    padding: 2px 8px;
+    background: rgba(244, 33, 46, 0.12);
+    border: 1px solid rgba(244, 33, 46, 0.5);
     color: #ff6b73;
-    font-size: 0.56rem;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
     white-space: nowrap;
-    flex-shrink: 0;
 }
-.gc-live::before {
+.gh-chip--state.is-live::before,
+.gc-live::before,
+.ticker-item.is-live .ticker-status::before {
     content: "";
-    width: 5px;
-    height: 5px;
+    flex: 0 0 auto;
+    width: var(--live-dot, 6px);
+    height: var(--live-dot, 6px);
     border-radius: 50%;
     background: #ff6b73;
     animation: gc-live-pulse 1.6s ease-in-out infinite;
 }
 @keyframes gc-live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) {
-    .gc-live::before { animation: none; }
+    .gh-chip--state.is-live::before,
+    .gc-live::before,
+    .ticker-item.is-live .ticker-status::before { animation: none; }
 }
+
+/* Card size. Typography is deliberately NOT set here: .gc-final, .gc-live and
+   .gc-upcoming share one block further down so all three states are the same
+   height and tracking, which is what keeps a card the same size whatever is
+   happening in the game. Only the dot is the live pill's own. */
+.gc-live { --live-dot: 5px; }
+
 .game-card-v2.is-live { border-left: 2px solid rgba(244,33,46,0.75); }
 .gc-team {
     display: flex;
@@ -3566,23 +3583,9 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
     color: #fff;
 }
 .gh-chip--state.is-scheduled { color: var(--accent); border-color: var(--border-gold); }
-.gh-chip--state.is-live {
-    /* A lifted red, not var(--red): the chip tints itself red too, and the token
-       measures 4.12:1 against that tint. This is the value the pill carried
-       before — it was tuned, not arbitrary. */
-    color: #ff6b73;
-    border-color: rgba(244, 33, 46, 0.5);
-    background: rgba(244, 33, 46, 0.12);
-}
-.gh-chip--state.is-live::before {
-    content: "";
-    width: 6px; height: 6px; border-radius: 50%;
-    background: #ff6b73;
-    animation: gc-live-pulse 1.6s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-    .gh-chip--state.is-live::before { animation: none; }
-}
+/* Hero size — the largest of the three. Typography comes from .gh-chip--state
+   above it; colour, dot and animation from the shared live block. */
+.gh-chip--state.is-live { --live-dot: 6px; --live-gap: 8px; }
 
 /* Label / value, the pattern the rest of the site's chips already use. */
 .gh-chip-label {
@@ -4484,8 +4487,22 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     margin-left: 8px;
     letter-spacing: 0.06em;
 }
-/* Ticker: a game under way reads red like the game cards do */
-.ticker-live { color: #ff6b73; font-weight: 800; }
+/* Ticker size. The pill lives on .ticker-status itself, not on a span inside
+   it: the live poll sets `status.textContent`, which wipes out any child
+   element, so the old inner <span class="ticker-live"> was destroyed on the
+   first tick and a live game showed as grey text like every other item. Styling
+   from the item's own .is-live class survives, because that is what the poll
+   toggles. */
+.ticker-item.is-live .ticker-status {
+    --live-dot: 5px;
+    --live-gap: 4px;
+    padding: 1px 7px;
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
 .ticker-item.is-live { box-shadow: inset 2px 0 0 rgba(244,33,46,0.75); }
 
 
