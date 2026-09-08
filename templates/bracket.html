@@ -65,25 +65,15 @@
          estimate rather than a fact — the team hero uses it for a projected
          record. Same device here, and the word is spelled out: a colour alone
          should never be what tells you a bracket has not happened. #}
-      {% if projection %}<span class="bk-projected">Projected</span>{% endif %}
+      {% if projection %}
+      <button type="button" class="bk-projected" aria-describedby="bk-proj-pop">Projected</button>
+      {% endif %}
     </div>
-    {% if bracket_seasons and bracket_seasons|length > 1 %}
-    <div style="margin-top:12px">
-        <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
-                onchange="location='?season='+this.value">
-            {% for s in bracket_seasons %}
-            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    {% endif %}
-  </header>
-
   {% if projection %}
-  {# What the projection rests on, stated before the board rather than under it.
-     The assumption about conference champions is the load-bearing one and is
-     named first. #}
-  <div class="bk-proj-note">
+  {# What the projection rests on. It hangs off the word "Projected" rather than
+     sitting above the board: it is the answer to a question, and a reader who
+     isn't asking it wants the bracket. #}
+  <div class="bk-proj-note" id="bk-proj-pop" role="tooltip">
       <p class="bk-proj-lede">
           Nobody has been seeded yet. This is the bracket the current AP poll would produce
           under the College Football Playoff's {{ season }} rules — twelve teams, straight
@@ -108,6 +98,18 @@
       </p>
   </div>
   {% endif %}
+    {% if bracket_seasons and bracket_seasons|length > 1 %}
+    <div style="margin-top:12px">
+        <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
+                onchange="location='?season='+this.value">
+            {% for s in bracket_seasons %}
+            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+  </header>
+
 
   {% if unsupported_season %}
   <div class="dark-card" style="max-width:560px;margin:24px auto;text-align:center;padding:40px 28px">

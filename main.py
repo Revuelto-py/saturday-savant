@@ -7798,15 +7798,22 @@ def bracket_page():
             conn.rollback()
             bracket_seasons = [s for s in get_available_seasons() if s >= FIRST_12_TEAM_SEASON]
         # A season the committee hasn't seeded yet gets a projection rather than
-        # a dead end, provided there is a poll to build one from. The season is
-        # then added to the selector — it used to show a subtitle for a season
-        # the dropdown had no option for, so the header said 2026 while the
-        # control underneath it said 2025.
+        # a dead end. Which season that is has to be decided independently of
+        # the one being viewed: adding it only while you were already on it put
+        # 2026 in the dropdown on the 2026 page and nowhere else, so switching
+        # to 2025 dropped the option and stranded you on a past season.
+        proj_season = None
+        if CURRENT_SEASON not in bracket_seasons and CURRENT_SEASON >= FIRST_12_TEAM_SEASON:
+            cursor.execute('SELECT 1 FROM ap_rankings WHERE season = %s LIMIT 1',
+                           (CURRENT_SEASON,))
+            if cursor.fetchone():
+                proj_season = CURRENT_SEASON
+                bracket_seasons = sorted(set(bracket_seasons) | {proj_season},
+                                         reverse=True)
+
         projection, proj_seeds = [], {}
-        if season not in bracket_seasons and season >= FIRST_12_TEAM_SEASON:
+        if season == proj_season:
             proj_seeds, projection = _project_cfp_field(cursor, season)
-            if projection:
-                bracket_seasons = sorted(set(bracket_seasons) | {season}, reverse=True)
 
         if bracket_seasons and season not in bracket_seasons:
             return render_template('bracket.html', unsupported_season=season,

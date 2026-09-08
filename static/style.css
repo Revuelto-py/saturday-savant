@@ -2098,15 +2098,67 @@ tr.player-row:hover {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     vertical-align: middle;
+    cursor: help;
+    transition: background var(--t-fast), border-color var(--t-fast);
 }
+.bk-projected:hover,
+.bk-projected:focus {
+    background: rgba(167,139,250,0.20);
+    border-color: rgba(167,139,250,0.9);
+    outline: none;
+}
+.bk-projected:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+/* No hover to give: the chip is small, so on touch it grows to a real target
+   rather than asking for a precise tap on 22px of text. */
+@media (hover: none) {
+    .bk-projected {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;       /* 42px on padding alone — the floor is 44 */
+        padding: 0 16px;
+    }
+}
+/* The explainer, now hung off the chip instead of stacked above the board.
+
+   Two triggers, because hover alone reaches nobody on a phone: the chip opens
+   it on hover for a pointer and on focus for a keyboard or a tap — it is a
+   <button>, so tapping focuses it rather than navigating. It stays open while
+   the pointer is inside it, since reading a panel usually means moving onto it.
+
+   Anchored to the header rather than the chip: the header is the full content
+   width and centred, so the panel can be centred and clamped to the viewport
+   without a small inline chip near the middle dragging it off-screen. */
 .bk-proj-note {
-    max-width: 74ch;
-    margin: var(--s5) auto var(--s6);
-    padding: 14px 18px;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    width: max-content;
+    max-width: min(56ch, calc(100vw - 2 * var(--s4)));
+    margin: 0;
+    padding: 16px 20px;
+    text-align: left;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
     border-left: 3px solid rgba(167,139,250,0.7);
     border-radius: var(--r-md);
+    box-shadow: var(--shadow-hover);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-fast);
+}
+.bk-header:has(.bk-projected:hover) .bk-proj-note,
+.bk-header:has(.bk-projected:focus) .bk-proj-note {
+    opacity: 1;
+}
+.bk-proj-note:hover { opacity: 1; pointer-events: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+    .bk-projected, .bk-proj-note { transition: none; }
 }
 .bk-proj-lede, .bk-proj-caveat {
     margin: 0;
