@@ -18,6 +18,7 @@ fallback for anything not stored.
 
 Usage:  python3 backfill/backfill_game_logs.py            # all seasons
         python3 backfill/backfill_game_logs.py 2019       # one season
+        python3 backfill/backfill_game_logs.py --current  # active season (weekly cron)
 """
 
 # This script lives one directory below the repo root; ROOT points back at it so
@@ -119,12 +120,20 @@ def backfill_season(apis, cur, conn, season):
     week_rows = cur.fetchall()
 
     import main as _m  # shorten_game_label lives in main
+    from season_util import cfbd_week
     logs = {}  # player_id -> [(start_date, entry)]
 
-    for week, stype in sorted(week_rows, key=lambda r: (('POSTSEASON' in r[1]), r[0])):
+    # Week 0 and week 1 both resolve to CFBD week 1, so de-duplicate before
+    # fetching or the opening weekend gets pulled twice.
+    week_rows = sorted({(cfbd_week(w), st) for w, st in week_rows},
+                       key=lambda r: (('POSTSEASON' in r[1]), r[0]))
+    for week, stype in week_rows:
         st = 'postseason' if 'POSTSEASON' in (stype or '') else 'regular'
         try:
-            games = apis.get_game_player_stats(year=season, week=week, season_type=st)
+            # CFBD has no week 0 and 400s on it; its week 1 carries those
+            # games, and each one is filed under OUR week via `meta` below.
+            games = apis.get_game_player_stats(
+                year=season, week=cfbd_week(week), season_type=st)
         except Exception as e:
             print(f"  {season} wk{week} {st}: {type(e).__name__} {str(e)[:70]}", flush=True)
             continue
@@ -192,7 +201,14 @@ def backfill_season(apis, cur, conn, season):
 
 
 def run():
-    seasons = [int(a) for a in sys.argv[1:]]
+    # --current is what the weekly chain passes: the in-season log has to be
+    # rebuilt after each week's games, and re-doing all eleven seasons every
+    # Sunday would be pointless (completed seasons never change).
+    if '--current' in sys.argv:
+        from season_util import current_cfb_season
+        seasons = [current_cfb_season()]
+    else:
+        seasons = [int(a) for a in sys.argv[1:] if not a.startswith('-')]
     conn = psycopg2.connect(os.getenv('DATABASE_URL'))
     cur = conn.cursor()
     cur.execute('''

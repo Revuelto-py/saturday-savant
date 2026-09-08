@@ -62,3 +62,15 @@ def week_zero_dates(kickoff_dates):
         # relabel most of week 1.
         break
     return set()
+
+
+def cfbd_week(week):
+    """Our week number, translated for a CFBD request.
+
+    CFBD has no Week 0 — it files those games under week 1 and **rejects
+    `week=0` with a 400**. So anything that reads a week out of our `games`
+    table and hands it back to CFBD has to map 0 -> 1. Requesting week 1
+    returns the Week 0 games alongside the real week 1 ones, and callers that
+    join the response by `game_id` still file each game under our week.
+    """
+    return 1 if week == 0 else week

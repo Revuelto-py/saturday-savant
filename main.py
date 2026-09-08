@@ -522,6 +522,28 @@ def get_ap_week_map(cursor, season):
     return regular, final
 
 
+@cache.memoize(timeout=600)
+def _season_last_completed_kickoff(season):
+    """Kickoff of the most recent completed game in a season, or None.
+
+    Used to decide whether a cached player game log is still current. Memoized
+    because every current-season player page asks the same question, and it only
+    changes when a game finishes.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT max(start_date::timestamptz) FROM games "
+                    "WHERE season = %s AND completed = 1", (season,))
+        row = cur.fetchone()
+        return row[0] if row else None
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+
 def ap_asof(ap_weekly, week, is_post):
     """The AP poll {team: rank} in effect for a game — the latest regular poll
     whose ranking week ≤ the game's week (poll teams carry INTO that week), or
@@ -6683,6 +6705,7 @@ def _player_detail_cached(player_id, season):
     # immutable, so the result is stored in Postgres and reused forever —
     # surviving restarts, unlike the in-memory page cache.
     _log_cached = None
+    _log_written = None
     connG = get_db()
     try:
         curG = connG.cursor()
@@ -6696,15 +6719,29 @@ def _player_detail_cached(player_id, season):
             )
         ''')
         connG.commit()
-        curG.execute('SELECT log FROM player_game_logs WHERE player_id=%s AND season=%s',
-                     (player_id, season))
+        curG.execute('SELECT log, updated_at FROM player_game_logs '
+                     'WHERE player_id=%s AND season=%s', (player_id, season))
         rowG = curG.fetchone()
         if rowG and rowG[0]:
             _log_cached = json.loads(rowG[0])
+            _log_written = rowG[1]
     except Exception:
         connG.rollback()
     finally:
         release_db(connG)
+
+    # A COMPLETED season is immutable and its log can be reused forever. The
+    # CURRENT one is not, and treating it the same way froze a player's game log
+    # at whatever it held the first time anyone opened the page: a USC player
+    # viewed between Week 0 and Week 1 kept a one-game log all season while his
+    # season totals — which come from player_stats, refreshed weekly — kept
+    # climbing. So a current-season log written before the most recent completed
+    # kickoff is stale, and gets rebuilt.
+    if (_log_cached is not None and season == CURRENT_SEASON):
+        _last_kick = _season_last_completed_kickoff(season)
+        if _last_kick is not None and (_log_written is None or _log_written < _last_kick):
+            _log_cached = None
+
     if _log_cached is not None:
         game_log = _log_cached
 
