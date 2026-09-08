@@ -3811,6 +3811,99 @@ def _returning_breakdown(cursor, team, prior, season, limit=4):
     return returning, departed
 
 
+# ── Situational splits: discipline and the spread ───────────────────────────
+@cache.memoize(timeout=3600)
+def _team_situational(team_name, season):
+    """One season of a team's box-score discipline and its record against the
+    spread. Returns {'box': ... or None, 'ats': ... or None}.
+
+    Two caveats the page states rather than hides:
+      * game_boxstats.team does not match teams.name for a single program, so
+        the side of each row is read from games.home_team/away_team via
+        is_home — the join the leaderboard uses for the same reason.
+      * game_boxstats stops at 2025. The current season has no rows, so 'box'
+        comes back None and the page says why instead of showing zeroes.
+    """
+    out = {'box': None, 'ats': None}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT count(*), sum(opp_tov - tov), avg(opp_tov - tov),
+                       avg(tov), avg(opp_tov), avg(pen), avg(pen_yds), avg(poss)
+                  FROM (
+                    SELECT bh.turnovers AS tov, ba.turnovers AS opp_tov,
+                           bh.penalties AS pen, bh.penalty_yards AS pen_yds,
+                           bh.poss_seconds AS poss
+                      FROM games g
+                      JOIN game_boxstats bh ON bh.game_id = g.id AND bh.is_home = 1
+                      JOIN game_boxstats ba ON ba.game_id = g.id AND ba.is_home = 0
+                     WHERE g.season = %s AND g.completed = 1 AND g.home_team = %s
+                    UNION ALL
+                    SELECT ba.turnovers, bh.turnovers,
+                           ba.penalties, ba.penalty_yards, ba.poss_seconds
+                      FROM games g
+                      JOIN game_boxstats bh ON bh.game_id = g.id AND bh.is_home = 1
+                      JOIN game_boxstats ba ON ba.game_id = g.id AND ba.is_home = 0
+                     WHERE g.season = %s AND g.completed = 1 AND g.away_team = %s
+                  ) bs""", (season, team_name, season, team_name))
+            r = cur.fetchone()
+            if r and r[0]:
+                poss = float(r[7]) if r[7] is not None else None
+                out['box'] = {
+                    'n': r[0],
+                    'tov_margin': int(r[1]) if r[1] is not None else None,
+                    'tov_margin_pg': round(float(r[2]), 2) if r[2] is not None else None,
+                    'giveaways_pg': round(float(r[3]), 2) if r[3] is not None else None,
+                    'takeaways_pg': round(float(r[4]), 2) if r[4] is not None else None,
+                    'pen_pg': round(float(r[5]), 1) if r[5] is not None else None,
+                    'pen_yds_pg': round(float(r[6]), 1) if r[6] is not None else None,
+                    'top': f'{int(poss) // 60}:{int(poss) % 60:02d}' if poss else None,
+                }
+        except Exception:
+            conn.rollback()
+
+        try:
+            # spread is home-perspective and negative when the home side is
+            # favoured, so the home team's margin over the number is
+            # (home_points - away_points) + spread, and the away team's is its
+            # negation. Positive = covered.
+            cur.execute("""
+                SELECT count(*),
+                       count(*) FILTER (WHERE m > 0), count(*) FILTER (WHERE m < 0),
+                       count(*) FILTER (WHERE m = 0), avg(m),
+                       count(*) FILTER (WHERE tot IS NOT NULL AND pts > tot),
+                       count(*) FILTER (WHERE tot IS NOT NULL AND pts < tot)
+                  FROM (
+                    SELECT (g.home_points - g.away_points) + b.spread AS m,
+                           b.over_under AS tot, (g.home_points + g.away_points) AS pts
+                      FROM games g JOIN betting_lines b ON b.game_id = g.id
+                     WHERE g.season = %s AND g.completed = 1 AND b.spread IS NOT NULL
+                       AND g.home_points IS NOT NULL AND g.home_team = %s
+                    UNION ALL
+                    SELECT -((g.home_points - g.away_points) + b.spread),
+                           b.over_under, (g.home_points + g.away_points)
+                      FROM games g JOIN betting_lines b ON b.game_id = g.id
+                     WHERE g.season = %s AND g.completed = 1 AND b.spread IS NOT NULL
+                       AND g.home_points IS NOT NULL AND g.away_team = %s
+                  ) a""", (season, team_name, season, team_name))
+            r = cur.fetchone()
+            if r and r[0]:
+                decided = r[1] + r[2]
+                out['ats'] = {
+                    'n': r[0], 'w': r[1], 'l': r[2], 'p': r[3],
+                    'pct': round(r[1] / decided * 100, 1) if decided else None,
+                    'cover_margin': round(float(r[4]), 1) if r[4] is not None else None,
+                    'over': r[5], 'under': r[6],
+                }
+        except Exception:
+            conn.rollback()
+    finally:
+        release_db(conn)
+    return out
+
+
 # ── NFL Talent ──────────────────────────────────────────────────────────────
 @cache.memoize(timeout=86400)
 def _team_nfl_talent(team):
@@ -4526,10 +4619,16 @@ def team(team_ref):
         # NFL Talent — all-time draft/UDFA alumni (not season-scoped)
         nfl_talent = _team_nfl_talent(team_name)
 
+        # Discipline (turnovers, penalties, possession) and the season's record
+        # against the closing spread. Both are season-scoped; the box-score half
+        # is empty for the current season because the table stops at 2025.
+        situational = _team_situational(team_name, season)
+
         return render_template('team.html',
                 team=team_info, record=record, projected_record=projected_record,
                 season_stats=season_stats,
                 returning=returning, nfl_talent=nfl_talent,
+                situational=situational,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
                 is_upcoming_season=is_upcoming, has_games=has_games,
@@ -4808,6 +4907,69 @@ def _classify_drive_result(display_result):
     return ('—', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
 
 
+def _game_market(game_id):
+    """Consensus betting line for one game, or None.
+
+    `spread` is stored from the home team's perspective — negative means the
+    home side was favoured — which is the OPPOSITE sign convention to the
+    Savant Forecast's `predicted_margin`. The implied home margin is therefore
+    `-spread`, and that flip is done here once rather than at each call site.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT spread, over_under FROM betting_lines
+                        WHERE game_id = %s AND spread IS NOT NULL
+                        ORDER BY updated_at DESC NULLS LAST LIMIT 1""", (game_id,))
+        row = cur.fetchone()
+    except Exception:
+        conn.rollback()          # table absent on a fresh DB
+        row = None
+    finally:
+        release_db(conn)
+    if not row or row[0] is None:
+        return None
+    return {'spread': float(row[0]),
+            'home_margin': -float(row[0]),
+            'total': float(row[1]) if row[1] is not None else None}
+
+
+def _game_boxstats(game_id):
+    """Stored team box stats for one game, keyed 'home'/'away'.
+
+    game_boxstats is the durable copy of the numbers the game page otherwise
+    scrapes from ESPN at render time. It is only read as a fallback, so an
+    older game whose ESPN summary no longer resolves still shows a team-stats
+    card instead of nothing. Ends at 2025 — there are no 2026 rows yet.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT is_home, turnovers, penalties, penalty_yards,
+                              poss_seconds, total_yards
+                         FROM game_boxstats WHERE game_id = %s""", (game_id,))
+        rows = cur.fetchall()
+    except Exception:
+        conn.rollback()
+        rows = []
+    finally:
+        release_db(conn)
+    out = {}
+    for is_home, tov, pen, pen_yds, poss, yds in rows:
+        d = {}
+        if yds is not None:
+            d['totalYards'] = f'{int(yds)}'
+        if tov is not None:
+            d['turnovers'] = f'{int(tov)}'
+        if pen is not None and pen_yds is not None:
+            d['totalPenaltiesYards'] = f'{int(pen)}-{int(pen_yds)}'
+        if poss:
+            d['possessionTime'] = f'{int(poss) // 60}:{int(poss) % 60:02d}'
+        if d:
+            out['home' if is_home else 'away'] = d
+    return out
+
+
 @app.route('/game/<int:game_id>')
 @cache.cached(timeout=3600)
 def game_detail(game_id):
@@ -4932,6 +5094,7 @@ def game_detail(game_id):
             # Empty defaults so the shared template never references missing data
             quarters={'home': [], 'away': []}, venue={}, attendance=None,
             venue_name='', venue_location='', attendance_fmt='', tv_broadcast='',
+            market=_game_market(game_id), stored_stats=False,
             plays=[], team_stats=[], home_stats={}, away_stats={},
             player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
             structured_leaders={}, win_prob=[], top_wpa=[])
@@ -5659,6 +5822,18 @@ def game_detail(game_id):
     finally:
         release_db(conn_u)
 
+    # The team-stats card above is filled from the ESPN summary. When that came
+    # back without a boxscore — common for older seasons — game_boxstats holds
+    # the durable version of the same numbers, so the card shows those instead
+    # of disappearing. Flagged so the page can say where they came from.
+    stored_stats = False
+    if not home_stats and not away_stats:
+        _bx = _game_boxstats(game_id)
+        if _bx:
+            home_stats = _bx.get('home', {})
+            away_stats = _bx.get('away', {})
+            stored_stats = True
+
     return render_template('game.html',
         game=game_info,
         forecast=forecast,
@@ -5681,6 +5856,8 @@ def game_detail(game_id):
         team_stats=team_stats,
         home_stats=home_stats,
         away_stats=away_stats,
+        stored_stats=stored_stats,
+        market=_game_market(game_id),
         player_stats=player_stats,
         leaders=leaders,
         drives=drives,

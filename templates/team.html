@@ -577,6 +577,87 @@
     </div>
     {% endif %}
 
+    <!-- Discipline and the spread — the two things the box-score and betting
+         tables carry that nothing else on the page reports. Kept as two label/
+         value strips rather than eight tiles: these are supporting numbers,
+         not the headline the Savant Rating cards above already claim. -->
+    {% if situational and (situational.box or situational.ats) %}
+    <div class="mt-4">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Discipline &amp; the Spread</h5>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · completed games only</span>
+        </div>
+
+        {% if situational.box %}
+        {% set b = situational.box %}
+        <div class="dark-card tsit">
+            <div class="tsit-head">Turnovers, penalties &amp; possession <span>{{ b.n }} game{{ '' if b.n == 1 else 's' }}</span></div>
+            <dl class="tsit-grid">
+                <div class="tsit-item">
+                    <dt>Turnover margin</dt>
+                    <dd class="tsit-num {{ 'is-pos' if b.tov_margin > 0 else ('is-neg' if b.tov_margin < 0 else '') }}">{{ '%+d'|format(b.tov_margin) }}</dd>
+                    <p class="tsit-sub">{{ '%+.2f'|format(b.tov_margin_pg) }} per game</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Giveaways</dt>
+                    <dd class="tsit-num">{{ b.giveaways_pg }}</dd>
+                    <p class="tsit-sub">per game</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Takeaways</dt>
+                    <dd class="tsit-num">{{ b.takeaways_pg }}</dd>
+                    <p class="tsit-sub">per game</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Penalties</dt>
+                    <dd class="tsit-num">{{ b.pen_pg }}</dd>
+                    <p class="tsit-sub">{{ b.pen_yds_pg }} yards per game</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Time of possession</dt>
+                    <dd class="tsit-num">{{ b.top or '—' }}</dd>
+                    <p class="tsit-sub">per game</p>
+                </div>
+            </dl>
+        </div>
+        {% elif has_games %}
+        <p class="tsit-gap">Turnovers, penalties and time of possession come from a stored box-score
+           table that ends at 2025 — there are no {{ season }} rows yet. Choose an earlier season
+           to see them.</p>
+        {% endif %}
+
+        {% if situational.ats %}
+        {% set a = situational.ats %}
+        <div class="dark-card tsit">
+            <div class="tsit-head">Against the closing spread <span>{{ a.n }} game{{ '' if a.n == 1 else 's' }} with a line</span></div>
+            <dl class="tsit-grid">
+                <div class="tsit-item">
+                    <dt>ATS record</dt>
+                    <dd class="tsit-num">{{ a.w }}–{{ a.l }}{% if a.p %}–{{ a.p }}{% endif %}</dd>
+                    <p class="tsit-sub">{% if a.p %}{{ a.p }} push{{ '' if a.p == 1 else 'es' }}{% else %}no pushes{% endif %}</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Cover rate</dt>
+                    <dd class="tsit-num">{{ ('%.1f'|format(a.pct)) ~ '%' if a.pct is not none else '—' }}</dd>
+                    <p class="tsit-sub">of decided games</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Cover margin</dt>
+                    <dd class="tsit-num {{ 'is-pos' if a.cover_margin > 0 else ('is-neg' if a.cover_margin < 0 else '') }}">{{ '%+.1f'|format(a.cover_margin) }}</dd>
+                    <p class="tsit-sub">points vs the number</p>
+                </div>
+                <div class="tsit-item">
+                    <dt>Over / Under</dt>
+                    <dd class="tsit-num">{{ a.over }} / {{ a.under }}</dd>
+                    <p class="tsit-sub">games with a total</p>
+                </div>
+            </dl>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Advanced Stats Percentile Rankings -->
     {% if team_adv %}
     <div class="mt-4">
