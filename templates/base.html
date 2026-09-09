@@ -530,6 +530,9 @@
         <div class="ticker-scroll">
             {% for g in ticker.games %}
             <a class="ticker-item{{ ' is-live' if g.state == 'live' else '' }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
+                {# The score is the resting face. Hovering swaps it, in place,
+                   for the win-probability chart — see .ticker-wp. #}
+                <span class="ticker-face">
                 {# Round name when the game has one (CFP), otherwise its state:
                    a kickoff time before the game, Live during, Final after. #}
                 <div class="ticker-status" data-live-status>
@@ -547,6 +550,7 @@
                     <span class="ticker-score{{ ' won' if side.won else '' }}" {{ 'data-live-away' if loop.first else 'data-live-home' }}>{{ side.pts if side.pts is not none else '' }}</span>
                 </div>
                 {% endfor %}
+                </span>
             </a>
             {% endfor %}
         </div>
@@ -826,14 +830,15 @@
     </script>
 
     <!-- ── Ticker win-probability peek ──────────────────────────────────────
-         Hovering a score in the ticker shows how the game actually went: the
-         two crests and a win-probability sparkline, the way Baseball Savant's
-         scoreboard does it.
+         Hovering a score turns that ticker cell into how the game actually
+         went: the two crests and a win-probability line, the way Baseball
+         Savant's scoreboard does it.
 
-         The popover lives on <body>, not inside the item. The ticker is a
-         horizontal scroller (overflow-x:auto, overflow-y:hidden), so anything
-         positioned inside it gets clipped at the bar's edges — there is no
-         "just position it absolutely" that works here.
+         It swaps IN PLACE rather than opening a panel underneath. The ticker is
+         a horizontal scroller (overflow-x:auto, overflow-y:hidden), so a panel
+         hung below the bar gets clipped and has to be escaped to <body> and
+         positioned by hand; drawing inside the cell it belongs to needs none of
+         that, and the chart lands exactly where the eye already is.
 
          Hover only, and only where hover is real: on a touch screen the tap
          belongs to the link, which goes to the full game page. -->
@@ -844,21 +849,10 @@
 
         var CACHE = null;          // {gid: [0-100, ...]} once fetched
         var pending = null;        // in-flight batch, so hovering fast asks once
-        var pop = null, hideTimer = null, current = null;
         // What the pointer is on RIGHT NOW. The batch is async, so by the time
         // it lands the pointer may be somewhere else; comparing against this is
         // reliable in a way that re-testing :hover afterwards is not.
         var wanted = null;
-
-        function build() {
-            pop = document.createElement('div');
-            pop.className = 'tk-wp';
-            pop.setAttribute('role', 'tooltip');
-            pop.id = 'tk-wp';
-            pop.hidden = true;
-            document.body.appendChild(pop);
-            return pop;
-        }
 
         function fetchAll() {
             if (CACHE) return Promise.resolve(CACHE);
@@ -873,110 +867,106 @@
             return pending;
         }
 
-        // Home win probability, as an area under a line with the 50% mark drawn
-        // in — the shape alone doesn't say which side of even it is on.
-        function spark(series) {
-            var W = 168, H = 48, P = 3;
-            var n = series.length, iw = W - P * 2, ih = H - P * 2;
+        // Home win probability as a line over its own fill, with the 50% mark
+        // drawn in — the shape alone doesn't say which side of even it is on.
+        // Sized to the box it is going into, so the stroke never gets scaled
+        // unevenly the way a stretched viewBox would do it.
+        function spark(series, W, H) {
+            var P = 2, n = series.length, iw = W - P * 2, ih = H - P * 2;
             var xs = function (i) { return P + (n === 1 ? iw / 2 : i * iw / (n - 1)); };
             var ys = function (v) { return P + (100 - v) * ih / 100; };
             var d = '', i;
             for (i = 0; i < n; i++) d += (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(series[i]).toFixed(1);
             var area = d + 'L' + xs(n - 1).toFixed(1) + ' ' + (H - P) + 'L' + xs(0).toFixed(1) + ' ' + (H - P) + 'Z';
-            return '<svg class="tk-wp-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' +
-                   '<path class="tk-wp-area" d="' + area + '"/>' +
-                   '<line class="tk-wp-mid" x1="' + P + '" y1="' + ys(50) + '" x2="' + (W - P) + '" y2="' + ys(50) + '"/>' +
-                   '<path class="tk-wp-line" d="' + d + '"/>' +
-                   '<circle class="tk-wp-dot" cx="' + xs(n - 1).toFixed(1) + '" cy="' + ys(series[n - 1]).toFixed(1) + '" r="2.5"/>' +
+            return '<svg class="ticker-wp-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' +
+                   '<path class="ticker-wp-area" d="' + area + '"/>' +
+                   '<line class="ticker-wp-mid" x1="' + P + '" y1="' + ys(50).toFixed(1) + '" x2="' + (W - P) + '" y2="' + ys(50).toFixed(1) + '"/>' +
+                   '<path class="ticker-wp-line" d="' + d + '"/>' +
+                   '<circle class="ticker-wp-dot" cx="' + xs(n - 1).toFixed(1) + '" cy="' + ys(series[n - 1]).toFixed(1) + '" r="2.2"/>' +
                    '</svg>';
+        }
+
+        // .ticker-name wraps the AP rank in its own span, so reading the
+        // element's text gives "3UGA". The abbreviation is the trailing text.
+        function abbr(team) {
+            var el = team.querySelector('.ticker-name');
+            if (!el) return '';
+            var out = '';
+            el.childNodes.forEach(function (n) { if (n.nodeType === 3) out += n.textContent; });
+            return (out || el.textContent).trim();
         }
 
         function show(item) {
             var series = CACHE && CACHE[item.getAttribute('data-gid')];
-            if (!series || !series.length) { hide(); return; }
-            var teams = item.querySelectorAll('.ticker-team');
-            if (teams.length < 2) { hide(); return; }
+            if (!series || !series.length) return;
+            var teams = item.querySelectorAll('.ticker-face .ticker-team');
+            if (teams.length < 2) return;
+
+            var box = item.querySelector('.ticker-wp');
+            if (!box) {
+                box = document.createElement('span');
+                box.className = 'ticker-wp';
+                box.setAttribute('aria-hidden', 'true');   // the label below carries it
+                item.appendChild(box);
+            }
+            if (box.dataset.built) { item.classList.add('wp-on'); return; }
+
             var logos = '';
             Array.prototype.forEach.call(teams, function (t) {
                 var img = t.querySelector('img');
-                logos += '<span class="tk-wp-crest">' +
-                    (img ? '<img src="' + img.getAttribute('src') + '" alt="" width="22" height="22">' : '') +
+                logos += '<span class="ticker-wp-crest">' +
+                    (img ? '<img src="' + img.getAttribute('src') + '" alt="" width="18" height="18">' : '') +
                     '</span>';
             });
             var last = series[series.length - 1];
-            // .ticker-name wraps the AP rank in its own span, so reading the
-            // element's text gives "3UGA". The abbreviation is the trailing
-            // text node.
-            function abbr(t) {
-                var el = t.querySelector('.ticker-name');
-                if (!el) return '';
-                var out = '';
-                el.childNodes.forEach(function (n) {
-                    if (n.nodeType === 3) out += n.textContent;
-                });
-                return (out || el.textContent).trim();
-            }
-            var away = abbr(teams[0]);
-            var home = abbr(teams[1]);
+            var away = abbr(teams[0]), home = abbr(teams[1]);
             var lead = last >= 50 ? home : away;
             var pct  = last >= 50 ? last : 100 - last;
-            // Named in text as well as drawn, so the panel still says something
-            // to a reader who can't use the line.
-            var cap = '<b>' + lead + '</b> ' + pct + '%';
-            pop.innerHTML = '<div class="tk-wp-crests">' + logos + '</div>' +
-                            '<div class="tk-wp-body">' + spark(series) +
-                            '<div class="tk-wp-cap">' + cap + '</div></div>';
-            pop.setAttribute('aria-label',
+
+            box.innerHTML = '<span class="ticker-wp-crests">' + logos + '</span>' +
+                            '<span class="ticker-wp-body">' +
+                              '<span class="ticker-wp-chart"></span>' +
+                              '<span class="ticker-wp-cap"><b>' + lead + '</b> ' + pct + '%</span>' +
+                            '</span>';
+            item.classList.add('wp-on');
+            // Measure after the box is laid out, then draw to that exact size.
+            var slot = box.querySelector('.ticker-wp-chart');
+            var w = Math.max(60, Math.round(slot.clientWidth));
+            var h = Math.max(26, Math.round(slot.clientHeight));
+            slot.innerHTML = spark(series, w, h);
+            box.dataset.built = '1';
+            // Named in text as well as drawn, so the cell still says something
+            // to a reader who cannot use the line.
+            item.setAttribute('aria-description',
                 'Win probability: ' + lead + ' finished at ' + pct + ' percent');
-            pop.hidden = false;
-            place(item);
-            requestAnimationFrame(function () { pop.classList.add('is-on'); });
-            current = item;
         }
 
-        function place(item) {
-            var r = item.getBoundingClientRect();
-            var w = pop.offsetWidth;
-            // Clamp to the viewport so an item at either end of the bar still
-            // gets a fully visible panel.
-            var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
-            pop.style.left = Math.round(left) + 'px';
-            pop.style.top = Math.round(r.bottom + 6) + 'px';
-        }
-
-        function hide() {
-            wanted = null;
-            if (!pop) return;
-            pop.classList.remove('is-on');
-            current = null;
-            clearTimeout(hideTimer);
-            hideTimer = setTimeout(function () { if (!current) pop.hidden = true; }, 160);
-        }
-
-        function onEnter(e) {
-            var item = e.target.closest('.ticker-item[data-gid]');
-            if (!item) return;
-            if (item === wanted) return;
-            wanted = item;
-            clearTimeout(hideTimer);
-            if (!pop) build();
-            fetchAll().then(function () {
-                if (wanted === item) show(item);
-            });
+        function hide(item) {
+            if (item) item.classList.remove('wp-on');
         }
 
         scroll.addEventListener('mouseover', onEnter);
         scroll.addEventListener('focusin', onEnter);
-        scroll.addEventListener('mouseout', function (e) {
-            if (!e.relatedTarget || !e.relatedTarget.closest('.ticker-item')) hide();
+        function onEnter(e) {
+            var item = e.target.closest('.ticker-item[data-gid]');
+            if (!item || item === wanted) return;
+            hide(wanted);
+            wanted = item;
+            fetchAll().then(function () { if (wanted === item) show(item); });
+        }
+        function leave(e) {
+            var item = e.target.closest ? e.target.closest('.ticker-item[data-gid]') : null;
+            if (!item) return;
+            if (e.relatedTarget && e.relatedTarget.closest &&
+                e.relatedTarget.closest('.ticker-item[data-gid]') === item) return;
+            if (wanted === item) wanted = null;
+            hide(item);
+        }
+        scroll.addEventListener('mouseout', leave);
+        scroll.addEventListener('focusout', leave);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { hide(wanted); wanted = null; }
         });
-        scroll.addEventListener('focusout', hide);
-        // The panel is pinned to the viewport, so anything that moves the item
-        // out from under it has to close it.
-        scroll.addEventListener('scroll', hide, { passive: true });
-        window.addEventListener('scroll', hide, { passive: true });
-        window.addEventListener('resize', hide, { passive: true });
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
     })();
     </script>
 

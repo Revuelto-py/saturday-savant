@@ -141,63 +141,68 @@ html {
 }
 
 /* ── Ticker win-probability peek ──────────────────────────────────────────
-   Hovering a score shows how the game actually went. Rendered on <body> and
-   positioned to the viewport, because the ticker is a horizontal scroller and
-   clips anything placed inside it.
+   Hovering a score turns that cell into the shape of the game. It swaps in
+   place: the ticker is a horizontal scroller that clips vertically, so a panel
+   hung below the bar has to be escaped to <body> and positioned by hand, while
+   drawing inside the cell needs none of that — and the chart arrives where the
+   eye already is.
 
-   It is a peek, not a page: two crests, the shape of the game, and who ended
-   up in front. Anything more belongs on the game page the item links to. */
-.tk-wp {
-    position: fixed;
-    z-index: 1000;
+   Both faces are absolutely stacked in the same box, so the cell's width and
+   the bar's height never move. */
+.ticker-item { position: relative; }
+.ticker-face {
+    display: block;
+    transition: opacity var(--t-fast);
+}
+.ticker-item.wp-on .ticker-face { opacity: 0; }
+
+.ticker-wp {
+    position: absolute;
+    inset: var(--s2) var(--s4);
     display: flex;
     align-items: stretch;
-    gap: 0.6rem;
-    padding: 0.6rem 0.7rem;
-    background: #0e1826;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-md);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-    pointer-events: none;          /* never steals the hover from the link */
+    gap: 0.5rem;
     opacity: 0;
-    transform: translateY(-4px);
-    transition: opacity var(--t-fast), transform var(--t-fast);
+    pointer-events: none;
+    transition: opacity var(--t-fast);
 }
-.tk-wp.is-on { opacity: 1; transform: translateY(0); }
+.ticker-item.wp-on .ticker-wp { opacity: 1; }
 
-.tk-wp-crests {
+.ticker-wp-crests {
     display: flex;
     flex-direction: column;
-    justify-content: space-around;
-    gap: 0.35rem;
-    padding-right: 0.6rem;
+    justify-content: space-evenly;
+    flex: 0 0 auto;
+    padding-right: 0.5rem;
     border-right: 1px solid var(--border);
 }
-.tk-wp-crest { display: flex; align-items: center; justify-content: center; }
-.tk-wp-crest img { object-fit: contain; display: block; }
+.ticker-wp-crest img { display: block; object-fit: contain; }
 
-.tk-wp-body { display: flex; flex-direction: column; gap: 0.2rem; }
-.tk-wp-svg { display: block; overflow: visible; }
-/* The line is the reading; the fill is only there to give it a body. */
-.tk-wp-area { fill: rgba(28,156,240,0.20); stroke: none; }
-.tk-wp-line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
-.tk-wp-dot  { fill: var(--accent); }
+.ticker-wp-body { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.ticker-wp-chart { flex: 1 1 auto; min-height: 0; display: block; }
+.ticker-wp-svg { display: block; }
+/* The line is the reading; the fill only gives it a body. */
+.ticker-wp-area { fill: rgba(28,156,240,0.20); stroke: none; }
+.ticker-wp-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.ticker-wp-dot  { fill: var(--accent); }
 /* Even. Without it the shape says how the game moved but not which side of the
    coin flip it was on. */
-.tk-wp-mid  { stroke: rgba(255,255,255,0.22); stroke-width: 1; stroke-dasharray: 3 3; }
+.ticker-wp-mid  { stroke: rgba(255,255,255,0.22); stroke-width: 1; stroke-dasharray: 3 3; }
 
-.tk-wp-cap {
+.ticker-wp-cap {
+    flex: 0 0 auto;
     font-size: var(--text-xs);
+    line-height: 1.2;
     color: var(--text-secondary);
-    letter-spacing: 0.02em;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-variant-numeric: tabular-nums;
 }
-.tk-wp-cap b { color: var(--text-primary); font-weight: 700; }
+.ticker-wp-cap b { color: var(--text-primary); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
-    .tk-wp { transition: none; transform: none; }
-    .tk-wp.is-on { transform: none; }
+    .ticker-face, .ticker-wp { transition: none; }
 }
 
 /* ── Sitewide score ticker (under the navbar) ─────────────────────────── */
