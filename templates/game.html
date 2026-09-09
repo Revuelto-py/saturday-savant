@@ -354,9 +354,15 @@
                 {%- else %}{{ ('%+g' % val) if signed else val }}{{ suffix }}{% endif -%}
             </span>
         </div>
+        {# The same five bands the team page's percentile section uses, so a
+           number means the same colour on both screens: blue is poor, grey is
+           average, red is great. #}
+        {%- set band = 'p4' if pctl is none else (
+              'p4' if pctl >= 80 else 'p3' if pctl >= 60 else
+              'p2' if pctl >= 45 else 'p1' if pctl >= 25 else 'p0') -%}
         <div class="gpx-bar">
             <span class="gpx-track">
-                {%- if pctl is not none %}<span class="gpx-fill" style="width: {{ pctl }}%"></span>{% endif -%}
+                {%- if pctl is not none %}<span class="gpx-fill {{ band }}" style="width: {{ pctl }}%"></span>{% endif -%}
             </span>
             <span class="gpx-pctl">{{ pctl if pctl is not none else '' }}</span>
         </div>
@@ -481,7 +487,11 @@
 
         <p class="gpx-foot">
             Season to date. The bar under a stat is that team's standing against all FBS
-            teams — further right is better, whichever way the raw number runs.
+            teams — further right is better, whichever way the raw number runs. Colour
+            follows the same scale as a team page:
+            <span class="gpx-key"><i class="p0"></i>poor</span>
+            <span class="gpx-key"><i class="p2"></i>average</span>
+            <span class="gpx-key"><i class="p4"></i>great.</span>
         </p>
     </section>
     {% endif %}
