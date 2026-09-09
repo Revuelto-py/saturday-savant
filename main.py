@@ -5172,7 +5172,7 @@ def _preview_team(team, season):
     out = {'team': team, 'games': None, 'wins': None, 'losses': None,
            'ppg': None, 'papg': None, 'net': None, 'net_rank': None,
            'svr_off': None, 'svr_def': None, 'off_epa': None, 'def_epa': None,
-           'ats': None}
+           'off_sr': None, 'havoc': None, 'ats': None, 'pct': {}}
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -5205,12 +5205,15 @@ def _preview_team(team, season):
             out['svr_off'] = round(float(r[2]), 1) if r[2] is not None else None
             out['svr_def'] = round(float(r[3]), 1) if r[3] is not None else None
 
-        cur.execute("""SELECT off_ppa, def_ppa FROM team_advanced
-                        WHERE team = %s AND season = %s""", (team, season))
+        cur.execute("""SELECT off_ppa, def_ppa, off_success_rate, def_havoc_total
+                         FROM team_advanced WHERE team = %s AND season = %s""", (team, season))
         r = cur.fetchone()
         if r:
             out['off_epa'] = round(float(r[0]), 3) if r[0] is not None else None
             out['def_epa'] = round(float(r[1]), 3) if r[1] is not None else None
+            # Stored as fractions; the site shows these as percentages.
+            out['off_sr'] = round(float(r[2]) * 100, 1) if r[2] is not None else None
+            out['havoc'] = round(float(r[3]) * 100, 1) if r[3] is not None else None
     except Exception:
         conn.rollback()
     finally:
@@ -5220,6 +5223,17 @@ def _preview_team(team, season):
     # leaderboard use — one definition of a cover across the site.
     sit = _team_situational(team, season) or {}
     out['ats'] = sit.get('ats')
+
+    # Percentiles against the whole FBS field, from the same precomputed store
+    # the team page reads. Already direction-corrected — a stingy defence scores
+    # high on def_ppa — so every one of these reads "higher is better".
+    field = _team_percentiles_all(season).get(team) or {}
+    out['pct'] = {
+        'off_epa': field.get('off_ppa'),
+        'def_epa': field.get('def_ppa'),
+        'off_sr':  field.get('off_success_rate'),
+        'havoc':   field.get('def_havoc_total'),
+    }
     return out
 
 

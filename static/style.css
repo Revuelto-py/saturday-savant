@@ -4702,112 +4702,155 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 /* Dashed edge marks it as a slot waiting to be filled, reusing the same
    empty-state signal .compare-empty-slot already uses on the compare page. */
 /* ── Matchup preview (upcoming games) ─────────────────────────────────────
-   Three columns mirroring the hero above it: the away side's season sits under
-   the away side, the home side's under the home side, and the market's number
-   between them.
-
-   It is ONE grid, not two lists flanking a card. Every comparison is a row of
-   the same grid, so "Points / game" lines up with "Points / game" by
-   construction — there is no pair of column heights to keep in sync, and it
-   survives a row being dropped because one team has no data for it. */
-.gp { margin-top: var(--s5); }
-.gp-grid {
+   Three boxes mirroring the hero: each team's season in its own card on its own
+   side, the forecast between them. Both team cards render the same rows in the
+   same order — a stat with no value still renders its row — so the two read
+   across without being welded into a single grid. */
+.gpx { margin-top: var(--s5); }
+.gpx-grid {
     display: grid;
-    /* The middle is the widest track: it carries the forecast bar, which is the
-       headline of the whole block. */
-    grid-template-columns: 1fr minmax(240px, 1.5fr) 1fr;
-    align-items: center;
-    gap: 0.55rem var(--s4);
-    padding: var(--s5) var(--s4) var(--s4);
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
+    grid-template-columns: 1fr minmax(260px, 1.15fr) 1fr;
+    align-items: start;
+    gap: var(--s3);
 }
+.gpx-team, .gpx-mid { padding: var(--s4) var(--s4) var(--s3); }
+.gpx-mid { text-align: center; padding-bottom: var(--s4); }
 
-/* Row 1: the two teams, and the line between them. */
-/* Explicit placement for the header row. The middle comes first in the DOM so
-   that a phone can lift it to full width above the two teams; on a wide screen
-   it is put back between them. */
-.gp-mid       { grid-column: 2; grid-row: 1; }
-.gp-team-away { grid-column: 1; grid-row: 1; }
-.gp-team-home { grid-column: 3; grid-row: 1; }
-.gp-spacer    { display: none; }
-
-.gp-team {
+/* Team card header */
+.gpx-head {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 5px;
+    gap: 0.55rem;
+    /* Two lines of name, always — and never more. "Penn State" wraps at this
+       width and "Temple" does not, and that single difference put every row in
+       the two cards out of step with each other all the way down. Reserving the
+       taller of the two shapes is what keeps them readable across. */
+    min-height: 3.4rem;
     padding-bottom: var(--s3);
+    margin-bottom: var(--s2);
+    border-bottom: 1px solid var(--border);
 }
-.gp-team img { object-fit: contain; }
-.gp-team-name {
+.gpx-head img { object-fit: contain; flex: 0 0 auto; }
+.gpx-name {
     font-family: var(--font-display);
     font-size: var(--text-md);
     font-weight: 800;
-    line-height: 1.1;
-    text-align: center;
-    text-wrap: balance;
+    line-height: 1.15;
+    min-width: 0;
+    flex: 1 1 auto;
+    /* A three-line name would defeat the reserved height above. */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
-.gp-rec {
-    font-size: var(--text-xs);
+.gpx-rank {
+    color: var(--accent);
+    font-size: 0.72em;
+    font-weight: 800;
+    margin-right: 4px;
+    vertical-align: 0.1em;
+}
+.gpx-rec {
+    flex: 0 0 auto;
+    font-size: var(--text-sm);
     font-weight: 700;
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
 }
 
-.gp-mid {
+/* One stat: label and value on a line, its standing against the field beneath.
+   The track is always rendered, even when a stat has no percentile, so the two
+   cards stay row-for-row aligned across the forecast between them. */
+.gpx-row { padding: 0.3rem 0 0.34rem; }
+.gpx-row-top {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 0 var(--s2) var(--s3);
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s2);
 }
-/* Forecast first, market under it — the model is the site's own read, the line
-   is the outside opinion beside it. */
-.gp-fc { width: 100%; text-align: center; }
-.gp-fc-k {
+.gpx-label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    min-width: 0;
+    /* A label that wraps in one card and not the other breaks the read-across.
+       The labels are short enough that this never actually truncates. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.gpx-val {
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 800;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+/* Bar and number share the second line. Overlaying the number on the row above
+   put it on top of the value. */
+/* Fixed height. When a stat has no percentile the number span is empty and
+   collapses, which made those rows 6px shorter than the rest — enough to put
+   the two cards out of step wherever one team was missing from the advanced
+   table (every FCS opponent, and any team the season has not rated yet). */
+.gpx-bar { display: flex; align-items: center; gap: 6px; height: 0.75rem; margin-top: 4px; }
+.gpx-track {
+    flex: 1 1 auto;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+}
+.gpx-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+}
+/* The number, so the bar is never the only way to read the standing. Its box is
+   reserved even when empty, so every row is the same height in both cards. */
+.gpx-pctl {
+    flex: 0 0 1.6rem;
+    text-align: right;
+    font-size: 0.64rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Middle card */
+.gpx-fc-k {
     font-size: 0.66rem;
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--accent);
-    margin-bottom: 7px;
+    margin-bottom: 8px;
 }
-.gp-fc-exp {
-    margin-top: 7px;
+.gpx-fc-exp {
+    margin-top: 8px;
     font-size: var(--text-sm);
     color: var(--text-secondary);
     line-height: 1.4;
     text-wrap: balance;
 }
-.gp-fc-exp b { color: var(--text-primary); font-weight: 700; }
-.gp-fc-basis {
-    margin-top: 6px;
+.gpx-fc-exp b { color: var(--text-primary); font-weight: 700; }
+.gpx-fc-basis {
+    margin-top: 7px;
     font-size: 0.68rem;
-    line-height: 1.45;
+    line-height: 1.5;
     color: var(--text-dim);
     text-wrap: balance;
 }
-.gp-vegas { text-align: center; }
-/* A rule, not a card: the line is a second reading of the same matchup, not a
-   separate object. */
-.gp-vegas.has-fc {
-    margin-top: var(--s3);
-    padding-top: var(--s3);
+/* A rule, not another card: the line is a second reading of the same matchup. */
+.gpx-vegas.has-fc {
+    margin-top: var(--s4);
+    padding-top: var(--s4);
     border-top: 1px solid var(--border);
-    width: 100%;
 }
-.gp-why { margin-top: var(--s3); }
-.gp-vegas-k {
-    font-size: 0.66rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
-    margin-bottom: 3px;
-}
-.gp-vegas-v {
+.gpx-vegas-k { color: var(--text-secondary); }
+.gpx-vegas-v {
     font-family: var(--font-display);
     font-size: var(--text-lg);
     font-weight: 800;
@@ -4816,62 +4859,37 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     font-variant-numeric: tabular-nums;
     text-wrap: balance;
 }
-.gp-vegas-v b { color: var(--accent); font-weight: 800; }
-.gp-vegas-sub {
-    margin-top: 3px;
+.gpx-vegas-v b { color: var(--accent); font-weight: 800; }
+.gpx-vegas-sub {
+    margin-top: 4px;
     font-size: var(--text-xs);
     color: var(--text-secondary);
     font-variant-numeric: tabular-nums;
 }
-.gp-mid-note {
-    font-size: 0.68rem;
-    line-height: 1.45;
-    color: var(--text-dim);
-    text-align: center;
-    max-width: 30ch;
-}
-
-/* Comparison rows. The label is printed once, between the two values, so a
-   number never has to carry its own caption to say what it is. */
-.gp-v {
-    font-family: var(--font-display);
-    font-size: var(--text-md);
-    font-weight: 700;
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-.gp-v-away { text-align: right; }
-.gp-v-home { text-align: left; }
-/* The better of the two, marked by weight as well as colour — the accent on
-   its own would be the only signal, and the footnote says what it means. */
-.gp-v.is-better { color: var(--accent); font-weight: 900; }
-.gp-k {
-    text-align: center;
-    font-size: var(--text-xs);
-    color: var(--text-dim);
-    line-height: 1.3;
-    text-wrap: balance;
-}
-.gp-foot {
+.gpx-why { margin-top: var(--s3); text-align: left; }
+.gpx-foot {
     margin: var(--s3) 0 0;
     font-size: var(--text-xs);
     color: var(--text-dim);
     line-height: 1.5;
+    max-width: 78ch;
 }
 
-@media (max-width: 620px) {
-    /* The forecast takes the full width and sits above the two teams — squeezed
-       into a third of a phone it wrapped the split onto four lines and turned
-       the basis note into a ribbon. The comparison keeps its three columns,
-       because side-by-side is the whole point of it. */
-    .gp-grid { grid-template-columns: 1fr minmax(88px, 0.85fr) 1fr; gap: 0.5rem var(--s2); padding: var(--s4) var(--s2); }
-    .gp-mid       { grid-column: 1 / -1; grid-row: 1; padding-bottom: var(--s4); }
-    .gp-team-away { grid-column: 1; grid-row: 2; }
-    .gp-team-home { grid-column: 3; grid-row: 2; }
-    .gp-spacer    { display: block; grid-column: 2; grid-row: 2; }
-    .gp-team img { width: 28px; height: 28px; }
-    .gp-k { font-size: 0.68rem; }
+@media (max-width: 900px) {
+    /* The forecast leads, then the two teams side by side underneath — a third
+       of a narrow screen is not enough for the probability split to stay on
+       one line, and the two cards still need to sit next to each other to be
+       compared. */
+    .gpx-grid { grid-template-columns: 1fr 1fr; }
+    .gpx-mid { grid-column: 1 / -1; grid-row: 1; }
+    .gpx-away { grid-column: 1; grid-row: 2; }
+    .gpx-home { grid-column: 2; grid-row: 2; }
+}
+@media (max-width: 460px) {
+    .gpx-team, .gpx-mid { padding: var(--s3); }
+    .gpx-head { gap: 0.4rem; }
+    .gpx-head img { width: 24px; height: 24px; }
+    .gpx-label { font-size: 0.66rem; }
 }
 
 .sched-empty {
