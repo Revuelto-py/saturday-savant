@@ -9170,6 +9170,68 @@ def _slate_state():
     return out
 
 
+# ── Ticker win-probability sparklines ───────────────────────────────────────
+WP_SPARK_POINTS = 48        # enough to show the shape, small enough to send many
+
+
+@cache.memoize(timeout=1800)
+def _winprob_series(game_id):
+    """Home win probability across a game, as ints 0-100, downsampled.
+
+    Read out of the stored ESPN summary, which is where the game page's own win
+    probability chart already comes from — so this adds a reader, not a source.
+    A game with no stored summary (nothing scraped yet) returns [], and the
+    caller simply shows no sparkline for it.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
+        row = cur.fetchone()
+    except Exception:
+        conn.rollback()
+        return []
+    finally:
+        release_db(conn)
+    if not row or not row[0]:
+        return []
+    try:
+        data = json.loads(gzip.decompress(bytes(row[0])))
+        raw = data.get('winprobability') or []
+    except Exception:
+        return []
+    pts = []
+    for wp in raw:
+        v = wp.get('homeWinPercentage')
+        if v is not None:
+            pts.append(round(float(v) * 100))
+    if len(pts) < 3:
+        return []
+    if len(pts) <= WP_SPARK_POINTS:
+        return pts
+    # Even sample that always keeps the first and last point — the opening and
+    # the finish are the two the shape has to get right.
+    step = (len(pts) - 1) / (WP_SPARK_POINTS - 1)
+    return [pts[round(i * step)] for i in range(WP_SPARK_POINTS)]
+
+
+@app.route('/api/winprob')
+def api_winprob():
+    """Win-probability sparklines for the ticker, by game id.
+
+    Batched: the ticker asks once for every game it is showing, on the first
+    hover, and every hover after that is served from memory in the page. Ids are
+    capped so the endpoint can't be used to pull the season a request at a time.
+    """
+    raw = (request.args.get('ids') or '').split(',')
+    ids = []
+    for r in raw[:40]:
+        r = r.strip()
+        if r.isdigit():
+            ids.append(int(r))
+    return jsonify({str(g): _winprob_series(g) for g in ids})
+
+
 @app.route('/api/live')
 def api_live():
     """Scores for games currently in play, for in-page patching.

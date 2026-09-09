@@ -825,6 +825,161 @@
     })();
     </script>
 
+    <!-- ── Ticker win-probability peek ──────────────────────────────────────
+         Hovering a score in the ticker shows how the game actually went: the
+         two crests and a win-probability sparkline, the way Baseball Savant's
+         scoreboard does it.
+
+         The popover lives on <body>, not inside the item. The ticker is a
+         horizontal scroller (overflow-x:auto, overflow-y:hidden), so anything
+         positioned inside it gets clipped at the bar's edges — there is no
+         "just position it absolutely" that works here.
+
+         Hover only, and only where hover is real: on a touch screen the tap
+         belongs to the link, which goes to the full game page. -->
+    <script>
+    (function () {
+        var scroll = document.querySelector('.ticker-scroll');
+        if (!scroll || !window.matchMedia('(hover: hover)').matches) return;
+
+        var CACHE = null;          // {gid: [0-100, ...]} once fetched
+        var pending = null;        // in-flight batch, so hovering fast asks once
+        var pop = null, hideTimer = null, current = null;
+        // What the pointer is on RIGHT NOW. The batch is async, so by the time
+        // it lands the pointer may be somewhere else; comparing against this is
+        // reliable in a way that re-testing :hover afterwards is not.
+        var wanted = null;
+
+        function build() {
+            pop = document.createElement('div');
+            pop.className = 'tk-wp';
+            pop.setAttribute('role', 'tooltip');
+            pop.id = 'tk-wp';
+            pop.hidden = true;
+            document.body.appendChild(pop);
+            return pop;
+        }
+
+        function fetchAll() {
+            if (CACHE) return Promise.resolve(CACHE);
+            if (pending) return pending;
+            var ids = Array.prototype.map.call(
+                scroll.querySelectorAll('.ticker-item[data-gid]'),
+                function (el) { return el.getAttribute('data-gid'); });
+            pending = fetch('/api/winprob?ids=' + ids.join(','))
+                .then(function (r) { return r.ok ? r.json() : {}; })
+                .catch(function () { return {}; })
+                .then(function (d) { CACHE = d; pending = null; return d; });
+            return pending;
+        }
+
+        // Home win probability, as an area under a line with the 50% mark drawn
+        // in — the shape alone doesn't say which side of even it is on.
+        function spark(series) {
+            var W = 168, H = 48, P = 3;
+            var n = series.length, iw = W - P * 2, ih = H - P * 2;
+            var xs = function (i) { return P + (n === 1 ? iw / 2 : i * iw / (n - 1)); };
+            var ys = function (v) { return P + (100 - v) * ih / 100; };
+            var d = '', i;
+            for (i = 0; i < n; i++) d += (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(series[i]).toFixed(1);
+            var area = d + 'L' + xs(n - 1).toFixed(1) + ' ' + (H - P) + 'L' + xs(0).toFixed(1) + ' ' + (H - P) + 'Z';
+            return '<svg class="tk-wp-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' +
+                   '<path class="tk-wp-area" d="' + area + '"/>' +
+                   '<line class="tk-wp-mid" x1="' + P + '" y1="' + ys(50) + '" x2="' + (W - P) + '" y2="' + ys(50) + '"/>' +
+                   '<path class="tk-wp-line" d="' + d + '"/>' +
+                   '<circle class="tk-wp-dot" cx="' + xs(n - 1).toFixed(1) + '" cy="' + ys(series[n - 1]).toFixed(1) + '" r="2.5"/>' +
+                   '</svg>';
+        }
+
+        function show(item) {
+            var series = CACHE && CACHE[item.getAttribute('data-gid')];
+            if (!series || !series.length) { hide(); return; }
+            var teams = item.querySelectorAll('.ticker-team');
+            if (teams.length < 2) { hide(); return; }
+            var logos = '';
+            Array.prototype.forEach.call(teams, function (t) {
+                var img = t.querySelector('img');
+                logos += '<span class="tk-wp-crest">' +
+                    (img ? '<img src="' + img.getAttribute('src') + '" alt="" width="22" height="22">' : '') +
+                    '</span>';
+            });
+            var last = series[series.length - 1];
+            // .ticker-name wraps the AP rank in its own span, so reading the
+            // element's text gives "3UGA". The abbreviation is the trailing
+            // text node.
+            function abbr(t) {
+                var el = t.querySelector('.ticker-name');
+                if (!el) return '';
+                var out = '';
+                el.childNodes.forEach(function (n) {
+                    if (n.nodeType === 3) out += n.textContent;
+                });
+                return (out || el.textContent).trim();
+            }
+            var away = abbr(teams[0]);
+            var home = abbr(teams[1]);
+            var lead = last >= 50 ? home : away;
+            var pct  = last >= 50 ? last : 100 - last;
+            // Named in text as well as drawn, so the panel still says something
+            // to a reader who can't use the line.
+            var cap = '<b>' + lead + '</b> ' + pct + '%';
+            pop.innerHTML = '<div class="tk-wp-crests">' + logos + '</div>' +
+                            '<div class="tk-wp-body">' + spark(series) +
+                            '<div class="tk-wp-cap">' + cap + '</div></div>';
+            pop.setAttribute('aria-label',
+                'Win probability: ' + lead + ' finished at ' + pct + ' percent');
+            pop.hidden = false;
+            place(item);
+            requestAnimationFrame(function () { pop.classList.add('is-on'); });
+            current = item;
+        }
+
+        function place(item) {
+            var r = item.getBoundingClientRect();
+            var w = pop.offsetWidth;
+            // Clamp to the viewport so an item at either end of the bar still
+            // gets a fully visible panel.
+            var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+            pop.style.left = Math.round(left) + 'px';
+            pop.style.top = Math.round(r.bottom + 6) + 'px';
+        }
+
+        function hide() {
+            wanted = null;
+            if (!pop) return;
+            pop.classList.remove('is-on');
+            current = null;
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(function () { if (!current) pop.hidden = true; }, 160);
+        }
+
+        function onEnter(e) {
+            var item = e.target.closest('.ticker-item[data-gid]');
+            if (!item) return;
+            if (item === wanted) return;
+            wanted = item;
+            clearTimeout(hideTimer);
+            if (!pop) build();
+            fetchAll().then(function () {
+                if (wanted === item) show(item);
+            });
+        }
+
+        scroll.addEventListener('mouseover', onEnter);
+        scroll.addEventListener('focusin', onEnter);
+        scroll.addEventListener('mouseout', function (e) {
+            if (!e.relatedTarget || !e.relatedTarget.closest('.ticker-item')) hide();
+        });
+        scroll.addEventListener('focusout', hide);
+        // The panel is pinned to the viewport, so anything that moves the item
+        // out from under it has to close it.
+        scroll.addEventListener('scroll', hide, { passive: true });
+        window.addEventListener('scroll', hide, { passive: true });
+        window.addEventListener('resize', hide, { passive: true });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+    })();
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

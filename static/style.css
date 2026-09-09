@@ -140,6 +140,66 @@ html {
     }
 }
 
+/* ── Ticker win-probability peek ──────────────────────────────────────────
+   Hovering a score shows how the game actually went. Rendered on <body> and
+   positioned to the viewport, because the ticker is a horizontal scroller and
+   clips anything placed inside it.
+
+   It is a peek, not a page: two crests, the shape of the game, and who ended
+   up in front. Anything more belongs on the game page the item links to. */
+.tk-wp {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.6rem 0.7rem;
+    background: #0e1826;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    pointer-events: none;          /* never steals the hover from the link */
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity var(--t-fast), transform var(--t-fast);
+}
+.tk-wp.is-on { opacity: 1; transform: translateY(0); }
+
+.tk-wp-crests {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 0.35rem;
+    padding-right: 0.6rem;
+    border-right: 1px solid var(--border);
+}
+.tk-wp-crest { display: flex; align-items: center; justify-content: center; }
+.tk-wp-crest img { object-fit: contain; display: block; }
+
+.tk-wp-body { display: flex; flex-direction: column; gap: 0.2rem; }
+.tk-wp-svg { display: block; overflow: visible; }
+/* The line is the reading; the fill is only there to give it a body. */
+.tk-wp-area { fill: rgba(28,156,240,0.20); stroke: none; }
+.tk-wp-line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.tk-wp-dot  { fill: var(--accent); }
+/* Even. Without it the shape says how the game moved but not which side of the
+   coin flip it was on. */
+.tk-wp-mid  { stroke: rgba(255,255,255,0.22); stroke-width: 1; stroke-dasharray: 3 3; }
+
+.tk-wp-cap {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.tk-wp-cap b { color: var(--text-primary); font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+    .tk-wp { transition: none; transform: none; }
+    .tk-wp.is-on { transform: none; }
+}
+
 /* ── Sitewide score ticker (under the navbar) ─────────────────────────── */
 .score-ticker {
     display: flex;
