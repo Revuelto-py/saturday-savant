@@ -9,7 +9,7 @@
     <div>
         <div class="section-label">Stat Explorer</div>
         <h1 class="xp-title">{{ season }} {{ 'Player' if scope == 'player' else 'Team' }} Landscape</h1>
-        <p class="xp-sub">Pick any two stats — {% if scope == 'player' %}players in one conference plot as their headshot{% else %}every FBS team plots as its logo{% endif %}. Axes always point the good way: up and right is better, whatever the stat.</p>
+        <p class="xp-sub">Pick any two stats — {% if scope == 'player' %}the national leaders at a position plot as their headshot{% else %}every FBS team plots as its logo{% endif %}. Axes always point the good way: up and right is better, whatever the stat.</p>
     </div>
     {% if available_seasons and available_seasons|length > 1 %}
     <select class="lb-select season-select" id="xp-season" aria-label="Season">
@@ -55,7 +55,19 @@
 </div>
 
 <div class="xp-card">
-    <div id="xp-plot" class="xp-plot"></div>
+    <div class="xp-plot-wrap">
+            <div id="xp-plot" class="xp-plot"></div>
+            {# Shown until Plotly has drawn. The chart is ~200 headshots and a
+               library load, so without this the page holds an empty box for a
+               beat and then snaps. #}
+            <div id="xp-skel" class="xp-skel" aria-hidden="true">
+                <span class="xp-skel-axis xp-skel-y skel"></span>
+                <span class="xp-skel-axis xp-skel-x skel"></span>
+                <span class="xp-skel-cloud">
+                    {% for _ in range(22) %}<i class="skel"></i>{% endfor %}
+                </span>
+            </div>
+        </div>
     <div class="xp-legend">
         <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
         <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
@@ -99,14 +111,14 @@
             <label class="lb-filter-label" for="xp-y">Y-Axis</label>
             <select id="xp-y" class="lb-select"></select>
         </div>
-        {% if player_confs %}
         <div class="lb-filter-group">
-            <label class="lb-filter-label" for="xp-conf">Conference</label>
-            <select id="xp-conf" class="lb-select">
-                {% for c in player_confs %}<option value="{{ c }}" {{ 'selected' if c == player_conf }}>{{ c }}</option>{% endfor %}
+            <label class="lb-filter-label" for="xp-top">Show</label>
+            <select id="xp-top" class="lb-select">
+                {% for n in player_top_opts %}
+                <option value="{{ n }}" {{ 'selected' if n == player_top }}>Top {{ n }}</option>
+                {% endfor %}
             </select>
         </div>
-        {% endif %}
         <label class="xp-check">
             <input type="checkbox" id="xp-qual" {{ 'checked' if qualified_only }}>
             <span>Qualified only</span>
@@ -114,11 +126,23 @@
     </div>
 
     <div class="xp-card">
-        <div id="xp-plot" class="xp-plot"></div>
+        <div class="xp-plot-wrap">
+            <div id="xp-plot" class="xp-plot"></div>
+            {# Shown until Plotly has drawn. The chart is ~200 headshots and a
+               library load, so without this the page holds an empty box for a
+               beat and then snaps. #}
+            <div id="xp-skel" class="xp-skel" aria-hidden="true">
+                <span class="xp-skel-axis xp-skel-y skel"></span>
+                <span class="xp-skel-axis xp-skel-x skel"></span>
+                <span class="xp-skel-cloud">
+                    {% for _ in range(22) %}<i class="skel"></i>{% endfor %}
+                </span>
+            </div>
+        </div>
         <div class="xp-legend">
             <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
             <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>Group average</span>
-            <span class="xp-legend-note" id="xp-count">{{ players_data|length }} {{ player_conf }} players · {{ season }}</span>
+            <span class="xp-legend-note" id="xp-count">Top {{ players_data|length }} nationally by {{ player_rank_stat }} · {{ season }}</span>
         </div>
     </div>
 </div>
@@ -166,6 +190,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var SEASON = {{ season }};
+    var RANK_STAT = {{ (player_rank_stat or 'volume') | tojson }};
     var SCOPE = "{{ scope }}";
 
     var css = getComputedStyle(document.documentElement);
@@ -278,6 +303,7 @@ document.addEventListener('DOMContentLoaded', function () {
                      xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
         });
         Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true});
+        hideSkeleton();
         syncUrl({x:xk, y:yk, size:sk});
     }
 
@@ -298,7 +324,12 @@ document.addEventListener('DOMContentLoaded', function () {
     var AXMAP = {}; AXES.forEach(function(a){ AXMAP[a.key]=a; });
 
     var selX = document.getElementById('xp-x'), selY = document.getElementById('xp-y');
-    var selPos = document.getElementById('xp-pos'), selConf = document.getElementById('xp-conf');
+    var selPos = document.getElementById('xp-pos'), selTop = document.getElementById('xp-top');
+    // Resting and hovered marker diameters, in px. The jump is what makes a
+    // point in a crowded cluster readable without clicking into it.
+    var CHIP = 26, CHIP_HOVER = 46;
+    var HL_IDX = 0, HOVER_SX = 0, HOVER_SY = 0;
+    var LAST_PTS = [], LAST_X = '', LAST_Y = '';
     var chkQual = document.getElementById('xp-qual');
     var axStats = {}; AXES.forEach(function(a){ axStats[a.key]={label:a.label, invert:a.invert, dp:a.dp, unit:a.unit||''}; });
     fillStatOptions([selX, selY], axStats);
@@ -315,9 +346,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var pts = PLAYERS.filter(function (p) {
             return p.stats[xk]!=null && p.stats[yk]!=null;
         });
-        var confLbl = selConf ? selConf.value + ' ' : '';
-        document.getElementById('xp-count').textContent = pts.length + ' ' + confLbl + 'players · ' + SEASON;
+        document.getElementById('xp-count').textContent =
+            'Top ' + pts.length + ' nationally by ' + RANK_STAT + ' · ' + SEASON;
         if (!pts.length) { Plotly.react('xp-plot', [], {}, {displayModeBar:false}); return; }
+        LAST_PTS = pts; LAST_X = xk; LAST_Y = yk;
         var xs = pts.map(function(p){return p.stats[xk];});
         var ys = pts.map(function(p){return p.stats[yk];});
         var xmin=Math.min.apply(null,xs), xmax=Math.max.apply(null,xs);
@@ -331,31 +363,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var f = fit(xs, ys);
         var traces = [
-            { x:[xmin,xmax], y:[f.icept+f.slope*xmin, f.icept+f.slope*xmax],
-              mode:'lines', hoverinfo:'skip', line:{color:COL.accent,width:2,dash:'dash'} },
-            // visible dot layer: a faint team-colored point so headshot-less
-            // players still appear, and every point stays hoverable/clickable
+            // The chip each headshot sits on: a filled circle ringed in the
+            // team's colour, so a player reads as a token rather than a
+            // floating cutout, and anyone without a photo still has a marker.
+            // This trace is also what carries the hover.
             { x:xs, y:ys, mode:'markers',
-              marker:{ size:9, color: pts.map(function(p){return p.color;}), opacity:0.5,
-                       line:{color:'rgba(0,0,0,0.4)', width:0.5} },
+              marker:{ size:CHIP, color:COL.card,
+                       line:{ color: pts.map(function(p){return p.color;}), width:2 } },
               customdata: pts.map(function(p){ return [p.name, fmt(xk,p.stats[xk]), fmt(yk,p.stats[yk]), p.url, p.team]; }),
               hovertemplate:'<b>%{customdata[0]}</b>  ·  %{customdata[4]}<br>'+
                   axStats[xk].label+': <b>%{customdata[1]}</b><br>'+
-                  axStats[yk].label+': <b>%{customdata[2]}</b><extra></extra>' }
+                  axStats[yk].label+': <b>%{customdata[2]}</b><extra></extra>' },
+            // A single point, parked off-plot, moved onto whatever is hovered.
+            // One relayout of one marker beats rewriting a 150-long size array
+            // on every mousemove.
+            { x:[null], y:[null], mode:'markers', hoverinfo:'skip',
+              marker:{ size:CHIP_HOVER, color:COL.card,
+                       line:{color:COL.accent, width:2.5} } }
         ];
         var layout = baseLayout(xk, yk, xr, yr, f, axStats);
-        layout.images = pts.filter(function(p){return p.headshot;}).map(function(p){
+        var shot = pts.filter(function(p){return p.headshot;});
+        layout.images = shot.map(function(p){
             return { source:p.headshot, x:p.stats[xk], y:p.stats[yk], xref:'x', yref:'y',
                      sizex:sx, sizey:sy, xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
         });
+        // The enlarged copy of whichever headshot is hovered. Last in the list
+        // so it draws over its neighbours instead of under them.
+        HL_IDX = layout.images.length;
+        layout.images.push({ source:'', x:0, y:0, xref:'x', yref:'y', sizex:0, sizey:0,
+                             xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' });
+        HOVER_SX = sx * 1.75; HOVER_SY = sy * 1.75;
         Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true});
+        hideSkeleton();
         syncUrl({x:xk, y:yk});
     }
 
     selX.addEventListener('change', buildPlayer);
     selY.addEventListener('change', buildPlayer);
-    // Conference now changes the plotted pool server-side -> reload
-    if (selConf) selConf.addEventListener('change', function(){ reloadWith({scope:'player', pos:GROUP, conf:selConf.value}); });
+    // The size of the top slice changes the plotted pool server-side -> reload
+    if (selTop) selTop.addEventListener('change', function(){
+        showSkeleton();
+        reloadWith({scope:'player', pos:GROUP, top:selTop.value});
+    });
     document.getElementById('xp-swap').addEventListener('click', function(){
         var x=selX.value; selX.value=selY.value; selY.value=x; buildPlayer();
     });
@@ -501,7 +550,41 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Init view from ?view
-    whenPlotly(function(){ buildPlayer(); wireClicks('xp-plot', 3); });
+    // Hover: the point under the pointer grows. The ring moves to it and the
+    // headshot is redrawn larger on top, so a face in a dense cluster becomes
+    // legible without having to click through to the player.
+    function wirePlayerHover() {
+        var plot = document.getElementById('xp-plot');
+        var last = -1;
+        plot.on('plotly_hover', function(d){
+            var pt = d.points && d.points[0];
+            if (!pt || pt.curveNumber !== 0) return;
+            var i = pt.pointIndex;
+            if (i === last) return;
+            last = i;
+            var p = LAST_PTS[i];
+            if (!p) return;
+            var x = p.stats[LAST_X], y = p.stats[LAST_Y];
+            Plotly.restyle(plot, {x:[[x]], y:[[y]], 'marker.line.color':[[p.color || COL.accent]]}, [1]);
+            if (p.headshot) {
+                var u = {};
+                u['images[' + HL_IDX + '].source'] = p.headshot;
+                u['images[' + HL_IDX + '].x'] = x;
+                u['images[' + HL_IDX + '].y'] = y;
+                u['images[' + HL_IDX + '].sizex'] = HOVER_SX;
+                u['images[' + HL_IDX + '].sizey'] = HOVER_SY;
+                Plotly.relayout(plot, u);
+            }
+        });
+        plot.on('plotly_unhover', function(){
+            last = -1;
+            Plotly.restyle(plot, {x:[[null]], y:[[null]]}, [1]);
+            var u = {}; u['images[' + HL_IDX + '].sizex'] = 0; u['images[' + HL_IDX + '].sizey'] = 0;
+            Plotly.relayout(plot, u);
+        });
+    }
+
+    whenPlotly(function(){ buildPlayer(); wireClicks('xp-plot', 3); wirePlayerHover(); });
     var initView = (new URLSearchParams(location.search)).get('view');
     if (initView === 'radar') setView('radar');
 {% endif %}
@@ -557,6 +640,8 @@ document.addEventListener('DOMContentLoaded', function () {
         var h = hex.replace('#',''); if (h.length===3) h=h.split('').map(function(c){return c+c;}).join('');
         var n = parseInt(h,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
     }
+    function showSkeleton() { var e=document.getElementById('xp-skel'); if (e) e.hidden = false; }
+    function hideSkeleton() { var e=document.getElementById('xp-skel'); if (e) e.hidden = true; }
     function whenPlotly(fn) { if (typeof Plotly==='undefined') { setTimeout(function(){whenPlotly(fn);}, 60); return; } fn(); }
 });
 </script>

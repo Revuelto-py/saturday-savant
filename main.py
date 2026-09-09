@@ -60,6 +60,7 @@ import cfbd
 import psycopg2
 from psycopg2 import pool as pg_pool
 import gzip
+from functools import lru_cache
 import json
 import math
 import os
@@ -226,7 +227,12 @@ def _rate_limit():
     if _RL_MAX <= 0:
         return
     path = request.path
-    if path == '/healthz' or path.startswith('/static'):
+    # /img-proxy is an asset route, not a page: one Stat Explorer view asks it
+    # for ~150 headshots, which blew straight through a 100-per-minute budget
+    # and left the chart half-drawn AND the visitor locked out of the site for
+    # the next minute. It is host-allowlisted and memory-cached, so it belongs
+    # with /static rather than with the pages the limiter exists to protect.
+    if path == '/healthz' or path.startswith('/static') or path == '/img-proxy':
         return
     ip = _client_ip()
     now = _time.monotonic()
@@ -8086,6 +8092,24 @@ def _build_compare_team_rows(cursor, slots):
     return rows
 
 
+# Headshots are immutable per URL — the filename carries a ?v= content hash, so
+# a changed photo is a different URL. That makes them safe to hold in memory,
+# and holding them is the difference between the Stat Explorer costing one
+# upstream fetch per image per view and costing one ever. Bounded, because the
+# whole player base would not fit: ~600 headshots is roughly 20MB.
+@lru_cache(maxsize=600)
+def _img_fetch(url):
+    """(bytes, content-type) for an allowlisted image URL, or None."""
+    try:
+        r = req.get(url, timeout=6)
+        ctype = r.headers.get('Content-Type', 'image/png')
+        if r.status_code != 200 or not ctype.startswith('image/'):
+            return None
+        return (r.content, ctype)
+    except Exception:
+        return None
+
+
 @app.route('/img-proxy')
 def img_proxy():
     """Same-origin passthrough for headshots/logos used by the compare
@@ -8098,15 +8122,13 @@ def img_proxy():
     netloc = urlparse(url).netloc.lower()
     if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
         return 'Forbidden', 403
-    try:
-        r = req.get(url, timeout=3)
-        ctype = r.headers.get('Content-Type', 'image/png')
-        if r.status_code != 200 or not ctype.startswith('image/'):
-            return '', 502
-        return Response(r.content, content_type=ctype,
-                        headers={'Cache-Control': 'public, max-age=604800'})
-    except Exception:
+    hit = _img_fetch(url)
+    if hit is None:
         return '', 502
+    body, ctype = hit
+    return Response(body, content_type=ctype,
+                    headers={'Cache-Control': 'public, max-age=604800',
+                             'Access-Control-Allow-Origin': '*'})
 
 
 @app.route('/compare')
@@ -8776,13 +8798,24 @@ _DEF_WIDE = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB']
 _RB_REC_WIDE = ['WR','TE','RB','HB','FB']
 
 
-def _explorer_player_scope(cursor, group, season, qualified_only=True, conference=None):
-    """Players in a position group (scoped to one conference — plotting an
-    entire position across all of FBS is too dense to be readable or cheap to
-    ship) with their raw values for the group's scatter axes. Defaults to the
-    leaderboards' qualified pool (min attempts/carries/etc.); qualified_only=
-    False ships the whole group within the conference. Reuses the persisted
-    percentile pools, so this is cheap."""
+EXPLORER_TOP_N = (100, 150, 200, 300)
+
+# What the top slice is ranked on, said the way a reader would say it.
+EXPLORER_RANK_LABEL = {
+    'ATT': 'pass attempts', 'CAR': 'carries', 'REC': 'receptions', 'TOT': 'tackles',
+}
+
+
+def _explorer_player_scope(cursor, group, season, qualified_only=True, top_n=150):
+    """The national top `top_n` of a position group, with their raw values for
+    the group's scatter axes.
+
+    It used to be scoped to one conference, because an entire FBS position group
+    is too dense to read and too heavy to ship. Ranking nationally by the
+    group's own counting stat — pass attempts for quarterbacks, carries for
+    backs, receptions for receivers — gets both: the players anyone opens this
+    chart to look at, and a payload that is smaller than a conference's worth of
+    everybody. Reuses the persisted percentile pools, so this stays cheap."""
     spec = EXPLORER_PLAYER_SPEC[group]
     peer = spec['peer']
     cat_pools, need_ppa = {}, False
@@ -8805,28 +8838,28 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, conferenc
         pids &= qualified
     if not pids:
         return []
+
+    # National, but not everybody: rank on the group's counting stat and keep
+    # the top slice. This is the one filter that decides both what is worth
+    # plotting and how much has to be sent, so it happens before anything else
+    # is looked up — the metadata query below then only touches the survivors.
+    ranked = sorted(pids, key=lambda pid: (qpool.get(pid, {}).get(qstat) or 0), reverse=True)
+    if top_n:
+        ranked = ranked[:top_n]
+    pids = set(ranked)
+
     int_pids = [int(p) for p in pids if str(p).lstrip('-').isdigit()]
-    # Restrict to the requested conference at the DB, so only that conference's
-    # players are ever built/shipped — never the full FBS position group.
-    if conference:
-        cursor.execute('''
-            SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
-                   t.logo_dark, t.color, t.conference
-            FROM players p JOIN teams t ON t.name = p.team
-            WHERE p.id = ANY(%s) AND t.conference = %s
-        ''', (int_pids, conference))
-    else:
-        cursor.execute('''
-            SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
-                   t.logo_dark, t.color, t.conference
-            FROM players p LEFT JOIN teams t ON t.name = p.team
-            WHERE p.id = ANY(%s)
-        ''', (int_pids,))
+    cursor.execute('''
+        SELECT p.id, p.first_name, p.last_name, p.team, p.headshot,
+               t.logo_dark, t.color, t.conference
+        FROM players p LEFT JOIN teams t ON t.name = p.team
+        WHERE p.id = ANY(%s)
+    ''', (int_pids,))
     meta = {str(r[0]): r for r in cursor.fetchall()}
 
     from urllib.parse import quote
     out = []
-    for pid in pids:
+    for pid in ranked:
         m = meta.get(str(pid))
         if not m or not (m[1] or m[2]):
             continue
@@ -8835,9 +8868,12 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, conferenc
             src = ppa_pool if cat == 'ppa' else cat_pools[cat]
             v = src.get(pid, {}).get(st)
             stats[key] = round(v, dp) if v is not None else None
-        # Headshots are R2-hosted (no CORS headers); Plotly draws marker images
-        # to a canvas, which taints on cross-origin sources — so route them
-        # through the same-origin image proxy (browser-cached a week).
+        # Through the same-origin proxy, and it has to be. Plotly requests
+        # everything in `layout.images` with crossOrigin set — it prepares them
+        # for canvas export whether or not the page ever exports — and the R2
+        # bucket sends no CORS headers, so loading them directly fails outright
+        # with ERR_FAILED and the chart draws with no faces at all. Tried it;
+        # that is what happens. The proxy is cached both ways (see img_proxy).
         headshot = f'/img-proxy?url={quote(m[4], safe="")}' if m[4] else None
         out.append({
             'id': int(pid), 'name': f'{m[1] or ""} {m[2] or ""}'.strip(),
@@ -8937,19 +8973,22 @@ def explorer():
         if group not in EXPLORER_PLAYER_SPEC:
             group = 'QB'
         qualified_only = request.args.get('qual', '1') != '0'
+        # National now, ranked by the group's counting stat and cut to a top
+        # slice — the conference filter it replaces existed only because a whole
+        # FBS position group was too dense to plot and too heavy to ship.
+        try:
+            top_n = int(request.args.get('top', 150))
+        except (TypeError, ValueError):
+            top_n = 150
+        if top_n not in EXPLORER_TOP_N:
+            top_n = 150
         conn = get_db()
         try:
             cursor = conn.cursor()
-            # The scatter is always scoped to a single conference — one FBS
-            # position group is far too dense to plot or ship whole.
-            cursor.execute('SELECT DISTINCT conference FROM teams '
-                           'WHERE conference IS NOT NULL AND conference <> ALL(%s) '
-                           'ORDER BY conference', (list(FCS_CONFS),))
-            all_confs = [r[0] for r in cursor.fetchall()]
-            conf = request.args.get('conf', '')
-            if conf not in all_confs:
-                conf = 'SEC' if 'SEC' in all_confs else (all_confs[0] if all_confs else '')
-            players_data = _explorer_player_scope(cursor, group, season, qualified_only, conf)
+            players_data = _explorer_player_scope(cursor, group, season,
+                                                  qualified_only, top_n)
+            qcat = QUAL_SOURCE_CATEGORY[group]
+            rank_stat, _ = _qual_threshold(group, qcat, season)
         finally:
             release_db(conn)
         axes_meta = [{'key': k, 'label': l, 'invert': inv, 'dp': dp, 'unit': u}
@@ -8959,7 +8998,8 @@ def explorer():
         return render_template('explorer.html', scope='player',
                                players_data=players_data, player_axes=axes_meta,
                                player_group=group, player_groups=groups_meta,
-                               player_confs=all_confs, player_conf=conf,
+                               player_top=top_n, player_top_opts=list(EXPLORER_TOP_N),
+                               player_rank_stat=EXPLORER_RANK_LABEL.get(rank_stat, rank_stat),
                                qualified_only=qualified_only,
                                season=season, available_seasons=get_available_seasons())
 

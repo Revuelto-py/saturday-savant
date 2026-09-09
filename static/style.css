@@ -1793,6 +1793,54 @@ tr.postseason-row:hover {
 .lb-th-na:hover { color: var(--text-dim); }
 .lb-sort-arrow { margin-left: 2px; }
 
+/* ── Stat Explorer: chart skeleton ────────────────────────────────────────
+   Plotly is a library load plus ~200 headshots, so the plot area sits empty for
+   a beat and then snaps into place. This holds the shape of a scatter — two
+   axes and a drift of points — in the same box, so nothing moves when the real
+   chart arrives. */
+.xp-plot-wrap { position: relative; }
+.xp-skel {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    padding: 12px 18px 52px 58px;   /* matches the plot's own margins */
+}
+.xp-skel[hidden] { display: none !important; }
+.xp-skel-axis { position: absolute; border-radius: 2px; }
+.xp-skel-y { left: 52px; top: 12px; bottom: 52px; width: 3px; }
+.xp-skel-x { left: 52px; right: 18px; bottom: 48px; height: 3px; }
+.xp-skel-cloud { position: absolute; inset: 12px 18px 52px 58px; display: block; }
+/* Scattered, not gridded — a regular lattice reads as a table loading, and the
+   thing that is loading is a cloud of points. */
+.xp-skel-cloud i {
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+}
+.xp-skel-cloud i:nth-child(1)  { left: 8%;  top: 74%; }
+.xp-skel-cloud i:nth-child(2)  { left: 14%; top: 58%; }
+.xp-skel-cloud i:nth-child(3)  { left: 19%; top: 66%; }
+.xp-skel-cloud i:nth-child(4)  { left: 24%; top: 47%; }
+.xp-skel-cloud i:nth-child(5)  { left: 27%; top: 71%; }
+.xp-skel-cloud i:nth-child(6)  { left: 32%; top: 55%; }
+.xp-skel-cloud i:nth-child(7)  { left: 35%; top: 38%; }
+.xp-skel-cloud i:nth-child(8)  { left: 39%; top: 63%; }
+.xp-skel-cloud i:nth-child(9)  { left: 43%; top: 50%; }
+.xp-skel-cloud i:nth-child(10) { left: 46%; top: 30%; }
+.xp-skel-cloud i:nth-child(11) { left: 49%; top: 68%; }
+.xp-skel-cloud i:nth-child(12) { left: 53%; top: 44%; }
+.xp-skel-cloud i:nth-child(13) { left: 56%; top: 57%; }
+.xp-skel-cloud i:nth-child(14) { left: 60%; top: 24%; }
+.xp-skel-cloud i:nth-child(15) { left: 63%; top: 49%; }
+.xp-skel-cloud i:nth-child(16) { left: 67%; top: 61%; }
+.xp-skel-cloud i:nth-child(17) { left: 71%; top: 36%; }
+.xp-skel-cloud i:nth-child(18) { left: 75%; top: 52%; }
+.xp-skel-cloud i:nth-child(19) { left: 79%; top: 28%; }
+.xp-skel-cloud i:nth-child(20) { left: 83%; top: 45%; }
+.xp-skel-cloud i:nth-child(21) { left: 88%; top: 60%; }
+.xp-skel-cloud i:nth-child(22) { left: 92%; top: 40%; }
+
 /* ══ Loading skeletons ═══════════════════════════════════════════════════
    A shared shimmer for any region that is being fetched. The point of a
    skeleton over a spinner is that the layout does not move: the structure the
