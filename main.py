@@ -8126,8 +8126,12 @@ def img_proxy():
     if hit is None:
         return '', 502
     body, ctype = hit
+    # `immutable` matters as much as the max-age here: a headshot URL carries a
+    # ?v= content hash, so it can never change under a given URL, and without it
+    # the browser still fires a revalidation request per image on every repeat
+    # visit — 150 round trips to be told nothing changed.
     return Response(body, content_type=ctype,
-                    headers={'Cache-Control': 'public, max-age=604800',
+                    headers={'Cache-Control': 'public, max-age=31536000, immutable',
                              'Access-Control-Allow-Origin': '*'})
 
 
