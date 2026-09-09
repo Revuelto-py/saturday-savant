@@ -5163,7 +5163,16 @@ def _preview_team(team, season):
     Every field is independently optional: a week-one team has a record and
     little else, and each row is dropped rather than shown as a zero.
     """
-    out = {'team': team}
+    # Every key is always present, set to None when the source has no row for
+    # this team. A missing KEY and a missing VALUE are different things in a
+    # template: `preview.away.net is none` is False for an absent key, and the
+    # formatting downstream then raises. Only 120 of 137 FBS teams have a
+    # savant_ratings row in a young season, so this is the normal case, not an
+    # edge one.
+    out = {'team': team, 'games': None, 'wins': None, 'losses': None,
+           'ppg': None, 'papg': None, 'net': None, 'net_rank': None,
+           'svr_off': None, 'svr_def': None, 'off_epa': None, 'def_epa': None,
+           'ats': None}
     conn = get_db()
     try:
         cur = conn.cursor()
