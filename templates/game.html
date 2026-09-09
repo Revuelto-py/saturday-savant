@@ -331,35 +331,134 @@
     {% set fav_home = forecast.home_prob >= 0.5 %}
     {% set fav_team = home_team if fav_home else away_team %}
     {% set fav_prob = forecast.home_prob if fav_home else 1 - forecast.home_prob %}
-    <div class="dark-card sched-card">
-        <div class="section-header">Savant Forecast</div>
-        <div class="fc-block" style="margin-top:0">
-            {# Legend for the bar, not a second headline — the hero already
-               states the split at full size. #}
-            <div class="fc-legend">
-                <span><b>{{ away_team }}</b> {{ '%.0f' % ((1 - forecast.home_prob) * 100) }}%</span>
-                <span>{{ '%.0f' % (forecast.home_prob * 100) }}% <b>{{ home_team }}</b></span>
+    {% endif %}
+    {% if preview and (preview.away.games or preview.home.games or market) %}
+    {# ── MATCHUP PREVIEW ───────────────────────────────────────────────────
+       One grid, three columns, mirroring the hero: the away side's season is
+       under the away side, the home side's under the home side, and the
+       forecast sits between them as the headline. Because every comparison is
+       a row of the SAME grid, the two teams' numbers line up by construction
+       rather than by matching heights in two separate lists. #}
+    {% macro row(key, label, a, h, lower_better=false, suffix='', signed=false) %}
+    {% if a is not none or h is not none %}
+    {% set better = none %}
+    {% if a is not none and h is not none and a != h %}
+      {% set better = 'a' if ((a < h) if lower_better else (a > h)) else 'h' %}
+    {% endif %}
+    <div class="gp-v gp-v-away{{ ' is-better' if better == 'a' }}">
+        {%- if a is none %}—{% else %}{{ ('%+g' % a) if signed else a }}{{ suffix }}{% endif -%}
+    </div>
+    <div class="gp-k">{{ label }}</div>
+    <div class="gp-v gp-v-home{{ ' is-better' if better == 'h' }}">
+        {%- if h is none %}—{% else %}{{ ('%+g' % h) if signed else h }}{{ suffix }}{% endif -%}
+    </div>
+    {% endif %}
+    {% endmacro %}
+
+    <section class="gp" aria-labelledby="gp-h">
+        <h2 class="section-label" id="gp-h">Matchup preview</h2>
+        <div class="gp-grid">
+
+            {# Row 1 — the two teams, with the market's read between them. #}
+            <div class="gp-mid">
+                {% if forecast %}
+                <div class="gp-fc">
+                    <div class="gp-fc-k">Savant Forecast</div>
+                    <div class="fc-legend">
+                        <span><b>{{ away_team }}</b> {{ '%.0f' % ((1 - forecast.home_prob) * 100) }}%</span>
+                        <span>{{ '%.0f' % (forecast.home_prob * 100) }}% <b>{{ home_team }}</b></span>
+                    </div>
+                    <div class="fc-bar" role="img"
+                         aria-label="{{ fav_team }} win probability {{ '%.0f' % (fav_prob * 100) }} percent">
+                        <span class="fc-bar-fill" style="background:linear-gradient(90deg,
+                            {{ away_color }}cc 0%, {{ away_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%,
+                            {{ home_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%, {{ home_color }}cc 100%)"></span>
+                        <span class="fc-bar-tick" style="left: {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%"></span>
+                    </div>
+                    {% if forecast.margin is not none %}
+                    <div class="gp-fc-exp">
+                        {% if forecast.margin|abs >= 1.5 %}Savant expects <b>{{ fav_team }}</b> by ~{{ '%.0f' % (forecast.margin|abs) }}
+                        {% else %}Savant calls it even{% endif %}
+                    </div>
+                    {% endif %}
+                    <div class="gp-fc-basis">
+                        Model estimate from team strength, roster continuity, and results so far.
+                        A probability, not a prediction — locked before kickoff.
+                    </div>
+                </div>
+                {% endif %}
+                {% if market %}
+                {% set m = market.home_margin %}
+                {% set fav = home_team if m > 0 else away_team %}
+                <div class="gp-vegas{{ ' has-fc' if forecast }}">
+                    <div class="gp-vegas-k">Vegas line</div>
+                    <div class="gp-vegas-v">
+                        {%- if m|abs < 0.5 -%}Pick'em
+                        {%- else -%}<b>{{ fav }}</b> −{{ '%g' % (m|abs) }}{%- endif -%}
+                    </div>
+                    {% if market.total %}
+                    <div class="gp-vegas-sub">Total {{ '%g' % market.total }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="gp-mid-note">
+                    {% if not market %}No betting line is posted for this game yet.{% endif %}
+                </div>
             </div>
-            <div class="fc-bar" role="img" aria-label="{{ fav_team }} win probability {{ '%.0f' % (fav_prob * 100) }} percent">
-                <span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                    {{ away_color }}cc 0%, {{ away_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%,
-                    {{ home_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%, {{ home_color }}cc 100%)"></span>
-                <span class="fc-bar-tick" style="left: {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%"></span>
+
+            <div class="gp-team gp-team-away">
+                {% if game[10] %}<img src="{{ game[10] }}" alt="" width="34" height="34" loading="lazy">{% endif %}
+                <span class="gp-team-name">{{ away_team }}</span>
+                {% if preview.away.games %}<span class="gp-rec">{{ preview.away.wins }}–{{ preview.away.losses }}</span>{% endif %}
             </div>
-            {% if forecast.margin is not none %}
-            <div class="fc-expect">
-                {% if forecast.margin|abs >= 1.5 %}Savant expects <b>{{ fav_team }}</b> by ~{{ '%.0f' % (forecast.margin|abs) }}{% else %}Savant calls it even{% endif %}
+
+            <div class="gp-team gp-team-home">
+                {% if game[9] %}<img src="{{ game[9] }}" alt="" width="34" height="34" loading="lazy">{% endif %}
+                <span class="gp-team-name">{{ home_team }}</span>
+                {% if preview.home.games %}<span class="gp-rec">{{ preview.home.wins }}–{{ preview.home.losses }}</span>{% endif %}
+            </div>
+
+            {# Plugs the middle cell of the team row on a phone, where the
+               forecast has moved above it — without it the first comparison
+               value auto-places into that hole. #}
+            <div class="gp-spacer" aria-hidden="true"></div>
+
+            {# Comparison rows. Labels sit once, in the middle column, under the
+               forecast — so a number is never printed twice to say what it is. #}
+            {{ row('ppg', 'Points / game', preview.away.ppg, preview.home.ppg) }}
+            {{ row('papg', 'Points allowed', preview.away.papg, preview.home.papg, true) }}
+            {{ row('net', 'Savant net', preview.away.net, preview.home.net, false, '', true) }}
+            {{ row('offepa', 'Off EPA / play', preview.away.off_epa, preview.home.off_epa, false, '', true) }}
+            {{ row('defepa', 'Def EPA / play', preview.away.def_epa, preview.home.def_epa, true, '', true) }}
+
+            {% if preview.away.ats or preview.home.ats %}
+            {% set aa = preview.away.ats %}{% set hh = preview.home.ats %}
+            {% set ap = aa.pct if aa else none %}{% set hp = hh.pct if hh else none %}
+            {% set better = none %}
+            {% if ap is not none and hp is not none and ap != hp %}{% set better = 'a' if ap > hp else 'h' %}{% endif %}
+            <div class="gp-v gp-v-away{{ ' is-better' if better == 'a' }}">
+                {%- if aa %}{{ aa.w }}–{{ aa.l }}{% if aa.p %}–{{ aa.p }}{% endif %}{% else %}—{% endif -%}
+            </div>
+            <div class="gp-k">Against the spread</div>
+            <div class="gp-v gp-v-home{{ ' is-better' if better == 'h' }}">
+                {%- if hh %}{{ hh.w }}–{{ hh.l }}{% if hh.p %}–{{ hh.p }}{% endif %}{% else %}—{% endif -%}
             </div>
             {% endif %}
-            {# Lightweight transparency note — the standalone methodology page was
-               removed, so the basis is stated inline rather than linked away. #}
-            <div class="fc-basis">
-                Model estimate from team strength, roster continuity, and results so far.
-                A probability, not a prediction — locked before kickoff.
-            </div>
-            {{ forecast_why(forecast, fav_team, False) }}
         </div>
-    </div>
+
+        {% if forecast and forecast.contrib %}
+        {# Full width, below the grid: the middle column is too narrow to read a
+           list of contributing factors in. #}
+        <div class="gp-why">{{ forecast_why(forecast, fav_team, False) }}</div>
+        {% endif %}
+
+        <p class="gp-foot">
+            Season to date{% if preview.away.games and preview.home.games %},
+            {{ preview.away.games }} game{{ '' if preview.away.games == 1 else 's' }} and
+            {{ preview.home.games }} game{{ '' if preview.home.games == 1 else 's' }} in{% endif %}.
+            Highlighted numbers are the better of the two.
+        </p>
+    </section>
     {% endif %}
 
     <div class="dark-card sched-empty">

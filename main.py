@@ -5125,6 +5125,95 @@ def _classify_drive_result(display_result):
     return ('—', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
 
 
+def _game_market(game_id):
+    """Consensus betting line for one game, or None.
+
+    `spread` is stored from the home team's perspective — negative means the
+    home side was favoured — so the margin Vegas implies for the home team is
+    `-spread`. That flip is done once, here, rather than at each call site.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT spread, over_under FROM betting_lines
+                        WHERE game_id = %s AND spread IS NOT NULL
+                        ORDER BY updated_at DESC NULLS LAST LIMIT 1""", (game_id,))
+        row = cur.fetchone()
+    except Exception:
+        conn.rollback()          # table absent on a fresh DB
+        row = None
+    finally:
+        release_db(conn)
+    if not row or row[0] is None:
+        return None
+    return {'spread': float(row[0]),
+            'home_margin': -float(row[0]),
+            'total': float(row[1]) if row[1] is not None else None}
+
+
+@cache.memoize(timeout=3600)
+def _preview_team(team, season):
+    """The season-to-date form line for one team, for a matchup preview.
+
+    Deliberately short. A preview is read in a few seconds before kickoff, so
+    this is the handful of numbers that actually separate two teams — what they
+    score, what they allow, how efficient they are per play, and how they have
+    done against the number — not the whole team page in miniature.
+
+    Every field is independently optional: a week-one team has a record and
+    little else, and each row is dropped rather than shown as a zero.
+    """
+    out = {'team': team}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT count(*), sum(w), avg(pf), avg(pa) FROM (
+              SELECT CASE WHEN home_points > away_points THEN 1 ELSE 0 END AS w,
+                     home_points AS pf, away_points AS pa
+                FROM games WHERE season = %s AND completed = 1 AND home_team = %s
+                  AND home_points IS NOT NULL
+              UNION ALL
+              SELECT CASE WHEN away_points > home_points THEN 1 ELSE 0 END,
+                     away_points, home_points
+                FROM games WHERE season = %s AND completed = 1 AND away_team = %s
+                  AND home_points IS NOT NULL
+            ) g""", (season, team, season, team))
+        r = cur.fetchone()
+        if r and r[0]:
+            out['games'] = r[0]
+            out['wins'] = int(r[1] or 0)
+            out['losses'] = r[0] - int(r[1] or 0)
+            out['ppg'] = round(float(r[2]), 1)
+            out['papg'] = round(float(r[3]), 1)
+
+        cur.execute("""SELECT net_rating, net_ranking, off_rating, def_rating
+                         FROM savant_ratings WHERE team = %s AND season = %s""", (team, season))
+        r = cur.fetchone()
+        if r and r[0] is not None:
+            out['net'] = round(float(r[0]), 1)
+            out['net_rank'] = r[1]
+            out['svr_off'] = round(float(r[2]), 1) if r[2] is not None else None
+            out['svr_def'] = round(float(r[3]), 1) if r[3] is not None else None
+
+        cur.execute("""SELECT off_ppa, def_ppa FROM team_advanced
+                        WHERE team = %s AND season = %s""", (team, season))
+        r = cur.fetchone()
+        if r:
+            out['off_epa'] = round(float(r[0]), 3) if r[0] is not None else None
+            out['def_epa'] = round(float(r[1]), 3) if r[1] is not None else None
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+
+    # Against the spread, from the same helper the team page and the Vs Spread
+    # leaderboard use — one definition of a cover across the site.
+    sit = _team_situational(team, season) or {}
+    out['ats'] = sit.get('ats')
+    return out
+
+
 def _game_boxstats(game_id):
     """Stored team box stats for one game, keyed 'home'/'away'.
 
@@ -5286,6 +5375,11 @@ def game_detail(game_id):
             quarters={'home': [], 'away': []}, venue={}, attendance=None,
             venue_name='', venue_location='', attendance_fmt='', tv_broadcast='',
             stored_stats=False,
+            # Matchup preview: each side's season form, plus the market's
+            # read on the game. Only assembled for games not yet played.
+            market=_game_market(game_id),
+            preview={'away': _preview_team(away_team, game_season),
+                     'home': _preview_team(home_team, game_season)},
             plays=[], team_stats=[], home_stats={}, away_stats={},
             player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
             structured_leaders={}, win_prob=[], top_wpa=[])
@@ -6048,6 +6142,7 @@ def game_detail(game_id):
         home_stats=home_stats,
         away_stats=away_stats,
         stored_stats=stored_stats,
+        market=None, preview=None,
         player_stats=player_stats,
         leaders=leaders,
         drives=drives,
