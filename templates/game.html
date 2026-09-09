@@ -342,12 +342,15 @@
     {# One team's line. `pctl` is that stat's standing against the whole FBS
        field, 0-100 and already direction-corrected, so the bar always means
        "further right is better" whatever the stat. #}
-    {% macro stat(label, val, pctl=none, suffix='', signed=false, dash='—') %}
+    {# One metric: its value, and its standing against every FBS team. `pctl` is
+       already direction-corrected, so the bar always means "further right is
+       better" whatever the stat — a stingy defence fills it. #}
+    {% macro stat(label, val, pctl=none, suffix='', signed=false) %}
     <div class="gpx-row">
         <div class="gpx-row-top">
             <span class="gpx-label">{{ label }}</span>
             <span class="gpx-val">
-                {%- if val is none %}{{ dash }}
+                {%- if val is none %}—
                 {%- else %}{{ ('%+g' % val) if signed else val }}{{ suffix }}{% endif -%}
             </span>
         </div>
@@ -360,6 +363,12 @@
     </div>
     {% endmacro %}
 
+    {# Same thing, keyed — pulls the value and its percentile out of the team's
+       two dicts so the pairing can never drift apart. #}
+    {% macro metric(p, label, key, suffix='', signed=false) %}
+    {{ stat(label, p.adv.get(key), p.pct.get(key), suffix, signed) }}
+    {% endmacro %}
+
     {% macro team_box(p, name, logo, rank, side) %}
     <section class="dark-card gpx-team gpx-{{ side }}" aria-label="{{ name }} season form">
         <header class="gpx-head">
@@ -367,18 +376,53 @@
             <span class="gpx-name">{% if rank %}<span class="gpx-rank">#{{ rank }}</span>{% endif %}{{ name }}</span>
             {% if p.games %}<span class="gpx-rec">{{ p.wins }}–{{ p.losses }}</span>{% endif %}
         </header>
-        {{ stat('Pts / game', p.ppg) }}
-        {{ stat('Pts allowed', p.papg) }}
-        {{ stat('Savant net', p.net, none, '', true) }}
-        {{ stat('Off EPA', p.off_epa, p.pct.off_epa, '', true) }}
-        {{ stat('Def EPA', p.def_epa, p.pct.def_epa, '', true) }}
-        {{ stat('Success rate', p.off_sr, p.pct.off_sr, '%') }}
-        {{ stat('Havoc rate', p.havoc, p.pct.havoc, '%') }}
-        {% if p.ats %}
-        {{ stat('ATS record', p.ats.w ~ '–' ~ p.ats.l ~ ('–' ~ p.ats.p if p.ats.p else '')) }}
-        {% else %}
-        {{ stat('ATS record', none) }}
-        {% endif %}
+
+        {# The four numbers a reader wants before any of the per-play detail. #}
+        <div class="gpx-summary">
+            {% for lab, v in [('Pts / game', p.ppg), ('Pts allowed', p.papg),
+                              ('Savant net', p.net),
+                              ('ATS', (p.ats.w ~ '–' ~ p.ats.l) if p.ats else none)] %}
+            <div class="gpx-sum">
+                <span class="gpx-sum-v">{{ v if v is not none else '—' }}</span>
+                <span class="gpx-sum-k">{{ lab }}</span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="gpx-cols">
+            <div class="gpx-col">
+                <div class="gpx-col-k">Offense</div>
+                {{ metric(p, 'EPA / play',        'off_ppa', '', true) }}
+                {{ metric(p, 'Success rate',      'off_success_rate', '%') }}
+                {{ metric(p, 'Explosiveness',     'off_explosiveness') }}
+                {{ metric(p, 'Pass EPA / play',   'off_pass_ppa', '', true) }}
+                {{ metric(p, 'Rush EPA / play',   'off_rush_ppa', '', true) }}
+                {{ metric(p, 'Pass success',      'off_pass_sr', '%') }}
+                {{ metric(p, 'Rush success',      'off_rush_sr', '%') }}
+                {{ metric(p, 'Power success',     'off_power_success', '%') }}
+                {{ metric(p, 'Line yards',        'off_line_yards') }}
+                {{ metric(p, '2nd level yards',   'off_second_level_yards') }}
+                {{ metric(p, 'Open field yards',  'off_open_field_yards') }}
+                {{ metric(p, 'Points / scoring opp', 'off_pts_per_opp') }}
+                {{ metric(p, 'Avg start',         'off_field_pos_avg_start', ' yd') }}
+            </div>
+            <div class="gpx-col">
+                <div class="gpx-col-k">Defense</div>
+                {{ metric(p, 'EPA allowed',       'def_ppa', '', true) }}
+                {{ metric(p, 'Success allowed',   'def_success_rate', '%') }}
+                {{ metric(p, 'Explosive allowed', 'def_explosiveness') }}
+                {{ metric(p, 'Pass EPA allowed',  'def_pass_ppa', '', true) }}
+                {{ metric(p, 'Rush EPA allowed',  'def_rush_ppa', '', true) }}
+                {{ metric(p, 'Pass success all.', 'def_pass_sr', '%') }}
+                {{ metric(p, 'Rush success all.', 'def_rush_sr', '%') }}
+                {{ metric(p, 'Stuff rate',        'def_stuff_rate', '%') }}
+                {{ metric(p, 'Havoc rate',        'def_havoc_total', '%') }}
+                {{ metric(p, 'Havoc · front 7',   'def_havoc_front7', '%') }}
+                {{ metric(p, 'Havoc · secondary', 'def_havoc_db', '%') }}
+                {{ metric(p, 'Points / opp all.', 'def_pts_per_opp') }}
+                {{ metric(p, 'Avg start allowed', 'def_field_pos_avg_start', ' yd') }}
+            </div>
+        </div>
     </section>
     {% endmacro %}
 

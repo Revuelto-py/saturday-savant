@@ -4626,40 +4626,7 @@ def team(team_ref):
 
         cursor.execute('SELECT * FROM team_stats WHERE team=%s AND season=%s', (team_name, season))
         ts = cursor.fetchone()
-        team_adv = None
-        if ts:
-            team_adv = {
-                'off_plays':                ts[1],
-                'def_plays':                ts[18],
-                'off_ppa':                  round(ts[3], 3)  if ts[3]  else None,
-                'off_success_rate':         round(ts[5]*100, 1) if ts[5] else None,
-                'off_explosiveness':        round(ts[6], 3)  if ts[6]  else None,
-                'off_power_success':        round(ts[7]*100, 1) if ts[7] else None,
-                'off_stuff_rate':           round(ts[8]*100, 1) if ts[8] else None,
-                'off_line_yards':           round(ts[9], 2)  if ts[9]  else None,
-                'off_second_level_yards':   round(ts[11], 2) if ts[11] else None,
-                'off_open_field_yards':     round(ts[10], 2) if ts[10] else None,
-                'off_rush_ppa':             round(ts[12], 3) if ts[12] else None,
-                'off_pass_ppa':             round(ts[13], 3) if ts[13] else None,
-                'off_rush_sr':              round(ts[14]*100, 1) if ts[14] else None,
-                'off_pass_sr':              round(ts[15]*100, 1) if ts[15] else None,
-                'off_rush_exp':             round(ts[16], 3) if ts[16] else None,
-                'off_pass_exp':             round(ts[17], 3) if ts[17] else None,
-                'def_ppa':                  round(ts[20], 3) if ts[20] else None,
-                'def_success_rate':         round(ts[22]*100, 1) if ts[22] else None,
-                'def_explosiveness':        round(ts[23], 3) if ts[23] else None,
-                'def_power_success':        round(ts[24]*100, 1) if ts[24] else None,
-                'def_stuff_rate':           round(ts[25]*100, 1) if ts[25] else None,
-                'def_line_yards':           round(ts[26], 2) if ts[26] else None,
-                'def_second_level_yards':   round(ts[28], 2) if ts[28] else None,
-                'def_open_field_yards':     round(ts[27], 2) if ts[27] else None,
-                'def_rush_ppa':             round(ts[29], 3) if ts[29] else None,
-                'def_pass_ppa':             round(ts[30], 3) if ts[30] else None,
-                'def_rush_sr':              round(ts[31]*100, 1) if ts[31] else None,
-                'def_pass_sr':              round(ts[32]*100, 1) if ts[32] else None,
-                'def_rush_exp':             round(ts[33], 3) if ts[33] else None,
-                'def_pass_exp':             round(ts[34], 3) if ts[34] else None,
-            }
+        team_adv = _team_adv_from_row(ts)
 
         # NOTE: the block below used to be nested inside `if ts:`, which meant
         # brand-new FBS programs with no team_stats row yet (e.g. teams just
@@ -5151,6 +5118,56 @@ def _game_market(game_id):
             'total': float(row[1]) if row[1] is not None else None}
 
 
+def _team_adv_from_row(ts):
+    """A `SELECT * FROM team_stats` row as the advanced-metric dict the site
+    displays: rates scaled to percentages, everything else rounded the way each
+    metric is read. Keys line up 1:1 with the percentile keys from
+    `_team_percentiles_all`, which is what lets a value and its standing be
+    shown together. Returns None for a team with no row yet.
+
+    Shared by the team page and the matchup preview — the column indices are
+    positional, so having two copies of this was one schema change away from
+    the two surfaces disagreeing about which number is which.
+    """
+    if not ts:
+        return None
+    def r3(v): return round(v, 3) if v else None
+    def r2(v): return round(v, 2) if v else None
+    def pc(v): return round(v * 100, 1) if v else None
+    return {
+        'off_plays':                ts[1],
+        'def_plays':                ts[18],
+        'off_ppa':                  r3(ts[3]),
+        'off_success_rate':         pc(ts[5]),
+        'off_explosiveness':        r3(ts[6]),
+        'off_power_success':        pc(ts[7]),
+        'off_stuff_rate':           pc(ts[8]),
+        'off_line_yards':           r2(ts[9]),
+        'off_second_level_yards':   r2(ts[11]),
+        'off_open_field_yards':     r2(ts[10]),
+        'off_rush_ppa':             r3(ts[12]),
+        'off_pass_ppa':             r3(ts[13]),
+        'off_rush_sr':              pc(ts[14]),
+        'off_pass_sr':              pc(ts[15]),
+        'off_rush_exp':             r3(ts[16]),
+        'off_pass_exp':             r3(ts[17]),
+        'def_ppa':                  r3(ts[20]),
+        'def_success_rate':         pc(ts[22]),
+        'def_explosiveness':        r3(ts[23]),
+        'def_power_success':        pc(ts[24]),
+        'def_stuff_rate':           pc(ts[25]),
+        'def_line_yards':           r2(ts[26]),
+        'def_second_level_yards':   r2(ts[28]),
+        'def_open_field_yards':     r2(ts[27]),
+        'def_rush_ppa':             r3(ts[29]),
+        'def_pass_ppa':             r3(ts[30]),
+        'def_rush_sr':              pc(ts[31]),
+        'def_pass_sr':              pc(ts[32]),
+        'def_rush_exp':             r3(ts[33]),
+        'def_pass_exp':             r3(ts[34]),
+    }
+
+
 @cache.memoize(timeout=3600)
 def _preview_team(team, season):
     """The season-to-date form line for one team, for a matchup preview.
@@ -5171,8 +5188,7 @@ def _preview_team(team, season):
     # edge one.
     out = {'team': team, 'games': None, 'wins': None, 'losses': None,
            'ppg': None, 'papg': None, 'net': None, 'net_rank': None,
-           'svr_off': None, 'svr_def': None, 'off_epa': None, 'def_epa': None,
-           'off_sr': None, 'havoc': None, 'ats': None, 'pct': {}}
+           'svr_off': None, 'svr_def': None, 'ats': None, 'adv': {}, 'pct': {}}
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -5205,15 +5221,27 @@ def _preview_team(team, season):
             out['svr_off'] = round(float(r[2]), 1) if r[2] is not None else None
             out['svr_def'] = round(float(r[3]), 1) if r[3] is not None else None
 
-        cur.execute("""SELECT off_ppa, def_ppa, off_success_rate, def_havoc_total
+        # The same advanced-metric set the team page shows, built by the same
+        # function — so a preview and a team page can never disagree.
+        cur.execute('SELECT * FROM team_stats WHERE team = %s AND season = %s', (team, season))
+        out['adv'] = _team_adv_from_row(cur.fetchone()) or {}
+
+        # Havoc and field position live in team_advanced, not team_stats.
+        cur.execute("""SELECT def_havoc_total, def_havoc_front7, def_havoc_db,
+                              off_field_pos_avg_start, def_field_pos_avg_start,
+                              off_pts_per_opp, def_pts_per_opp
                          FROM team_advanced WHERE team = %s AND season = %s""", (team, season))
         r = cur.fetchone()
         if r:
-            out['off_epa'] = round(float(r[0]), 3) if r[0] is not None else None
-            out['def_epa'] = round(float(r[1]), 3) if r[1] is not None else None
-            # Stored as fractions; the site shows these as percentages.
-            out['off_sr'] = round(float(r[2]) * 100, 1) if r[2] is not None else None
-            out['havoc'] = round(float(r[3]) * 100, 1) if r[3] is not None else None
+            out['adv'].update({
+                'def_havoc_total':          round(float(r[0]) * 100, 1) if r[0] is not None else None,
+                'def_havoc_front7':         round(float(r[1]) * 100, 1) if r[1] is not None else None,
+                'def_havoc_db':             round(float(r[2]) * 100, 1) if r[2] is not None else None,
+                'off_field_pos_avg_start':  round(float(r[3]), 1) if r[3] is not None else None,
+                'def_field_pos_avg_start':  round(float(r[4]), 1) if r[4] is not None else None,
+                'off_pts_per_opp':          round(float(r[5]), 2) if r[5] is not None else None,
+                'def_pts_per_opp':          round(float(r[6]), 2) if r[6] is not None else None,
+            })
     except Exception:
         conn.rollback()
     finally:
@@ -5226,14 +5254,9 @@ def _preview_team(team, season):
 
     # Percentiles against the whole FBS field, from the same precomputed store
     # the team page reads. Already direction-corrected — a stingy defence scores
-    # high on def_ppa — so every one of these reads "higher is better".
-    field = _team_percentiles_all(season).get(team) or {}
-    out['pct'] = {
-        'off_epa': field.get('off_ppa'),
-        'def_epa': field.get('def_ppa'),
-        'off_sr':  field.get('off_success_rate'),
-        'havoc':   field.get('def_havoc_total'),
-    }
+    # high on def_ppa — so every one of these reads "higher is better". Keys
+    # match `adv` above, so a value and its standing are looked up together.
+    out['pct'] = _team_percentiles_all(season).get(team) or {}
     return out
 
 
