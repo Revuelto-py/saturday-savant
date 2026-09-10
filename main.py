@@ -60,6 +60,7 @@ import cfbd
 import psycopg2
 from psycopg2 import pool as pg_pool
 import gzip
+import colorsys
 from functools import lru_cache
 import json
 import math
@@ -2605,6 +2606,101 @@ def build_game_card(row, ap_weekly, rivalry_map):
         'kickoff_hm': None if (time_tbd or not et) else et,
     }
 
+# ── Which games are worth reading first ──────────────────────────────────
+# The home slate is ordered by kickoff and nothing else, so a top-five meeting
+# is drawn exactly like a 60-point FCS tune-up and the reader does the triage
+# across ~86 identical rectangles. Both jobs the product is for — reading a
+# matchup before kickoff, reading into a result after — start with WHICH game,
+# and the page never answered that.
+#
+# Deliberately not a new data source: rank, rivalry and the forecast are all
+# already on the card. This only decides what goes on top.
+TOP_GAMES_N = 6
+
+@cache.memoize(timeout=21600)
+def forecast_record(season):
+    """The Savant Forecast's season-to-date record, or None before it has one.
+
+    PRODUCT principle 3 asks the site to say what its data does not know next
+    to the number. The home page rendered a win probability 86 times and never
+    once said how often the model is right; this is the figure that sentence
+    needs. Reads only frozen, already-scored predictions, so it can never
+    include a game the model is currently forecasting.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT COUNT(*), COALESCE(SUM(correct), 0) '
+                    'FROM game_predictions WHERE season = %s AND scored = 1', (season,))
+        total, correct = cur.fetchone()
+    except Exception:
+        return None
+    finally:
+        release_db(conn)
+    if not total:
+        return None
+    return {'total': total, 'correct': int(correct),
+            'pct': round(100.0 * int(correct) / total)}
+
+
+def slate_headline(top, forecasts):
+    """The one game worth naming at the top of the page, and why it is that one.
+
+    Returns None on a slate with nothing to say, which is the point: a quiet
+    week gets a masthead with no claim rather than a manufactured one.
+    """
+    if not top:
+        return None
+    g = top[0]
+    prob = forecasts.get(g['id'])
+    if g.get('away_rank') and g.get('home_rank'):
+        reason = 'the biggest matchup on the board'
+    elif g.get('rivalry'):
+        reason = g['rivalry']
+    elif prob is not None and abs(prob - 0.5) < 0.08:
+        reason = 'the closest call on the board'
+    else:
+        reason = 'the game to watch'
+    fav = dog_pct = None
+    if prob is not None:
+        home_fav = prob >= 0.5
+        fav = g['home'] if home_fav else g['away']
+        dog_pct = round((prob if home_fav else 1 - prob) * 100)
+    return {'game': g, 'reason': reason, 'fav': fav, 'fav_pct': dog_pct}
+
+
+
+def top_games(games, forecasts, limit=TOP_GAMES_N):
+    """The handful of games worth surfacing above the chronological grid.
+
+    Returns [] when the slate has nothing that stands out, so a quiet week
+    renders the plain grid rather than promoting six arbitrary games.
+    """
+    scored = []
+    for g in games:
+        ar, hr = g.get('away_rank'), g.get('home_rank')
+        score = 0.0
+        if ar and hr:
+            # Ranked vs ranked is the strongest signal on the board, and #1 vs
+            # #4 should outrank #18 vs #22.
+            score += 100 - (ar + hr)
+        elif ar or hr:
+            score += 45 - (ar or hr)
+        if g.get('rivalry'):
+            score += 18
+        prob = forecasts.get(g['id'])
+        if prob is not None:
+            # A coin flip is worth reading; a 97% is not.
+            score += 24 * max(0.0, 1 - 2 * abs(prob - 0.5))
+        if score > 0:
+            scored.append((score, g))
+    # A band of one or two reads as an accident rather than a selection.
+    if len(scored) < 3:
+        return []
+    scored.sort(key=lambda x: (-x[0], x[1].get('day_key') or '', x[1]['id']))
+    return [g for _, g in scored[:limit]]
+
+
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
 # query_string=True so ?leaders=<year> caches as its own entry — without it the
@@ -2701,6 +2797,11 @@ def home(week=None, season_type='regular'):
         # Drive tracking lives on the game page (Drives tab); point the hero
         # pill at the most prominent recent game rather than an unrelated page.
         featured_game_id = games[0]['id'] if games else None
+        # Regular season only: the postseason view is already grouped by round,
+        # which is a stronger ordering than anything this would compute.
+        top = [] if season_type == 'postseason' else top_games(games, forecasts)
+        top_ids = {g['id'] for g in top}
+        headline = slate_headline(top, forecasts)
 
     finally:
         release_db(conn)
@@ -2714,7 +2815,9 @@ def home(week=None, season_type='regular'):
         leaders=leaders, ap_rankings=ap_rankings,
         forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
-        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
+        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id,
+        top_games=top, top_ids=top_ids, headline=headline,
+        forecast_record=forecast_record(home_season))
 
 @app.route('/games')
 @cache.cached(timeout=21600, query_string=True)
@@ -3456,6 +3559,103 @@ def team_hex(value, fallback='#334155'):
     return f'#{h}'
 
 app.jinja_env.filters['team_hex'] = team_hex
+
+
+# ── Forecast-bar colours ─────────────────────────────────────────────────
+# The split bar draws each team's brand colour, and for most of the slate that
+# is fine. It is not always: measured across an 86-game home page, 41 of the
+# bars had the two segments under 1.5:1 against each other and five sat at
+# 1.00-1.03:1 — Washington's 87% bar carried a 34px underdog segment that was
+# literally invisible because two school colours happened to composite to the
+# same luminance. Colour was the only thing saying where the split fell, and
+# on those cards it said nothing.
+#
+# team_hex already answers "can this colour be seen at all" (its luminance
+# floor catches black and its neighbours). This answers the different question
+# the bar actually asks: can these two be told APART. The darker colour keeps
+# its exact brand value and the lighter one is lifted toward white until the
+# pair clears the ratio, so the team that owns the darker colour is never
+# misrepresented and the adjustment is invisible on the ~half of the slate
+# that already passes.
+# Why 2.0 and not the 3:1 WCAG 2.2 asks of a non-text indicator: 3:1 is a
+# LUMINANCE ratio, and two mid-luminance brand colours can only reach it by
+# moving one of them a long way up the lightness ramp. Measured on the real
+# slate, Texas #c15d26 against Ohio State #ce1141 came back as #eab496 — a pale
+# peach that no longer reads as burnt orange, which trades one misrepresentation
+# for another.
+#
+# What actually carries the split is this guaranteed tonal step between the two
+# segments. There is also a 2px gap of track drawn between them, but measured
+# across the slate that gap is only a reinforcement, not a guarantee: against a
+# dark navy it comes in at 1.01:1, because some school colours sit at nearly the
+# same luminance as the track itself. It reads as a clean break on the majority
+# of bars and never hurts; the ratio below is the part that always holds.
+#
+# 2.0 is the point where the two sides read as different tones while the colours
+# still read as themselves — 2.4 and up starts turning burnt orange peach.
+FC_MIN_RATIO = 2.0
+
+def _srgb_lum(rgb):
+    def ch(v):
+        v /= 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (ch(c) for c in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _ratio(a, b):
+    la, lb = _srgb_lum(a), _srgb_lum(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def _to_rgb(h):
+    h = h.lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _lift(rgb, amt):
+    """Raise HSL lightness, keeping hue and saturation.
+
+    Blending toward white was the obvious version and it was wrong: it washes
+    saturation out along with the darkness, so Texas burnt orange came back as
+    pale pink — a colour that no longer reads as the team it is standing for.
+    Moving lightness alone keeps burnt orange burnt orange, only brighter.
+    """
+    r, g, b = (c / 255.0 for c in rgb)
+    h, l, sat = colorsys.rgb_to_hls(r, g, b)
+    l = min(1.0, l + (1.0 - l) * amt)
+    return tuple(round(c * 255) for c in colorsys.hls_to_rgb(h, l, sat))
+
+
+@lru_cache(maxsize=2048)
+def forecast_pair(away_hex, home_hex):
+    """Two team hexes guaranteed distinguishable from each other.
+
+    Returns (away, home). Cached because a season's worth of pages draws the
+    same few hundred colour pairs over and over.
+    """
+    a, h = _to_rgb(away_hex), _to_rgb(home_hex)
+    if _ratio(a, h) >= FC_MIN_RATIO:
+        return away_hex, home_hex
+    # Lift whichever is already lighter; ties go to the away side so the pair
+    # is stable regardless of which team happens to be at home.
+    lift_away = _srgb_lum(a) >= _srgb_lum(h)
+    for step in range(1, 21):
+        amt = step * 0.05
+        if lift_away:
+            cand = _lift(a, amt)
+            if _ratio(cand, h) >= FC_MIN_RATIO:
+                return '#%02x%02x%02x' % cand, home_hex
+        else:
+            cand = _lift(h, amt)
+            if _ratio(a, cand) >= FC_MIN_RATIO:
+                return away_hex, '#%02x%02x%02x' % cand
+    # Both ends of the ramp exhausted (only reachable if one colour is already
+    # near-white); fall back to white so the split is at least visible.
+    return ('#ffffff', home_hex) if lift_away else (away_hex, '#ffffff')
+
+
+app.jinja_env.globals['forecast_pair'] = forecast_pair
 
 
 def _hex_to_rgba(hex_color, alpha):

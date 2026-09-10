@@ -32,12 +32,12 @@
              for: the split bar before and during the game, the recap after.
              One idea, one place, three renderings.
 #}
-{% macro game_card(g, prob=None, forecast=None, show_date=True) %}
+{% macro game_card(g, prob=None, forecast=None, show_date=True, featured=False) %}
 {% set state = 'final' if g.completed else ('live' if g.live else 'upcoming') %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
 {% set has_foot = (prob is not none and state != 'final') or (forecast and state == 'final') %}
-<a class="game-card-v2 is-{{ state }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
+<a class="game-card-v2 is-{{ state }}{{ ' is-featured' if featured else '' }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
 
     {# ── head ───────────────────────────────────────────────────────────── #}
     <div class="gc-head">
@@ -90,15 +90,33 @@
             {# Same guard as the game hero: the old test checked the shape of the
                value but not whether the colour can be seen, so a black brand
                colour drew an invisible half to the forecast split bar. #}
-            {% set hc = g.home_color | team_hex('#2b3a55') %}
-            {% set ac = g.away_color | team_hex('#5a2b2b') %}
-            {% set fav = g.home if prob >= 0.5 else g.away %}
-            {% set fav_pct = (prob if prob >= 0.5 else 1 - prob) * 100 %}
-            <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%">
-                <span class="fc-bar"><span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                    {{ ac }}cc 0%, {{ ac }}cc {{ '%.1f' % ((1 - prob) * 100) }}%,
-                    {{ hc }}cc {{ '%.1f' % ((1 - prob) * 100) }}%, {{ hc }}cc 100%)"></span></span>
-                <span class="gc-fc-pct">{{ fav }} {{ '%.0f' % fav_pct }}%</span>
+            {% set pair = forecast_pair(g.away_color | team_hex('#5a2b2b'),
+                                        g.home_color | team_hex('#2b3a55')) %}
+            {% set ac = pair[0] %}{% set hc = pair[1] %}
+            {% set home_fav = prob >= 0.5 %}
+            {% set fav = g.home if home_fav else g.away %}
+            {% set dog = g.away if home_fav else g.home %}
+            {% set fav_pct = (prob if home_fav else 1 - prob) * 100 %}
+            {% set split = (1 - prob) * 100 %}
+            {# Geometry only: a 0.3% share yields a negative calc() and drops the
+               segment entirely, so the drawn split is floored well below the
+               point where it could misstate anything. The text carries the
+               true number either way. #}
+            {% set gsplit = '%.1f' % ([[split, 1.2] | max, 98.8] | min) %}
+            <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%"
+                  role="img" aria-label="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }} percent, {{ dog }} {{ '%.0f' % (100 - fav_pct) }} percent">
+                <span class="fc-bar">
+                    {# A 2px gap of track between the segments rather than an edge
+                       to edge meeting. forecast_pair() guarantees the two sides
+                       differ in tone; this just sharpens the boundary where the
+                       track is darker than both of them. #}
+                    <span class="fc-bar-fill" style="background:linear-gradient(90deg,
+                        {{ ac }} 0%, {{ ac }} calc({{ gsplit }}% - 1px),
+                        transparent calc({{ gsplit }}% - 1px), transparent calc({{ gsplit }}% + 1px),
+                        {{ hc }} calc({{ gsplit }}% + 1px), {{ hc }} 100%)"></span>
+                    <span class="fc-bar-tick fc-bar-even" aria-hidden="true"></span>
+                </span>
+                <span class="gc-fc-pct"><span class="fc-swatch" style="background:{{ hc if home_fav else ac }}" aria-hidden="true"></span>{{ fav }} {{ '%.0f' % fav_pct }}%</span>
             </span>
         {% endif %}
     </div>

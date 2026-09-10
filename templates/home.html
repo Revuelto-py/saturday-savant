@@ -1,49 +1,45 @@
 {% extends "base.html" %}
 {% import "_game_card.html" as gc %}
 {% block title %}Saturday Savant · College Football Analytics{% endblock %}
-{% block og_description %}Live scores, win probabilities, and Savant Ratings for every FBS college football game. Advanced stats, EPA, and forecasts for all 136 teams, updated through the {{ home_season }} season.{% endblock %}
+{% block og_description %}Live scores, win probabilities, and Savant Ratings for every FBS college football game. Advanced stats, EPA, and forecasts for all {{ fbs_team_count or 136 }} teams, updated through the {{ home_season }} season.{% endblock %}
 
 {% block content %}
 
-{# ── Infinite-grid hero — animated grid with a mouse-following gold reveal.
-     Sits below the ticker; all game content stays directly beneath it. ── #}
-<section class="ig-hero" id="igHero" aria-label="Saturday Savant — college football, quantified">
+{# ── Masthead ─────────────────────────────────────────────────────────────
+     This used to be a 512px full-viewport brand block: logo, eyebrow, wordmark,
+     tagline, sentence, and a row of four links that duplicated the nav under
+     different labels. Nearly every visit to a free, no-account index page is a
+     return visit, and each one paid that toll before reaching a score.
+
+     It keeps the identity — the drifting grid, the wordmark, the night sky —
+     and gives the space back by carrying one thing a returning reader cannot
+     get from the nav: what is actually worth watching this week. ── #}
+<section class="ig-hero" id="igHero">
     {# base grid: always faintly visible, drifting #}
     <div class="ig-layer ig-base" aria-hidden="true"><div class="ig-grid"></div></div>
-    {# reveal grid: gold lines, unmasked only around the cursor #}
+    {# reveal grid: accent lines, unmasked only around the cursor #}
     <div class="ig-layer ig-reveal" aria-hidden="true"><div class="ig-grid"></div></div>
-    {# palette glows — brand gold up right, deep field-navy down left #}
-    <div class="ig-glow ig-glow-gold" aria-hidden="true"></div>
+    {# palette glows — accent up right, deeper blue down left #}
+    <div class="ig-glow ig-glow-accent" aria-hidden="true"></div>
     <div class="ig-glow ig-glow-navy" aria-hidden="true"></div>
 
     <div class="ig-content">
-        <img src="/static/logo-mark-256.png" alt="" class="ig-logo">
-        <div class="ig-eyebrow">College Football Analytics</div>
-        <h1 class="ig-title">Saturday <span class="ig-title-gold">Savant</span></h1>
-        <p class="ig-tagline">College football, quantified.</p>
-        <p class="ig-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team.</p>
+        <div class="ig-lockup">
+            <img src="/static/logo-mark-256.png" alt="" class="ig-logo">
+            <h1 class="ig-title">Saturday <span class="ig-title-accent">Savant</span></h1>
+        </div>
+        <p class="ig-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team — every season since 2016.</p>
 
-        <nav class="ig-features" aria-label="Site features">
-            <a class="ig-feature" href="/teams">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 4v6c0 4.6-3.2 8.4-8 10-4.8-1.6-8-5.4-8-10V6l8-4z"/></svg>
-                {{ fbs_team_count or 136 }} FBS Teams
-            </a>
-            <span class="ig-divider"></span>
-            <a class="ig-feature" href="/savant-rating">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
-                Savant Ratings
-            </a>
-            <span class="ig-divider"></span>
-            <a class="ig-feature" href="{{ ('/game/' ~ featured_game_id) if featured_game_id else '/games' }}">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Drive-by-Drive
-            </a>
-            <span class="ig-divider"></span>
-            <a class="ig-feature" href="/compare">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>
-                Compare Players &amp; Teams
-            </a>
-        </nav>
+        {% if headline %}
+        {# A quiet week returns no headline rather than a manufactured one. #}
+        <p class="ig-headline">
+            <a class="ig-headline-game" href="/game/{{ headline.game.id }}">
+                {%- if headline.game.away_rank %}<span class="gc-rank">{{ headline.game.away_rank }}</span>{% endif %}{{ headline.game.away }}
+                <span class="ig-headline-at">at</span>
+                {%- if headline.game.home_rank %}<span class="gc-rank">{{ headline.game.home_rank }}</span>{% endif %}{{ headline.game.home }}</a>
+            <span class="ig-headline-why">{{ headline.reason }}{% if headline.fav %} · Savant Forecast has {{ headline.fav }} at {{ headline.fav_pct }}%{% endif %}</span>
+        </p>
+        {% endif %}
     </div>
 </section>
 
@@ -52,11 +48,27 @@
 
     <!-- Games Section -->
     <div class="col-lg-8">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">
+
+        {% if top_games %}
+        {# ── Top games ────────────────────────────────────────────────────
+             The slate below is ordered by kickoff and nothing else, so a
+             top-five meeting is drawn exactly like a tune-up. This is a
+             shortcut, not a filter: every one of these games is still in the
+             full slate underneath, in its chronological place. ── #}
+        <div class="slate-head">
+            <h2 class="section-label">Top Games</h2>
+            <span class="slate-head-note">Ranked matchups, rivalries, and the closest calls</span>
+        </div>
+        <div class="home-games-grid">
+            {% for game in top_games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id), featured=True) }}{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="slate-head slate-head-main" id="slate">
+            <h2 class="section-label">
                 {% if season_type == 'postseason' %}Postseason{% else %}Week {{ selected_week }}{% endif %}{% if week_complete %} Results{% endif %}
                 <span class="section-label-season">{{ home_season }}</span>
-            </h5>
+            </h2>
             <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
                 {% for w, stype in all_weeks %}
                     {% set stype_short = 'postseason' if 'POSTSEASON' in stype else 'regular' %}
@@ -68,24 +80,37 @@
             </select>
         </div>
 
+        {# The model is named once here rather than 86 times in a tooltip: it
+           previously appeared only inside title= attributes, which never show
+           on touch and are not keyboard-reachable. #}
+        <p class="slate-caption">
+            <span class="slate-caption-model">Savant Forecast</span> — pre-kickoff win probability, shown on every game below.{% if forecast_record %} Correct on {{ forecast_record.pct }}% of the {{ forecast_record.total }} {{ home_season }} games it has been scored against so far.{% endif %}
+        </p>
+
         {% if season_type == 'postseason' %}
             {% for label, games in grouped_games.items() %}
-                <div class="section-label mt-4">{{ label }}</div>
+                <h3 class="section-label mt-4">{{ label }}</h3>
                 <div class="home-games-grid">
                     {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}{% endfor %}
                 </div>
+            {% else %}
+                <p class="slate-empty">No postseason games are scheduled for {{ home_season }} yet. They appear here once the bowl and playoff fields are set.</p>
             {% endfor %}
         {% else %}
-            <div class="home-games-grid">
-                {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}{% endfor %}
+            <div class="home-games-grid" id="slateGrid">
+                {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id), featured=game.id in top_ids) }}
+                {% else %}
+                <p class="slate-empty">No games are scheduled for Week {{ selected_week }} of {{ home_season }}. Pick another week above, or see the <a href="/games">full season schedule</a>.</p>
+                {% endfor %}
             </div>
         {% endif %}
     </div>
 
     <!-- Leaders Section -->
     <div class="col-lg-4">
-        <div class="d-flex align-items-center justify-content-between" style="margin-bottom: var(--s6);gap:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Season Leaders</h5>
+      <div class="leader-rail">
+        <div class="slate-head">
+            <h2 class="section-label">Season Leaders</h2>
             {% if leader_seasons and leader_seasons|length > 1 %}
             {# Leaders run on their own season, independent of the games column:
                they are stats-derived, and the season being played has none yet. #}
@@ -101,7 +126,7 @@
         {% for label, href, players in leaders %}
         <div class="leader-card">
             <div class="leader-head">
-                <span class="section-label">{{ label }}</span>
+                <h3 class="section-label">{{ label }}</h3>
                 <a class="leader-viewall" href="{{ href }}?season={{ leaders_season }}">View all →</a>
             </div>
             {% for p in players %}
@@ -140,7 +165,10 @@
             {% endif %}
             {% endfor %}
         </div>
+        {% else %}
+        <p class="slate-empty">No {{ leaders_season }} stat lines yet. Leaders fill in once the season's first games are recorded.</p>
         {% endfor %}
+      </div>
     </div>
 
 </div>
@@ -194,6 +222,62 @@
         }
         rafId = requestAnimationFrame(tick);
     }
+})();
+
+/* ── Long-slate collapse (small screens only) ─────────────────────────────
+   A full week is ~86 cards. Stacked one-up on a phone that put Season Leaders
+   at 83.7% down a 19,000px page, which is to say nobody ever saw them. The
+   tail folds behind a button below the leaders breakpoint and stays open on
+   desktop, where the two columns sit side by side and the length costs
+   nothing.
+
+   Collapsing is done in JS rather than in the template so that a reader
+   without JS still gets the complete slate — the markup always contains
+   every game. ── */
+(function () {
+    var grid = document.getElementById('slateGrid');
+    if (!grid) return;
+
+    var SHOWN = 20;
+    var cards = grid.querySelectorAll('.game-card-v2');
+    if (cards.length <= SHOWN + 4) return;   // not worth a control
+
+    var mq = window.matchMedia('(max-width: 991.98px)');
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'slate-more';
+    btn.hidden = true;
+    grid.insertAdjacentElement('afterend', btn);
+
+    function label() {
+        btn.textContent = 'Show all ' + cards.length + ' games';
+        btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function collapse() {
+        grid.classList.add('is-collapsed');
+        label();
+        btn.hidden = false;
+    }
+
+    function expand() {
+        grid.classList.remove('is-collapsed');
+        btn.hidden = true;
+    }
+
+    btn.addEventListener('click', function () {
+        expand();
+        /* Keep the reader where they were rather than letting the page jump. */
+        cards[SHOWN].scrollIntoView({ block: 'start', behavior: 'smooth' });
+        cards[SHOWN].focus({ preventScroll: true });
+    });
+
+    function sync(e) {
+        if (e.matches) { collapse(); } else { expand(); }
+    }
+    sync(mq);
+    (mq.addEventListener ? mq.addEventListener.bind(mq, 'change')
+                         : mq.addListener.bind(mq))(sync);
 })();
 </script>
 {% endblock %}

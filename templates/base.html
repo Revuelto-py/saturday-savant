@@ -160,7 +160,14 @@
             width: 220px;
             flex-shrink: 0;
             isolation: isolate;
-            transition: width var(--t-base, 0.2s) ease;
+            /* --t-base is `0.2s ease`; appending another `ease` made this
+               `width 0.2s ease ease`, which is invalid, so the shorthand was
+               dropped and the box snapped instead of easing.
+
+               Deliberately still a width animation, which the design detector
+               flags: transform would distort the input's text, and the reflow
+               is one nav-bar element on focus. Snapping was the worse trade. */
+            transition: width var(--t-base);
         }
         /* Expand on focus — a compact resting width keeps the now-shorter nav
            row balanced, widening only while the user is actually searching */
@@ -392,7 +399,7 @@
             border-radius: var(--r-sm, 6px); padding: 7px 12px;
             transition: border-color var(--t-fast);
         }
-        select.form-select:focus { border-color: var(--border-gold); box-shadow: 0 0 0 3px rgba(28, 156, 240,0.08); }
+        select.form-select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(28, 156, 240,0.18); }
         select.form-select option { background: var(--bg-surface, #0a1628); color: var(--text-primary, #f0f4f8); }
         .player-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; object-position: top; border: 1px solid var(--border-strong); }
 
@@ -462,6 +469,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+
+    <a class="skip-link" href="#main">Skip to main content</a>
 
     <nav class="navbar navbar-dark">
         <div class="navbar-inner">
@@ -557,10 +566,40 @@
     </div>
     {% endif %}
 
+    <main id="main" tabindex="-1">
     {% block content %}{% endblock %}
+    </main>
 
     <!-- Sitewide footer -->
     <footer class="site-footer">
+        {# The site's whole position is breadth in one place, and the footer —
+           the last thing anyone sees after a long scroll — used to be a single
+           GitHub link. Most of these destinations exist only behind the nav's
+           "More" menu, so nothing on a page ever revealed they were here. #}
+        <nav class="page-wrapper footer-nav" aria-label="All sections">
+            <div class="footer-col">
+                <h2 class="footer-col-head">Teams &amp; Players</h2>
+                <a href="/teams">Teams</a>
+                <a href="/explorer">Stat Explorer</a>
+                <a href="/leaderboards/passing">Leaderboards</a>
+                <a href="/compare">Compare</a>
+                <a href="/transfers">Transfer Portal</a>
+                <a href="/draft">NFL Draft</a>
+            </div>
+            <div class="footer-col">
+                <h2 class="footer-col-head">Games &amp; Season</h2>
+                <a href="/games">Every Game</a>
+                <a href="/rankings">AP Rankings</a>
+                <a href="/standings">Standings</a>
+                <a href="/bracket">Playoff Bracket</a>
+                <a href="/rivalries">Rivalries</a>
+            </div>
+            <div class="footer-col">
+                <h2 class="footer-col-head">The Models</h2>
+                <a href="/savant-rating">Savant Rating</a>
+                <p class="footer-note">Opponent-adjusted points per ten drives, and the pre-kickoff Savant Forecast graded against what it predicted. Coverage runs 2016&ndash;{{ current_season or 2026 }}; some advanced splits start later.</p>
+            </div>
+        </nav>
         <div class="page-wrapper site-footer-inner">
             <a href="https://github.com/Revuelto-py/saturday-savant" target="_blank" rel="noopener noreferrer" class="footer-gh" aria-label="Saturday Savant on GitHub">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
