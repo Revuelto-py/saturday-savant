@@ -9,7 +9,6 @@
 
     <!-- Page header -->
     <div style="margin-bottom:20px">
-        <div class="section-label" style="margin-bottom: var(--s2)">Games</div>
         <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
             {% if sel_team %}{{ sel_team }}
                 <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} schedule</span>
@@ -65,6 +64,12 @@
         </div>
     </div>
 
+    {# The split bar under each scheduled card is this model's output, and the
+       page never said so — it appeared only inside a title= attribute. #}
+    <p class="slate-caption">
+        <span class="slate-caption-model">Savant Forecast</span> — pre-kickoff win probability on scheduled games, and the frozen call it made on completed ones.{% if forecast_record %} Correct on {{ forecast_record.pct }}% of the {{ forecast_record.total }} {{ season }} games scored so far.{% endif %}
+    </p>
+
     {% if sel_team %}
     <div class="games-context">
         Showing {{ sel_team }}'s full {{ season }} schedule.
@@ -85,19 +90,20 @@
                 {{ d.count }} game{{ '' if d.count == 1 else 's' }}{% if d.window %}<span class="day-window">{{ d.window }}</span>{% endif %}
             </span>
         </div>
-        <div class="games-grid">
-            {% for g in d.games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id), show_date=False) }}{% endfor %}
+        <div class="games-grid day-grid">
+            {% for g in d.games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id), show_date=False, featured=g.id in top_ids) }}{% endfor %}
         </div>
     </section>
     {% endfor %}
     {% elif games %}
     <div class="games-grid">
-        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id)) }}{% endfor %}
+        {% for g in games %}{{ gc.game_card(g, prob=forecasts.get(g.id), forecast=completed_forecasts.get(g.id), featured=g.id in top_ids) }}{% endfor %}
     </div>
     {% else %}
-    <div class="games-empty">
-        No games found for this selection.
-    </div>
+    <p class="slate-empty">
+        No games match {% if sel_team %}{{ sel_team }} in {{ season }}{% elif sel_conf %}{{ sel_conf }} in this week{% else %}this week of {{ season }}{% endif %}.
+        Try <a href="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}">clearing the filters</a>, or pick another week above.
+    </p>
     {% endif %}
 
     <!-- Upsets in the current view — synced to the same week/filters as the grid.
@@ -105,8 +111,7 @@
     {% if week_upsets %}
     <div class="upsets-strip" style="margin-top: var(--s6); margin-bottom: 0">
         <div class="upsets-strip-head">
-            <span class="upset-badge">Upsets</span>
-            <h3>{{ upsets_label }}</h3>
+            <h3>Upsets <span class="upsets-strip-when">{{ upsets_label }}</span></h3>
             <span class="upsets-strip-count">{{ week_upsets|length }} the forecast missed</span>
         </div>
         <div class="upsets-strip-list">
@@ -124,4 +129,64 @@
     {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Long-day collapse (small screens only) ───────────────────────────────
+   A full Saturday is ~60 cards stacked one-up, which put this page at 18,925px
+   on a phone and buried the upsets strip under all of it. The day is already
+   how the page is organised, so the fold happens inside each day rather than
+   across the whole slate — Thursday's three games are never touched, and
+   Saturday gets a control.
+
+   Collapsing is done from JS so a reader without it still gets every game. ── */
+(function () {
+    var SHOWN = 8;
+    var mq = window.matchMedia('(max-width: 767.98px)');
+    var blocks = [];
+
+    document.querySelectorAll('.day-grid').forEach(function (grid) {
+        var cards = grid.querySelectorAll('.game-card-v2');
+        if (cards.length <= SHOWN + 2) return;      // not worth a control
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'slate-more';
+        btn.hidden = true;
+        btn.setAttribute('aria-controls', grid.id || (grid.id = 'daygrid-' + blocks.length));
+        grid.insertAdjacentElement('afterend', btn);
+
+        var block = grid.closest('.day-block');
+        var day = block && block.querySelector('.day-name');
+        var name = day ? day.textContent.trim() : 'this day';
+
+        function collapse() {
+            grid.classList.add('is-collapsed');
+            btn.textContent = 'Show all ' + cards.length + ' ' + name + ' games';
+            btn.setAttribute('aria-expanded', 'false');
+            btn.hidden = false;
+        }
+        function expand() {
+            grid.classList.remove('is-collapsed');
+            btn.setAttribute('aria-expanded', 'true');
+            btn.hidden = true;
+        }
+        btn.addEventListener('click', function () {
+            expand();
+            cards[SHOWN].scrollIntoView({ block: 'start', behavior: 'smooth' });
+            cards[SHOWN].focus({ preventScroll: true });
+        });
+        blocks.push({ collapse: collapse, expand: expand });
+    });
+
+    if (!blocks.length) return;
+    function sync(e) {
+        blocks.forEach(function (b) { e.matches ? b.collapse() : b.expand(); });
+    }
+    sync(mq);
+    (mq.addEventListener ? mq.addEventListener.bind(mq, 'change')
+                         : mq.addListener.bind(mq))(sync);
+})();
+</script>
 {% endblock %}

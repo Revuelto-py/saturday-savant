@@ -2990,9 +2990,15 @@ def games_hub():
     finally:
         release_db(conn)
 
+    # Same scorer the home page promotes with. No band here — the day grouping
+    # is this page's organising idea and a second one would compete with it —
+    # but marking the standouts gives a long Saturday some tiers.
+    top_ids = {g['id'] for g in top_games(games, forecasts)}
+
     return render_template('games.html',
         games=games, day_groups=day_groups, seasons=seasons, season=season, forecasts=forecasts,
-        completed_forecasts=completed_forecasts,
+        completed_forecasts=completed_forecasts, top_ids=top_ids,
+        forecast_record=forecast_record(season),
         week_upsets=week_upsets, upsets_label=upsets_label,
         week_options=week_options, sel_week=sel_week, sel_stype=sel_stype,
         conferences=conferences, team_names=team_names,
