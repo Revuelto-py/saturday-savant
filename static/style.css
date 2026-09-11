@@ -4916,23 +4916,44 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     color: #cfd8e3; text-shadow: 0 1px 4px rgba(0,0,0,0.7);
     white-space: nowrap;
 }
-.gh-fc-split { display: flex; align-items: baseline; }
+/* The two numbers sit under their own crest — left is away, right is home —
+   so position carries the mapping and the split bar underneath confirms it.
+   They were crowded around a centre dot before, with the underdog dimmed,
+   which read as a rendering fault at an even split. */
+.gh-fc-split {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: clamp(18px, 3vw, 54px);
+    width: 100%;
+}
 .gh-fc-pct {
     font-family: var(--font-display); font-weight: 800;
-    font-size: clamp(2.5rem, 1.8rem + 2.3vw, 4.6rem);
+    font-size: clamp(2.2rem, 1.6rem + 2vw, 4rem);
     line-height: 1; letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
     /* Same shadow discipline as the rest of the hero: these sit over saturated
        team-colour blooms and washed out without it. */
     text-shadow: 0 2px 10px rgba(0,0,0,0.55);
 }
+/* Weight and size separate favourite from underdog; both stay fully legible,
+   because the losing side's number is the one a fan most wants to read. */
 .gh-fc-pct.is-fav { color: #fff; }
-.gh-fc-pct.is-dog { color: rgba(255,255,255,0.58); }
-.gh-pct-sign { font-size: 0.46em; font-weight: 700; margin-left: 2px; }
-.gh-fc-dot {
-    font-size: clamp(1.1rem, 0.8rem + 0.9vw, 1.9rem);
-    color: rgba(255,255,255,0.35); padding: 0 clamp(10px, 1vw, 18px);
-    line-height: 1;
+.gh-fc-pct.is-even { color: #fff; }
+.gh-fc-pct.is-dog { color: #e2e6ea; font-weight: 700; font-size: clamp(1.7rem, 1.2rem + 1.5vw, 3rem); }
+/* A readable suffix, not a superscript — 0.46em put it below the type floor. */
+.gh-pct-sign { font-size: 0.42em; font-weight: 700; margin-left: 3px; letter-spacing: 0.02em; }
+.gh-fc-bar {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 6px;
+    border-radius: var(--r-pill);
+    overflow: hidden;
+    background: rgba(0,0,0,0.45);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
+.gh-fc-bar-fill { position: absolute; inset: 0; }
 .gh-vs {
     font-family: var(--font-display); font-weight: 800;
     font-size: clamp(1.9rem, 1.4rem + 1.8vw, 3.2rem);
@@ -4981,6 +5002,277 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    same order — a stat with no value still renders its row — so the two read
    across without being welded into a single grid. */
 .gpx { margin-top: var(--s5); }
+/* ── Upcoming game: the verdict, then the evidence ────────────────────────
+   Two jobs in order. The verdict band says what the model and the market
+   think; the head-to-head below is the evidence for disagreeing with them.
+
+   The stats were previously two tall columns with the forecast wedged in the
+   middle, which put a team's EPA and its opponent's EPA — the same row
+   conceptually — about 470px apart with an unrelated card between them. */
+.gpv-verdict {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    gap: var(--s3);
+    margin-bottom: var(--s6);
+}
+.gpv-fc, .gpv-vegas { padding: var(--s5) var(--s5) var(--s4); }
+.gpv-k-head {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: var(--s3);
+}
+.gpv-fc-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s3);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+.gpv-fc-line b { color: var(--text-primary); font-weight: 700; }
+.gpv-fc-side-h { text-align: right; }
+.gpv-fc .fc-bar { height: 12px; }
+.gpv-fc-exp {
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: var(--s3);
+}
+.gpv-fc-exp b { color: var(--accent); }
+.gpv-vegas-v {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.1;
+}
+.gpv-vegas-v b { color: var(--accent); }
+.gpv-vegas-sub {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+.gpv-basis {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    line-height: 1.65;
+    color: var(--text-dim);
+    margin: var(--s3) 0 0;
+    max-width: 54ch;
+}
+.gpv-why { margin-top: var(--s3); }
+
+/* ── Head to head ───────────────────────────────────────────────────────── */
+.gpv-h2h-head {
+    display: grid;
+    grid-template-columns: var(--gpv-side) minmax(0, 1fr) var(--gpv-side);
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s3) 0;
+    margin-bottom: var(--s2);
+    border-bottom: 1px solid var(--border-strong);
+    position: sticky;
+    top: var(--nav-h);
+    z-index: 3;
+    background: var(--bg-base);
+}
+@media (max-width: 767.98px) {
+    /* The navbar is height:auto below 768, so nothing can pin under it. */
+    .gpv-h2h-head { position: static; }
+}
+.gpv-side {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    min-width: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    color: var(--text-primary);
+}
+.gpv-side-h { justify-content: flex-end; }
+.gpv-side img { flex-shrink: 0; object-fit: contain; }
+.gpv-side b { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gpv-rank { color: var(--accent); font-weight: 800; margin-right: 4px; }
+.gpv-rec { color: var(--text-dim); font-size: var(--text-xs); font-weight: 700; flex-shrink: 0; }
+.gpv-h2h-scale {
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+}
+
+/* The four headline numbers, paired rather than stacked per team. */
+.gpv-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* A wide column gap plus a rule: without them the right-hand number of the
+       first pair and the left-hand number of the second read as one run. */
+    gap: 2px var(--s10);
+    padding: var(--s3) 0 var(--s4);
+    margin-bottom: var(--s2);
+    border-bottom: 1px solid var(--border);
+}
+.gpv-sum {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    gap: var(--s3);
+    padding: 5px 0;
+}
+.gpv-sum:nth-child(even) {
+    border-left: 1px solid var(--border);
+    padding-left: var(--s8);
+    margin-left: calc(var(--s8) * -1);
+}
+.gpv-sum-a, .gpv-sum-h {
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 800;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.gpv-sum-h { text-align: right; }
+.gpv-sum-k {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.gpv-group { margin-top: var(--s5); }
+.gpv-group-k {
+    font-family: var(--font-display);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin: 0 0 var(--s2);
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* One metric, both teams, growing outward from the label. The knob is the
+   team page's percentile circle — same size, same five bands, same dark ink
+   — so a number means the same thing on both screens. */
+.gpv-row {
+    display: grid;
+    grid-template-columns: var(--gpv-val) minmax(0, 1fr) var(--gpv-label) minmax(0, 1fr) var(--gpv-val);
+    align-items: center;
+    gap: var(--s3);
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+.gpv-row:last-child { border-bottom: none; }
+.gpv-v {
+    font-family: var(--font-display);
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: visible;
+}
+.gpv-v-h { text-align: right; }
+/* The side with the higher percentile. Weight and colour, not colour alone. */
+.gpv-v.is-edge { color: var(--text-primary); font-weight: 800; }
+.gpv-k {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-align: center;
+    line-height: 1.3;
+}
+.gpv-track {
+    position: relative;
+    height: 16px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+}
+.gpv-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; }
+/* Away grows right-to-left, home left-to-right, so distance from the centre
+   label is the comparison and the longer bar is the better team. */
+.gpv-track-a .gpv-fill { right: 0; border-radius: 3px 0 0 3px; }
+.gpv-track-h .gpv-fill { left: 0;  border-radius: 0 3px 3px 0; }
+.gpv-knob {
+    position: absolute;
+    top: 50%;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 900;
+    color: #0b0f14;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    font-variant-numeric: tabular-nums;
+    z-index: 2;
+}
+.gpv-track-a .gpv-knob { right: var(--p); transform: translate(50%, -50%); }
+.gpv-track-h .gpv-knob { left: var(--p); transform: translate(-50%, -50%); }
+/* The same five bands the team page uses. */
+.gpv-fill.p0, .gpv-knob.p0 { background: #2a83bd; }
+.gpv-fill.p1, .gpv-knob.p1 { background: #5d8aa8; }
+.gpv-fill.p2, .gpv-knob.p2 { background: #95a5a6; }
+.gpv-fill.p3, .gpv-knob.p3 { background: #e74c3c; }
+.gpv-fill.p4, .gpv-knob.p4 { background: #d44f41; }
+
+/* Column widths live in one place so the header, the summary and every row
+   stay on the same grid. */
+.gpv-h2h { --gpv-side: minmax(0, 1fr); --gpv-val: 64px; --gpv-label: 158px; }
+
+@media (max-width: 1099.98px) {
+    .gpv-h2h { --gpv-val: 56px; --gpv-label: 128px; }
+}
+@media (max-width: 899.98px) {
+    .gpv-verdict { grid-template-columns: minmax(0, 1fr); }
+}
+/* Below this the mirrored row has no room: the label goes above and each team
+   takes its own line, both bars reading left to right. */
+@media (max-width: 719.98px) {
+    .gpv-h2h { --gpv-val: 104px; }
+    .gpv-row {
+        grid-template-columns: var(--gpv-val) minmax(0, 1fr);
+        grid-template-areas:
+            "label label"
+            "va    ta"
+            "vh    th";
+        gap: 6px var(--s3);
+        padding: 10px 0;
+    }
+    .gpv-k { grid-area: label; text-align: left; font-weight: 600; color: var(--text-primary); }
+    .gpv-v-a  { grid-area: va; text-align: left; }
+    .gpv-v-a::before, .gpv-v-h::before {
+        content: attr(data-abbr);
+        display: inline-block;
+        min-width: 3.2em;
+        margin-right: 6px;
+        font-size: var(--text-xs);
+        font-weight: 700;
+        color: var(--text-dim);
+        letter-spacing: 0.04em;
+    }
+    .gpv-track-a { grid-area: ta; }
+    .gpv-v-h  { grid-area: vh; text-align: left; }
+    .gpv-track-h { grid-area: th; }
+    .gpv-track-a .gpv-fill { right: auto; left: 0; border-radius: 0 3px 3px 0; }
+    .gpv-track-a .gpv-knob { right: auto; left: var(--p); transform: translate(-50%, -50%); }
+    .gpv-h2h-head { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .gpv-side-h { justify-content: flex-start; flex-direction: row-reverse; }
+    .gpv-h2h-scale { text-align: left; }
+    .gpv-summary { grid-template-columns: minmax(0, 1fr); }
+}
+
 .gpx-grid {
     display: grid;
     /* The team cards take the width; the forecast between them only needs
@@ -5274,10 +5566,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 }
 .fc-why-toggle::-webkit-details-marker { display: none; }
 .fc-why-toggle:hover { color: var(--accent); }
-.fc-why-toggle:focus-visible {
-    color: var(--accent); outline: none;
-    box-shadow: 0 0 0 2px rgba(28,156,240,0.5); border-radius: var(--r-sm);
-}
+.fc-why-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: none; }
 .fc-why-chev { flex-shrink: 0; transition: transform var(--t-fast); }
 .fc-why[open] .fc-why-chev { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .fc-why-chev { transition: none; } }
@@ -5645,6 +5934,8 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
          .team-name-default 57x19
        Inline links need a box before a min-height can apply to them. */
     #xp-swap { min-width: 44px; }
+    /* The forecast disclosure: 320x29 measured. */
+    .fc-why-toggle { min-height: 44px; }
     .btn-primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
     .lb-th.stat-header { height: 44px; }
     .bk-proj-team,

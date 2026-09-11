@@ -5289,6 +5289,30 @@ def _classify_drive_result(display_result):
     return ('—', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
 
 
+@lru_cache(maxsize=1024)
+def _team_abbrs(away, home):
+    """Short forms for a matchup, from teams.abbreviation with a sane fallback.
+
+    Deriving these in the template produced "OS" for Ohio State and "TEXA" for
+    Texas — initials for multi-word names, a truncation for single-word ones.
+    The column the score ticker reads is already correct and consistent.
+    """
+    out = {}
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT name, abbreviation FROM teams WHERE name = ANY(%s)', ([away, home],))
+        got = {n: (a or '').strip() for n, a in cur.fetchall()}
+    except Exception:
+        got = {}
+    finally:
+        release_db(conn)
+    for key, name in (('away', away), ('home', home)):
+        a = got.get(name) or ''
+        out[key] = (a or name)[:4].upper()
+    return out
+
+
 def _game_market(game_id):
     """Consensus betting line for one game, or None.
 
@@ -5623,6 +5647,10 @@ def game_detail(game_id):
             market=_game_market(game_id),
             preview={'away': _preview_team(away_team, game_season),
                      'home': _preview_team(home_team, game_season)},
+            # The stacked mobile comparison loses the left/right mapping the
+            # mirrored desktop rows carry, so each row states its own side.
+            # teams.abbreviation is what the ticker already uses.
+            team_abbr=_team_abbrs(away_team, home_team),
             plays=[], team_stats=[], home_stats={}, away_stats={},
             player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
             structured_leaders={}, win_prob=[], top_wpa=[])

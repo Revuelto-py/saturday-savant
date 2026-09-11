@@ -213,13 +213,22 @@
             {% elif is_scheduled %}
                 {% if forecast %}
                 {% set gh_fav_home = forecast.home_prob >= 0.5 %}
+                {% set gh_even = ('%.0f' % (forecast.home_prob * 100)) == ('%.0f' % ((1 - forecast.home_prob) * 100)) %}
                 <div class="gh-fc">
                     <div class="gh-fc-eyebrow">Win probability</div>
                     <div class="gh-fc-split">
-                        <span class="gh-fc-pct {{ 'is-dog' if gh_fav_home else 'is-fav' }}">{{ '%.0f' % ((1 - forecast.home_prob) * 100) }}<span class="gh-pct-sign">%</span></span>
-                        <span class="gh-fc-dot">·</span>
-                        <span class="gh-fc-pct {{ 'is-fav' if gh_fav_home else 'is-dog' }}">{{ '%.0f' % (forecast.home_prob * 100) }}<span class="gh-pct-sign">%</span></span>
+                        <span class="gh-fc-pct {{ 'is-even' if gh_even else ('is-dog' if gh_fav_home else 'is-fav') }}">{{ '%.0f' % ((1 - forecast.home_prob) * 100) }}<span class="gh-pct-sign">%</span></span>
+                        <span class="gh-fc-pct {{ 'is-even' if gh_even else ('is-fav' if gh_fav_home else 'is-dog') }}">{{ '%.0f' % (forecast.home_prob * 100) }}<span class="gh-pct-sign">%</span></span>
                     </div>
+                    {% set gh_pair = forecast_pair(away_color | team_hex('#5a2b2b'), home_color | team_hex('#2b3a55')) %}
+                    {% set gh_split = '%.1f' % ((1 - forecast.home_prob) * 100) %}
+                    <span class="gh-fc-bar" aria-hidden="true">
+                        <span class="gh-fc-bar-fill" style="background:linear-gradient(90deg,
+                            {{ gh_pair[0] }} 0%, {{ gh_pair[0] }} calc({{ gh_split }}% - 1px),
+                            transparent calc({{ gh_split }}% - 1px),
+                            transparent calc({{ gh_split }}% + 1px),
+                            {{ gh_pair[1] }} calc({{ gh_split }}% + 1px), {{ gh_pair[1] }} 100%)"></span>
+                    </span>
                 </div>
                 {% else %}
                 <div class="gh-fc"><span class="gh-vs">VS</span></div>
@@ -334,161 +343,177 @@
     {% endif %}
     {% if preview and (preview.away.games or preview.home.games or market) %}
     {# ── MATCHUP PREVIEW ───────────────────────────────────────────────────
-       Three boxes, mirroring the hero: each team's season in its own card on
-       its own side, the forecast between them. Both team cards render the same
-       rows in the same order — including a row that has no value — so the two
-       read across at a glance without being welded into one grid. #}
+       Two jobs, in this order: say who the model and the market think wins,
+       then hand over the evidence so the reader can disagree.
 
-    {# One team's line. `pctl` is that stat's standing against the whole FBS
-       field, 0-100 and already direction-corrected, so the bar always means
-       "further right is better" whatever the stat. #}
-    {# One metric: its value, and its standing against every FBS team. `pctl` is
-       already direction-corrected, so the bar always means "further right is
-       better" whatever the stat — a stingy defence fills it. #}
-    {% macro stat(label, val, pctl=none, suffix='', signed=false) %}
-    <div class="gpx-row">
-        <div class="gpx-row-top">
-            <span class="gpx-label">{{ label }}</span>
-            <span class="gpx-val">
-                {%- if val is none %}—
-                {%- else %}{{ ('%+g' % val) if signed else val }}{{ suffix }}{% endif -%}
-            </span>
-        </div>
-        {# The same five bands the team page's percentile section uses, so a
-           number means the same colour on both screens: blue is poor, grey is
-           average, red is great. #}
-        {%- set band = 'p4' if pctl is none else (
-              'p4' if pctl >= 80 else 'p3' if pctl >= 60 else
-              'p2' if pctl >= 45 else 'p1' if pctl >= 25 else 'p0') -%}
-        <div class="gpx-bar">
-            <span class="gpx-track">
-                {%- if pctl is not none %}<span class="gpx-fill {{ band }}" style="width: {{ pctl }}%"></span>{% endif -%}
-            </span>
-            <span class="gpx-pctl">{{ pctl if pctl is not none else '' }}</span>
-        </div>
+       The stats used to sit in two tall boxes with the forecast wedged
+       between them, which meant a team's EPA and its opponent's EPA — the
+       same row conceptually — were ~470px apart with an unrelated card in
+       between. They share a row now and grow outward from the label, so the
+       longer bar is the better team and the comparison needs no eye travel. #}
+
+    {# One metric, both teams. `pct` is already direction-corrected, so a
+       longer bar is always the better side whichever way the raw number runs
+       — a stingy defence fills it. #}
+    {% macro band(p) %}{{ 'p4' if p is none else ('p4' if p >= 80 else 'p3' if p >= 60 else 'p2' if p >= 45 else 'p1' if p >= 25 else 'p0') }}{% endmacro %}
+
+    {% macro cmp_row(label, key, suffix='', signed=false) %}
+    {% set av = preview.away.adv.get(key) %}{% set ap = preview.away.pct.get(key) %}
+    {% set hv = preview.home.adv.get(key) %}{% set hp = preview.home.pct.get(key) %}
+    {% set both = ap is not none and hp is not none and av is not none and hv is not none %}
+    {% set edge = 'a' if (both and ap > hp) else ('h' if (both and hp > ap) else '') %}
+    <div class="gpv-row">
+        <span class="gpv-v gpv-v-a{{ ' is-edge' if edge == 'a' }}" data-abbr="{{ (team_abbr or {}).get('away', '') }}">
+            {%- if av is none %}—{% else %}{{ ('%+g' % av) if signed else av }}{{ suffix }}{% endif -%}
+        </span>
+        <span class="gpv-track gpv-track-a">
+            {%- if ap is not none and av is not none -%}
+            <span class="gpv-fill {{ band(ap)|trim }}" style="width: {{ ap }}%"></span>
+            <span class="gpv-knob {{ band(ap)|trim }}" style="--p: {{ ap }}%">{{ ap }}</span>
+            {%- endif -%}
+        </span>
+        <span class="gpv-k">{{ label }}</span>
+        <span class="gpv-track gpv-track-h">
+            {%- if hp is not none and hv is not none -%}
+            <span class="gpv-fill {{ band(hp)|trim }}" style="width: {{ hp }}%"></span>
+            <span class="gpv-knob {{ band(hp)|trim }}" style="--p: {{ hp }}%">{{ hp }}</span>
+            {%- endif -%}
+        </span>
+        <span class="gpv-v gpv-v-h{{ ' is-edge' if edge == 'h' }}" data-abbr="{{ (team_abbr or {}).get('home', '') }}">
+            {%- if hv is none %}—{% else %}{{ ('%+g' % hv) if signed else hv }}{{ suffix }}{% endif -%}
+        </span>
     </div>
-    {% endmacro %}
-
-    {# Same thing, keyed — pulls the value and its percentile out of the team's
-       two dicts so the pairing can never drift apart. #}
-    {% macro metric(p, label, key, suffix='', signed=false) %}
-    {{ stat(label, p.adv.get(key), p.pct.get(key), suffix, signed) }}
-    {% endmacro %}
-
-    {% macro team_box(p, name, logo, rank, side) %}
-    <section class="dark-card gpx-team gpx-{{ side }}" aria-label="{{ name }} season form">
-        <header class="gpx-head">
-            {% if logo %}<img src="{{ logo }}" alt="" width="30" height="30" loading="lazy">{% endif %}
-            <span class="gpx-name">{% if rank %}<span class="gpx-rank">#{{ rank }}</span>{% endif %}{{ name }}</span>
-            {% if p.games %}<span class="gpx-rec">{{ p.wins }}–{{ p.losses }}</span>{% endif %}
-        </header>
-
-        {# The four numbers a reader wants before any of the per-play detail. #}
-        <div class="gpx-summary">
-            {% for lab, v in [('Pts / game', p.ppg), ('Pts allowed', p.papg),
-                              ('Savant net', p.net),
-                              ('ATS', (p.ats.w ~ '–' ~ p.ats.l) if p.ats else none)] %}
-            <div class="gpx-sum">
-                <span class="gpx-sum-v">{{ v if v is not none else '—' }}</span>
-                <span class="gpx-sum-k">{{ lab }}</span>
-            </div>
-            {% endfor %}
-        </div>
-
-        <div class="gpx-cols">
-            <div class="gpx-col">
-                <div class="gpx-col-k">Offense</div>
-                {{ metric(p, 'EPA / play',        'off_ppa', '', true) }}
-                {{ metric(p, 'Success rate',      'off_success_rate', '%') }}
-                {{ metric(p, 'Explosiveness',     'off_explosiveness') }}
-                {{ metric(p, 'Pass EPA / play',   'off_pass_ppa', '', true) }}
-                {{ metric(p, 'Rush EPA / play',   'off_rush_ppa', '', true) }}
-                {{ metric(p, 'Pass success',      'off_pass_sr', '%') }}
-                {{ metric(p, 'Rush success',      'off_rush_sr', '%') }}
-                {{ metric(p, 'Power success',     'off_power_success', '%') }}
-                {{ metric(p, 'Line yards',        'off_line_yards') }}
-                {{ metric(p, '2nd level yards',   'off_second_level_yards') }}
-                {{ metric(p, 'Open field yards',  'off_open_field_yards') }}
-                {{ metric(p, 'Points / scoring opp', 'off_pts_per_opp') }}
-                {{ metric(p, 'Avg start',         'off_field_pos_avg_start', ' yd') }}
-            </div>
-            <div class="gpx-col">
-                <div class="gpx-col-k">Defense</div>
-                {{ metric(p, 'EPA allowed',       'def_ppa', '', true) }}
-                {{ metric(p, 'Success allowed',   'def_success_rate', '%') }}
-                {{ metric(p, 'Explosive allowed', 'def_explosiveness') }}
-                {{ metric(p, 'Pass EPA allowed',  'def_pass_ppa', '', true) }}
-                {{ metric(p, 'Rush EPA allowed',  'def_rush_ppa', '', true) }}
-                {{ metric(p, 'Pass success all.', 'def_pass_sr', '%') }}
-                {{ metric(p, 'Rush success all.', 'def_rush_sr', '%') }}
-                {{ metric(p, 'Stuff rate',        'def_stuff_rate', '%') }}
-                {{ metric(p, 'Havoc rate',        'def_havoc_total', '%') }}
-                {{ metric(p, 'Havoc · front 7',   'def_havoc_front7', '%') }}
-                {{ metric(p, 'Havoc · secondary', 'def_havoc_db', '%') }}
-                {{ metric(p, 'Points / opp all.', 'def_pts_per_opp') }}
-                {{ metric(p, 'Avg start allowed', 'def_field_pos_avg_start', ' yd') }}
-            </div>
-        </div>
-    </section>
     {% endmacro %}
 
     <section class="gpx" aria-labelledby="gp-h">
         <h2 class="section-label" id="gp-h">Matchup preview</h2>
-        <div class="gpx-grid">
-            {{ team_box(preview.away, away_team, game[10], away_rank, 'away') }}
 
-            <section class="dark-card gpx-mid" aria-label="Forecast and betting line">
+        {# ── The verdict: model first, market beside it ── #}
+        <div class="gpv-verdict">
+            <section class="dark-card gpv-fc" aria-label="Savant Forecast">
                 {% if forecast %}
-                <div class="gpx-fc-k">Savant Forecast</div>
-                <div class="fc-legend">
-                    <span><b>{{ away_team }}</b> {{ '%.0f' % ((1 - forecast.home_prob) * 100) }}%</span>
-                    <span>{{ '%.0f' % (forecast.home_prob * 100) }}% <b>{{ home_team }}</b></span>
+                <div class="gpv-k-head">Savant Forecast</div>
+                <div class="gpv-fc-line">
+                    <span class="gpv-fc-side"><b>{{ away_team }}</b> {{ '%.0f' % ((1 - forecast.home_prob) * 100) }}%</span>
+                    <span class="gpv-fc-side gpv-fc-side-h">{{ '%.0f' % (forecast.home_prob * 100) }}% <b>{{ home_team }}</b></span>
                 </div>
+                {% set v_pair = forecast_pair(away_color | team_hex('#5a2b2b'), home_color | team_hex('#2b3a55')) %}
+                {% set v_split = '%.1f' % ((1 - forecast.home_prob) * 100) %}
                 <div class="fc-bar" role="img"
                      aria-label="{{ fav_team }} win probability {{ '%.0f' % (fav_prob * 100) }} percent">
                     <span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                        {{ away_color }}cc 0%, {{ away_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%,
-                        {{ home_color }}cc {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%, {{ home_color }}cc 100%)"></span>
-                    <span class="fc-bar-tick" style="left: {{ '%.1f' % ((1 - forecast.home_prob) * 100) }}%"></span>
+                        {{ v_pair[0] }} 0%, {{ v_pair[0] }} calc({{ v_split }}% - 1px),
+                        transparent calc({{ v_split }}% - 1px), transparent calc({{ v_split }}% + 1px),
+                        {{ v_pair[1] }} calc({{ v_split }}% + 1px), {{ v_pair[1] }} 100%)"></span>
+                    <span class="fc-bar-tick fc-bar-even" style="left: 50%"></span>
                 </div>
                 {% if forecast.margin is not none %}
-                <div class="gpx-fc-exp">
+                <div class="gpv-fc-exp">
                     {% if forecast.margin|abs >= 1.5 %}Savant expects <b>{{ fav_team }}</b> by ~{{ '%.0f' % (forecast.margin|abs) }}
                     {% else %}Savant calls it even{% endif %}
                 </div>
                 {% endif %}
-                <div class="gpx-fc-basis">
+                <p class="gpv-basis">
                     Model estimate from team strength, roster continuity, and results so far.
                     A probability, not a prediction — locked before kickoff.
-                </div>
+                </p>
+                {% if forecast.contrib %}
+                <div class="gpv-why">{{ forecast_why(forecast, fav_team, False) }}</div>
                 {% endif %}
-
-                {% if market %}
-                {% set m = market.home_margin %}
-                <div class="gpx-vegas{{ ' has-fc' if forecast }}">
-                    <div class="gpx-fc-k gpx-vegas-k">Vegas line</div>
-                    <div class="gpx-vegas-v">
-                        {%- if m|abs < 0.5 -%}Pick'em
-                        {%- else -%}<b>{{ home_team if m > 0 else away_team }}</b> −{{ '%g' % (m|abs) }}{%- endif -%}
-                    </div>
-                    {% if market.total %}<div class="gpx-vegas-sub">Total {{ '%g' % market.total }}</div>{% endif %}
-                </div>
                 {% else %}
-                <div class="gpx-fc-basis">No betting line is posted for this game yet.</div>
-                {% endif %}
-
-                {% if forecast and forecast.contrib %}
-                <div class="gpx-why">{{ forecast_why(forecast, fav_team, False) }}</div>
+                <div class="gpv-k-head">Savant Forecast</div>
+                <p class="gpv-basis">No forecast is available for this game yet.</p>
                 {% endif %}
             </section>
 
-            {{ team_box(preview.home, home_team, game[9], home_rank, 'home') }}
+            <section class="dark-card gpv-vegas" aria-label="Betting market">
+                <div class="gpv-k-head">Vegas line</div>
+                {% if market %}
+                {% set m = market.home_margin %}
+                <div class="gpv-vegas-v">
+                    {%- if m|abs < 0.5 -%}Pick&rsquo;em
+                    {%- else -%}<b>{{ home_team if m > 0 else away_team }}</b> &minus;{{ '%g' % (m|abs) }}{%- endif -%}
+                </div>
+                {% if market.total %}<div class="gpv-vegas-sub">Total {{ '%g' % market.total }}</div>{% endif %}
+                <p class="gpv-basis">
+                    The closing consensus spread. Where it and the forecast disagree,
+                    the gap is the thing worth reading.
+                </p>
+                {% else %}
+                <p class="gpv-basis">No betting line is posted for this game yet.</p>
+                {% endif %}
+            </section>
+        </div>
+
+        {# ── The evidence ── #}
+        <div class="gpv-h2h">
+            <header class="gpv-h2h-head">
+                <span class="gpv-side">
+                    {% if game[10] %}<img src="{{ game[10] }}" alt="" width="26" height="26" loading="lazy">{% endif %}
+                    <b>{% if away_rank %}<span class="gpv-rank">#{{ away_rank }}</span>{% endif %}{{ away_team }}</b>
+                    {% if preview.away.games %}<span class="gpv-rec">{{ preview.away.wins }}&ndash;{{ preview.away.losses }}</span>{% endif %}
+                </span>
+                <span class="gpv-h2h-scale">Percentile vs all FBS &middot; longer is better</span>
+                <span class="gpv-side gpv-side-h">
+                    {% if preview.home.games %}<span class="gpv-rec">{{ preview.home.wins }}&ndash;{{ preview.home.losses }}</span>{% endif %}
+                    <b>{% if home_rank %}<span class="gpv-rank">#{{ home_rank }}</span>{% endif %}{{ home_team }}</b>
+                    {% if game[9] %}<img src="{{ game[9] }}" alt="" width="26" height="26" loading="lazy">{% endif %}
+                </span>
+            </header>
+
+            <div class="gpv-summary">
+                {% for lab, a, h in [
+                    ('Points / game',  preview.away.ppg,  preview.home.ppg),
+                    ('Points allowed', preview.away.papg, preview.home.papg),
+                    ('Savant net',     preview.away.net,  preview.home.net),
+                    ('ATS', (preview.away.ats.w ~ '–' ~ preview.away.ats.l) if preview.away.ats else none,
+                            (preview.home.ats.w ~ '–' ~ preview.home.ats.l) if preview.home.ats else none) ] %}
+                <div class="gpv-sum">
+                    <span class="gpv-sum-a">{{ a if a is not none else '—' }}</span>
+                    <span class="gpv-sum-k">{{ lab }}</span>
+                    <span class="gpv-sum-h">{{ h if h is not none else '—' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="gpv-group">
+                <h3 class="gpv-group-k">Offense</h3>
+                {{ cmp_row('EPA / play',          'off_ppa', '', true) }}
+                {{ cmp_row('Success rate',        'off_success_rate', '%') }}
+                {{ cmp_row('Explosiveness',       'off_explosiveness') }}
+                {{ cmp_row('Pass EPA / play',     'off_pass_ppa', '', true) }}
+                {{ cmp_row('Rush EPA / play',     'off_rush_ppa', '', true) }}
+                {{ cmp_row('Pass success',        'off_pass_sr', '%') }}
+                {{ cmp_row('Rush success',        'off_rush_sr', '%') }}
+                {{ cmp_row('Power success',       'off_power_success', '%') }}
+                {{ cmp_row('Line yards',          'off_line_yards') }}
+                {{ cmp_row('2nd level yards',     'off_second_level_yards') }}
+                {{ cmp_row('Open field yards',    'off_open_field_yards') }}
+                {{ cmp_row('Points / scoring opp','off_pts_per_opp') }}
+                {{ cmp_row('Avg start',           'off_field_pos_avg_start', ' yd') }}
+            </div>
+
+            <div class="gpv-group">
+                <h3 class="gpv-group-k">Defense</h3>
+                {{ cmp_row('EPA allowed',        'def_ppa', '', true) }}
+                {{ cmp_row('Success allowed',    'def_success_rate', '%') }}
+                {{ cmp_row('Explosive allowed',  'def_explosiveness') }}
+                {{ cmp_row('Pass EPA allowed',   'def_pass_ppa', '', true) }}
+                {{ cmp_row('Rush EPA allowed',   'def_rush_ppa', '', true) }}
+                {{ cmp_row('Pass success all.',  'def_pass_sr', '%') }}
+                {{ cmp_row('Rush success all.',  'def_rush_sr', '%') }}
+                {{ cmp_row('Stuff rate',         'def_stuff_rate', '%') }}
+                {{ cmp_row('Havoc rate',         'def_havoc_total', '%') }}
+                {{ cmp_row('Havoc · front 7',   'def_havoc_front7', '%') }}
+                {{ cmp_row('Havoc · secondary', 'def_havoc_db', '%') }}
+                {{ cmp_row('Points / opp all.',  'def_pts_per_opp') }}
+                {{ cmp_row('Avg start allowed',  'def_field_pos_avg_start', ' yd') }}
+            </div>
         </div>
 
         <p class="gpx-foot">
-            Season to date. The bar under a stat is that team's standing against all FBS
-            teams — further right is better, whichever way the raw number runs. Colour
-            follows the same scale as a team page:
+            Season to date. The circle on each bar is that team&rsquo;s standing against all
+            {{ fbs_team_count or 136 }} FBS teams, on the same scale a team page uses:
             <span class="gpx-key"><i class="p0"></i>poor</span>
             <span class="gpx-key"><i class="p2"></i>average</span>
             <span class="gpx-key"><i class="p4"></i>great.</span>
