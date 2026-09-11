@@ -2774,8 +2774,6 @@ def home(week=None, season_type='regular'):
         featured_game_id = games[0]['id'] if games else None
         # Regular season only: the postseason view is already grouped by round,
         # which is a stronger ordering than anything this would compute.
-        top = [] if season_type == 'postseason' else top_games(games, forecasts)
-        top_ids = {g['id'] for g in top}
 
     finally:
         release_db(conn)
@@ -2789,8 +2787,7 @@ def home(week=None, season_type='regular'):
         leaders=leaders, ap_rankings=ap_rankings,
         forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
-        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id,
-        top_games=top, top_ids=top_ids)
+        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
 
 @app.route('/games')
 @cache.cached(timeout=21600, query_string=True)

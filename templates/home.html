@@ -44,6 +44,7 @@
                 {% if season_type == 'postseason' %}Postseason{% else %}Week {{ selected_week }}{% endif %}{% if week_complete %} Results{% endif %}
                 <span class="section-label-season">{{ home_season }}</span>
             </h2>
+            {% if games %}<span class="slate-head-note">{{ games|length }} game{{ '' if games|length == 1 else 's' }}, in kickoff order</span>{% endif %}
             <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
                 {% for w, stype in all_weeks %}
                     {% set stype_short = 'postseason' if 'POSTSEASON' in stype else 'regular' %}
@@ -55,21 +56,6 @@
             </select>
         </div>
 
-        {% if top_games %}
-        {# ── Top games ────────────────────────────────────────────────────
-             The slate below is ordered by kickoff and nothing else, so a
-             top-five meeting is drawn exactly like a tune-up. This is a
-             shortcut, not a filter: every one of these games is still in the
-             full slate underneath, in its chronological place. ── #}
-        <div class="slate-head">
-            <h3 class="section-label">Top Games</h3>
-            <span class="slate-head-note">Ranked matchups, rivalries, and the closest calls</span>
-        </div>
-        <div class="home-games-grid">
-            {% for game in top_games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id), featured=True) }}{% endfor %}
-        </div>
-        {% endif %}
-
         {% if season_type == 'postseason' %}
             {% for label, games in grouped_games.items() %}
                 <h3 class="section-label mt-4">{{ label }}</h3>
@@ -80,14 +66,8 @@
                 <p class="slate-empty">No postseason games are scheduled for {{ home_season }} yet. They appear here once the bowl and playoff fields are set.</p>
             {% endfor %}
         {% else %}
-            {% if games %}
-            <div class="slate-head">
-                <h3 class="section-label">{% if top_games %}Every game{% else %}The slate{% endif %}</h3>
-                <span class="slate-head-note">{{ games|length }} game{{ '' if games|length == 1 else 's' }}, in kickoff order</span>
-            </div>
-            {% endif %}
             <div class="home-games-grid" id="slateGrid">
-                {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id), featured=game.id in top_ids) }}
+                {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}
                 {% else %}
                 <p class="slate-empty">No games are scheduled for Week {{ selected_week }} of {{ home_season }}. Pick another week above, or see the <a href="/games">full season schedule</a>.</p>
                 {% endfor %}
