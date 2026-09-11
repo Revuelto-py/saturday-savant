@@ -54,6 +54,9 @@ for s in stats:
     cursor.execute('''
         INSERT INTO player_stats (player_id, player_name, team, conference, position, category, stat_type, stat, season)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (player_id, season, team, category, stat_type) DO UPDATE
+           SET stat = EXCLUDED.stat, player_name = EXCLUDED.player_name,
+               conference = EXCLUDED.conference, position = EXCLUDED.position
     ''', (s.player_id, s.player, s.team, s.conference, s.position, s.category, s.stat_type, s.stat, SEASON))
 
 # Save PPA

@@ -258,6 +258,78 @@ rather than blanking the rankings page.
 Manual run: `python3 pipeline/fetch_rankings.py` (active season) or
 `python3 pipeline/fetch_rankings.py 2016 2025` to backfill a range.
 
+## Fourth Cron Job — season totals (`pipeline/refresh_player_stats.py`)
+
+`player_stats` holds each player's **season totals**, and step 1 of the weekly
+chain was the only thing that rewrote it. So a Thursday, Friday or Saturday
+game left every player who appeared in it carrying last week's totals until the
+following Sunday — the leaderboards, the player pages and the home-page leaders
+all read this table, so for most of the week the site showed numbers that were
+simply out of date. Scores were live; the totals behind them were not.
+
+The site already knew about this from the other side. The player page rebuilds
+a cached game log whenever a game has completed since the log was written,
+because otherwise a player's log froze "while his season totals — which come
+from `player_stats`, refreshed weekly — kept climbing". This closes the other
+half, against the same signal.
+
+It is deliberately **not** `pipeline/fetch_data.py`, which DELETEs the season's
+games, `player_stats` and `player_ppa` and re-inserts them — correct weekly, far
+too heavy and too dangerous on a game-day cadence, and it also rewrites `games`,
+which `pipeline/fetch_scores.py` owns between chains.
+
+1. Render Dashboard → **New +** → **Cron Job** (a fourth one).
+2. Same repo/branch/runtime/build command as the others.
+3. **Command:** `python3 pipeline/refresh_player_stats.py`
+4. **Schedule (UTC):** `*/15 * * * *` — every 15 minutes, all week.
+
+   Same reasoning as the scores job: the 2026 slate kicks off on every day of
+   the week, so a "game day" window has to be re-reasoned whenever the schedule
+   shifts and gets DST wrong twice a year. Running always has no gaps to get
+   wrong. 15 rather than 10 because CFBD needs a few minutes after a final to
+   post the box score, and a run that fires the instant a game ends would just
+   read the same totals back.
+5. **Environment variables:** `DATABASE_URL`, `CFBD_API_KEY`, `ADMIN_KEY`.
+
+**Why running it this often is safe.** Four things, each one load-bearing:
+
+- **It UPSERTs, never DELETE-then-INSERT.** The key is
+  `(player_id, season, team, category, stat_type)`, verified unique across all
+  1.2M stored rows. `team` is in the key because a player who changes teams
+  mid-season legitimately carries one row per team — 112 such groups exist, and
+  keying without `team` would silently collapse them. There is no window where
+  the table is empty, so it cannot wipe a season the way the 2026-07-21
+  incident did.
+- **It refuses a short payload.** If CFBD returns fewer than 80% of the rows
+  already stored for the season, the run aborts having written nothing. A
+  season's totals only grow; a response that shrinks them is an upstream
+  problem, not a correction.
+- **It no-ops cheaply.** The gate is the kickoff of the most recent completed
+  game, compared against a marker in `pool_store`. If nothing has finished
+  since the last successful refresh it exits after one `SELECT` and one small
+  read — **no CFBD call at all**. That is what makes ~160 idle runs a week free.
+- **It skips the cache clear unless a row actually changed.** The UPSERT's
+  `WHERE ... IS DISTINCT FROM` makes unchanged rows a genuine no-op, so the
+  changed-row count is real. Without this guard a quarter-hourly job would keep
+  every page permanently cold.
+
+The script creates its own unique index on first run (`IF NOT EXISTS`), so
+there is no separate migration step. `pipeline/fetch_data.py` was made
+conflict-safe at the same time: it still DELETEs the season first, so a
+conflict should be impossible, but a duplicate inside a single CFBD payload
+would otherwise abort the whole weekly chain.
+
+**What this does not cover.** Only `player_stats`. Advanced per-player EPA
+(`player_ppa`), team stats, Savant ratings and the percentile pools are all
+still weekly — they are derived rather than counted, and several of them are
+opponent-adjusted, so refreshing one mid-week without the others would make the
+set internally inconsistent. A player's raw totals are now current within about
+fifteen minutes of his game ending; his percentile against the field still
+moves on Sundays.
+
+Manual run: `python3 pipeline/refresh_player_stats.py` (active season),
+`--force` to ignore the gate, or a year to target one season.
+
 ## Manual fallback
 
 If the cron is ever paused, run the whole chain by hand from the project root:
