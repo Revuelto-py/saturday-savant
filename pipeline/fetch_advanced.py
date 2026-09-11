@@ -24,10 +24,24 @@ with cfbd.ApiClient(configuration) as api_client:
     recruiting_api = cfbd.RecruitingApi(api_client)
     ratings_api    = cfbd.RatingsApi(api_client)
 
+    # Section 1 is the only part a mid-week refresh needs: recruiting is a
+    # preseason table and SP history moves weekly at most, so re-pulling them
+    # every quarter hour would be waste with no upside.
+    TEAM_ONLY = '--team-only' in _sys.argv
+
     # ── 1. TEAM ADVANCED STATS ────────────────────────────────────────────────
     print("Fetching team advanced stats...")
     try:
         adv = stats_api.get_advanced_season_stats(year=SEASON, exclude_garbage_time=True)
+        # The DELETE is atomic with the INSERTs after it, so no reader sees a
+        # half-empty table — but a SHORT fetch would still replace the field
+        # with whatever came back. This is what lets the section run between
+        # weekly chains instead of only inside one.
+        cursor.execute('SELECT count(*) FROM team_advanced WHERE season = %s', (SEASON,))
+        _stored = cursor.fetchone()[0]
+        if _stored and len(adv) < _stored * 0.80:
+            raise RuntimeError(f"CFBD returned {len(adv)} teams against {_stored} "
+                               f"stored — refusing to write")
         # Multi-season table — only refresh the active season so prior years
         # (loaded by backfill/backfill_history.py) survive.
         cursor.execute('DELETE FROM team_advanced WHERE season = %s', (SEASON,))
@@ -80,6 +94,12 @@ with cfbd.ApiClient(configuration) as api_client:
         conn.rollback()
         print(f"  Error: {e}")
         import traceback; traceback.print_exc()
+
+    if TEAM_ONLY:
+        conn.commit()
+        print("--team-only: skipping usage, recruiting and SP history")
+        conn.close()
+        _sys.exit(0)
 
     # ── 2. PLAYER USAGE STATS ─────────────────────────────────────────────────
     print("\nFetching player usage stats...")

@@ -22,6 +22,18 @@ with cfbd.ApiClient(configuration) as api_client:
     stats_api = cfbd.StatsApi(api_client)
     advanced = stats_api.get_advanced_season_stats(year=SEASON, exclude_garbage_time=True)
 
+# The DELETE below is atomic with the INSERTs that follow, so a reader never
+# sees a half-empty table — but a SHORT fetch would still replace 136 teams
+# with whatever came back. This makes that impossible, which is what lets this
+# script run between chains rather than only once a week.
+cursor.execute('SELECT count(*) FROM team_stats WHERE season = %s', (SEASON,))
+_stored = cursor.fetchone()[0]
+if _stored and len(advanced) < _stored * 0.80:
+    print(f"Refusing to write: CFBD returned {len(advanced)} teams against "
+          f"{_stored} stored. Nothing changed.")
+    conn.close()
+    _sys.exit(1)
+
 # Multi-season table — only refresh the active season so prior years (loaded by
 # backfill/backfill_history.py) survive.
 cursor.execute('DELETE FROM team_stats WHERE season = %s', (SEASON,))
