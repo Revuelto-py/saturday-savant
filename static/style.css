@@ -3536,10 +3536,10 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 }
 .ig-lockup {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: var(--s4);
-    margin-bottom: var(--s3);
+    gap: var(--s3);
+    margin-bottom: var(--s4);
 }
 .ig-logo {
     height: clamp(44px, 3vw + 26px, 64px);
@@ -3570,64 +3570,6 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     text-wrap: balance;
 }
 
-/* ── This week's headline ─────────────────────────────────────────────────
-   The one thing the masthead carries that the nav cannot: which game is worth
-   opening. It is also the only place on the page the forecast model is named
-   in prose, which is how a first-time reader learns the bar under every card
-   has an author. */
-.ig-headline {
-    margin: var(--s6) auto 0;
-    max-width: 62ch;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    pointer-events: auto;
-}
-.ig-headline-game {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 14px;
-    min-height: 44px;
-    border-radius: var(--r-md);
-    border: 1px solid var(--border-strong);
-    background: rgba(255,255,255,0.03);
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: clamp(1.05rem, 0.9rem + 0.7vw, 1.4rem);
-    letter-spacing: 0.01em;
-    color: var(--text-primary);
-    text-decoration: none;
-    transition: var(--t-fast);
-    transition-property: var(--t-ui);
-}
-.ig-headline-game:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: rgba(28,156,240,0.08);
-}
-.ig-headline-game:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    color: var(--accent);
-}
-.ig-headline-game:active { background: rgba(28,156,240,0.14); }
-.ig-headline-at {
-    color: var(--text-dim);
-    font-weight: 600;
-    font-size: 0.8em;
-    text-transform: lowercase;
-}
-.ig-headline-why {
-    font-family: var(--font-body);
-    font-size: var(--text-xs);
-    color: var(--text-dim);
-    letter-spacing: 0.02em;
-    text-align: center;
-}
 /* Touch / no-hover devices: no cursor to follow — keep the reveal parked
    as a soft center glow */
 @media (hover: none) {

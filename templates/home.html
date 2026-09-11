@@ -12,8 +12,8 @@
      return visit, and each one paid that toll before reaching a score.
 
      It keeps the identity — the drifting grid, the wordmark, the night sky —
-     and gives the space back by carrying one thing a returning reader cannot
-     get from the nav: what is actually worth watching this week. ── #}
+     and gives the space back. What is worth watching this week is answered by
+     the Top Games band below, where the cards can carry it properly. ── #}
 <section class="ig-hero" id="igHero">
     {# base grid: always faintly visible, drifting #}
     <div class="ig-layer ig-base" aria-hidden="true"><div class="ig-grid"></div></div>
@@ -30,16 +30,6 @@
         </div>
         <p class="ig-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team — every season since 2016.</p>
 
-        {% if headline %}
-        {# A quiet week returns no headline rather than a manufactured one. #}
-        <p class="ig-headline">
-            <a class="ig-headline-game" href="/game/{{ headline.game.id }}">
-                {%- if headline.game.away_rank %}<span class="gc-rank">{{ headline.game.away_rank }}</span>{% endif %}{{ headline.game.away }}
-                <span class="ig-headline-at">at</span>
-                {%- if headline.game.home_rank %}<span class="gc-rank">{{ headline.game.home_rank }}</span>{% endif %}{{ headline.game.home }}</a>
-            <span class="ig-headline-why">{{ headline.reason }}{% if headline.fav %} · Savant Forecast has {{ headline.fav }} at {{ headline.fav_pct }}%{% endif %}</span>
-        </p>
-        {% endif %}
     </div>
 </section>
 

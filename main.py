@@ -2643,31 +2643,6 @@ def forecast_record(season):
             'pct': round(100.0 * int(correct) / total)}
 
 
-def slate_headline(top, forecasts):
-    """The one game worth naming at the top of the page, and why it is that one.
-
-    Returns None on a slate with nothing to say, which is the point: a quiet
-    week gets a masthead with no claim rather than a manufactured one.
-    """
-    if not top:
-        return None
-    g = top[0]
-    prob = forecasts.get(g['id'])
-    if g.get('away_rank') and g.get('home_rank'):
-        reason = 'the biggest matchup on the board'
-    elif g.get('rivalry'):
-        reason = g['rivalry']
-    elif prob is not None and abs(prob - 0.5) < 0.08:
-        reason = 'the closest call on the board'
-    else:
-        reason = 'the game to watch'
-    fav = dog_pct = None
-    if prob is not None:
-        home_fav = prob >= 0.5
-        fav = g['home'] if home_fav else g['away']
-        dog_pct = round((prob if home_fav else 1 - prob) * 100)
-    return {'game': g, 'reason': reason, 'fav': fav, 'fav_pct': dog_pct}
-
 
 
 def top_games(games, forecasts, limit=TOP_GAMES_N):
@@ -2801,7 +2776,6 @@ def home(week=None, season_type='regular'):
         # which is a stronger ordering than anything this would compute.
         top = [] if season_type == 'postseason' else top_games(games, forecasts)
         top_ids = {g['id'] for g in top}
-        headline = slate_headline(top, forecasts)
 
     finally:
         release_db(conn)
@@ -2816,7 +2790,7 @@ def home(week=None, season_type='regular'):
         forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id,
-        top_games=top, top_ids=top_ids, headline=headline,
+        top_games=top, top_ids=top_ids,
         forecast_record=forecast_record(home_season))
 
 @app.route('/games')
