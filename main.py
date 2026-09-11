@@ -2790,8 +2790,7 @@ def home(week=None, season_type='regular'):
         forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id,
-        top_games=top, top_ids=top_ids,
-        forecast_record=forecast_record(home_season))
+        top_games=top, top_ids=top_ids)
 
 @app.route('/games')
 @cache.cached(timeout=21600, query_string=True)

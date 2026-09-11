@@ -330,7 +330,12 @@ html {
     flex-wrap: wrap;
     margin-bottom: var(--s4);
 }
-.slate-head-main { margin-bottom: var(--s2); }
+.slate-head-week {
+    padding-bottom: var(--s3);
+    margin-bottom: var(--s6);
+    border-bottom: 1px solid var(--border-strong);
+}
+.slate-head-week .section-label { font-size: var(--text-md); }
 .slate-head .section-label { margin: 0; font-size: var(--text-sm); }
 .slate-head-note {
     /* Sits with the heading it qualifies, not flung to the far edge of an
