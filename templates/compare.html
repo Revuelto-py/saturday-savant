@@ -17,7 +17,6 @@
 <!-- HERO — matches the player/team hero gradient treatment -->
 <div class="cmp-hero">
     <div class="page-wrapper cmp-hero-inner">
-        <div class="section-label" style="margin-bottom: var(--s2)">Compare</div>
         <h1 class="cmp-hero-title">Head-to-Head</h1>
         <p class="cmp-hero-sub">Compare up to three {{ 'players' if mode == 'player' else 'teams' }} side by side — the leading number in every row is highlighted.</p>
     </div>
@@ -37,10 +36,12 @@
                role="tab" aria-selected="{{ 'true' if mode == 'team' else 'false' }}">TEAMS</a>
         </div>
 
+        {% if active_entities and active_entities|length >= 2 %}
         <button type="button" class="cmp-download" id="cmpDownload">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download Image
         </button>
+        {% endif %}
     </div>
 
     <!-- Selection slots -->
@@ -100,6 +101,25 @@
         </div>
         {% endfor %}
     </div>
+
+    {% if not active_entities %}
+    <div class="cmp-zero">
+        <p class="cmp-zero-lede">
+            Pick two or three {{ 'players' if mode == 'player' else 'teams' }} and every stat lines up side by side,
+            with the leading number in each row called out and a percentile against the rest of the FBS field.
+        </p>
+        {% if suggested %}
+        <a class="cmp-zero-try" href="{{ suggested.url }}">
+            Try {{ suggested.a_name }} vs {{ suggested.b_name }}
+            <span class="cmp-zero-try-meta">{{ suggested.a_team }} &middot; {{ suggested.b_team }}</span>
+        </a>
+        {% endif %}
+        <p class="cmp-zero-hint">
+            Searching by last name is quickest. Not sure who to look at?
+            The <a href="/leaderboards/passing?season={{ season }}">leaderboards</a> are a good place to start.
+        </p>
+    </div>
+    {% endif %}
 
     <!-- ── Comparison card (also the exported graphic) ── -->
     {% if n >= 1 %}

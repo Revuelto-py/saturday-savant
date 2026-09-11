@@ -2861,11 +2861,22 @@ def games_hub():
         match = next((o for o in week_options
                       if o['week'] == sel_week and o['stype'] == sel_stype), None)
         if not match:
+            # Open on the slate actually being played, the same week the
+            # sitewide ticker shows. These used to disagree: the ticker ran on
+            # current_slate_week() while this hardcoded Week 1, so arriving here
+            # from the home page mid-season showed last week's finals under a
+            # heading that contradicted the ticker 150px above it.
+            #
             # Week 0 is a real week and gets its own tab, but it is a handful of
-            # August games — landing there by default for the rest of the season
-            # would be wrong, so the unselected default stays Week 1.
+            # August games, so it stays a floor rather than a landing week.
+            _cur, _cst = current_slate_week(cursor, season)
+            _cur_stype = 'postseason' if 'POSTSEASON' in (_cst or '') else 'regular'
+            if _cur_stype == 'regular':
+                _cur = max(_cur or 1, 1)
             match = (next((o for o in week_options
-                           if o['stype'] == 'regular' and o['week'] == 1), None)
+                           if o['stype'] == _cur_stype and o['week'] == _cur), None)
+                     or next((o for o in week_options
+                              if o['stype'] == 'regular' and o['week'] == 1), None)
                      or (week_options[0] if week_options
                          else {'week': 1, 'stype': 'regular'}))
         sel_week, sel_stype = match['week'], match['stype']
@@ -8471,10 +8482,29 @@ def compare():
             params['pos'] = tab
         tab_urls[tab] = '/compare?' + urlencode(params)
 
+    # An empty compare page used to be three blank search boxes and a Download
+    # button with nothing to download. Offering a real pair to open — the two
+    # leading passers — turns the zero state into a working example the reader
+    # then edits. Reuses the memoized home-page leaders, so it costs no query.
+    suggested = None
+    if not active_entities:
+        try:
+            for label, _href, rows_ in get_cached_season_leaders(season):
+                if label == 'Passing Yards' and len(rows_) >= 2:
+                    a, b = rows_[0], rows_[1]
+                    if a[5] and b[5]:
+                        suggested = {'a_name': a[0], 'a_team': a[1],
+                                     'b_name': b[0], 'b_team': b[1],
+                                     'url': f'/compare?p1={a[5]}&p2={b[5]}&y1={season}&y2={season}'}
+                    break
+        except Exception:
+            suggested = None
+
     return render_template('compare.html',
         mode=mode, players=players, teams=teams_out, active_entities=active_entities, rows=rows,
         season=season, available_seasons=get_available_seasons(),
         group_name=group_name, pos_filter=pos_filter, tab_urls=tab_urls,
+        suggested=suggested,
     )
 
 

@@ -55,7 +55,6 @@
 
 <!-- Page header -->
 <div style="margin-bottom:20px">
-    <div class="section-label" style="margin-bottom: var(--s2)">Leaderboards</div>
     <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
         {% if mode == 'team' %}
             {% for c, l in TEAM_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
@@ -87,20 +86,20 @@
     <input type="hidden" name="qualified" value="{{ '1' if qualified else '0' }}">
     <div class="lb-filter-row">
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Season</div>
+            <label class="lb-filter-label" for="lf-season-1">Season</label>
             {% if available_seasons and available_seasons|length > 1 %}
-            <select name="season" class="lb-select" onchange="lbFilter(this)">
+            <select id="lf-season-1" aria-label="Season" name="season" class="lb-select" onchange="lbFilter(this)">
                 {% for s in available_seasons %}
                 <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
                 {% endfor %}
             </select>
             {% else %}
-            <select class="lb-select" disabled><option selected>{{ season }}</option></select>
+            <select id="lf-conference-2" aria-label="Conference" class="lb-select" disabled><option selected>{{ season }}</option></select>
             {% endif %}
         </div>
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Conference</div>
-            <select name="conf" class="lb-select" onchange="lbFilter(this)">
+            <label class="lb-filter-label" for="lf-conference-2">Conference</label>
+            <select id="lf-team-3" aria-label="Team" name="conf" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
                 {% for conf in conferences %}
                 <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
@@ -108,8 +107,8 @@
             </select>
         </div>
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Team</div>
-            <select name="team" class="lb-select" onchange="lbFilter(this)">
+            <label class="lb-filter-label" for="lf-team-3">Team</label>
+            <select id="lf-position-group-4" aria-label="Position Group" name="team" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not team_filter }}>All Teams</option>
                 {% for conf, team_list in all_teams.items() %}
                 <optgroup label="{{ conf }}">
@@ -123,8 +122,8 @@
     </div>
     <div class="lb-filter-row">
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Position Group</div>
-            <select name="pos" class="lb-select" onchange="lbFilter(this)">
+            <label class="lb-filter-label" for="lf-position-group-4">Position Group</label>
+            <select id="lf-season-5" aria-label="Season" name="pos" class="lb-select" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not pos_filter }}>All Positions</option>
                 {% for pg in position_groups %}
                 <option value="{{ pg }}" {{ 'selected' if pos_filter == pg }}>{{ pg }}</option>
@@ -239,10 +238,10 @@
     </thead>
     <tbody>
         {% for p in players %}
-        <tr class="lb-row" onclick="window.location.href='{{ player_url(p.id, season) }}'">
+        <tr class="lb-row">
             <td class="lb-td-rank">{{ p.rank }}</td>
             <td class="lb-td-player">
-                <a href="{{ player_url(p.id, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
+                <a href="{{ player_url(p.id, season) }}" class="lb-player-link">
                     {% if p.headshot %}
                     <img src="{{ p.headshot }}" alt="" class="lb-headshot" loading="lazy">
                     {% else %}
@@ -253,7 +252,7 @@
             </td>
             <td class="lb-td-pos"><span class="lb-pos-pill">{{ p.pos or '—' }}</span></td>
             <td class="lb-td-team">
-                <a href="{{ team_url(p.team, season) }}" onclick="event.stopPropagation()" class="lb-team-link">
+                <a href="{{ team_url(p.team, season) }}" class="lb-team-link">
                     {% if p.logo %}<img src="{{ p.logo }}" alt="" class="lb-team-logo" loading="lazy">{% endif %}
                     <span class="lb-team-name">{{ p.team }}</span>
                 </a>
@@ -292,7 +291,7 @@
     <span style="color: var(--gold);font-weight:800;font-size: var(--text-xs);letter-spacing:0.08em">SVR</span>
     <span>Saturday Savant's proprietary opponent-adjusted points-per-drive model.</span>
     <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
-       onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
+       class="lb-howitworks" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
 </div>
 {% endif %}
 
@@ -301,20 +300,20 @@
     <input type="hidden" name="view" value="{{ view }}">
     <div class="lb-filter-row">
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Season</div>
+            <label class="lb-filter-label" for="lf-season-5">Season</label>
             {% if available_seasons and available_seasons|length > 1 %}
-            <select name="season" class="lb-select" onchange="lbFilter(this)">
+            <select id="lf-conference-6" aria-label="Conference" name="season" class="lb-select" onchange="lbFilter(this)">
                 {% for s in available_seasons %}
                 <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
                 {% endfor %}
             </select>
             {% else %}
-            <select class="lb-select" disabled><option selected>{{ season }}</option></select>
+            <select id="lf-team-7" aria-label="Team" class="lb-select" disabled><option selected>{{ season }}</option></select>
             {% endif %}
         </div>
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Conference</div>
-            <select name="conf" class="lb-select" onchange="lbFilter(this)">
+            <label class="lb-filter-label" for="lf-conference-6">Conference</label>
+            <select name="conf" class="lb-select" aria-label="Conference" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
                 {% for conf in conferences %}
                 <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
@@ -322,8 +321,8 @@
             </select>
         </div>
         <div class="lb-filter-group">
-            <div class="lb-filter-label">Team</div>
-            <select name="team" class="lb-select" onchange="lbFilter(this)">
+            <label class="lb-filter-label" for="lf-team-7">Team</label>
+            <select name="team" class="lb-select" aria-label="Team" onchange="lbFilter(this)">
                 <option value="" {{ 'selected' if not team_filter }}>All Teams</option>
                 {% for conf, team_list in all_teams.items() %}
                 <optgroup label="{{ conf }}">
@@ -401,10 +400,10 @@
     </thead>
     <tbody>
         {% for t in teams %}
-        <tr class="lb-row" onclick="window.location.href='{{ team_url(t.name, season) }}'">
+        <tr class="lb-row">
             <td class="lb-td-rank">{{ t.rank }}</td>
             <td class="lb-td-player">
-                <a href="{{ team_url(t.name, season) }}" onclick="event.stopPropagation()" class="lb-player-link">
+                <a href="{{ team_url(t.name, season) }}" class="lb-player-link">
                     {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" class="lb-team-logo">{% endif %}
                     <span class="lb-player-name">{{ t.name }}</span>
                 </a>

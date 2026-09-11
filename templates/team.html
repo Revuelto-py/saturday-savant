@@ -82,7 +82,7 @@
                         {# Projected record stays a distinct dashed-purple pill — it is
                            an estimate, semantically different from a factual record. #}
                         <span title="Savant Forecast projection: {{ projected_record.proj_wins }}-{{ projected_record.proj_losses }} ({{ '%+.2f'|format(projected_record.exp_wins) }} expected wins from {{ projected_record.remaining }} remaining game{{ '' if projected_record.remaining == 1 else 's' }})"
-                              style="background:rgba(167,139,250,0.10);border: 1px dashed rgba(167,139,250,0.6);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700;cursor:help">{{ projected_record.display }}<span style="color:#a78bfa;font-size: var(--text-xs);font-weight:700;margin-left:6px">PROJECTED</span></span>
+                              style="background:rgba(167,139,250,0.10);border: 1px dashed rgba(167,139,250,0.6);color: var(--text-primary);padding:4px 14px;border-radius: var(--r-pill);font-size: var(--text-base);font-weight:700;cursor:help">{{ projected_record.display }}<span style="color:#c0a9ff;font-size: var(--text-xs);font-weight:700;margin-left:6px">PROJECTED</span></span>
                         {% endif %}
                     </div>
                     {% endif %}
@@ -124,7 +124,7 @@
                     <div class="sc-value" style="color: var(--gold);font-size: var(--text-xl);font-weight:900;line-height:1;text-shadow:0 2px 6px rgba(0,0,0,0.3)">{{ '%+.1f'|format(svr.net_rating) }}</div>
                     <div class="sc-label" style="color: var(--text-secondary);font-size: var(--text-xs);font-weight:700;letter-spacing:0.1em;margin-top:6px;text-transform:uppercase">Net Savant</div>
                     {% if svr.net_ranking %}<div class="sc-rank" style="color: var(--gold);font-size: var(--text-xs);font-weight:700;margin-top:4px;opacity:0.9">{{ ordinal(svr.net_ranking) }}</div>{% endif %}
-                    {% if svr_week %}<div class="sc-week" style="color: var(--text-dim);font-size:0.62rem;font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
+                    {% if svr_week %}<div class="sc-week" style="color: var(--text-dim);font-size: var(--text-xs);font-weight:600;letter-spacing:0.06em;margin-top:3px">THROUGH WEEK {{ svr_week }}</div>{% endif %}
                 </div>
                 {% endif %}
                 {% if has_games %}
@@ -229,13 +229,13 @@
             {% endmacro %}
 
             <div class="sched-head" style="margin-bottom:8px;display:flex;align-items:center;gap:6px;position:relative">
-                <h5 class="section-label" id="sched-heading" style="margin:0;font-size: var(--text-sm)">{{ season }} Schedule</h5>
+                <h2 class="section-label" id="sched-heading" style="margin:0;font-size: var(--text-sm)">{{ season }} Schedule</h2>
                 {% if schedule_has_projections %}
                 <span class="info-tip" tabindex="0" role="button" aria-label="How projected picks work">
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6.6"/><path d="M8 7.3v3.5" stroke-linecap="round"/><circle cx="8" cy="4.8" r="0.7" fill="currentColor" stroke="none"/></svg>
                 </span>
                 <span class="info-tip-pop" role="tooltip">
-                    Upcoming games show the <b style="color:#a78bfa">Savant Forecast</b> pick — a dashed
+                    Upcoming games show the <b style="color:#c0a9ff">Savant Forecast</b> pick — a dashed
                     <b style="color: var(--green)">W</b> (favored) / <b style="color: var(--red)">L</b> (underdog)
                     with each team's win probability, recomputed weekly.{% if projected_record %} The <b>Projected</b>
                     record above weights every game by that probability, so it reflects likely close-game splits
@@ -262,8 +262,8 @@
         <div class="col-lg-5">
             <div style="display:flex;align-items:center;gap: var(--s2);margin-bottom: var(--s3)">
                 {% if conf_logo %}<img src="{{ conf_logo }}" class="conf-logo-img conf-logo-img-sm" alt="{{ team_season_conf }} logo" loading="lazy">{% endif %}
-                <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ season }} {{ team_season_conf }} Standings</h5>
-                <a href="{{ url_for('standings', season=season) }}" style="margin-left:auto;color: var(--accent);font-size: var(--text-xs);font-weight:700;text-decoration:none">All conferences →</a>
+                <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ season }} {{ team_season_conf }} Standings</h2>
+                <a class="team-standings-all" href="{{ url_for('standings', season=season) }}" style="margin-left:auto;color: var(--accent);font-size: var(--text-xs);font-weight:700;text-decoration:none">All conferences →</a>
             </div>
             {# Preseason: nothing has been played, so the standings order is not yet
                meaningful — suppress the rank numbers and say why, rather than implying
@@ -288,14 +288,14 @@
                     <tbody>
                         {% for s in standings %}
                         {% set ic = s.name==team[0] %}
-                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(59,130,246,0.1)' if ic else ('rgba(212,175,55,0.10)' if s.is_champion else 'transparent') }};{% if s.is_champion %}box-shadow:inset 3px 0 0 #e8b04b;{% endif %}cursor:pointer" onclick="window.location.href='{{ team_url(s.name, season) }}'">
+                        <tr style="border-top: 1px solid var(--border);background:{{ 'rgba(28,156,240,0.10)' if ic else ('rgba(212,175,55,0.10)' if s.is_champion else 'transparent') }};{% if s.is_champion %}box-shadow:inset 3px 0 0 #e8b04b;{% endif %}">
                             <td style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;text-align:center;padding:9px 4px">{{ loop.index if ns_st.played else '—' }}</td>
                             <td style="padding:9px 10px 9px 4px">
                                 <div style="display:flex;align-items:center;gap:8px">
                                     {% if s.logo %}
                                     <img src="{{ s.logo }}" alt="{{ s.name }} logo" loading="lazy" width="24" height="24" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
                                     {% endif %}
-                                    <a href="{{ team_url(s.name, season) }}" style="color: {{ '#f0c66a' if s.is_champion else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '800' if s.is_champion else ('700' if ic else '500') }};font-size: var(--text-sm)">
+                                    <a class="row-link" href="{{ team_url(s.name, season) }}" style="color: {{ '#f0c66a' if s.is_champion else 'var(--text-primary)' }};text-decoration:none;font-weight:{{ '800' if s.is_champion else ('700' if ic else '500') }};font-size: var(--text-sm)">
                                         {% if s.ap_rank %}<span style="color:var(--accent);font-size: var(--text-xs);font-weight:800;margin-right:4px">{{ s.ap_rank }}</span>{% endif %}
                                         {{ s.name }}
                                     </a>
@@ -318,7 +318,7 @@
     {% if recruiting %}
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Recruiting Rankings</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Recruiting Rankings</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
         </div>
         <div class="row g-3">
@@ -348,7 +348,7 @@
 <div class="pt-4">
 
     <div style="margin-bottom:24px">
-        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Team Analytics</h5>
+        <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Team Analytics</h2>
         <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the {{ season }} season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
     </div>
 
@@ -361,7 +361,7 @@
     {% if svr %}
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · {{ season }}{% if svr_week %} · through week {{ svr_week }}{% endif %} ·
                 <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
@@ -386,8 +386,8 @@
             <div class="col-6 col-lg-3">
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#60a5fa;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.def_ranking }} Nationally</span></div>
+                    <div style="color:#7cc4ff;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.def_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#7cc4ff;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.def_ranking }} Nationally</span></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
@@ -405,14 +405,14 @@
     {% if returning %}
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Returning Production</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Returning Production</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">Share of {{ returning.prior }} production back on the {{ season }} roster (same school)</span>
         </div>
         <div class="row g-3">
             {% set rp_cards = [
                 ('Offense',  returning.off_pct,     returning.off_rank,     '#34d399', 'rgba(52,211,153,0.1)',  'rgba(52,211,153,0.25)'),
-                ('Defense',  returning.def_pct,     returning.def_rank,     '#60a5fa', 'rgba(96,165,250,0.1)',  'rgba(96,165,250,0.25)'),
+                ('Defense',  returning.def_pct,     returning.def_rank,     '#7cc4ff', 'rgba(96,165,250,0.1)',  'rgba(96,165,250,0.25)'),
                 ('Overall',  returning.overall_pct, returning.overall_rank, 'var(--gold)', 'rgba(28,156,240,0.1)', 'rgba(28,156,240,0.3)') ] %}
             {% for label, pct, rank, color, chip_bg, chip_bd in rp_cards %}
             <div class="col-6 col-lg-4">
@@ -452,7 +452,7 @@
     {% if sp %}
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">SP+ Ratings</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">SP+ Ratings</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">Bill Connelly's SP+ model · {{ season }}</span>
         </div>
@@ -474,8 +474,8 @@
             <div class="col-6 col-lg-3">
                 <div class="dark-card p-4 text-center">
                     <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#60a5fa;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.def_ranking }} Nationally</span></div>
+                    <div style="color:#7cc4ff;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.def_rating }}</div>
+                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#7cc4ff;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.def_ranking }} Nationally</span></div>
                 </div>
             </div>
             <div class="col-6 col-lg-3">
@@ -507,7 +507,7 @@
 
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Offense</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Offense</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · per game · national rank shown for scoring &amp; yardage</span>
         </div>
@@ -534,9 +534,9 @@
                 {{ tcell('%.1f'|format(season_stats.rush_yds_pg), hero_ranks.rush_yds_pg) }}
                 {{ tcell('%.0f%%'|format(pass_pct)) }}
                 {{ tcell('%.1f'|format(off_ypp) if off_ypp is not none else '—') }}
-                {{ tcell(epa_fmt(team_adv.off_ppa), none, '#34d399' if (team_adv.off_ppa or 0) > 0 else '#f87171') }}
-                {{ tcell(epa_fmt(team_adv.off_pass_ppa), none, '#34d399' if (team_adv.off_pass_ppa or 0) > 0 else '#f87171') }}
-                {{ tcell(epa_fmt(team_adv.off_rush_ppa), none, '#34d399' if (team_adv.off_rush_ppa or 0) > 0 else '#f87171') }}
+                {{ tcell(epa_fmt(team_adv.off_ppa), none, '#34d399' if (team_adv.off_ppa or 0) > 0 else '#ff9aa2') }}
+                {{ tcell(epa_fmt(team_adv.off_pass_ppa), none, '#34d399' if (team_adv.off_pass_ppa or 0) > 0 else '#ff9aa2') }}
+                {{ tcell(epa_fmt(team_adv.off_rush_ppa), none, '#34d399' if (team_adv.off_rush_ppa or 0) > 0 else '#ff9aa2') }}
                 {{ tcell(('%.1f%%'|format(team_adv.off_success_rate)) if team_adv.off_success_rate is not none else '—') }}
             </tr></tbody>
         </table>
@@ -545,7 +545,7 @@
 
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Defense</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Defense</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · yards allowed aren't tracked in our data source, so this is EPA/scoring-based</span>
         </div>
@@ -584,7 +584,7 @@
     {% if situational and (situational.box or situational.ats) %}
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Discipline &amp; the Spread</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Discipline &amp; the Spread</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · completed games only</span>
         </div>
@@ -662,7 +662,7 @@
     {% if team_adv %}
     <div class="mt-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Advanced Stats — Percentile Rankings</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Advanced Stats — Percentile Rankings</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">vs all 136 FBS teams · Garbage time excluded</span>
         </div>
@@ -743,7 +743,7 @@
             </div>
             <div class="col-lg-6">
                 <div class="dark-card p-4">
-                    <div style="margin-bottom:8px"><span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#93c5fd;font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">DEFENSE</span></div>
+                    <div style="margin-bottom:8px"><span style="background:rgba(28,156,240,0.15);border:1px solid rgba(28,156,240,0.3);color:#9ad4ff;font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">DEFENSE</span></div>
                     {{ scale_header() }}
                     {{ pct_bar('EPA / Play Allowed',         team_adv.def_ppa,                'def_ppa') }}
                     {{ pct_bar('Success Rate Allowed',       team_adv.def_success_rate,       'def_success_rate',   '%') }}
@@ -776,7 +776,7 @@
     {% if passing_profile and (passing_profile.offense or passing_profile.defense) %}
     <div class="dark-card tp-passing" style="padding:24px;margin-bottom:24px">
         <div style="margin-bottom:18px">
-            <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Passing Game</h5>
+            <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Passing Game</h2>
             <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
                 Where {{ team[0] }} throws it, and where opponents throw on them. Depth of target
                 separates a vertical attack from a short-passing one; yards after catch separate
@@ -793,7 +793,7 @@
     <!-- Glossary -->
     <div class="mt-5 mb-4">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">Stats Glossary</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Stats Glossary</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
         </div>
         {% set glossary = [
@@ -856,13 +856,13 @@
 
 {% macro stat_table_header(title, color) %}
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-    <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h5>
+    <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h2>
     <div style="flex:1;height:1px;background: var(--border)"></div>
 </div>
 {% endmacro %}
 
 <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
-    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">{{ season }} Season Stats</h4>
+    <h2 class="section-label" style="margin:0;font-size: var(--text-base)">{{ season }} Season Stats</h2>
     {% if has_games %}<span class="badge-pos" style="letter-spacing:0.04em">Final</span>{% endif %}
     <span style="color: var(--text-dim);font-size: var(--text-xs)">Individual production from the {{ season }} season</span>
 </div>
@@ -909,14 +909,14 @@
 
 {% if rushing_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Rushing Leaders','#60a5fa') }}
+    {{ stat_table_header('Rushing Leaders','#7cc4ff') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
             <th style="width:36px">Rk</th>
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Att</th>
-            <th style="color:#60a5fa;text-align:center">Yds ↓</th>
+            <th style="color:#7cc4ff;text-align:center">Yds ↓</th>
             <th style="text-align:center">Avg</th>
             <th style="text-align:center">TD</th>
             <th style="text-align:center">Long</th>
@@ -927,7 +927,7 @@
                 <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('CAR')) }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') is not none else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#7cc4ff;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') is not none else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPC')|float) if p.get('YPC') else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
@@ -973,7 +973,7 @@
 
 {% if defensive_stats %}
 <div class="mb-5">
-    {{ stat_table_header('Defensive Leaders','#a78bfa') }}
+    {{ stat_table_header('Defensive Leaders','#c0a9ff') }}
     <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
     <table class="data-table" style="width:100%">
         <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
@@ -981,7 +981,7 @@
             <th style="text-align:left">Player</th>
             <th style="text-align:center">Solo</th>
             <th style="text-align:center">Ast</th>
-            <th style="color:#a78bfa;text-align:center">Tot ↓</th>
+            <th style="color:#c0a9ff;text-align:center">Tot ↓</th>
             <th style="text-align:center">TFL</th>
             <th style="text-align:center" data-tt="Sacks">Sacks</th>
             <th style="text-align:center" data-tt="Interceptions">Int</th>
@@ -995,7 +995,7 @@
                 {{ player_cell(p) }}
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('SOLO')|int if p.get('SOLO') is not none else '—' }}</td>
                 <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('AST')|int if p.get('AST') is not none else '—' }}</td>
-                <td style="padding:10px 10px;text-align:center;background:rgba(167,139,250,0.04)"><span style="color:#a78bfa;font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') is not none else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(167,139,250,0.04)"><span style="color:#c0a9ff;font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') is not none else '—' }}</span></td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TFL')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('SACKS')) }}</td>
                 <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
@@ -1039,13 +1039,13 @@
     {% endif %}
     {% if punting_stats %}
     <div class="col-lg-6">
-        {{ stat_table_header('Punting','#60a5fa') }}
+        {{ stat_table_header('Punting','#7cc4ff') }}
         <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
         <table class="data-table" style="width:100%">
             <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
                 <th style="text-align:left">Player</th>
                 <th style="text-align:center">No</th>
-                <th style="color:#60a5fa;text-align:center">Yds</th>
+                <th style="color:#7cc4ff;text-align:center">Yds</th>
                 <th style="text-align:center">Avg</th>
                 <th style="text-align:center">Long</th>
             </tr></thead>
@@ -1054,7 +1054,7 @@
                 <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if p.player_id else '' }}" {% if p.player_id %}onclick="window.location.href='{{ player_url(p.player_id, season) }}'"{% endif %}>
                     {{ player_cell(p) }}
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('NO')|int if p.get('NO') else '—' }}</td>
-                    <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#60a5fa;font-weight:800">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                    <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#7cc4ff;font-weight:800">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPP')|float) if p.get('YPP') else '—' }}</td>
                     <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
                 </tr>
@@ -1075,7 +1075,7 @@
 <div class="pt-4">
 
     <div style="margin-bottom:24px">
-        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Program Trends · {{ trends.seasons[0] }}–{{ trends.seasons[-1] }}</h5>
+        <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Program Trends · {{ trends.seasons[0] }}–{{ trends.seasons[-1] }}</h2>
         <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
             How {{ team[0] }} has moved year over year. Hover any point for that season's
             full context; click legend entries to toggle lines. Gaps mean the metric
@@ -1086,7 +1086,7 @@
     {% macro trend_card(id, title, note='') %}
     <div class="trend-card" id="card-{{ id }}">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-            <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h5>
+            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             {% if note %}<span style="color: var(--text-dim);font-size: var(--text-xs)">{{ note }}</span>{% endif %}
         </div>
@@ -1115,7 +1115,7 @@
 <div class="pt-4">
 
 <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
-    <h4 class="section-label" style="margin:0;font-size: var(--text-base)">{{ roster_season }} Roster</h4>
+    <h2 class="section-label" style="margin:0;font-size: var(--text-base)">{{ roster_season }} Roster</h2>
     {% if is_upcoming_season %}
     <span class="badge-pos" style="letter-spacing:0.04em">Current</span>
     <span style="color: var(--text-dim);font-size: var(--text-xs)">Active roster, including offseason transfers</span>
@@ -1135,7 +1135,7 @@
 {% if section_players %}
 <div class="mb-5">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <h5 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h5>
+        <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h2>
         <div style="flex:1;height:1px;background: var(--border)"></div>
         <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ section_players|length }} players</span>
     </div>
@@ -1155,14 +1155,14 @@
                 {% set feet = (player[6] // 12) if player[6] else none %}
                 {% set inches = (player[6] % 12) if player[6] else none %}
                 {% set year_map = {'1':'Fr','2':'So','3':'Jr','4':'Sr','5':'Gr'} %}
-                <tr class="player-row" style="border-bottom: 1px solid var(--border);{{ 'cursor:pointer' if player[4] else '' }}" {% if player[4] %}onclick="window.location.href='{{ player_url(player[4], season) }}'"{% endif %}>
+                <tr class="player-row" style="border-bottom: 1px solid var(--border)">
                     <td style="padding:10px 16px">
                         <div style="display:flex;align-items:center;gap:12px">
                             {% if player[5] %}<img src="{{ player[5] }}" alt="{{ player[0] }} {{ player[1] }} headshot" style="width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:top;border: 1px solid var(--border-strong);flex-shrink:0">
                             {% else %}<div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary);flex-shrink:0">{{ player[0][0] if player[0] else '' }}{{ player[1][0] if player[1] else '' }}</div>{% endif %}
                             <div>
                                 {% if player[4] %}
-                                <a href="{{ player_url(player[4], season) }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);text-decoration:none"
+                                <a class="row-link" href="{{ player_url(player[4], season) }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);text-decoration:none"
                                    onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ player[0] }} {{ player[1] }}</a>
                                 {% else %}
                                 <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">{{ player[0] }} {{ player[1] }}</span>
@@ -1199,7 +1199,7 @@
 <div class="tab-pane fade" id="starters">
 <div class="pt-4">
     <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:16px">
-        <h4 class="section-label" style="margin:0;font-size: var(--text-base)">Projected {{ roster_season }} Starters</h4>
+        <h2 class="section-label" style="margin:0;font-size: var(--text-base)">Projected {{ roster_season }} Starters</h2>
         <span style="color: var(--text-dim);font-size: var(--text-xs)">Talent-based depth chart · offense &amp; defense</span>
     </div>
     {% include "_depth_chart.html" %}
@@ -1213,7 +1213,7 @@
 <div class="pt-4">
 
     <div style="margin-bottom:24px">
-        <h5 class="section-label" style="margin:0 0 6px;font-size: var(--text-base)">NFL Talent</h5>
+        <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-base)">NFL Talent</h2>
         <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Every {{ team[0] }} player who was drafted or signed as an undrafted free agent, across the 2016–2026 data range.</p>
     </div>
 
@@ -1307,8 +1307,8 @@
     var T = {{ trends|tojson }};
     var built = false;
 
-    var C = { net: '#1c9cf0', off: '#34d399', def: '#60a5fa',
-              red: '#f87171', line: '#e7e9ea', dim: '#8da4be' };
+    var C = { net: '#1c9cf0', off: '#34d399', def: '#7cc4ff',
+              red: '#ff9aa2', line: '#e7e9ea', dim: '#8da4be' };
 
     // per-season hover context: "10-3 · SEC"
     var ctx = T.seasons.map(function (s, i) {

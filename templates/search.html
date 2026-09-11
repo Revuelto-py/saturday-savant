@@ -7,7 +7,6 @@
 
     <!-- Header: same eyebrow + display-type convention as the leaderboards -->
     <div style="margin-bottom:20px">
-        <div class="section-label" style="margin-bottom: var(--s2)">Search</div>
         <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
             {% if query %}“{{ query }}”
                 <span style="color: var(--text-dim);font-weight:400;font-size:1.4rem">
@@ -21,7 +20,7 @@
     <form method="GET" action="/search" class="sp-form" role="search">
         <input type="search" name="q" value="{{ query }}" class="sp-input"
                placeholder="Search players or teams…" autocomplete="off"
-               {% if not query %}autofocus{% endif %}>
+               {% if not query %}autofocus{% endif %} aria-label="Search players and teams">
         <button type="submit" class="sp-submit">Search</button>
     </form>
 
@@ -42,7 +41,7 @@
     {% if team_results %}
     <div style="margin:32px 0 36px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h4 class="section-label" style="margin:0">Teams</h4>
+            <h2 class="section-label" style="margin:0">Teams</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ team_results|length }} found</span>
         </div>
@@ -63,7 +62,7 @@
     {% if player_results %}
     <div style="margin-top:32px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h4 class="section-label" style="margin:0">Players</h4>
+            <h2 class="section-label" style="margin:0">Players</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ player_results|length }} found</span>
         </div>

@@ -30,8 +30,8 @@
     <div class="lb-filter-section">
         <div class="lb-filter-row">
             <div class="lb-filter-group">
-                <div class="lb-filter-label">Week</div>
-                <select class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
+                <label class="lb-filter-label" for="gf-week-1">Week</label>
+                <select id="gf-week-1" aria-label="Week" class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
                     {% for o in week_options %}
                     <option value="{{ url_for('games_hub', season=season, week=o.week, stype=o.stype, conf=(sel_conf or none)) }}"
                         {{ 'selected' if (o.week == sel_week and o.stype == sel_stype) else '' }}>{{ o.label }}</option>
@@ -39,8 +39,8 @@
                 </select>
             </div>
             <div class="lb-filter-group">
-                <div class="lb-filter-label">Conference</div>
-                <select class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
+                <label class="lb-filter-label" for="gf-conference-2">Conference</label>
+                <select id="gf-conference-2" aria-label="Conference" class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
                     <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
                         {{ 'selected' if not sel_conf else '' }}>All Conferences</option>
                     {% for c in conferences %}
@@ -50,8 +50,8 @@
                 </select>
             </div>
             <div class="lb-filter-group">
-                <div class="lb-filter-label">Team</div>
-                <select class="lb-select" onchange="location=this.value">
+                <label class="lb-filter-label" for="gf-team-3">Team</label>
+                <select id="gf-team-3" aria-label="Team" class="lb-select" onchange="location=this.value">
                     <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
                         {{ 'selected' if not sel_team else '' }}>All Teams</option>
                     {% for t in team_names %}

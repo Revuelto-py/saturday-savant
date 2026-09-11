@@ -213,7 +213,7 @@
             text-decoration: none;
         }
         .search-result-item:last-child { border-bottom: none; }
-        .search-result-item:hover { background: rgba(59,130,246,0.1); }
+        .search-result-item:hover { background: rgba(28,156,240,0.1); }
         .search-result-avatar {
             width: 42px; height: 42px; border-radius: 50%;
             object-fit: cover; object-position: top;
@@ -228,8 +228,8 @@
         .search-result-name { color: var(--text-primary); font-weight: 700; font-size: var(--text-base); line-height: 1.2; }
         .search-result-meta { color: var(--text-secondary); font-size: var(--text-xs); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
         .search-result-pos {
-            background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3);
-            color: #93c5fd; font-size: var(--text-xs); font-weight: 800;
+            background: rgba(28,156,240,0.15); border: 1px solid rgba(28,156,240,0.3);
+            color: #9ad4ff; font-size: var(--text-xs); font-weight: 800;
             padding: 3px 8px; border-radius: var(--r-sm); letter-spacing: 0.06em;
             margin-left: auto; flex-shrink: 0;
         }
@@ -358,7 +358,7 @@
             background: var(--blue) !important; border: none !important; color: var(--text-primary) !important;
         }
         .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-            background: rgba(59,130,246,0.15) !important; border: none !important; color: var(--text-primary) !important;
+            background: rgba(28,156,240,0.15) !important; border: none !important; color: var(--text-primary) !important;
         }
 
         /* Nav tabs */
@@ -481,10 +481,10 @@
             {% set path = request.path %}
             {% set more_active = path.startswith('/standings') or path.startswith('/rankings') or path.startswith('/bracket') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') %}
             <div class="nav-links" id="navLinks">
-                <a href="/games" {% if path.startswith('/games') or path.startswith('/game/') %}class="active"{% endif %}>Games</a>
-                <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active"{% endif %}>Teams</a>
-                <a href="/leaderboards/passing" {% if path.startswith('/leaderboards') %}class="active"{% endif %}>Leaderboards</a>
-                <a href="/compare" {% if path.startswith('/compare') %}class="active"{% endif %}>Compare</a>
+                <a href="/games" {% if path.startswith('/games') or path.startswith('/game/') %}class="active" aria-current="page"{% endif %}>Games</a>
+                <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active" aria-current="page"{% endif %}>Teams</a>
+                <a href="/leaderboards/passing" {% if path.startswith('/leaderboards') %}class="active" aria-current="page"{% endif %}>Leaderboards</a>
+                <a href="/compare" {% if path.startswith('/compare') %}class="active" aria-current="page"{% endif %}>Compare</a>
 
                 <div class="nav-more" id="navMore">
                     <button type="button" class="nav-more-trigger{{ ' active' if more_active }}"
@@ -511,8 +511,11 @@
                     <circle cx="11" cy="11" r="7"></circle>
                     <line x1="21" y1="21" x2="16.5" y2="16.5"></line>
                 </svg>
-                <input type="text" class="nav-search-input" id="navSearch"
-                       placeholder="Search players or teams..." autocomplete="off">
+                <label class="sr-only" for="navSearch">Search players or teams</label>
+                <input type="search" class="nav-search-input" id="navSearch"
+                       placeholder="Search players or teams..." autocomplete="off"
+                       role="combobox" aria-expanded="false" aria-controls="searchDropdown"
+                       aria-autocomplete="list">
                 <div class="search-dropdown" id="searchDropdown"></div>
             </div>
 
@@ -767,7 +770,7 @@
             let html = '';
 
             if (teams.length) {
-                html += `<div style="color: var(--text-dim);font-size: 0.58rem;font-weight:800;letter-spacing:0.12em;padding:8px 14px 4px;text-transform:uppercase">Teams</div>`;
+                html += `<div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.12em;padding:8px 14px 4px;text-transform:uppercase">Teams</div>`;
                 for (const r of teams) {
                     html += `<a href="${r.url}" style="display:flex;align-items:center;gap:10px;padding:8px 14px;text-decoration:none;border-bottom: 1px solid var(--border)"
                                onmouseover="this.style.background='rgba(255,255,255,0.06)'"
@@ -784,7 +787,7 @@
 
             if (players.length) {
                 if (teams.length) {
-                    html += `<div style="color: var(--text-dim);font-size: 0.58rem;font-weight:800;letter-spacing:0.12em;padding:8px 14px 4px;text-transform:uppercase;border-top: 1px solid var(--border)">Players</div>`;
+                    html += `<div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.12em;padding:8px 14px 4px;text-transform:uppercase;border-top: 1px solid var(--border)">Players</div>`;
                 }
                 for (const r of players) {
                     const avatar = r.headshot
@@ -801,7 +804,7 @@
                                 <span style="color: var(--text-secondary);font-size: var(--text-xs)">${r.team}</span>
                             </div>
                         </div>
-                        <span style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.25);color:#93c5fd;font-size: var(--text-xs);font-weight:800;padding:2px 6px;border-radius: var(--r-sm);flex-shrink:0">${r.pos || ''}</span>
+                        <span style="background:rgba(28,156,240,0.15);border:1px solid rgba(28,156,240,0.25);color:#9ad4ff;font-size: var(--text-xs);font-weight:800;padding:2px 6px;border-radius: var(--r-sm);flex-shrink:0">${r.pos || ''}</span>
                     </a>`;
                 }
             }

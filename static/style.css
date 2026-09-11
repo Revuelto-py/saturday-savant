@@ -22,7 +22,10 @@
      on a hovered one. It is the token most of the site's supporting text uses,
      so that single value was ~600 failing elements. This clears 4.5:1 on every
      surface in the palette, the lightest included. */
-  --text-dim:       #85898d;    /* muted-foreground */
+  /* Lifted from #85898d: that cleared 4.5:1 on the palette's own surfaces
+     but landed at 4.47 on the bluish rgb(27,35,50) some tables composite
+     to. On a dark-only site a lighter dim can only improve every pairing. */
+  --text-dim:       #949a9f;    /* muted-foreground */
   --gold:           var(--accent);  /* legacy alias — accent is blue now */
   --green:          #00b87a;
   --red:            #f4212e;    /* destructive */
@@ -534,7 +537,7 @@ html {
 .gc-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .gc-final {
     color: var(--text-dim);
-    font-size: 0.56rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -621,7 +624,7 @@ html {
     background: rgba(28, 156, 240,0.13);
     border: 1px solid rgba(28, 156, 240,0.3);
     color: var(--gold);
-    font-size: 0.58rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     padding: 1px 8px;
     border-radius: var(--r-md);
@@ -635,7 +638,7 @@ html {
 .game-card-v2.is-upcoming { border-left: 2px solid rgba(28,156,240,0.55); }
 .gc-upcoming {
     color: var(--accent);
-    font-size: 0.62rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -780,7 +783,7 @@ html {
 .sched-tab:hover { color: var(--text-primary); }
 .sched-tab.active {
     background: var(--accent);
-    color: #fff;
+    color: #1a1200;
 }
 
 /* ── Home page: season leaders sidebar ─────────────────────────────────── */
@@ -922,6 +925,32 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     box-shadow: 0 6px 24px rgba(0,0,0,0.4);
 }
 
+/* ── Text over a school-colour layer ──────────────────────────────────────
+   The entity heroes and the team cards paint a team gradient over the palette,
+   and the last stop is the school's ALTERNATE colour at 53% alpha — which for
+   a team whose alt colour is white composites to about rgb(81,81,81) behind
+   the right-hand stat chips, where --text-secondary lands at 2.47:1.
+
+   The rgba(0,0,0,0.45) scrim in the markup is not enough on its own, and
+   deepening it would drain the team colour, which is the whole point of the
+   hero. Re-pointing the text tokens for the tinted subtree corrects every
+   descendant at once — including the inline-styled chips — and leaves the
+   colour alone. */
+.team-hero,
+.player-hero,
+.team-card {
+    --text-secondary: #dfe2e5;
+    --text-dim:       #cdd1d5;
+    --gold:           #9ad4ff;
+}
+/* AP pill over a team wash: the 12% tint let the card's own colour through. */
+.team-card .badge-rank,
+.ap-rank-row .badge-rank {
+    background: rgba(0,0,0,0.55);
+    border-color: rgba(28,156,240,0.5);
+    color: #9ad4ff;
+}
+
 .ap-team-logo {
     width: 44px; height: 44px;
     object-fit: contain;
@@ -946,15 +975,26 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     box-shadow: 0 2px 8px rgba(0,0,0,0.45);
 }
 /* Podium medals stay gold/silver/bronze — universal ranking semantics, not the UI accent. */
-.ap-medal-1 { background: linear-gradient(135deg, #fde68a, #f5a623); color: #231a00; }
-.ap-medal-2 { background: linear-gradient(135deg, #e5e7eb, #94a3b8); color: #0f172a; }
+.ap-medal-1 { background: linear-gradient(135deg, #f7dfa0, #f5a623); color: #231a00; }
+.ap-medal-2 { background: linear-gradient(135deg, #e5e7eb, #9aa6b4); color: #0f172a; }
 .ap-medal-3 { background: linear-gradient(135deg, #d97706, #7c3a10); color: var(--text-primary); }
 .ap-rank-num {
-    color: var(--text-secondary);
+    color: var(--text-primary);
     font-size: var(--text-md); font-weight: 800;
     font-variant-numeric: tabular-nums;
 }
 
+/* Text tokens are re-pointed for the whole tinted row rather than patched per
+   class. --text-secondary and --text-dim clear 4.5:1 on every surface in the
+   PALETTE — which is true, and is exactly why they failed here: the school
+   gradient is not in the palette. Measured worst backdrop rgb(105,87,12), where
+   #9aa0a6 lands at 2.68:1. Overriding the tokens on the row means every
+   descendant, including the inline-styled ones, is corrected at once. */
+.ap-rank-row {
+    --text-secondary: #dfe2e5;
+    --text-dim:       #cdd1d5;
+    --gold:           #9ad4ff;
+}
 .ap-cell        { color: var(--text-primary); font-size: var(--text-base); font-weight: 600; }
 .ap-cell-dim    { color: var(--text-secondary); font-size: var(--text-sm);  font-weight: 600; }
 .ap-cell-strong { color: var(--text-primary);                  font-size: var(--text-md); font-weight: 800; }
@@ -969,10 +1009,14 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     padding: 3px 8px;
     border-radius: var(--r-sm);
 }
-.ap-trend-up   { color: var(--green); background: rgba(34,197,94,0.12);  border: 1px solid rgba(34,197,94,0.3); }
-.ap-trend-down { color: #f87171; background: rgba(239,68,68,0.12);  border: 1px solid rgba(239,68,68,0.3); }
-.ap-trend-flat { color: var(--text-dim); background: rgba(255,255,255,0.05); border: 1px solid var(--border-strong); }
-.ap-trend-new  { color: #93c5fd; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); }
+/* These carry the only answer to "did we move?", and they were the worst text
+   on the page (2.79 / 2.88) because a 12%-alpha tint let the row's school
+   gradient reach the glyph. The pill now sits on its own near-opaque floor, so
+   its contrast no longer depends on which team it happens to belong to. */
+.ap-trend-up   { color: #5ef0b0; background: rgba(0,0,0,0.58); border: 1px solid rgba(0,184,122,0.5); }
+.ap-trend-down { color: #ff9aa2; background: rgba(0,0,0,0.58); border: 1px solid rgba(244,33,46,0.5); }
+.ap-trend-flat { color: #cdd1d5; background: rgba(0,0,0,0.58); border: 1px solid var(--border-strong); }
+.ap-trend-new  { color: #9ad4ff; background: rgba(0,0,0,0.58); border: 1px solid rgba(28,156,240,0.5); }
 
 .ap-final-pill {
     background: rgba(28, 156, 240,0.15);
@@ -1172,7 +1216,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     .ph-statcards .stat-card:first-child { border-left: 0 !important; padding-left: 0 !important; }
     .ph-statcards .stat-card:hover { transform: none !important; }
     .ph-statcards .sc-label {
-        font-size: 0.625rem !important;
+        font-size: var(--text-xs) !important;
         letter-spacing: 0.05em !important;
         color: var(--text-dim) !important;
         margin-bottom: 4px !important;
@@ -1184,7 +1228,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
         text-shadow: none !important;
     }
     .ph-statcards .sc-rank {
-        font-size: 0.625rem !important;
+        font-size: var(--text-xs) !important;
         font-weight: 700 !important;
         letter-spacing: 0.02em;
         color: var(--accent) !important;
@@ -1207,7 +1251,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     .ph-bio-item:not(:last-child)::after { margin: 0 5px; }
     .ph-statcards .stat-card { min-width: 0 !important; padding: 0 6px !important; }
     .ph-statcards .sc-value { font-size: 1.15rem !important; }
-    .ph-statcards .sc-label { font-size: 0.5625rem !important; letter-spacing: 0.02em !important; }
+    .ph-statcards .sc-label { font-size: var(--text-xs) !important; letter-spacing: 0.02em !important; }
 
 }
 
@@ -1316,7 +1360,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     /* the cards render value-then-label; the strip reads label-first */
     .team-hero-stats .sc-label {
         order: -1;
-        font-size: 0.625rem !important;
+        font-size: var(--text-xs) !important;
         letter-spacing: 0.04em !important;
         color: var(--text-dim) !important;
         margin: 0 0 4px !important;
@@ -1332,7 +1376,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
         text-shadow: none !important;
     }
     .team-hero-stats .sc-rank {
-        font-size: 0.625rem !important;
+        font-size: var(--text-xs) !important;
         font-weight: 700 !important;
         opacity: 1 !important;
         color: var(--accent) !important;
@@ -1362,7 +1406,7 @@ a.leader-row:hover .leader-name { color: var(--gold); }
 @media (max-width: 360px) {
     .team-hero-stats .stat-card { min-width: 0 !important; padding: 0 5px !important; }
     .team-hero-stats .sc-value { font-size: 1.05rem !important; }
-    .team-hero-stats .sc-label { font-size: 0.5625rem !important; letter-spacing: 0 !important; }
+    .team-hero-stats .sc-label { font-size: var(--text-xs) !important; letter-spacing: 0 !important; }
 }
 
 .transfer-badge {
@@ -1426,7 +1470,7 @@ tr.postseason-row:hover {
 .cmp-hero::before {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background:
-        radial-gradient(ellipse at 6% 45%, rgba(59,130,246,0.30) 0%, transparent 55%),
+        radial-gradient(ellipse at 6% 45%, rgba(28,156,240,0.30) 0%, transparent 55%),
         radial-gradient(ellipse at 96% 62%, rgba(28, 156, 240,0.22) 0%, transparent 55%);
 }
 .cmp-hero::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,0.42); pointer-events: none; }
@@ -1501,7 +1545,7 @@ tr.postseason-row:hover {
     transition-timing-function: ease;
 }
 .cmp-slot-btn:hover { background: rgba(255,255,255,0.14); color: var(--text-primary); }
-.cmp-slot-btn.remove:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #f87171; }
+.cmp-slot-btn.remove:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: #ff9aa2; }
 
 /* Search field (empty slot) — dashed until focused, dropdown escapes the grid */
 .cmp-search { position: relative; }
@@ -1587,7 +1631,7 @@ tr.postseason-row:hover {
 .cmp-cols-2 .cmp-cell-left .cmp-bar { direction: rtl; }
 .cmp-bar > span { display: block; height: 100%; border-radius: 2px; background: var(--grey-500, #8a8a8a); }
 .cmp-cell.is-lead .cmp-bar > span { background: var(--gold); }
-.cmp-pct { font-size: 0.62rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.02em; white-space: nowrap; }
+.cmp-pct { font-size: var(--text-xs); font-weight: 700; color: var(--text-secondary); letter-spacing: 0.02em; white-space: nowrap; }
 /* leading value per row — the reference's shaded highlight */
 .cmp-cell.is-lead { background: rgba(28, 156, 240,0.14); box-shadow: inset 0 0 0 1px var(--border-gold); }
 .cmp-cell.is-lead .cmp-val { color: var(--text-primary); }
@@ -1856,7 +1900,7 @@ tr.postseason-row:hover {
     border-radius: 50%;
     transition: color 0.15s ease;
 }
-.info-tip:hover, .info-tip:focus-visible { color: #a78bfa; outline: none; }
+.info-tip:hover, .info-tip:focus-visible { color: #c0a9ff; outline: none; }
 .info-tip:focus-visible { box-shadow: 0 0 0 2px rgba(167,139,250,0.5); }
 .info-tip svg { width: 14px; height: 14px; display: block; }
 .info-tip-pop {
@@ -1880,6 +1924,22 @@ tr.postseason-row:hover {
     transition: opacity 0.15s ease;
     z-index: 100;
 }
+/* W/L glyphs inside the tooltip take the tokens picked against the page
+   ground; on the popover's own #1a2e4a the red lands at 3.33:1. */
+.info-tip { position: relative; }
+@media (hover: none) {
+    /* 16x16 glyph. ::before is already the glyph itself, so the hit overlay
+       takes ::after; padding would have moved the row it sits in. */
+    .info-tip::after {
+        content: '';
+        position: absolute;
+        left: 50%; top: 50%;
+        width: 44px; height: 44px;
+        transform: translate(-50%, -50%);
+    }
+}
+.info-tip-pop b { color: #ff9aa2; }
+.info-tip-pop b.is-win { color: #5ef0b0; }
 .info-tip:hover ~ .info-tip-pop,
 .info-tip:focus-visible ~ .info-tip-pop,
 .info-tip-pop:hover { opacity: 1; }
@@ -2076,7 +2136,7 @@ tr.postseason-row:hover {
     display: block;
     margin-top: 2px;
     font-family: var(--font-display);
-    font-size: 0.68rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     letter-spacing: 0.02em;
     /* Bright enough to clear 4.5:1 on every step of the ramp — the secondary
@@ -2088,7 +2148,7 @@ tr.postseason-row:hover {
    it names a neighbourhood, it is not itself a column. */
 .lb-grouprow .lb-th {
     padding: 0.44rem 0.625rem 0.38rem;
-    font-size: 0.64rem;
+    font-size: var(--text-xs);
     letter-spacing: 0.14em;
     color: var(--text-secondary);
     background: rgba(255,255,255,0.03);
@@ -2241,7 +2301,7 @@ tr.postseason-row:hover {
 .lb-player-link, .lb-team-link { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .lb-team-link { gap: 7px; }
 .lb-player-name { color: var(--text-primary); font-weight: 700; font-size: var(--text-base); white-space: nowrap; }
-.lb-player-link:hover .lb-player-name, .lb-team-link:hover .lb-team-name { color: #60a5fa; }
+.lb-player-link:hover .lb-player-name, .lb-team-link:hover .lb-team-name { color: #7cc4ff; }
 .lb-team-name { color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600; white-space: nowrap; transition: color 0.12s; }
 .lb-headshot { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; object-position: top; flex-shrink: 0; border: 1px solid var(--border-strong); }
 .lb-headshot-fallback {
@@ -2251,7 +2311,7 @@ tr.postseason-row:hover {
 }
 .lb-team-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
 .lb-pos-pill {
-    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd;
+    background: rgba(28,156,240,0.12); border: 1px solid rgba(28,156,240,0.2); color: #9ad4ff;
     font-size: var(--text-xs); font-weight: 800; padding: 2px 7px; border-radius: var(--r-sm);
 }
 .lb-ap-pill {
@@ -2307,7 +2367,7 @@ tr.postseason-row:hover {
 .t-meta    { color: var(--text-dim);       font-weight: 400; font-family: var(--font-body); }
 /* the gold signal — winning total / leading stat only */
 .t-gold    { color: var(--gold) !important; }
-a.t-label:hover { color: #60a5fa; }
+a.t-label:hover { color: #7cc4ff; }
 /* .data-table sets th/td colors at higher specificity; let roles win inside
    the quarter table */
 .data-table thead th.t-meta { color: var(--text-dim); }
@@ -2669,7 +2729,7 @@ tr.player-row:hover {
     border: 1px dashed rgba(167,139,250,0.6);
     border-radius: var(--r-pill);
     background: rgba(167,139,250,0.10);
-    color: #c4b5fd;
+    color: #cfc3ff;
     font-family: var(--font-body);
     font-size: var(--text-xs);
     font-weight: 700;
@@ -2837,7 +2897,7 @@ tr.player-row:hover {
     font-size: var(--text-base);
     white-space: nowrap;
 }
-.bk-col-head-gold { color: rgba(28, 156, 240,0.75); }
+.bk-col-head-gold { color: var(--accent); }
 .bk-col-body {
     flex: 1;
     display: flex;
@@ -2945,7 +3005,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     font-variant-numeric: tabular-nums;
 }
 .bk-seed-bye { background: rgba(28, 156, 240,0.18); color: var(--gold); }
-.bk-seed-mid { background: rgba(59,130,246,0.18); color: #93c5fd; }
+.bk-seed-mid { background: rgba(28,156,240,0.18); color: #9ad4ff; }
 
 .bk-logo {
     flex-shrink: 0;
@@ -3011,7 +3071,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     z-index: 2;
     background: #dc2626;
     color: var(--text-primary);
-    font-size: 0.56rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.1em;
     padding: 2px 7px;
@@ -3172,9 +3232,9 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     flex-shrink: 0;
 }
 .badge-pos, .lb-pos-pill, .compare-pos-badge, .search-result-pos {
-    background: rgba(59,130,246,0.12);
-    border: 1px solid rgba(59,130,246,0.3);
-    color: #93c5fd;
+    background: rgba(28,156,240,0.12);
+    border: 1px solid rgba(28,156,240,0.3);
+    color: #9ad4ff;
 }
 .badge-conf {
     background: rgba(255,255,255,0.05);
@@ -3323,6 +3383,17 @@ select.form-select:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
+/* Same leak, second component. Bootstrap's `.nav-link:focus-visible` is also
+   (0,2,0), which left the seven primary tabs on the team page focusing to a
+   1.24:1 box-shadow — the site's 2px outline never rendered on the largest
+   template's main navigation. Anything Bootstrap styles at (0,2,0) has to be
+   matched here explicitly; the global rule above cannot reach it. */
+.nav-link:focus-visible,
+.nav-tabs .nav-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    box-shadow: none;
+}
 
 /* Skip link. Off-screen until focused, then a real control at the top-left —
    21 focusable elements (brand, nav, More, search, ten ticker items) sat
@@ -3449,7 +3520,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .ig-glow-navy {
     bottom: -30%; left: -12%;
     width: 46%; height: 66%;
-    background: rgba(59,130,246,0.07);
+    background: rgba(28,156,240,0.07);
 }
 /* content — centered, links interactive, everything else lets the mouse
    through so the reveal keeps tracking */
@@ -3654,7 +3725,7 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .lf-name { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lf-tag {
     font-family: var(--font-display); font-weight: 700;
-    font-size: 0.62rem; letter-spacing: 0.09em;
+    font-size: var(--text-xs); letter-spacing: 0.09em;
     padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid transparent;
 }
 /* empty slot */
@@ -3668,9 +3739,9 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .lf-unit-ol { --lf-accent: var(--text-dim); }
 .lf-unit-ol .lf-tag { color: var(--text-secondary); background: rgba(255,255,255,0.06); border-color: var(--border-strong); }
 .lf-unit-dl { --lf-accent: var(--red); }
-.lf-unit-dl .lf-tag { color: #f87171; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); }
+.lf-unit-dl .lf-tag { color: #ff9aa2; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); }
 .lf-unit-lb { --lf-accent: var(--blue); }
-.lf-unit-lb .lf-tag { color: #93c5fd; background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.3); }
+.lf-unit-lb .lf-tag { color: #9ad4ff; background: rgba(28,156,240,0.12); border-color: rgba(28,156,240,0.3); }
 .lf-unit-db { --lf-accent: var(--green); }
 .lf-unit-db .lf-tag { color: #6ee7b7; background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.3); }
 
@@ -3684,11 +3755,11 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .lineup-legend .lg-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
 
 @media (max-width: 767.98px) {
-    .lf-name { font-size: 0.62rem; }
+    .lf-name { font-size: var(--text-xs); }
     .lineup-toggle button { padding: 6px 14px; }
 }
 @media (max-width: 575.98px) {
-    .lf-jersey { font-size: 0.64rem; }
+    .lf-jersey { font-size: var(--text-xs); }
 }
 @media (prefers-reduced-motion: reduce) {
     a.lf-card:hover .lf-card-inner { transform: none; }
@@ -3815,7 +3886,7 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 .dc-field .lf-empty { aspect-ratio: 5 / 4; }
 .dc-field .lf-tag {
     position: absolute; top: 4px; left: 4px; z-index: 3;
-    font-size: 0.54rem; padding: 1px 5px; letter-spacing: 0.06em;
+    font-size: var(--text-xs); padding: 1px 5px; letter-spacing: 0.06em;
     box-shadow: 0 1px 4px rgba(0,0,0,0.55); backdrop-filter: blur(2px);
 }
 
@@ -3843,7 +3914,7 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
     .dc-row--line { gap: 2px; }
     .dc-row--line > .lf-card:first-child { margin-right: 4px; }
     .dc-row--line > .lf-card:last-child { margin-left: 4px; }
-    .dc-field .lf-tag { font-size: 0.5rem; padding: 1px 3px; }
+    .dc-field .lf-tag { font-size: var(--text-xs); padding: 1px 3px; }
     .dc-title { font-size: 1.7rem; }
     .dc-hero-logo { height: 48px; }
 }
@@ -4048,7 +4119,7 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 .sp-input::placeholder { color: var(--text-dim); }
 .sp-submit {
     background: var(--accent);
-    color: #fff;
+    color: #1a1200;
     border: none;
     border-radius: var(--r-md);
     font-family: var(--font-display);
@@ -4154,9 +4225,9 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 .sp-dot { color: var(--text-dim); }
 .sp-jersey { color: var(--text-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .sp-pos {
-    background: rgba(59,130,246,0.15);
-    border: 1px solid rgba(59,130,246,0.3);
-    color: #93c5fd;
+    background: rgba(28,156,240,0.15);
+    border: 1px solid rgba(28,156,240,0.3);
+    color: #9ad4ff;
     font-size: var(--text-xs);
     font-weight: 800;
     padding: 3px 8px;
@@ -4493,7 +4564,7 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     border-color: rgba(0,184,122,0.3);
     font-weight: 800;
 }
-.tp-stars { color: rgba(255,255,255,0.12); font-size: var(--text-sm); letter-spacing: 1px; white-space: nowrap; }
+.tp-stars { color: rgba(255,255,255,0.48); font-size: var(--text-sm); letter-spacing: 1px; white-space: nowrap; }
 .tp-stars-fill { color: var(--accent); }
 .tp-cell-date { color: var(--text-dim); font-size: var(--text-sm); white-space: nowrap; }
 .tp-dim { color: var(--text-dim); }
@@ -4898,7 +4969,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 }
 .gh-fc-eyebrow {
     font-family: var(--font-display); font-weight: 700;
-    font-size: clamp(0.62rem, 0.55rem + 0.2vw, 0.76rem);
+    font-size: var(--text-xs);
     letter-spacing: 0.18em; text-transform: uppercase;
     color: #cfd8e3; text-shadow: 0 1px 4px rgba(0,0,0,0.7);
     white-space: nowrap;
@@ -5000,7 +5071,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .gpx-sum-k {
     display: block;
     margin-top: 3px;
-    font-size: 0.64rem;
+    font-size: var(--text-xs);
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -5016,7 +5087,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 }
 .gpx-col { min-width: 0; }
 .gpx-col-k {
-    font-size: 0.64rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -5132,7 +5203,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .gpx-pctl {
     flex: 0 0 1.6rem;
     text-align: right;
-    font-size: 0.64rem;
+    font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1;
     color: var(--text-secondary);
@@ -5141,7 +5212,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 
 /* Middle card */
 .gpx-fc-k {
-    font-size: 0.66rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -5158,7 +5229,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .gpx-fc-exp b { color: var(--text-primary); font-weight: 700; }
 .gpx-fc-basis {
     margin-top: 7px;
-    font-size: 0.68rem;
+    font-size: var(--text-xs);
     line-height: 1.5;
     color: var(--text-dim);
     text-wrap: balance;
@@ -5227,7 +5298,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .gpx-team, .gpx-mid { padding: var(--s3); }
     .gpx-head { gap: 0.4rem; }
     .gpx-head img { width: 24px; height: 24px; }
-    .gpx-label { font-size: 0.66rem; }
+    .gpx-label { font-size: var(--text-xs); }
 }
 
 .sched-empty {
@@ -5439,7 +5510,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     --live-gap: 4px;
     padding: 1px 7px;
     font-family: var(--font-display);
-    font-size: 0.6rem;
+    font-size: var(--text-xs);
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -5619,6 +5690,32 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
         left: 0; right: 0; top: 50%;
         height: 44px;
         transform: translateY(-50%);
+    }
+}
+
+@media (hover: none) {
+    /* Measured at 390 with touch, after the first fix round:
+         .xp-swap        38x44  (height fixed, width still short)
+         .btn-primary   216x41
+         .lb-th          65x42  sortable column headers
+         .bk-proj-team   64x16  inline link inside the projection popover
+         .ph-meta-item   45x21  and its inner link at 25x19
+         .team-name-default 57x19
+       Inline links need a box before a min-height can apply to them. */
+    #xp-swap { min-width: 44px; }
+    .btn-primary { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+    .lb-th.stat-header { height: 44px; }
+    .bk-proj-team,
+    .lb-howitworks,
+    .team-name-default,
+    .ph-meta-item,
+    .ph-meta-item a,
+    .cmp-zero-hint a,
+    .team-standings-all {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        min-width: 44px;
     }
 }
 
@@ -6005,7 +6102,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     grid-column: 2; grid-row: 2;
     display: grid; grid-template-columns: repeat(3, 1fr);
     text-align: center;
-    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em;
+    font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--text-dim);
 }
 
@@ -6166,7 +6263,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     font-variant-numeric: tabular-nums;
 }
 .dr-num-rp {
-    font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em;
+    font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.06em;
     color: var(--text-dim); font-variant-numeric: tabular-nums;
 }
 
@@ -6187,7 +6284,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .dr-pos {
-    color: var(--text-dim); font-size: 0.64rem; font-weight: 800;
+    color: var(--text-dim); font-size: var(--text-xs); font-weight: 800;
     letter-spacing: 0.1em; text-transform: uppercase;
 }
 
@@ -6300,7 +6397,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .pc-card .pc-summary { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .pc-card .pc-stat { padding: 10px 12px; }
 .pc-card .pc-stat-val { font-size: var(--text-lg); }
-.pc-card .pc-stat-note { font-size: 0.66rem; line-height: 1.3; }
+.pc-card .pc-stat-note { font-size: var(--text-xs); line-height: 1.3; }
 /* Blur is an absolute radius, so on a field a little over half the width it has
    to come down with it or the surface smears into one colour. */
 .pc-card .ph-heat-blur { filter: blur(12px); }
@@ -6548,7 +6645,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     background: rgba(0, 0, 0, 0.45);
     border: 1px solid rgba(255, 255, 255, 0.16);
     color: var(--text-primary);
-    font-family: var(--font-display); font-size: 0.68rem;
+    font-family: var(--font-display); font-size: var(--text-xs);
     font-weight: 700; letter-spacing: 0.05em; white-space: nowrap;
 }
 
@@ -6837,6 +6934,84 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .gi-row:last-child { border-bottom: none; }
 .gi-ico { flex-shrink: 0; width: 18px; height: 18px; color: var(--text-dim); }
 
+/* ── Compare zero state ───────────────────────────────────────────────────
+   <main> measured 475px on a 900px viewport: a hero, eight pills, a dead
+   Download button and three empty boxes, with no copy after them. Compare is
+   one of five primary nav items, so that was a likely session-ending screen. */
+.cmp-zero {
+    max-width: 56ch;
+    margin: var(--s8) auto 0;
+    text-align: center;
+}
+.cmp-zero-lede {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: 1.7;
+    color: var(--text-secondary);
+    margin: 0 0 var(--s6);
+    text-wrap: balance;
+}
+.cmp-zero-try {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-height: 44px;
+    padding: 12px var(--s6);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: rgba(255,255,255,0.03);
+    font-family: var(--font-display);
+    font-size: var(--text-md);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: var(--t-fast);
+    transition-property: var(--t-ui);
+}
+.cmp-zero-try:hover { color: var(--accent); border-color: var(--accent); background: rgba(28,156,240,0.08); }
+.cmp-zero-try:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--accent); }
+.cmp-zero-try:active { background: rgba(28,156,240,0.14); }
+.cmp-zero-try-meta {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+}
+.cmp-zero-hint {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    line-height: 1.7;
+    color: var(--text-dim);
+    margin: var(--s6) 0 0;
+}
+.cmp-zero-hint a { color: var(--accent); }
+
+/* ── Row links ────────────────────────────────────────────────────────────
+   Data rows used to carry `onclick` on the <tr>: mouse-only, announced to no
+   screen reader, and leaving the real anchor at a 77x19 hit area inside a row
+   the reader perceives as one target. Measured 138 sub-44px targets on
+   /standings alone from this one pattern.
+
+   The anchor stretches over its whole row instead. Keyboard reach, screen-
+   reader announcement and tap target are then the same element, and the row
+   stops lying about what is clickable. Cells that carry their own links
+   (opponent, conference) keep working because they sit above the overlay. */
+.row-link {
+    display: inline-flex;
+    align-items: center;
+    /* Desktop keeps its density; a mouse does not need 44px and the extra
+       height would cost rows per screen. */
+    min-height: 0;
+}
+@media (hover: none) {
+    /* min-width too: a short name like "LSU" was a 33px-wide target even
+       once the height was right. */
+    .row-link { min-height: 44px; min-width: 44px; }
+}
+
 /* ── Touch targets ────────────────────────────────────────────────────────
    Measured on the live site at 390px, not assumed: the leaderboard select came
    in at 41px, its pagination and view buttons at 34-35, the transfer year tabs
@@ -6844,6 +7019,12 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    pointerless devices so desktop density is untouched — 34px is a fine mouse
    target and growing it there would only cost information per screen. */
 @media (hover: none) {
+    /* Measured at 390 with touch: the compare position pills came in at
+       45x34.7 with a 6px gap, the explorer axis-swap at 38x38, and the
+       bracket projection links at 64x16 with no gap to their neighbour. */
+    .cmp-pill,
+    #xp-swap,
+    .bk-proj-team,
     .lb-select,
     .lb-mode-btn,
     .lb-page-btn,
