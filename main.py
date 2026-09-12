@@ -9459,8 +9459,21 @@ def _live_status_text(state, period, clock):
 
 
 def _persist_finals(board):
-    """Write through games the board reports as finished while our row still
-    calls them live, and flush the caches a finished game invalidates.
+    """Write the board's scores through to `games`, and flush the caches a
+    finished game invalidates.
+
+    Live scores are written as well as finals, which they were not before, and
+    that gap is what made a game in progress invisible in more places than it
+    should have been. `/api/live` overlays the board on every poll, so the
+    ticker was fine — but `games` is what the SERVER renders from, so a game
+    card, the /games grid and the game page itself all had a scoreless row
+    until the whistle. With CFBD's own scoreboard now behind a Patreon tier
+    (it answers 401), the only other writer is the score cron, so anything the
+    cron missed stayed blank on a rendered page for as long as the game ran.
+
+    Writing the live score too costs nothing extra: this already runs at most
+    once per LIVE_TTL per worker, and the UPDATE is skipped when the score has
+    not moved.
 
     The score cron does this too, but only every ten minutes or so. Someone
     watching a game end should not wait for the next run to see the page turn
@@ -9470,21 +9483,31 @@ def _persist_finals(board):
     Guarded on completed = 0, so it is idempotent and can never touch a settled
     row: with two workers both may try, and the second is simply a no-op.
     """
-    finals = {gid: g for gid, g in board.items()
-              if g['state'] == 'final' and g['home'] is not None and g['away'] is not None}
-    if not finals:
+    scored = {gid: g for gid, g in board.items()
+              if g['state'] in ('live', 'final')
+              and g['home'] is not None and g['away'] is not None}
+    if not scored:
         return 0
     n = 0
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT id FROM games WHERE completed = 0 AND id = ANY(%s)',
-                    ([int(g) for g in finals],))
-        for (gid,) in cur.fetchall():
-            g = finals[str(gid)]
-            cur.execute("""UPDATE games SET home_points = %s, away_points = %s, completed = 1
-                            WHERE id = %s AND completed = 0""", (g['home'], g['away'], gid))
-            n += cur.rowcount
+        cur.execute('SELECT id, home_points, away_points FROM games '
+                    'WHERE completed = 0 AND id = ANY(%s)',
+                    ([int(g) for g in scored],))
+        for gid, hp, ap in cur.fetchall():
+            g = scored[str(gid)]
+            if g['state'] == 'final':
+                cur.execute("""UPDATE games SET home_points = %s, away_points = %s, completed = 1
+                                WHERE id = %s AND completed = 0""", (g['home'], g['away'], gid))
+                n += cur.rowcount
+            elif hp != g['home'] or ap != g['away']:
+                # Score only. `completed` is untouched, which is what marks the
+                # row as in progress for every reader — /games alone stays the
+                # authority on whether a game is actually over.
+                cur.execute("""UPDATE games SET home_points = %s, away_points = %s
+                                WHERE id = %s AND completed = 0""", (g['home'], g['away'], gid))
+                n += cur.rowcount
         conn.commit()
     except Exception as exc:
         conn.rollback()
