@@ -6445,6 +6445,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .bk-proj-team,
     .lb-howitworks,
     .howitworks,
+    .mu-full,
     .team-name-default,
     .ph-meta-item,
     .ph-meta-item a,
@@ -7983,3 +7984,223 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     border-radius: var(--r-sm); color: var(--accent);
 }
 .howitworks:active { color: var(--text-primary); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HEAD-TO-HEAD — Explorer scope=matchup (/explorer?scope=matchup)
+   Two team pickers, a series verdict, and every meeting in order. Reuses the
+   compare page's .cmp-search typeahead shell and the forecast .fc-bar, so the
+   controls are ones the reader has already met elsewhere on the site.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.mu-pickers {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s4); margin-bottom: var(--s5);
+}
+.mu-pick-label {
+    display: block; margin-bottom: 6px;
+    color: var(--text-dim); font-size: 0.75rem; font-weight: 800;
+    letter-spacing: 0.1em; text-transform: uppercase;
+}
+.mu-searchbox { width: 100%; }
+
+.mu-slot {
+    display: flex; align-items: center; gap: var(--s3);
+    padding: 9px var(--s3); min-height: 44px;
+    background: var(--bg-card); border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+}
+.mu-slot-logo { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.mu-slot-name {
+    color: var(--text-primary); font-weight: 700; font-size: var(--text-sm);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mu-slot-x {
+    margin-left: auto; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0;
+    background: none; border: 1px solid transparent; border-radius: var(--r-sm);
+    color: var(--text-dim); cursor: pointer;
+    transition: color var(--t-fast), background-color var(--t-fast), border-color var(--t-fast);
+}
+.mu-slot-x:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+.mu-slot-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--text-primary); }
+.mu-slot-x:active { background: var(--bg-subtle); }
+
+.mu-error {
+    margin: 0 0 var(--s4); padding: 10px var(--s4);
+    background: rgba(240,168,104,0.10); border: 1px solid rgba(240,168,104,0.30);
+    border-radius: var(--r-md); color: #f0a868; font-size: var(--text-sm);
+}
+
+/* ── Verdict + share bar ──────────────────────────────────────────────────── */
+.mu-result { margin-bottom: var(--s6); }
+.mu-verdict {
+    display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
+    margin: 0 0 var(--s4);
+    font-family: var(--font-display); font-weight: 800;
+    font-size: var(--text-lg); color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.mu-verdict strong { color: var(--accent); font-weight: 800; }
+.mu-verdict-window {
+    font-family: var(--font-body); font-weight: 700;
+    font-size: 0.75rem; letter-spacing: 0.06em;
+    color: var(--text-dim); text-transform: uppercase;
+}
+
+.mu-bar-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 2.4fr) minmax(0, 1fr);
+    align-items: center; gap: var(--s3); margin-bottom: var(--s5);
+}
+.mu-bar-side { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
+.mu-bar-side-b { justify-content: flex-end; }
+.mu-bar-team {
+    color: var(--text-secondary); font-weight: 700; font-size: 0.75rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mu-bar-wins {
+    color: var(--text-primary); font-family: var(--font-display);
+    font-weight: 800; font-size: var(--text-md); font-variant-numeric: tabular-nums;
+}
+.mu-bar { height: 14px; }
+
+/* ── Window + link ────────────────────────────────────────────────────────── */
+.mu-controls {
+    display: flex; align-items: center; gap: var(--s4);
+    flex-wrap: wrap; margin-bottom: var(--s5);
+}
+.mu-window {
+    display: inline-flex; gap: 2px; padding: 3px;
+    background: var(--bg-subtle); border: 1px solid var(--border);
+    border-radius: var(--r-md);
+}
+.mu-win-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 7px 14px; border-radius: var(--r-sm);
+    color: var(--text-secondary); text-decoration: none;
+    font-size: 0.75rem; font-weight: 700; white-space: nowrap;
+    transition: color var(--t-fast), background-color var(--t-fast);
+}
+.mu-win-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+.mu-win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mu-win-btn:active { background: var(--bg-card); }
+.mu-win-btn.active { color: var(--text-primary); background: var(--bg-card); }
+.mu-full {
+    margin-left: auto; color: var(--text-secondary); font-weight: 700;
+    font-size: 0.75rem; text-decoration: none; white-space: nowrap;
+    transition: color var(--t-fast);
+}
+.mu-full:hover { color: var(--accent); }
+.mu-full:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+.mu-full:active { color: var(--text-primary); }
+
+/* ── Summary figures ──────────────────────────────────────────────────────── */
+.mu-stats {
+    list-style: none; padding: 0; margin: 0 0 var(--s6);
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
+}
+.mu-stat { padding: var(--s3) var(--s4); background: var(--bg-card); }
+.mu-stat-k {
+    display: block; color: var(--text-dim); font-size: 0.75rem;
+    font-weight: 700; letter-spacing: 0.05em; margin-bottom: 3px;
+}
+.mu-stat-v {
+    display: block; color: var(--text-primary); font-weight: 700;
+    font-size: var(--text-sm); font-variant-numeric: tabular-nums;
+}
+
+/* ── The meetings ─────────────────────────────────────────────────────────── */
+.mu-list-head {
+    display: flex; align-items: baseline; gap: var(--s3);
+    margin: 0 0 var(--s3); font-size: var(--text-sm); font-weight: 800;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary);
+}
+.mu-list-note {
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
+    color: var(--text-dim); text-transform: none;
+}
+.mu-games { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.mu-game {
+    display: grid; align-items: center; gap: var(--s3);
+    grid-template-columns: 108px 92px 30px minmax(0, 1fr) auto;
+    padding: 10px var(--s4); min-height: 44px; text-decoration: none;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    transition: background-color var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+}
+.mu-game:hover { background: var(--bg-card-hover); border-color: var(--border-strong); }
+.mu-game:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.mu-game:active { transform: translateY(1px); }
+
+.mu-season {
+    color: var(--text-primary); font-weight: 800;
+    font-family: var(--font-display); font-size: var(--text-md);
+    font-variant-numeric: tabular-nums; margin-right: 6px;
+}
+.mu-week { color: var(--text-dim); font-size: 0.75rem; }
+.mu-score { display: flex; align-items: baseline; gap: 5px; font-variant-numeric: tabular-nums; }
+.mu-sc { color: var(--text-dim); font-weight: 800; font-size: var(--text-sm); min-width: 24px; }
+.mu-sc.is-won { color: var(--text-primary); }
+.mu-dash { color: var(--text-dim); font-size: 0.75rem; }
+.mu-res {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 22px; border-radius: var(--r-sm);
+    font-size: 0.75rem; font-weight: 800;
+}
+.mu-res-w { color: #6ee7b7; background: rgba(52,211,153,0.14); }
+.mu-res-l { color: #f0a868; background: rgba(240,168,104,0.14); }
+.mu-res-t { color: var(--text-dim); background: rgba(255,255,255,0.06); }
+.mu-venue {
+    color: var(--text-secondary); font-size: 0.75rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mu-date { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+
+/* ── Zero / empty states ──────────────────────────────────────────────────── */
+.mu-empty {
+    padding: var(--s6); text-align: center;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-md);
+}
+.mu-empty-lede {
+    margin: 0 0 var(--s2); color: var(--text-primary);
+    font-size: var(--text-md); font-weight: 700;
+}
+.mu-empty-sub {
+    margin: 0 auto; max-width: 52ch;
+    color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.7;
+}
+.mu-empty-sub a { color: var(--accent); font-weight: 700; }
+
+@media (max-width: 719.98px) {
+    .mu-pickers { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+    /* The date is the first thing to go: the season column already says when,
+       and the row has a link to the game for anyone who needs the day. */
+    .mu-game { grid-template-columns: 84px 82px 26px minmax(0, 1fr); }
+    .mu-date { display: none; }
+    .mu-bar-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+    /* Stacked, the mirrored B side would read "1 Maryland". Reversing puts the
+       name back in front of its number without touching the DOM order that the
+       side-by-side desktop layout depends on. */
+    .mu-bar-side-b { flex-direction: row-reverse; justify-content: flex-end; }
+    .mu-controls { gap: var(--s3); }
+    .mu-full { margin-left: 0; }
+}
+
+@media (max-width: 479.98px) {
+    /* Below this the venue line has nowhere to go, and the score plus the
+       W/L chip already carry the result. */
+    .mu-game { grid-template-columns: 72px minmax(0, 1fr) 26px; }
+    .mu-venue { display: none; }
+}
+
+@media (hover: none) {
+    /* Floors live here, not in the shared touch block near the top: this
+       section is appended later in the file, so an equal-specificity rule up
+       there loses on source order. Measured 28x28 and 32 high. */
+    .mu-slot-x { width: 44px; height: 44px; }
+    .mu-win-btn { min-height: 44px; }
+    .mu-game { min-height: 44px; }
+}

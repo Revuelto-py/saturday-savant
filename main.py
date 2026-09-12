@@ -9461,6 +9461,167 @@ def api_explorer_radar():
     return jsonify(profile)
 
 
+# ── Head-to-head matchup lookup (Explorer scope=matchup) ────────────────────
+# The series data and a detail page (/rivalry/<a>/<b>) already existed and work
+# for ANY pair, not just curated rivalries — there was simply no way to reach
+# one unless the pair was in the `rivalries` table. This is the missing search.
+MATCHUP_WINDOW_YEARS = 10
+
+
+def _matchup_teams(cursor):
+    """Every team that has actually appeared in a game, for the pickers.
+
+    Sourced from `games` rather than `teams` so the list can't offer a matchup
+    that returns nothing: `teams` carries FCS and defunct programs we hold no
+    schedule for."""
+    cursor.execute('''
+        SELECT t.name, t.logo_dark, t.conference
+        FROM teams t
+        WHERE EXISTS (SELECT 1 FROM games g
+                      WHERE g.home_team = t.name OR g.away_team = t.name)
+        ORDER BY t.name
+    ''')
+    return [{'name': r[0], 'logo': r[1], 'conference': r[2] or ''}
+            for r in cursor.fetchall()]
+
+
+def _matchup_date(raw):
+    """games.start_date is stored as TEXT, not a timestamp, so it arrives as a
+    string like '2016-10-08 16:00:00+00:00'. Take the date part and format it;
+    anything unparseable degrades to the raw date rather than blanking out."""
+    if not raw:
+        return ''
+    head = str(raw)[:10]
+    try:
+        return datetime.datetime.strptime(head, '%Y-%m-%d').strftime('%b %-d, %Y')
+    except ValueError:
+        return head
+
+
+def _matchup_meetings(cursor, team_a, team_b, min_season=None):
+    """Completed meetings between two teams, NEWEST FIRST.
+
+    Newest-first is what _rivalry_series() needs to walk the current streak; the
+    template reverses it for the chronological list."""
+    sql = '''
+        SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points,
+               g.week, g.season, g.season_type, g.notes, g.start_date
+        FROM games g
+        WHERE ((g.home_team = %s AND g.away_team = %s)
+            OR (g.home_team = %s AND g.away_team = %s))
+          AND g.completed = 1
+          AND g.home_points IS NOT NULL AND g.away_points IS NOT NULL
+    '''
+    params = [team_a, team_b, team_b, team_a]
+    if min_season is not None:
+        sql += ' AND g.season >= %s'
+        params.append(min_season)
+    sql += ' ORDER BY g.start_date DESC NULLS LAST, g.season DESC'
+    cursor.execute(sql, params)
+
+    out = []
+    for r in cursor.fetchall():
+        hp, ap = r[3], r[4]
+        g = {
+            'id': r[0], 'home_team': r[1], 'away_team': r[2],
+            'home_pts': hp, 'away_pts': ap, 'week': r[5], 'season': r[6],
+            'season_type': r[7], 'notes': r[8],
+            'date': _matchup_date(r[9]),
+            'winner': (r[1] if hp > ap else r[2]) if hp != ap else None,
+            'margin': abs(hp - ap),
+        }
+        # Rendered from A's point of view throughout, so the list reads as one
+        # team's story rather than flipping every time the venue changes.
+        g['a_pts'] = hp if r[1] == team_a else ap
+        g['b_pts'] = ap if r[1] == team_a else hp
+        g['a_home'] = r[1] == team_a
+        out.append(g)
+    return out
+
+
+def _explorer_matchup(cursor, season):
+    """Resolve the ?a=/?b=/?win= matchup query into template context."""
+    teams = _matchup_teams(cursor)
+    names = {t['name'] for t in teams}
+
+    a = (request.args.get('a') or '').strip()
+    b = (request.args.get('b') or '').strip()
+    win = request.args.get('win', str(MATCHUP_WINDOW_YEARS))
+    if win != 'all':
+        win = str(MATCHUP_WINDOW_YEARS)
+
+    ctx = {'mu_teams': teams, 'mu_a': None, 'mu_b': None, 'mu_win': win,
+           'mu_error': None, 'mu_games': [], 'mu_series': None,
+           'mu_window_label': None, 'mu_older': 0, 'mu_stats': None,
+           # The first season we hold games for, which is NOT the window start —
+           # the empty state has to name the real limit of the data.
+           'mu_earliest': _matchup_earliest_season(cursor)}
+
+    if not a and not b:
+        return ctx
+    # A half-filled form is the normal state between the two picks, not an
+    # error — say nothing and let them finish.
+    if not a or not b:
+        ctx['mu_a'], ctx['mu_b'] = (a or None), (b or None)
+        return ctx
+    if a == b:
+        ctx['mu_error'] = "Pick two different teams."
+        return ctx
+    for name in (a, b):
+        if name not in names:
+            ctx['mu_error'] = f"No team called “{name}”. Try the search above."
+            return ctx
+
+    earliest = ctx['mu_earliest']
+    min_season = None
+    if win != 'all':
+        min_season = season - MATCHUP_WINDOW_YEARS + 1
+        # Never advertise a window wider than the data behind it.
+        ctx['mu_window_label'] = f"{max(min_season, earliest)}–{season}"
+    else:
+        ctx['mu_window_label'] = f"{earliest}–{season}"
+
+    games = _matchup_meetings(cursor, a, b, min_season)
+    if min_season is not None:
+        older = _matchup_meetings(cursor, a, b)
+        ctx['mu_older'] = len(older) - len(games)
+
+    ctx.update(mu_a=a, mu_b=b, mu_games=games,
+               mu_series=_rivalry_series(games, a, b),
+               mu_stats=_matchup_stats(games, a))
+
+    cursor.execute('SELECT name, logo_dark, color FROM teams WHERE name IN (%s, %s)', (a, b))
+    info = {r[0]: {'logo': r[1], 'color': r[2]} for r in cursor.fetchall()}
+    ctx['mu_a_logo'] = info.get(a, {}).get('logo')
+    ctx['mu_b_logo'] = info.get(b, {}).get('logo')
+    ctx['mu_a_color'] = info.get(a, {}).get('color') or '#1c9cf0'
+    ctx['mu_b_color'] = info.get(b, {}).get('color') or '#9aa0a6'
+    return ctx
+
+
+def _matchup_earliest_season(cursor):
+    cursor.execute('SELECT MIN(season) FROM games WHERE completed = 1')
+    row = cursor.fetchone()
+    return row[0] if row and row[0] else CURRENT_SEASON
+
+
+def _matchup_stats(games, team_a):
+    """Summary figures for the meetings in view, from A's perspective."""
+    if not games:
+        return None
+    margins = [g['margin'] for g in games]
+    return {
+        'avg_margin': round(sum(margins) / len(margins), 1),
+        'avg_total': round(sum(g['home_pts'] + g['away_pts'] for g in games) / len(games), 1),
+        'biggest': max(games, key=lambda g: g['margin']),
+        'closest': min(games, key=lambda g: g['margin']),
+        # games is newest-first, so the first row is the most recent meeting.
+        'last': games[0],
+        'a_home_wins': sum(1 for g in games if g['a_home'] and g['winner'] == team_a),
+        'a_away_wins': sum(1 for g in games if not g['a_home'] and g['winner'] == team_a),
+    }
+
+
 @app.route('/explorer')
 @cache.cached(timeout=21600, query_string=True)
 def explorer():
@@ -9470,8 +9631,18 @@ def explorer():
     with the page so axis switching is instant; season/scope/position reload."""
     season = requested_season()
     scope = request.args.get('scope', 'team')
-    if scope not in ('team', 'player'):
+    if scope not in ('team', 'player', 'matchup'):
         scope = 'team'
+
+    if scope == 'matchup':
+        conn = get_db()
+        try:
+            ctx = _explorer_matchup(conn.cursor(), season)
+        finally:
+            release_db(conn)
+        return render_template('explorer.html', scope='matchup', season=season,
+                               available_seasons=get_available_seasons(),
+                               window_years=MATCHUP_WINDOW_YEARS, **ctx)
 
     if scope == 'player':
         group = request.args.get('pos', 'QB').upper()

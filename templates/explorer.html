@@ -1,16 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Stat Explorer · {{ season }} · Saturday Savant{% endblock %}
-{% block og_title %}Stat Explorer · Saturday Savant{% endblock %}
-{% block og_description %}Plot any two stats against each other — teams as logos, players as headshots, with trend lines and percentile radars. Savant ratings, SP+, EPA, and more, 2016–{{ season }}.{% endblock %}
+{# Matchup mode is a different page in everything but the route, so it carries
+   its own title and description rather than inheriting the scatter plot's —
+   and once a pair is picked, both name the teams so a shared link reads.
+   The conditional lives INSIDE each block: Jinja resolves blocks at compile
+   time, so defining one twice in two branches is an error, not an override. #}
+{% block title %}{% if scope == 'matchup' %}{% if mu_a and mu_b %}{{ mu_a }} vs {{ mu_b }} · Head-to-Head{% else %}Head-to-Head{% endif %}{% else %}Stat Explorer · {{ season }}{% endif %} · Saturday Savant{% endblock %}
+{% block og_title %}{% if scope == 'matchup' %}{% if mu_a and mu_b %}{{ mu_a }} vs {{ mu_b }} — the series{% else %}Head-to-Head{% endif %}{% else %}Stat Explorer{% endif %} · Saturday Savant{% endblock %}
+{% block og_description %}{% if scope == 'matchup' %}{% if mu_a and mu_b %}Every {{ mu_a }}–{{ mu_b }} meeting since {{ mu_earliest }}: the series record, the current streak, and each game's score in order.{% else %}Pick any two college football teams and get the head-to-head series — who leads, the current streak, and every meeting in order, {{ mu_earliest }} onward.{% endif %}{% else %}Plot any two stats against each other — teams as logos, players as headshots, with trend lines and percentile radars. Savant ratings, SP+, EPA, and more, 2016–{{ season }}.{% endif %}{% endblock %}
 {% block content %}
 <div class="page-wrapper" style="padding-top:32px">
 
 <div class="xp-head">
     <div>
+        {% if scope == 'matchup' %}
+        <h1 class="xp-title">Head-to-Head</h1>
+        <p class="xp-sub">Pick two teams and get the series: who leads, the current streak, and every meeting in order. No counting.</p>
+        {% else %}
         <h1 class="xp-title">{{ season }} {{ 'Player' if scope == 'player' else 'Team' }} Landscape</h1>
         <p class="xp-sub">Pick any two stats — {% if scope == 'player' %}the national leaders at a position plot as their headshot{% else %}every FBS team plots as its logo{% endif %}. Axes always point the good way: up and right is better, whatever the stat.</p>
+        {% endif %}
     </div>
-    {% if available_seasons and available_seasons|length > 1 %}
+    {# A series spans seasons, so the season picker has nothing to act on in
+       matchup mode — the window control below is the time control there. #}
+    {% if scope != 'matchup' and available_seasons and available_seasons|length > 1 %}
     <select class="lb-select season-select" id="xp-season" aria-label="Season">
         {% for s in available_seasons %}
         <option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>
@@ -23,6 +35,7 @@
 <div class="lb-mode-toggle" style="margin-bottom: var(--s4)">
     <a class="lb-mode-btn {{ 'active' if scope == 'team' }}" href="/explorer?scope=team&season={{ season }}">Teams</a>
     <a class="lb-mode-btn {{ 'active' if scope == 'player' }}" href="/explorer?scope=player&season={{ season }}">Players</a>
+    <a class="lb-mode-btn {{ 'active' if scope == 'matchup' }}" href="/explorer?scope=matchup">Matchups</a>
 </div>
 
 {% if scope == 'team' %}
@@ -74,7 +87,7 @@
     </div>
 </div>
 
-{% else %}
+{% elif scope == 'player' %}
 <!-- ===================== PLAYER SCOPE ===================== -->
 <!-- Position applies to both views (defines the peer group) -->
 <div class="xp-controls" style="margin-bottom: var(--s3)">
@@ -179,13 +192,160 @@
         </div>
     </div>
 </div>
+
+{% elif scope == 'matchup' %}
+<!-- ===================== HEAD-TO-HEAD ===================== -->
+{# Server-rendered off ?a=/?b=/?win=, not fetched: a matchup is the kind of
+   thing you send to someone, so it needs to live at a URL. It also means the
+   result survives a reload and the back button works. #}
+<div class="mu-pickers">
+    {% for slot, picked, logo in [('a', mu_a, mu_a_logo|default(none)), ('b', mu_b, mu_b_logo|default(none))] %}
+    <div class="mu-pick" data-slot="{{ slot }}">
+        <label class="mu-pick-label" for="mu-input-{{ slot }}">{{ 'First team' if slot == 'a' else 'Second team' }}</label>
+        {% if picked %}
+        <div class="mu-slot">
+            {% if logo %}<img src="{{ logo }}" alt="" class="mu-slot-logo">{% endif %}
+            <span class="mu-slot-name">{{ picked }}</span>
+            <button type="button" class="mu-slot-x" data-clear="{{ slot }}"
+                    aria-label="Clear {{ picked }}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+            </button>
+        </div>
+        {% else %}
+        <div class="cmp-search mu-searchbox">
+            <span class="cmp-search-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+            </span>
+            <input type="text" class="cmp-search-input mu-input" id="mu-input-{{ slot }}"
+                   data-slot="{{ slot }}" placeholder="Search a team…" autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-autocomplete="list"
+                   aria-controls="mu-drop-{{ slot }}">
+            <div class="cmp-dropdown mu-drop" id="mu-drop-{{ slot }}" data-slot="{{ slot }}" role="listbox"></div>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+{% if mu_error %}
+<p class="mu-error" role="alert">{{ mu_error }}</p>
+{% endif %}
+
+{% if mu_series and mu_games %}
+{% set s = mu_series %}
+{% set pair = forecast_pair(mu_a_color | team_hex('#1c9cf0'), mu_b_color | team_hex('#9aa0a6')) %}
+<div class="mu-result">
+
+    <h2 class="mu-verdict">
+        {% if s.leader %}<strong>{{ s.leader }}</strong> leads
+            {{ s.a_wins if s.leader == mu_a else s.b_wins }}–{{ s.b_wins if s.leader == mu_a else s.a_wins }}{% if s.ties %}–{{ s.ties }}{% endif %}
+        {% else %}Series tied {{ s.a_wins }}–{{ s.b_wins }}{% if s.ties %}–{{ s.ties }}{% endif %}{% endif %}
+        <span class="mu-verdict-window">{{ mu_window_label }}</span>
+    </h2>
+
+    <div class="mu-bar-row">
+        <span class="mu-bar-side">
+            <span class="mu-bar-team">{{ mu_a }}</span>
+            <span class="mu-bar-wins">{{ s.a_wins }}</span>
+        </span>
+        <span class="fc-bar mu-bar" role="img"
+              aria-label="{{ mu_a }} {{ s.a_wins }} wins, {{ mu_b }} {{ s.b_wins }} wins in {{ s.meetings }} meetings">
+            <span class="fc-bar-fill" style="background:linear-gradient(90deg,
+                {{ pair[0] }} 0%, {{ pair[0] }} calc({{ s.a_share }}% - 1px),
+                transparent calc({{ s.a_share }}% - 1px), transparent calc({{ s.a_share }}% + 1px),
+                {{ pair[1] }} calc({{ s.a_share }}% + 1px), {{ pair[1] }} 100%)"></span>
+        </span>
+        <span class="mu-bar-side mu-bar-side-b">
+            <span class="mu-bar-wins">{{ s.b_wins }}</span>
+            <span class="mu-bar-team">{{ mu_b }}</span>
+        </span>
+    </div>
+
+    <div class="mu-controls">
+        <div class="mu-window" role="group" aria-label="Time window">
+            <a class="mu-win-btn {{ 'active' if mu_win != 'all' }}"
+               href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win={{ window_years }}">Last {{ window_years }} years</a>
+            <a class="mu-win-btn {{ 'active' if mu_win == 'all' }}"
+               href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win=all">All{% if mu_older %} (+{{ mu_older }}){% endif %}</a>
+        </div>
+        <a class="mu-full" href="/rivalry/{{ mu_a|urlencode }}/{{ mu_b|urlencode }}">Full series page &rarr;</a>
+    </div>
+
+    {% if mu_stats %}
+    <ul class="mu-stats" role="list">
+        <li class="mu-stat"><span class="mu-stat-k">Meetings</span><span class="mu-stat-v">{{ s.meetings }}</span></li>
+        <li class="mu-stat"><span class="mu-stat-k">Current streak</span>
+            <span class="mu-stat-v">{% if s.streak_team %}{{ s.streak_team }} &times;{{ s.streak }}{% else %}—{% endif %}</span></li>
+        <li class="mu-stat"><span class="mu-stat-k">Avg margin</span><span class="mu-stat-v">{{ mu_stats.avg_margin }}</span></li>
+        <li class="mu-stat"><span class="mu-stat-k">Avg combined</span><span class="mu-stat-v">{{ mu_stats.avg_total }}</span></li>
+        <li class="mu-stat"><span class="mu-stat-k">Widest</span>
+            <span class="mu-stat-v">{{ mu_stats.biggest.winner }} by {{ mu_stats.biggest.margin }}</span></li>
+        <li class="mu-stat"><span class="mu-stat-k">Closest</span>
+            <span class="mu-stat-v">{{ mu_stats.closest.winner or 'Tie' }} by {{ mu_stats.closest.margin }}</span></li>
+    </ul>
+    {% endif %}
+
+    {# The score column is "A - B" with no header, so the note has to say whose
+       number comes first — the W/L chip alone leaves it to inference. #}
+    <h3 class="mu-list-head">Every meeting<span class="mu-list-note">{{ mu_a }} – {{ mu_b }} · oldest first</span></h3>
+    <ol class="mu-games" role="list">
+        {# Reversed: the query runs newest-first because the streak walk needs
+           it that way, but the list was asked for in chronological order. #}
+        {% for g in mu_games|reverse %}
+        <li>
+            <a class="mu-game" href="/game/{{ g.id }}">
+                <span class="mu-when">
+                    <span class="mu-season">{{ g.season }}</span>
+                    <span class="mu-week">{{ 'Postseason' if g.season_type and 'POSTSEASON' in g.season_type|upper else 'Week %s'|format(g.week) if g.week else '' }}</span>
+                </span>
+                <span class="mu-score">
+                    <span class="mu-sc {{ 'is-won' if g.winner == mu_a }}">{{ g.a_pts }}</span>
+                    <span class="mu-dash">–</span>
+                    <span class="mu-sc {{ 'is-won' if g.winner == mu_b }}">{{ g.b_pts }}</span>
+                </span>
+                {# Text, not colour alone: the chip says W or L from A's side. #}
+                <span class="mu-res {{ 'mu-res-w' if g.winner == mu_a else ('mu-res-l' if g.winner == mu_b else 'mu-res-t') }}">
+                    {{ 'W' if g.winner == mu_a else ('L' if g.winner == mu_b else 'T') }}
+                </span>
+                <span class="mu-venue">{{ 'vs' if g.a_home else 'at' }} {{ mu_b }}</span>
+                <span class="mu-date">{{ g.date }}</span>
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+</div>
+
+{% elif mu_a and mu_b and not mu_error %}
+<div class="mu-empty">
+    <p class="mu-empty-lede"><strong>{{ mu_a }}</strong> and <strong>{{ mu_b }}</strong> have not met
+    {% if mu_win != 'all' %}in the last {{ window_years }} years{% else %}in the seasons we hold{% endif %}.</p>
+    {% if mu_win != 'all' and mu_older %}
+    <p class="mu-empty-sub">There {{ 'is 1 earlier meeting' if mu_older == 1 else 'are %d earlier meetings'|format(mu_older) }} on record.
+        <a href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win=all">Show all</a></p>
+    {% else %}
+    <p class="mu-empty-sub">Game coverage starts in {{ mu_earliest }}, so a series that ended before then won't appear here.</p>
+    {% endif %}
+</div>
+
+{% elif not mu_error %}
+<div class="mu-empty">
+    <p class="mu-empty-lede">Pick two teams to see the series.</p>
+    <p class="mu-empty-sub">You get the head-to-head record over the last {{ window_years }} years, the current
+    streak, and every meeting listed in order — scores, venue and a link to each game.</p>
+</div>
+{% endif %}
+
 {% endif %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
+{# Matchup mode plots nothing, so it has no business paying for Plotly. #}
+{% if scope != 'matchup' %}
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
+{% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var SEASON = {{ season }};
@@ -644,4 +804,139 @@ document.addEventListener('DOMContentLoaded', function () {
     function whenPlotly(fn) { if (typeof Plotly==='undefined') { setTimeout(function(){whenPlotly(fn);}, 60); return; } fn(); }
 });
 </script>
+
+{% if scope == 'matchup' %}
+<script>
+/* ── Head-to-head team pickers ────────────────────────────────────────────
+   The whole team list ships with the page (about 250 names), so filtering is
+   local and instant — no request per keystroke, and no "searching…" state to
+   design around. Choosing a team navigates, because the result lives at a URL.
+   ── */
+document.addEventListener('DOMContentLoaded', function () {
+    var TEAMS = {{ mu_teams | tojson }};
+    var PICKED = { a: {{ (mu_a or '') | tojson }}, b: {{ (mu_b or '') | tojson }} };
+    var WIN = {{ mu_win | tojson }};
+
+    function go(next) {
+        var qs = new URLSearchParams();
+        qs.set('scope', 'matchup');
+        if (next.a) qs.set('a', next.a);
+        if (next.b) qs.set('b', next.b);
+        if (WIN) qs.set('win', WIN);
+        location.href = '/explorer?' + qs.toString();
+    }
+
+    document.querySelectorAll('[data-clear]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var slot = btn.getAttribute('data-clear');
+            var next = { a: PICKED.a, b: PICKED.b };
+            next[slot] = '';
+            go(next);
+        });
+    });
+
+    function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+        });
+    }
+
+    document.querySelectorAll('.mu-input').forEach(function (input) {
+        var slot = input.getAttribute('data-slot');
+        var drop = document.querySelector('.mu-drop[data-slot="' + slot + '"]');
+        var other = slot === 'a' ? PICKED.b : PICKED.a;
+        var active = -1;
+
+        function close() {
+            drop.classList.remove('is-open');
+            input.setAttribute('aria-expanded', 'false');
+            active = -1;
+        }
+
+        function choose(name) {
+            var next = { a: PICKED.a, b: PICKED.b };
+            next[slot] = name;
+            go(next);
+        }
+
+        function render(list) {
+            if (!list.length) {
+                drop.innerHTML = '<div class="cmp-dd-note">No team matches that.</div>';
+                drop.classList.add('is-open');
+                input.setAttribute('aria-expanded', 'true');
+                return;
+            }
+            drop.innerHTML = list.map(function (t, i) {
+                return '<button type="button" class="cmp-dd-item" role="option" id="mu-opt-' + slot + '-' + i + '"'
+                    + ' aria-selected="false" data-name="' + esc(t.name) + '">'
+                    + (t.logo ? '<img src="' + esc(t.logo) + '" class="cmp-dd-logo" alt="">'
+                              : '<span class="cmp-dd-logo"></span>')
+                    + '<span class="cmp-dd-text"><span class="cmp-dd-name">' + esc(t.name) + '</span>'
+                    + '<span class="cmp-dd-sub">' + esc(t.conference) + '</span></span></button>';
+            }).join('');
+            drop.classList.add('is-open');
+            input.setAttribute('aria-expanded', 'true');
+            active = -1;
+            drop.querySelectorAll('[data-name]').forEach(function (el) {
+                el.addEventListener('click', function () { choose(el.getAttribute('data-name')); });
+            });
+        }
+
+        function match(q) {
+            q = q.trim().toLowerCase();
+            if (!q) return [];
+            var starts = [], contains = [];
+            for (var i = 0; i < TEAMS.length; i++) {
+                var t = TEAMS[i];
+                if (t.name === other) continue;          // can't play itself
+                var n = t.name.toLowerCase();
+                var at = n.indexOf(q);
+                if (at === 0) starts.push(t);
+                else if (at > 0) contains.push(t);
+            }
+            /* Prefix matches first: typing "mia" should lead with Miami, not
+               with a team that merely contains the letters. */
+            return starts.concat(contains).slice(0, 8);
+        }
+
+        function highlight(next) {
+            var items = drop.querySelectorAll('.cmp-dd-item');
+            if (!items.length) return;
+            if (active >= 0) {
+                items[active].classList.remove('is-active');
+                items[active].setAttribute('aria-selected', 'false');
+            }
+            active = (next + items.length) % items.length;
+            items[active].classList.add('is-active');
+            items[active].setAttribute('aria-selected', 'true');
+            items[active].scrollIntoView({ block: 'nearest' });
+            input.setAttribute('aria-activedescendant', items[active].id);
+        }
+
+        input.addEventListener('input', function () { render(match(this.value)); });
+
+        input.addEventListener('keydown', function (e) {
+            var items = drop.querySelectorAll('.cmp-dd-item');
+            if (e.key === 'ArrowDown') { e.preventDefault(); highlight(active + 1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(active - 1); }
+            else if (e.key === 'Enter') {
+                /* Enter with nothing highlighted takes the first match, which is
+                   what someone who typed a full team name expects. */
+                if (items.length) { e.preventDefault(); (items[active >= 0 ? active : 0]).click(); }
+            } else if (e.key === 'Escape') { close(); }
+        });
+
+        input.addEventListener('focus', function () { if (this.value) render(match(this.value)); });
+        document.addEventListener('click', function (e) {
+            if (!input.contains(e.target) && !drop.contains(e.target)) close();
+        });
+    });
+
+    /* Land on the empty picker so a keyboard user can keep typing after the
+       first pick, instead of tabbing back through the page. */
+    var firstEmpty = document.querySelector('.mu-input');
+    if (firstEmpty && (PICKED.a || PICKED.b)) firstEmpty.focus();
+});
+</script>
+{% endif %}
 {% endblock %}
