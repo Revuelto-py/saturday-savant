@@ -8106,28 +8106,39 @@ def _cmp_usage_row(cursor, label, slots, column, pct=True):
             values.append({'raw': v, 'display': f'{shown:.1f}{"%" if pct else ""}', 'percentile': None})
     return {'label': label, 'higher_better': True, 'values': values}
 
-def _cmp_assign_colors(row):
-    """Best value (accounting for higher_better) -> blue, worst -> red,
-    anything in between (3-way compare) -> gray. Overrides the normal
-    1-24/25-44/45-59/60-79/80-99 percentile color bands per the reference design."""
+def _cmp_finish_row(row):
+    """Mark the leader and give every cell a relative bar length.
+
+    Red/blue now belong to the percentile scale (poor -> great), which the
+    player and team pages already speak, so the Stats view can no longer use
+    those two hues to mean best/worst without a number meaning two things on
+    one screen. The leader is marked by weight and an explicit flag instead.
+
+    `share` is the cell's bar length in the Stats view, normalised across the
+    entities actually being compared rather than against the FBS field — the
+    Percentiles view is the one that carries the field. It floors at 34 so the
+    trailing bar is still a bar; the printed number is what carries the value."""
     raws = [v['raw'] for v in row['values'] if v['raw'] is not None]
-    if len(raws) < 2:
+    if not raws:
         for v in row['values']:
-            v['color'] = 'neutral'
+            v['lead'] = False
+            v['share'] = None
         return row
-    best  = max(raws) if row['higher_better'] else min(raws)
-    worst = min(raws) if row['higher_better'] else max(raws)
+    best = max(raws) if row['higher_better'] else min(raws)
+    lo, hi = min(raws), max(raws)
     for v in row['values']:
         if v['raw'] is None:
-            v['color'] = 'none'
-        elif best == worst:
-            v['color'] = 'neutral'
-        elif v['raw'] == best:
-            v['color'] = 'blue'
-        elif v['raw'] == worst:
-            v['color'] = 'red'
+            v['lead'] = False
+            v['share'] = None
+            continue
+        v['lead'] = len(raws) > 1 and v['raw'] == best and lo != hi
+        if lo == hi:
+            t = 1.0
         else:
-            v['color'] = 'gray'
+            t = (v['raw'] - lo) / (hi - lo)
+            if not row['higher_better']:
+                t = 1.0 - t
+        v['share'] = round(34 + 66 * t)
     return row
 
 def _build_compare_group_rows(cursor, group_name, slots):
@@ -8139,6 +8150,15 @@ def _build_compare_group_rows(cursor, group_name, slots):
     peer = COMPARE_PEER_POSITIONS[group_name]
     seasons = {s['season'] for s in slots}
     rows = []
+
+    # Rows are grouped under a heading the way the reference card groups its
+    # metrics — a flat list of fourteen bars reads as one undifferentiated
+    # block. `section` travels on the row; the template starts a new heading
+    # whenever it changes, so order here is the order on the page.
+    def add(section, *built):
+        for r in built:
+            r['section'] = section
+            rows.append(r)
 
     def full_pools(cat, positions):
         return {yr: _fetch_stats_pool(cursor, cat, positions, yr) for yr in seasons}
@@ -8158,52 +8178,60 @@ def _build_compare_group_rows(cursor, group_name, slots):
         sp = full_pools('passing', peer)
         pass_stat, pass_min = _qual_threshold('QB', 'passing')
         sp_q = qual_pools(sp, sp, pass_stat, pass_min)
-        rows.append(_cmp_row('Comp %',     slots, sp, sp_q, 'PCT', games_by_slot, suffix='%', scale=100))
-        rows.append(_cmp_row('Pass Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True))
-        rows.append(_cmp_row('Pass TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
-        rows.append(_cmp_row('INT/G',      slots, sp, sp_q, 'INT', games_by_slot, per_game=True, higher_better=False))
-        rows.append(_cmp_row('Yds/Att',    slots, sp, sp_q, 'YPA', games_by_slot))
+        add('Passing',
+            _cmp_row('Comp %',     slots, sp, sp_q, 'PCT', games_by_slot, suffix='%', scale=100),
+            _cmp_row('Pass Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True),
+            _cmp_row('Pass TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True),
+            _cmp_row('INT/G',      slots, sp, sp_q, 'INT', games_by_slot, per_game=True, higher_better=False),
+            _cmp_row('Yds/Att',    slots, sp, sp_q, 'YPA', games_by_slot))
 
         rush_sp = full_pools('rushing', ['QB'])
         rush_stat, rush_min = _qual_threshold('QB', 'rushing')
         rush_sp_q = qual_pools(rush_sp, rush_sp, rush_stat, rush_min)
-        rows.append(_cmp_row('Rush Yds/G', slots, rush_sp, rush_sp_q, 'YDS', games_by_slot, per_game=True))
+        add('Rushing',
+            _cmp_row('Rush Yds/G', slots, rush_sp, rush_sp_q, 'YDS', games_by_slot, per_game=True))
 
         pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold('QB', 'ppa')
         pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
-        rows.append(_cmp_row('EPA / Pass Play', slots, pp, pp_q, 'avg_ppa_pass', games_by_slot, decimals=3))
+        add('Efficiency',
+            _cmp_row('EPA / Pass Play', slots, pp, pp_q, 'avg_ppa_pass', games_by_slot, decimals=3))
 
     elif group_name == 'RB':
         sp = full_pools('rushing', peer)
         rush_stat, rush_min = _qual_threshold('RB', 'rushing')
         sp_q = qual_pools(sp, sp, rush_stat, rush_min)
-        rows.append(_cmp_row('Rush Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True))
-        rows.append(_cmp_row('Yds/Carry',  slots, sp, sp_q, 'YPC', games_by_slot))
-        rows.append(_cmp_row('Rush TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
+        add('Rushing',
+            _cmp_row('Rush Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True),
+            _cmp_row('Yds/Carry',  slots, sp, sp_q, 'YPC', games_by_slot),
+            _cmp_row('Rush TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
 
         pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold('RB', 'ppa')
         pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
-        rows.append(_cmp_row('EPA / Rush', slots, pp, pp_q, 'avg_ppa_rush', games_by_slot, decimals=3))
+        add('Efficiency',
+            _cmp_row('EPA / Rush', slots, pp, pp_q, 'avg_ppa_rush', games_by_slot, decimals=3),
+            _cmp_team_proxy_row(cursor, 'Rush Success Rate (Team)', slots,
+                                'off_rushing_success_rate', pct=True))
 
-        rows.append(_cmp_team_proxy_row(cursor, 'Rush Success Rate (Team)', slots,
-                                         'off_rushing_success_rate', pct=True))
-        rows.append(_cmp_usage_row(cursor, 'Rush Usage', slots, 'rush', pct=True))
+        add('Usage',
+            _cmp_usage_row(cursor, 'Rush Usage', slots, 'rush', pct=True))
 
     elif group_name in ('WR', 'TE'):
         sp = full_pools('receiving', peer)
         rec_stat, rec_min = _qual_threshold(group_name, 'receiving')
         sp_q = qual_pools(sp, sp, rec_stat, rec_min)
-        rows.append(_cmp_row('Rec/G',     slots, sp, sp_q, 'REC', games_by_slot, per_game=True))
-        rows.append(_cmp_row('Rec Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True))
-        rows.append(_cmp_row('Rec TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
-        rows.append(_cmp_row('Yds/Rec',   slots, sp, sp_q, 'YPR', games_by_slot))
+        add('Receiving',
+            _cmp_row('Rec/G',     slots, sp, sp_q, 'REC', games_by_slot, per_game=True),
+            _cmp_row('Rec Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True),
+            _cmp_row('Rec TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True),
+            _cmp_row('Yds/Rec',   slots, sp, sp_q, 'YPR', games_by_slot))
 
         pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold(group_name, 'ppa')
         pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
-        rows.append(_cmp_row('EPA / Play', slots, pp, pp_q, 'avg_ppa_all', games_by_slot, decimals=3))
+        add('Efficiency',
+            _cmp_row('EPA / Play', slots, pp, pp_q, 'avg_ppa_all', games_by_slot, decimals=3))
 
     elif group_name in ('DL', 'LB'):
         sp_wide = full_pools('defensive', COMPARE_WIDE_DEF_POSITIONS)
@@ -8211,10 +8239,11 @@ def _build_compare_group_rows(cursor, group_name, slots):
         def_stat, def_min = _qual_threshold(group_name, 'defensive')
         sp_wide_q = qual_pools(sp_wide, sp_wide, def_stat, def_min)
         sp_narrow_q = qual_pools(sp_narrow, sp_narrow, def_stat, def_min)
-        rows.append(_cmp_row('Tackles/G', slots, sp_wide, sp_wide_q, 'TOT',   games_by_slot, per_game=True))
-        rows.append(_cmp_row('Sacks/G',   slots, sp_wide, sp_wide_q, 'SACKS', games_by_slot, per_game=True))
-        rows.append(_cmp_row('TFL/G',     slots, sp_narrow, sp_narrow_q, 'TFL', games_by_slot, per_game=True))
-        rows.append(_cmp_row('PBU/G',     slots, sp_narrow, sp_narrow_q, 'PD',  games_by_slot, per_game=True))
+        add('Defense',
+            _cmp_row('Tackles/G', slots, sp_wide, sp_wide_q, 'TOT',   games_by_slot, per_game=True),
+            _cmp_row('Sacks/G',   slots, sp_wide, sp_wide_q, 'SACKS', games_by_slot, per_game=True),
+            _cmp_row('TFL/G',     slots, sp_narrow, sp_narrow_q, 'TFL', games_by_slot, per_game=True),
+            _cmp_row('PBU/G',     slots, sp_narrow, sp_narrow_q, 'PD',  games_by_slot, per_game=True))
         # No EPA/Play row here — player_ppa only covers offensive skill positions
         # (QB/RB/FB/TE/WR) in this dataset, so it would always be empty for DL/LB.
 
@@ -8222,25 +8251,44 @@ def _build_compare_group_rows(cursor, group_name, slots):
         sp = full_pools('defensive', peer)
         def_stat, def_min = _qual_threshold('DB', 'defensive')
         sp_q = qual_pools(sp, sp, def_stat, def_min)
-        rows.append(_cmp_row('Tackles/G', slots, sp, sp_q, 'TOT',   games_by_slot, per_game=True))
-        rows.append(_cmp_row('Sacks/G',   slots, sp, sp_q, 'SACKS', games_by_slot, per_game=True))
-        rows.append(_cmp_row('TFL/G',     slots, sp, sp_q, 'TFL',   games_by_slot, per_game=True))
-        rows.append(_cmp_row('PBU/G',     slots, sp, sp_q, 'PD',    games_by_slot, per_game=True))
+        add('Defense',
+            _cmp_row('Tackles/G', slots, sp, sp_q, 'TOT',   games_by_slot, per_game=True),
+            _cmp_row('Sacks/G',   slots, sp, sp_q, 'SACKS', games_by_slot, per_game=True),
+            _cmp_row('TFL/G',     slots, sp, sp_q, 'TFL',   games_by_slot, per_game=True),
+            _cmp_row('PBU/G',     slots, sp, sp_q, 'PD',    games_by_slot, per_game=True))
         # No EPA/Play row — player_ppa has no DB rows in this dataset either.
 
     for row in rows:
-        _cmp_assign_colors(row)
+        _cmp_finish_row(row)
     return rows
 
 COMPARE_TEAM_STAT_DEFS = [
-    ('Off. EPA / Play',    'off_ppa',                  True,  3, ''),
-    ('Off. Success Rate',  'off_success_rate',         True,  1, '%'),
-    ('Off. Explosiveness', 'off_explosiveness',        True,  2, ''),
-    ('Rush Success Rate',  'off_rushing_success_rate', True,  1, '%'),
-    ('Pass Success Rate',  'off_passing_success_rate', True,  1, '%'),
-    ('Def. EPA / Play',    'def_ppa',                  False, 3, ''),
-    ('Def. Success Rate',  'def_success_rate',         False, 1, '%'),
+    ('Offense', 'Off. EPA / Play',    'off_ppa',                  True,  3, ''),
+    ('Offense', 'Off. Success Rate',  'off_success_rate',         True,  1, '%'),
+    ('Offense', 'Off. Explosiveness', 'off_explosiveness',        True,  2, ''),
+    ('Offense', 'Rush Success Rate',  'off_rushing_success_rate', True,  1, '%'),
+    ('Offense', 'Pass Success Rate',  'off_passing_success_rate', True,  1, '%'),
+    ('Defense', 'Def. EPA / Play',    'def_ppa',                  False, 3, ''),
+    ('Defense', 'Def. Success Rate',  'def_success_rate',         False, 1, '%'),
 ]
+
+
+def _pool_pct(values, my_val, higher_better=True):
+    """Percentile of `my_val` inside `values`, mid-ranking ties and clamped to
+    1-99 — the same arithmetic _rank_pct applies to a player pool, so a
+    percentile printed on the team side of this page means what it means on the
+    player side. Teams have no qualification bar: every team that played the
+    season is in its own season's pool."""
+    vals = [v for v in values if v is not None]
+    if my_val is None or not vals:
+        return None
+    n = len(vals)
+    if higher_better:
+        below = sum(1 for v in vals if v < my_val)
+    else:
+        below = sum(1 for v in vals if v > my_val)
+    equal = sum(1 for v in vals if v == my_val)
+    return max(1, min(99, round((below + 0.5 * equal) / n * 100)))
 
 def _build_compare_team_rows(cursor, slots):
     """slots: ordered list of {'name','season'} — each column reads its own
@@ -8263,26 +8311,55 @@ def _build_compare_team_rows(cursor, slots):
             svr_by_key[(team, yr)] = {'net': r[0], 'net_rk': r[1], 'off': r[2], 'off_rk': r[3],
                                       'def': r[4], 'def_rk': r[5]}
 
+    # Season-wide pools so a team number carries its standing in the field, the
+    # way every player number on this page already does. Three small queries per
+    # distinct season (~140 rows each), and the route is cached for six hours.
+    ts_pool, svr_pool, sp_pool = {}, {}, {}
+    for yr in {s['season'] for s in slots}:
+        cursor.execute('SELECT * FROM team_stats WHERE season=%s', (yr,))
+        cols = [d[0] for d in cursor.description]
+        fetched = cursor.fetchall()
+        ts_pool[yr] = {c: [r[i] for r in fetched] for i, c in enumerate(cols)}
+        cursor.execute('SELECT net_rating, off_rating, def_rating FROM savant_ratings WHERE season=%s', (yr,))
+        fetched = cursor.fetchall()
+        svr_pool[yr] = {'net': [r[0] for r in fetched],
+                        'off': [r[1] for r in fetched],
+                        'def': [r[2] for r in fetched]}
+        cursor.execute('SELECT rating FROM sp_ratings WHERE season=%s', (yr,))
+        sp_pool[yr] = [r[0] for r in cursor.fetchall()]
+
     def _key(s):
         return (s['name'], s['season'])
 
-    def _svr_row(label, key, rk_key, higher_better, signed=False):
+    def _svr_row(section, label, key, rk_key, higher_better, signed=False):
         values = []
         for s in slots:
             sv = svr_by_key.get(_key(s))
             if sv and sv.get(key) is not None:
                 num = f'{sv[key]:+.1f}' if signed else f'{sv[key]:.1f}'
-                values.append({'raw': sv[key], 'display': f'{num} (#{sv[rk_key]})', 'percentile': None})
+                values.append({'raw': sv[key], 'display': f'{num} (#{sv[rk_key]})',
+                               'percentile': _pool_pct(svr_pool[s['season']][key], sv[key], higher_better)})
             else:
                 values.append({'raw': None, 'display': '—', 'percentile': None})
-        return {'label': label, 'higher_better': higher_better, 'values': values}
+        return {'section': section, 'label': label, 'higher_better': higher_better, 'values': values}
 
     rows = [
-        _svr_row('Net Rating',        'net', 'net_rk', True, signed=True),
-        _svr_row('Offensive Rating',  'off', 'off_rk', True),
-        _svr_row('Defensive Rating',  'def', 'def_rk', False),
+        _svr_row('Ratings', 'Net Rating',       'net', 'net_rk', True, signed=True),
+        _svr_row('Ratings', 'Offensive Rating', 'off', 'off_rk', True),
+        _svr_row('Ratings', 'Defensive Rating', 'def', 'def_rk', False),
     ]
-    for label, col, higher_better, decimals, suffix in COMPARE_TEAM_STAT_DEFS:
+
+    sp_values = []
+    for s in slots:
+        sp = sp_by_key.get(_key(s))
+        if sp and sp.get('rating') is not None:
+            sp_values.append({'raw': sp['rating'], 'display': f"{sp['rating']:.1f} (#{sp['ranking']})",
+                              'percentile': _pool_pct(sp_pool[s['season']], sp['rating'], True)})
+        else:
+            sp_values.append({'raw': None, 'display': '—', 'percentile': None})
+    rows.append({'section': 'Ratings', 'label': 'SP+ Rating', 'higher_better': True, 'values': sp_values})
+
+    for section, label, col, higher_better, decimals, suffix in COMPARE_TEAM_STAT_DEFS:
         values = []
         for s in slots:
             v = ts_by_key.get(_key(s), {}).get(col)
@@ -8290,20 +8367,12 @@ def _build_compare_team_rows(cursor, slots):
                 values.append({'raw': None, 'display': '—', 'percentile': None})
             else:
                 shown = v * 100 if suffix == '%' else v
-                values.append({'raw': v, 'display': f'{shown:.{decimals}f}{suffix}', 'percentile': None})
-        rows.append({'label': label, 'higher_better': higher_better, 'values': values})
-
-    sp_values = []
-    for s in slots:
-        sp = sp_by_key.get(_key(s))
-        if sp and sp.get('rating') is not None:
-            sp_values.append({'raw': sp['rating'], 'display': f"{sp['rating']:.1f} (#{sp['ranking']})", 'percentile': None})
-        else:
-            sp_values.append({'raw': None, 'display': '—', 'percentile': None})
-    rows.append({'label': 'SP+ Rating', 'higher_better': True, 'values': sp_values})
+                values.append({'raw': v, 'display': f'{shown:.{decimals}f}{suffix}',
+                               'percentile': _pool_pct(ts_pool[s['season']][col], v, higher_better)})
+        rows.append({'section': section, 'label': label, 'higher_better': higher_better, 'values': values})
 
     for row in rows:
-        _cmp_assign_colors(row)
+        _cmp_finish_row(row)
     return rows
 
 
@@ -8469,9 +8538,18 @@ def compare():
     active_entities = [s for s in slots if s]
 
     base_params = request.args.to_dict()
+    # Switching the position tab clears the slots. A QB carried into the RB tab
+    # is not an RB, so every rushing row came back "—" and the page looked
+    # broken; the honest behaviour is an empty board to fill. Re-selecting the
+    # tab you are already on keeps what you have.
+    current_tab = 'TEAMS' if mode == 'team' else group_name
+    slot_params = ('p1', 'p2', 'p3', 't1', 't2', 't3', 'y1', 'y2', 'y3')
     tab_urls = {}
     for tab in ('QB', 'RB', 'WR', 'TE', 'DL', 'LB', 'DB', 'TEAMS'):
         params = dict(base_params)
+        if tab != current_tab:
+            for k in slot_params:
+                params.pop(k, None)
         if tab == 'TEAMS':
             params['type'] = 'team'
             params.pop('pos', None)
@@ -8480,12 +8558,24 @@ def compare():
             params['pos'] = tab
         tab_urls[tab] = '/compare?' + urlencode(params)
 
+    # Which view the card opens in. It lives in the query string rather than in
+    # localStorage so a shared link arrives showing what the sender was looking
+    # at; the toggle itself swaps it client-side without a round trip.
+    view = 'stats' if request.args.get('view') == 'stats' else 'percentiles'
+
+    # What the percentile bars are measured against, stated next to them.
+    if mode == 'team':
+        pool_note = 'Percentile vs every FBS team in the same season.'
+    else:
+        pool_note = ('Percentile vs qualified FBS '
+                     f'{group_name}s in each entity’s own season.')
+
     # An empty compare page used to be three blank search boxes and a Download
     # button with nothing to download. Offering a real pair to open — the two
     # leading passers — turns the zero state into a working example the reader
     # then edits. Reuses the memoized home-page leaders, so it costs no query.
     suggested = None
-    if not active_entities:
+    if not active_entities and mode == 'player':
         try:
             for label, _href, rows_ in get_cached_season_leaders(season):
                 if label == 'Passing Yards' and len(rows_) >= 2:
@@ -8493,16 +8583,34 @@ def compare():
                     if a[5] and b[5]:
                         suggested = {'a_name': a[0], 'a_team': a[1],
                                      'b_name': b[0], 'b_team': b[1],
-                                     'url': f'/compare?p1={a[5]}&p2={b[5]}&y1={season}&y2={season}'}
+                                     'url': f'/compare?type=player&pos=QB'
+                                            f'&p1={a[5]}&p2={b[5]}&y1={season}&y2={season}'}
                     break
         except Exception:
             suggested = None
+    elif not active_entities:
+        # Same idea on the team tab: the two best-rated teams are a comparison
+        # worth opening, and a filled board teaches the tool faster than copy.
+        conn = get_db()
+        try:
+            cur2 = conn.cursor()
+            cur2.execute('''SELECT team FROM savant_ratings WHERE season=%s AND net_rating IS NOT NULL
+                            ORDER BY net_rating DESC LIMIT 2''', (season,))
+            top = [r[0] for r in cur2.fetchall()]
+            if len(top) == 2:
+                suggested = {'a_name': top[0], 'a_team': '', 'b_name': top[1], 'b_team': '',
+                             'url': '/compare?' + urlencode({'type': 'team', 't1': top[0], 't2': top[1],
+                                                             'y1': season, 'y2': season})}
+        except Exception:
+            suggested = None
+        finally:
+            release_db(conn)
 
     return render_template('compare.html',
         mode=mode, players=players, teams=teams_out, active_entities=active_entities, rows=rows,
         season=season, available_seasons=get_available_seasons(),
         group_name=group_name, pos_filter=pos_filter, tab_urls=tab_urls,
-        suggested=suggested,
+        suggested=suggested, view=view, pool_note=pool_note,
     )
 
 

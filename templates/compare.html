@@ -8,44 +8,41 @@
 
 {% set slots = players if mode == 'player' else teams %}
 {% set n = active_entities|length %}
-{% set cols = 3 if n == 3 else 2 %}
+{% set noun = 'player' if mode == 'player' else 'team' %}
+
+{# Band colours are the site's percentile scale — the same five used on the
+   player and team pages. A number has to mean the same colour wherever it is
+   drawn, so this page reads from that scale rather than inventing one. #}
+{% macro band(p) -%}
+{% if p >= 80 %}b4{% elif p >= 60 %}b3{% elif p >= 45 %}b2{% elif p >= 25 %}b1{% else %}b0{% endif %}
+{%- endmacro %}
 
 {% macro ord(x) -%}
 {{ x }}{% if (x % 100) in [11, 12, 13] %}th{% elif (x % 10) == 1 %}st{% elif (x % 10) == 2 %}nd{% elif (x % 10) == 3 %}rd{% else %}th{% endif %}
 {%- endmacro %}
 
-<!-- HERO — matches the player/team hero gradient treatment -->
-<div class="cmp-hero">
-    <div class="page-wrapper cmp-hero-inner">
-        <h1 class="cmp-hero-title">Head-to-Head</h1>
-        <p class="cmp-hero-sub">Compare up to three {{ 'players' if mode == 'player' else 'teams' }} side by side — the leading number in every row is highlighted.</p>
-    </div>
-</div>
+<div class="page-wrapper cmp-page">
 
-<div class="page-wrapper" style="padding-top: var(--s6)">
+    <header class="cmp-masthead">
+        <h1 class="cmp-h1">Compare {{ 'teams' if mode == 'team' else 'players' }}</h1>
+        <p class="cmp-lede">Put two or three side by side. Read them by percentile against the
+            FBS field, or by the raw numbers.</p>
+    </header>
 
-    <!-- Toolbar: position / mode pills + download -->
-    <div class="cmp-toolbar" data-compare-hide>
-        <div class="cmp-pills" role="tablist" aria-label="Compare mode">
-            {% for tab in ['QB','RB','WR','TE','DL','LB','DB'] %}
-            <a href="{{ tab_urls[tab] }}" class="cmp-pill{% if mode == 'player' and group_name == tab %} active{% endif %}"
-               role="tab" aria-selected="{{ 'true' if (mode == 'player' and group_name == tab) else 'false' }}">{{ tab }}</a>
-            {% endfor %}
-            <span class="cmp-pill-sep" aria-hidden="true"></span>
-            <a href="{{ tab_urls['TEAMS'] }}" class="cmp-pill{% if mode == 'team' %} active{% endif %}"
-               role="tab" aria-selected="{{ 'true' if mode == 'team' else 'false' }}">TEAMS</a>
-        </div>
-
-        {% if active_entities and active_entities|length >= 2 %}
-        <button type="button" class="cmp-download" id="cmpDownload">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download Image
-        </button>
-        {% endif %}
-    </div>
+    <!-- Position / mode tabs. Switching a tab clears the board: a QB has no
+         rushing-back rows, so carrying him across only produced empty ones. -->
+    <nav class="cmp-tabs" aria-label="Compare by position">
+        {% for tab in ['QB','RB','WR','TE','DL','LB','DB'] %}
+        <a href="{{ tab_urls[tab] }}" class="cmp-tab{% if mode == 'player' and group_name == tab %} is-on{% endif %}"
+           {% if mode == 'player' and group_name == tab %}aria-current="page"{% endif %}>{{ tab }}</a>
+        {% endfor %}
+        <span class="cmp-tab-gap" aria-hidden="true"></span>
+        <a href="{{ tab_urls['TEAMS'] }}" class="cmp-tab cmp-tab-wide{% if mode == 'team' %} is-on{% endif %}"
+           {% if mode == 'team' %}aria-current="page"{% endif %}>Teams</a>
+    </nav>
 
     <!-- Selection slots -->
-    <div class="cmp-slots" data-compare-hide>
+    <div class="cmp-slots">
         {% for i in [0, 1, 2] %}
         {% set slot_num = i + 1 %}
         {% set entity = slots[i] %}
@@ -55,7 +52,7 @@
                 <div class="cmp-slot-filled">
                     {% if mode == 'player' %}
                         {% if entity.headshot %}
-                        <img src="{{ entity.headshot }}" class="cmp-avatar" alt="{{ entity.first_name }} {{ entity.last_name }} headshot">
+                        <img src="{{ entity.headshot }}" class="cmp-avatar" alt="" loading="lazy">
                         {% else %}
                         <div class="cmp-avatar avatar-placeholder">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
                         {% endif %}
@@ -64,7 +61,7 @@
                             <div class="cmp-slot-meta">{{ entity.position or '—' }} · {{ entity.team }}</div>
                         </div>
                     {% else %}
-                        {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="cmp-slot-logo" alt="{{ entity.team or entity.name }} logo">{% endif %}
+                        {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="cmp-slot-logo" alt="" loading="lazy">{% endif %}
                         <div class="cmp-slot-id">
                             <div class="cmp-slot-name">{{ entity.name }}</div>
                             <div class="cmp-slot-meta">{{ entity.conference or '' }}</div>
@@ -72,7 +69,7 @@
                     {% endif %}
                     {% set slot_years = entity.years or available_seasons %}
                     {% if slot_years and slot_years|length > 1 %}
-                    <select class="lb-select cmp-slot-season" aria-label="Season for this slot"
+                    <select class="cmp-slot-season" aria-label="Season for slot {{ slot_num }}"
                             onchange="compareSetSeason({{ slot_num }}, this.value)">
                         {% for s in slot_years %}
                         <option value="{{ s }}" {{ 'selected' if s == entity.season else '' }}>{{ s }}</option>
@@ -81,11 +78,17 @@
                     {% endif %}
                     <div class="cmp-slot-actions">
                         {% if i < 2 %}
-                        <button type="button" class="cmp-slot-btn" title="Swap with next slot" aria-label="Swap with next slot"
-                                onclick="compareSwap('{{ param_key }}', '{{ ('p' if mode == 'player' else 't') ~ (slot_num + 1) }}')">&#8646;</button>
+                        <button type="button" class="cmp-slot-btn" title="Move to slot {{ slot_num + 1 }}"
+                                aria-label="Move {{ entity.name or (entity.first_name ~ ' ' ~ entity.last_name) }} to slot {{ slot_num + 1 }}"
+                                onclick="compareSwap('{{ param_key }}', '{{ ('p' if mode == 'player' else 't') ~ (slot_num + 1) }}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 5h18"/><polyline points="7 23 3 19 7 15"/><path d="M21 19H3"/></svg>
+                        </button>
                         {% endif %}
-                        <button type="button" class="cmp-slot-btn remove" title="Remove" aria-label="Remove"
-                                onclick="compareRemove('{{ param_key }}')">&times;</button>
+                        <button type="button" class="cmp-slot-btn is-remove" title="Remove"
+                                aria-label="Remove {{ entity.name or (entity.first_name ~ ' ' ~ entity.last_name) }}"
+                                onclick="compareRemove('{{ param_key }}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+                        </button>
                     </div>
                 </div>
             {% else %}
@@ -93,126 +96,163 @@
                     <span class="cmp-search-icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
                     </span>
-                    <input type="text" class="cmp-search-input" placeholder="Search {{ 'players' if mode == 'player' else 'teams' }}…"
-                           autocomplete="off" data-slot-input="{{ param_key }}" aria-label="Search {{ 'players' if mode == 'player' else 'teams' }}">
-                    <div class="cmp-dropdown" data-slot-dropdown="{{ param_key }}"></div>
+                    <input type="text" class="cmp-search-input"
+                           placeholder="{{ 'Add a ' ~ group_name ~ '…' if mode == 'player' else 'Add a team…' }}"
+                           autocomplete="off" data-slot-input="{{ param_key }}"
+                           aria-label="Search {{ 'players' if mode == 'player' else 'teams' }} for slot {{ slot_num }}">
+                    <div class="cmp-dropdown" data-slot-dropdown="{{ param_key }}" role="listbox"></div>
                 </div>
             {% endif %}
         </div>
         {% endfor %}
     </div>
 
-    {% if not active_entities %}
+    {% if n < 2 %}
     <div class="cmp-zero">
         <p class="cmp-zero-lede">
-            Pick two or three {{ 'players' if mode == 'player' else 'teams' }} and every stat lines up side by side,
-            with the leading number in each row called out and a percentile against the rest of the FBS field.
+            {% if n == 1 %}
+                One more {{ noun }} and the board fills in.
+            {% else %}
+                Pick two or three {{ noun }}s. Every metric lines up in a row, with each one's
+                standing against the FBS field on the bar and the raw number beside it.
+            {% endif %}
         </p>
         {% if suggested %}
         <a class="cmp-zero-try" href="{{ suggested.url }}">
-            Try {{ suggested.a_name }} vs {{ suggested.b_name }}
-            <span class="cmp-zero-try-meta">{{ suggested.a_team }} &middot; {{ suggested.b_team }}</span>
+            <span class="cmp-zero-try-names">Compare {{ suggested.a_name }} and {{ suggested.b_name }}</span>
+            {% if suggested.a_team %}<span class="cmp-zero-try-meta">{{ suggested.a_team }} · {{ suggested.b_team }}</span>{% endif %}
         </a>
         {% endif %}
         <p class="cmp-zero-hint">
-            Searching by last name is quickest. Not sure who to look at?
-            The <a href="/leaderboards/passing?season={{ season }}">leaderboards</a> are a good place to start.
+            Searching by last name is quickest. Not sure who to look at? The
+            <a href="/leaderboards/passing?season={{ season }}">leaderboards</a> are a good place to start.
         </p>
     </div>
     {% endif %}
 
-    <!-- ── Comparison card (also the exported graphic) ── -->
-    {% if n >= 1 %}
+    {% if n >= 2 %}
 
-    {% macro hcell(e) %}
+    <!-- View switch + export. Both sit outside the card so neither lands in
+         the downloaded image. -->
+    <div class="cmp-viewbar">
+        <div class="cmp-seg" role="radiogroup" aria-label="How to read the numbers">
+            <button type="button" class="cmp-seg-btn{% if view == 'percentiles' %} is-on{% endif %}"
+                    role="radio" aria-checked="{{ 'true' if view == 'percentiles' else 'false' }}"
+                    data-view="percentiles">Percentiles</button>
+            <button type="button" class="cmp-seg-btn{% if view == 'stats' %} is-on{% endif %}"
+                    role="radio" aria-checked="{{ 'true' if view == 'stats' else 'false' }}"
+                    data-view="stats">Stats</button>
+        </div>
+        <div class="cmp-actions">
+            <button type="button" class="cmp-btn" id="cmpShare">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"/></svg>
+                <span>Copy link</span>
+            </button>
+            <button type="button" class="cmp-btn is-primary" id="cmpDownload">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Download image</span>
+            </button>
+        </div>
+    </div>
+
+    {# One cell. Both readings are rendered; the card's data-view decides which
+       one the eye gets. --pp is the percentile, --ps the cell's length within
+       this comparison — the bar reads one or the other, never both. #}
+    {% macro cell(v) %}
+    {% set has_p = v.percentile is not none %}
+    <div class="cmp-cell{% if v.raw is none %} is-empty{% elif not has_p %} is-unranked{% endif %}{% if v.lead %} is-lead{% endif %}"
+         style="--pp:{{ v.percentile or 0 }};--ps:{{ v.share or 0 }}">
+        {# The track is drawn even when there is no value, so a metric one side
+           is missing does not knock the two columns out of step. #}
+        <div class="cmp-meter"{% if v.raw is not none and not has_p %} title="No qualified percentile for this metric"{% endif %}>
+            {% if v.raw is not none %}
+            <span class="cmp-fill {{ band(v.percentile) if has_p else 'b2' }}"></span>
+            {% if has_p %}
+            <span class="cmp-knob {{ band(v.percentile) }}"
+                  aria-label="{{ ord(v.percentile) }} percentile">{{ v.percentile }}</span>
+            {% endif %}
+            {% endif %}
+        </div>
+        <div class="cmp-val">{{ v.display }}</div>
+    </div>
+    {% endmacro %}
+
+    {% macro headcell(e) %}
     <div class="cmp-hcell">
         {% if mode == 'player' %}
             <div class="cmp-hphoto-wrap">
+                {# A background-image with cover, rather than an image element with
+                   object-fit: html2canvas respects background-size but not
+                   object-fit, and that warped every headshot in the export. #}
                 {% if e.headshot %}
-                {# background-image (cover) instead of <img object-fit> — html2canvas
-                   respects background-size but not object-fit, which warped the export #}
                 <div class="cmp-hphoto" data-headshot="{{ e.headshot }}" style="background-image:url('{{ e.headshot }}')"></div>
                 {% else %}
-                <div class="cmp-hph-fallback">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
+                <div class="cmp-hphoto cmp-hphoto-none">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
                 {% endif %}
-                {% if e.jersey %}<div class="cmp-hjersey">{{ e.jersey }}</div>{% endif %}
             </div>
-            <div class="cmp-hname">{{ e.first_name }} {{ e.last_name }}</div>
+            <div class="cmp-hname">{{ e.first_name }}<br>{{ e.last_name }}</div>
+            <div class="cmp-hseason">{{ e.season }}</div>
             <div class="cmp-hmeta">
-                <span class="compare-pos-badge">{{ e.position or '—' }}</span>
-                {% if e.logo_dark %}<img src="{{ e.logo_dark }}" alt="{{ e.team }} logo" style="width:16px;height:16px;object-fit:contain">{% endif %}
-                <span>{{ e.team }}</span>
-                {% if e.ap_rank %}<span class="compare-ap-badge">AP #{{ e.ap_rank }}</span>{% endif %}
+                {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo-sm" alt="">{% endif %}
+                <span>{{ e.position or '—' }} · {{ e.team }}</span>
             </div>
-            <div class="cmp-hseason">{{ e.season }} season</div>
+            {% if e.ap_rank %}<div class="cmp-hap">AP #{{ e.ap_rank }}</div>{% endif %}
         {% else %}
-            {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo" alt="{{ e.team or e.name }} logo">{% endif %}
-            <div class="cmp-hname">{{ e.name }}</div>
-            <div class="cmp-hmeta">
-                <span>{{ e.conference or '' }}</span>
-                {% if e.ap_rank %}<span class="compare-ap-badge">AP #{{ e.ap_rank }}</span>{% endif %}
-            </div>
-            <div class="cmp-hseason">{{ e.season }} season</div>
-        {% endif %}
-    </div>
-    {% endmacro %}
-
-    {% macro vcell(v, side) %}
-    <div class="cmp-cell cmp-cell-{{ side }}{% if v.color == 'blue' %} is-lead{% elif v.color == 'red' %} is-worst{% elif v.color == 'none' %} is-none{% endif %}">
-        <div class="cmp-val">{{ v.display }}</div>
-        {% if v.raw is not none and v.percentile is not none %}
-        <div class="cmp-bar"><span style="width:{{ v.percentile }}%"></span></div>
-        <div class="cmp-pct">{{ ord(v.percentile) }} percentile</div>
-        {% endif %}
-    </div>
-    {% endmacro %}
-
-    <div class="compare-card-capture" id="compareCard">
-        <div class="cmp-brand">
-            <img src="/static/logo-mark-256.png" alt="">
-            <span class="cmp-brand-text">Saturday Savant</span>
-            {% set distinct_seasons = active_entities | map(attribute='season') | list | unique | list %}
-            <span class="cmp-brand-sub">Head-to-Head{% if distinct_seasons %} · {{ distinct_seasons | sort | join(' vs ') }}{% endif %}</span>
-        </div>
-
-        <div class="cmp-table cmp-cols-{{ cols }}">
-            <!-- Player / team column headers -->
-            <div class="cmp-head">
-                {% if cols == 2 %}
-                    {{ hcell(active_entities[0]) }}
-                    <div class="cmp-vs">{% if n == 2 %}VS{% endif %}</div>
-                    {% if n == 2 %}{{ hcell(active_entities[1]) }}{% else %}<div></div>{% endif %}
+            <div class="cmp-hphoto-wrap">
+                {% if e.logo_dark %}
+                <div class="cmp-hphoto cmp-hphoto-logo" data-headshot="{{ e.logo_dark }}" style="background-image:url('{{ e.logo_dark }}')"></div>
                 {% else %}
-                    <div></div>
-                    {% for e in active_entities %}{{ hcell(e) }}{% endfor %}
+                <div class="cmp-hphoto cmp-hphoto-none">{{ (e.name or '?')[0] }}</div>
                 {% endif %}
             </div>
+            <div class="cmp-hname">{{ e.name }}</div>
+            <div class="cmp-hseason">{{ e.season }}</div>
+            <div class="cmp-hmeta"><span>{{ e.conference or '' }}</span></div>
+            {% if e.ap_rank %}<div class="cmp-hap">AP #{{ e.ap_rank }}</div>{% endif %}
+        {% endif %}
+    </div>
+    {% endmacro %}
 
-            <!-- Stat rows -->
-            {% if rows %}
-            <div class="cmp-body">
-                {% for row in rows %}
-                <div class="cmp-trow">
-                    {% if cols == 2 %}
-                        {{ vcell(row['values'][0], 'left') }}
-                        <div class="cmp-stat">{{ row.label }}</div>
-                        {{ vcell(row['values'][1], 'right') }}
-                    {% else %}
-                        <div class="cmp-stat">{{ row.label }}</div>
-                        {% for v in row['values'] %}{{ vcell(v, 'center') }}{% endfor %}
-                    {% endif %}
-                </div>
-                {% endfor %}
+    <div class="cmp-card" id="compareCard" data-view="{{ view }}" style="--cols:{{ n }}">
+
+        <div class="cmp-card-head">
+            <div class="cmp-brand">
+                <img src="/static/logo-mark-256.png" alt="" class="cmp-brand-mark">
+                <span class="cmp-brand-name">Saturday Savant</span>
+                <span class="cmp-brand-kind">{{ (group_name ~ ' comparison') if mode == 'player' else 'Team comparison' }}</span>
             </div>
-            {% else %}
-            <div class="cmp-empty-note">Pick {{ 'another player' if mode == 'player' else 'another team' }} to build the comparison.</div>
-            {% endif %}
+            <div class="cmp-cells cmp-cells-head">
+                {% for e in active_entities %}{{ headcell(e) }}{% endfor %}
+            </div>
         </div>
 
-        <div class="compare-watermark">saturdaysavant.com</div>
+        {% if rows %}
+        {% set ns = namespace(section=None) %}
+        {% for row in rows %}
+            {% if row.section != ns.section %}
+                {% if ns.section is not none %}</div>{% endif %}
+                {% set ns.section = row.section %}
+                <div class="cmp-sect">
+                <h2 class="cmp-sect-h">{{ row.section }}</h2>
+            {% endif %}
+            {# --i staggers the one animation on this page: the bars arriving. #}
+            <div class="cmp-row" style="--i:{{ loop.index0 }}">
+                <div class="cmp-rlabel">{{ row.label }}</div>
+                <div class="cmp-cells">
+                    {% for v in row['values'] %}{{ cell(v) }}{% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+        {% if ns.section is not none %}</div>{% endif %}
+        {% endif %}
+
+        <footer class="cmp-foot">
+            <span class="cmp-foot-site">saturdaysavant.com</span>
+            <span class="cmp-foot-note cmp-foot-pct">{{ pool_note }} Hatched bars have no qualified percentile.</span>
+            <span class="cmp-foot-note cmp-foot-stats">Bars show each {{ noun }}'s standing within this comparison. Per-game rates use completed team games.</span>
+        </footer>
     </div>
 
-    <button type="button" class="cmp-openfull" id="cmpShare" data-compare-hide>Copy shareable link</button>
     {% endif %}
 
 </div>
@@ -224,7 +264,12 @@
 <script>
 (function() {
     const MODE = {{ mode|tojson }};
-    const POS = {{ (group_name or '')|tojson }};  // active position group filters player search
+    const POS  = {{ (group_name or '')|tojson }};  // active position tab filters player search
+    // Names the download after who is in it, so three saved comparisons are
+    // three distinguishable files rather than compare (1).png.
+    const FILE = {{ (active_entities | map(attribute='name') | list) | tojson
+                    if mode == 'team' else
+                    (active_entities | map(attribute='last_name') | list) | tojson }};
 
     function currentParams() { return new URLSearchParams(window.location.search); }
     function navigate(params) { window.location.href = '/compare?' + params.toString(); }
@@ -250,7 +295,29 @@
         const params = currentParams(); params.set('y' + slotNum, year); navigate(params);
     };
 
-    // Per-slot live search
+    // ── View switch ──────────────────────────────────────────────────────
+    // Both readings are already in the DOM, so this is a class flip, not a
+    // reload. The URL follows along (replaceState, no history entry) so the
+    // link someone copies opens on the view they were looking at.
+    const card = document.getElementById('compareCard');
+    document.querySelectorAll('.cmp-seg-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const v = btn.getAttribute('data-view');
+            if (!card || card.getAttribute('data-view') === v) return;
+            card.setAttribute('data-view', v);
+            document.querySelectorAll('.cmp-seg-btn').forEach(function(b) {
+                const on = b === btn;
+                b.classList.toggle('is-on', on);
+                b.setAttribute('aria-checked', on ? 'true' : 'false');
+            });
+            const params = currentParams();
+            if (v === 'stats') params.set('view', 'stats'); else params.delete('view');
+            const q = params.toString();
+            history.replaceState(null, '', '/compare' + (q ? '?' + q : ''));
+        });
+    });
+
+    // ── Per-slot live search ─────────────────────────────────────────────
     document.querySelectorAll('[data-slot-input]').forEach(function(input) {
         const paramKey = input.getAttribute('data-slot-input');
         const dropdown = document.querySelector('[data-slot-dropdown="' + paramKey + '"]');
@@ -262,32 +329,32 @@
             const wanted = MODE === 'player' ? 'player' : 'team';
             const filtered = results.filter(r => r.type === wanted);
             if (!filtered.length) {
-                dropdown.innerHTML = '<div class="cmp-dd-note">No results found</div>';
-                dropdown.classList.add('active');
+                dropdown.innerHTML = '<div class="cmp-dd-note">No ' + (wanted === 'player' ? (POS || 'player') + 's' : 'teams') + ' match that.</div>';
+                dropdown.classList.add('is-open');
                 return;
             }
             let html = '';
             for (const r of filtered) {
                 if (wanted === 'player') {
                     const avatar = r.headshot
-                        ? `<img src="${esc(r.headshot)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0">`
-                        : `<div class="avatar-placeholder" style="width:32px;height:32px;flex-shrink:0;font-size: var(--text-xs)">${esc((r.first||'')[0]||'')}${esc((r.last||'')[0]||'')}</div>`;
-                    html += `<div class="cmp-dd-item" data-id="${esc(r.id)}">${avatar}
-                        <div style="flex:1;min-width:0">
-                            <div class="cmp-dd-name">${esc(r.first)} ${esc(r.last)}</div>
-                            <div class="cmp-dd-sub">${esc(r.pos || '')} · ${esc(r.team || '')}</div>
-                        </div></div>`;
+                        ? `<img src="${esc(r.headshot)}" class="cmp-dd-face" alt="">`
+                        : `<div class="avatar-placeholder cmp-dd-face">${esc((r.first||'')[0]||'')}${esc((r.last||'')[0]||'')}</div>`;
+                    html += `<button type="button" class="cmp-dd-item" role="option" data-id="${esc(r.id)}">${avatar}
+                        <span class="cmp-dd-text">
+                            <span class="cmp-dd-name">${esc(r.first)} ${esc(r.last)}</span>
+                            <span class="cmp-dd-sub">${esc(r.pos || '')} · ${esc(r.team || '')}</span>
+                        </span></button>`;
                 } else {
-                    html += `<div class="cmp-dd-item" data-name="${esc(r.name)}">
-                        ${r.logo ? `<img src="${esc(r.logo)}" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">` : ''}
-                        <div style="flex:1;min-width:0">
-                            <div class="cmp-dd-name">${esc(r.name)}</div>
-                            <div class="cmp-dd-sub">${esc(r.conference || '')}</div>
-                        </div></div>`;
+                    html += `<button type="button" class="cmp-dd-item" role="option" data-name="${esc(r.name)}">
+                        ${r.logo ? `<img src="${esc(r.logo)}" class="cmp-dd-logo" alt="">` : '<span class="cmp-dd-logo"></span>'}
+                        <span class="cmp-dd-text">
+                            <span class="cmp-dd-name">${esc(r.name)}</span>
+                            <span class="cmp-dd-sub">${esc(r.conference || '')}</span>
+                        </span></button>`;
                 }
             }
             dropdown.innerHTML = html;
-            dropdown.classList.add('active');
+            dropdown.classList.add('is-open');
             dropdown.querySelectorAll('[data-id]').forEach(el =>
                 el.addEventListener('click', () => selectEntity(paramKey, el.getAttribute('data-id'))));
             dropdown.querySelectorAll('[data-name]').forEach(el =>
@@ -297,24 +364,28 @@
         input.addEventListener('input', function() {
             const q = this.value.trim();
             clearTimeout(timer);
-            if (q.length < 2) { dropdown.classList.remove('active'); dropdown.innerHTML = ''; return; }
+            if (q.length < 2) { dropdown.classList.remove('is-open'); dropdown.innerHTML = ''; return; }
             dropdown.innerHTML = '<div class="cmp-dd-note">Searching…</div>';
-            dropdown.classList.add('active');
+            dropdown.classList.add('is-open');
             // In player mode the active position tab filters the results server-side.
             let apiUrl = '/api/players?q=' + encodeURIComponent(q);
             if (MODE === 'player' && POS) apiUrl += '&pos=' + encodeURIComponent(POS);
             timer = setTimeout(() =>
                 fetch(apiUrl)
                     .then(r => r.json()).then(render)
-                    .catch(() => { dropdown.innerHTML = '<div class="cmp-dd-note">Search unavailable</div>'; }),
+                    .catch(() => { dropdown.innerHTML = '<div class="cmp-dd-note">Search is unavailable right now. Try again in a moment.</div>'; }),
             220);
         });
 
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') { dropdown.classList.remove('is-open'); this.blur(); }
+        });
         document.addEventListener('click', function(e) {
-            if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove('active');
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove('is-open');
         });
     });
 
+    // ── Image export ─────────────────────────────────────────────────────
     // Route a cross-origin image through our same-origin proxy so html2canvas
     // can rasterise it. The R2 headshot bucket sends no CORS headers, which
     // otherwise leaves the photos blank in the export.
@@ -325,23 +396,21 @@
         return '/img-proxy?url=' + encodeURIComponent(src);
     }
 
-    // Download image
     const downloadBtn = document.getElementById('cmpDownload');
     if (downloadBtn) {
+        const label = downloadBtn.querySelector('span');
+        const original = label.textContent;
         downloadBtn.addEventListener('click', async function() {
-            const card = document.getElementById('compareCard');
             if (!card || typeof html2canvas === 'undefined') return;
-            const hidden = document.querySelectorAll('[data-compare-hide]');
-            const nav = document.querySelector('nav.navbar');
-            hidden.forEach(el => el.style.display = 'none');
-            if (nav) nav.style.display = 'none';
             downloadBtn.disabled = true;
+            label.textContent = 'Rendering…';
 
-            // Route external images (logo <img>s and the headshot background
-            // divs) through the same-origin proxy so html2canvas can rasterise
-            // them; wait for the proxied images to load, then restore after.
-            const restores = [];
-            const loads = [];
+            // A phone-width capture would export a phone-width graphic. The
+            // card is pinned to a fixed desktop width for the shot so the file
+            // is the same shareable image whatever it was taken on.
+            document.body.classList.add('cmp-exporting');
+
+            const restores = [], loads = [];
             function preload(url) {
                 loads.push(new Promise(function(res) {
                     const im = new Image();
@@ -357,7 +426,7 @@
                 restores.push(function() { img.src = img.getAttribute('data-orig-src'); img.removeAttribute('data-orig-src'); });
                 preload(px);
             });
-            card.querySelectorAll('.cmp-hphoto[data-headshot]').forEach(function(el) {
+            card.querySelectorAll('[data-headshot]').forEach(function(el) {
                 const orig = el.getAttribute('data-headshot');
                 const px = proxied(orig);
                 if (!px) return;
@@ -371,35 +440,43 @@
                 new Promise(function(r) { setTimeout(r, 5000); }),
             ]);
 
-            const bg = getComputedStyle(card).backgroundColor || '#0a0b0d';
-            html2canvas(card, { backgroundColor: bg, scale: 2, useCORS: true }).then(function(canvas) {
+            const slug = (FILE.length ? FILE : ['compare'])
+                .join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+            html2canvas(card, {
+                backgroundColor: getComputedStyle(card).backgroundColor || '#0a0b0d',
+                scale: 2, useCORS: true, windowWidth: 1280,
+            }).then(function(canvas) {
                 const link = document.createElement('a');
-                link.download = 'saturday-savant-compare.png';
+                link.download = 'saturday-savant-' + (slug || 'compare') + '.png';
                 link.href = canvas.toDataURL('image/png');
                 link.click();
+                label.textContent = 'Saved ✓';
+                setTimeout(function() { label.textContent = original; }, 2200);
             }).catch(function(err) {
                 console.error('Compare image export failed:', err);
-                alert('Could not generate the image — please try again.');
+                label.textContent = 'Could not render — try again';
+                setTimeout(function() { label.textContent = original; }, 3000);
             }).finally(function() {
                 restores.forEach(function(fn) { fn(); });
-                hidden.forEach(el => el.style.display = '');
-                if (nav) nav.style.display = '';
+                document.body.classList.remove('cmp-exporting');
                 downloadBtn.disabled = false;
             });
         });
     }
 
-    // Copy shareable link — this comparison's own URL is the shareable version.
+    // ── Copy link — this comparison's own URL is the shareable version ────
     const shareBtn = document.getElementById('cmpShare');
     if (shareBtn) {
-        const original = shareBtn.textContent;
+        const label = shareBtn.querySelector('span');
+        const original = label.textContent;
         let resetTimer;
         shareBtn.addEventListener('click', function() {
             const url = window.location.href;
             const done = function(ok) {
-                shareBtn.textContent = ok ? 'Link copied ✓' : 'Press Ctrl/⌘+C to copy';
+                label.textContent = ok ? 'Link copied ✓' : 'Press Ctrl/⌘+C to copy';
                 clearTimeout(resetTimer);
-                resetTimer = setTimeout(function() { shareBtn.textContent = original; }, 2200);
+                resetTimer = setTimeout(function() { label.textContent = original; }, 2200);
             };
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(url).then(function() { done(true); }, function() { done(false); });
