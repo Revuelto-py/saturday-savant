@@ -4088,6 +4088,153 @@ def savant_rating_methodology():
     return render_template('savant_rating.html', top10=top10, season=CURRENT_SEASON,
                            n_teams=n_teams, n_drives=n_drives, n_games=n_games)
 
+
+# ── Savant Forecast methodology ─────────────────────────────────────────────
+# Relative influence of each input family, as a share of the summed absolute
+# standardized logistic coefficients in forecast_model.json. Hardcoded rather
+# than read at request time: main.py never loads the artifact (only
+# pipeline/predict_games.py does), and a cosmetic bar chart is not a reason to
+# couple the web process to a model file. Recompute after any retrain with
+# tools/forecast_family_shares.py and update these four numbers.
+FORECAST_FAMILIES = [
+    ('In-season form', 56.0,
+     'Game-by-game Elo, points scored and allowed per game, record, games played.',
+     'var(--accent)'),
+    ('Roster & recruiting', 27.0,
+     'Four-year recruiting average, returning production, transfer-portal talent.',
+     '#34d399'),
+    ('Preseason priors', 10.7,
+     "Last season's SP+ and Savant Net, and a flag for teams that have neither.",
+     '#c084fc'),
+    ('Situation', 6.3,
+     'Neutral site, postseason, days of rest, week of the season.',
+     '#f0a868'),
+]
+
+# Every FBS team, per season — realignment-safe, and the same membership test
+# the standings use. A game is FBS-vs-FBS only when BOTH sides appear.
+_FBS_SET = '(SELECT DISTINCT team AS t, season AS s FROM sp_ratings)'
+
+
+def _fc_games(cursor, order_sql, limit, where_extra=''):
+    """Completed, graded, FBS-vs-FBS forecasts with the result attached."""
+    cursor.execute(f'''
+        SELECT gp.game_id, gp.season, gp.week, gp.home_team, gp.away_team,
+               gp.home_prob, gp.correct, g.home_points, g.away_points,
+               g.neutral_site, ht.logo_dark, at.logo_dark, ht.color, at.color
+        FROM game_predictions gp
+        JOIN games g  ON g.id = gp.game_id
+        JOIN {_FBS_SET} hf ON hf.t = gp.home_team AND hf.s = gp.season
+        JOIN {_FBS_SET} af ON af.t = gp.away_team AND af.s = gp.season
+        LEFT JOIN teams ht ON ht.name = gp.home_team
+        LEFT JOIN teams at ON at.name = gp.away_team
+        WHERE gp.scored = 1
+          AND g.home_points IS NOT NULL AND g.away_points IS NOT NULL
+          {where_extra}
+        ORDER BY {order_sql}
+        LIMIT %s
+    ''', (limit,))
+    out = []
+    for r in cursor.fetchall():
+        home_won = r[7] > r[8]
+        out.append({
+            'id': r[0], 'season': r[1], 'week': r[2],
+            'home': r[3], 'away': r[4], 'home_prob': r[5], 'correct': r[6],
+            'home_pts': r[7], 'away_pts': r[8], 'neutral': r[9],
+            'home_logo': r[10], 'away_logo': r[11],
+            'home_color': r[12], 'away_color': r[13],
+            'winner': r[3] if home_won else r[4],
+            'margin': abs(r[7] - r[8]),
+        })
+    return out
+
+
+@app.route('/savant-forecast')
+@cache.cached(timeout=21600)  # 6h — refreshed when pipeline/predict_games.py scores a week
+def savant_forecast_methodology():
+    """Plain-language methodology page for the Savant Forecast win-probability
+    model, with its own accuracy, calibration and most interesting calls."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+
+        # Headline accuracy, split by opponent class. Mixing them would be
+        # flattering and meaningless: an FBS team beats an FCS team ~93% of the
+        # time, so those games inflate straight-up accuracy without the model
+        # having said anything difficult.
+        cursor.execute(f'''
+            SELECT (hf.t IS NOT NULL AND af.t IS NOT NULL) AS both_fbs,
+                   COUNT(*), AVG(gp.correct::float),
+                   AVG(POWER(gp.home_prob - gp.home_won, 2))
+            FROM game_predictions gp
+            LEFT JOIN {_FBS_SET} hf ON hf.t = gp.home_team AND hf.s = gp.season
+            LEFT JOIN {_FBS_SET} af ON af.t = gp.away_team AND af.s = gp.season
+            WHERE gp.scored = 1
+            GROUP BY 1
+        ''')
+        fbs = {'n': 0, 'acc': None, 'brier': None}
+        fcs = {'n': 0, 'acc': None, 'brier': None}
+        for both, n, acc, brier in cursor.fetchall():
+            (fbs if both else fcs).update(
+                n=n, acc=None if acc is None else float(acc) * 100,
+                brier=None if brier is None else float(brier))
+
+        cursor.execute('''SELECT MIN(season), MAX(season)
+                          FROM game_predictions WHERE scored = 1''')
+        span = cursor.fetchone()
+
+        # Calibration: does "70%" mean 70%? Bucketed on the FAVOURITE's
+        # probability so every bucket runs 50-100% and `correct` is the
+        # matching hit rate.
+        cursor.execute(f'''
+            SELECT width_bucket(GREATEST(gp.home_prob, 1 - gp.home_prob), 0.5, 1.0, 5),
+                   COUNT(*), AVG(GREATEST(gp.home_prob, 1 - gp.home_prob)),
+                   AVG(gp.correct::float)
+            FROM game_predictions gp
+            JOIN {_FBS_SET} hf ON hf.t = gp.home_team AND hf.s = gp.season
+            JOIN {_FBS_SET} af ON af.t = gp.away_team AND af.s = gp.season
+            WHERE gp.scored = 1
+            GROUP BY 1 ORDER BY 1
+        ''')
+        _labels = ['50–60%', '60–70%', '70–80%', '80–90%', '90–100%']
+        calib = [{'label': _labels[min(int(b), 5) - 1], 'n': n,
+                  'pred': float(p) * 100, 'act': float(a) * 100}
+                 for b, n, p, a in cursor.fetchall() if 1 <= int(b) <= 5]
+
+        # Where the model is actually useful. The honest finding on the page:
+        # on one-possession games it is barely better than a coin flip.
+        cursor.execute(f'''
+            SELECT CASE WHEN ABS(g.home_points - g.away_points) <= 8  THEN 0
+                        WHEN ABS(g.home_points - g.away_points) <= 16 THEN 1
+                        WHEN ABS(g.home_points - g.away_points) <= 24 THEN 2
+                        ELSE 3 END AS band,
+                   COUNT(*), AVG(gp.correct::float)
+            FROM game_predictions gp
+            JOIN games g ON g.id = gp.game_id
+            JOIN {_FBS_SET} hf ON hf.t = gp.home_team AND hf.s = gp.season
+            JOIN {_FBS_SET} af ON af.t = gp.away_team AND af.s = gp.season
+            WHERE gp.scored = 1 AND g.home_points IS NOT NULL
+            GROUP BY 1 ORDER BY 1
+        ''')
+        _bands = ['One possession', 'Two scores', 'Three scores', 'Four scores or more']
+        _sub = ['8 points or fewer', '9–16', '17–24', '25+']
+        bands = [{'label': _bands[b], 'sub': _sub[b], 'n': n, 'acc': float(a) * 100}
+                 for b, n, a in cursor.fetchall()]
+
+        # The games the model refused to call, and the ones it called loudest
+        # and got wrong.
+        coin = _fc_games(cursor, 'ABS(gp.home_prob - 0.5) ASC', 10)
+        upsets = _fc_games(cursor, 'ABS(gp.home_prob - 0.5) DESC', 8,
+                           'AND gp.correct = 0')
+    finally:
+        release_db(conn)
+
+    return render_template('savant_forecast.html',
+                           fbs=fbs, fcs=fcs, span=span, calib=calib,
+                           bands=bands, coin=coin, upsets=upsets,
+                           families=FORECAST_FAMILIES)
+
+
 # ── Returning Production ────────────────────────────────────────────────────
 # Bill Connelly–style metric: what share of a team's PRIOR-season statistical
 # production is retained on THIS season's roster (same school only — a player
@@ -9469,7 +9616,7 @@ def sitemap():
     paths = ['/', '/teams', '/rankings', '/standings', '/games',
              '/leaderboards', '/leaderboards/teams',
              '/bracket', '/compare', '/transfers', '/draft', '/rivalries',
-             '/savant-rating', '/explorer']
+             '/savant-rating', '/savant-forecast', '/explorer']
     for cat in ('passing', 'rushing', 'receiving', 'defense'):
         paths.append(f'/leaderboards/{cat}')
     lastmod = {}

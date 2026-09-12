@@ -6444,6 +6444,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .lb-th.stat-header { height: 44px; }
     .bk-proj-team,
     .lb-howitworks,
+    .howitworks,
     .team-name-default,
     .ph-meta-item,
     .ph-meta-item a,
@@ -7743,3 +7744,242 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    scaled container — under any reasonable floor for text a reader has to
    parse. */
 .lf-tag { font-size: 0.7rem; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SAVANT FORECAST — methodology page (/savant-forecast)
+   Shares the rhythm of the Savant Rating page: a 1000px column, section labels
+   with a rule, and dark-card panels. Everything specific to this page is
+   prefixed .sf- so it can't leak into the forecast controls (.fc-*) it reuses.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* --text-xs clamps down to 11px, and this page leans on small text for the
+   figures beside every bar. Same curve, floored at 12px so nothing here drops
+   under it on a phone. Local on purpose: moving the global token would reflow
+   every page on the site. */
+.sf-page { --sf-xs: clamp(0.75rem, 0.6rem + 0.2vw, 0.78rem); }
+
+/* ── Headline stats ───────────────────────────────────────────────────────── */
+.sf-stat { height: 100%; }
+.sf-stat-key {
+    font-size: var(--sf-xs); font-weight: 800; letter-spacing: 0.15em;
+    text-transform: uppercase; margin-bottom: var(--s2);
+}
+.sf-stat-val {
+    font-family: var(--font-display); font-weight: 800; line-height: 1;
+    font-size: var(--text-xl); color: var(--text-primary);
+    font-variant-numeric: tabular-nums; margin-bottom: var(--s2);
+}
+.sf-stat-unit { font-size: 0.55em; font-weight: 800; margin-left: 2px; color: var(--text-secondary); }
+.sf-stat-note { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; }
+
+.sf-caveat {
+    color: var(--text-dim); font-size: var(--text-sm); line-height: 1.7;
+    max-width: 55ch; margin: 0 0 28px;
+}
+
+/* ── Section rule (matches the Savant Rating page) ────────────────────────── */
+.sf-rule { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.sf-rule-head { margin: 0; font-size: var(--text-sm); }
+.sf-rule-line { flex: 1; height: 1px; background: var(--border); }
+.sf-rule-note { color: var(--text-dim); font-size: var(--sf-xs); }
+
+/* ── Prose ─────────────────────────────────────────────────────────────────
+   Measured, not guessed: `ch` is the width of the digit zero, and in DM Sans
+   the average letter is much narrower, so 70ch renders about 96 characters —
+   well past the 60-75 a reader can track without losing the line. These caps
+   are set to land in that band at desktop width. */
+.sf-prose { padding: 28px 32px; margin-bottom: 28px; }
+.sf-prose > div {
+    /* Centred, not flush left: at a readable measure the column is narrower
+       than the card, and splitting the slack evenly reads as margin instead of
+       a paragraph that ran out. */
+    max-width: 52ch; margin: 0 auto; color: var(--text-secondary);
+    font-size: var(--text-base); line-height: 1.8;
+}
+.sf-prose p { margin: 0 0 var(--s4); }
+.sf-prose p:last-child { margin-bottom: 0; }
+.sf-step {
+    color: var(--text-primary); font-weight: 700; font-size: var(--text-base);
+    margin: 18px 0 6px; line-height: 1.5;
+}
+.sf-prose > div > .sf-step:first-child { margin-top: 0; }
+
+.sf-panel { padding: 24px 28px; margin-bottom: 28px; }
+.sf-lede {
+    color: var(--text-secondary); font-size: var(--text-base);
+    line-height: 1.75; max-width: 52ch; margin: 0 0 var(--s5);
+}
+.sf-lede-loose { margin-bottom: var(--s4); }
+.sf-foot {
+    color: var(--text-dim); font-size: var(--text-sm); line-height: 1.7;
+    max-width: 53ch; margin: var(--s5) 0 0;
+    padding-top: var(--s4); border-top: 1px solid var(--border);
+}
+
+/* ── Input families ───────────────────────────────────────────────────────── */
+.sf-fam { list-style: none; padding: 0; margin: 0 0 var(--s5); }
+.sf-fam-row + .sf-fam-row { margin-top: var(--s4); }
+.sf-fam-head { display: flex; align-items: baseline; gap: var(--s3); margin-bottom: 6px; }
+.sf-fam-name { color: var(--text-primary); font-weight: 700; font-size: var(--text-sm); }
+.sf-fam-share {
+    margin-left: auto; color: var(--text-primary); font-weight: 800;
+    font-family: var(--font-display); font-size: var(--text-md);
+    font-variant-numeric: tabular-nums;
+}
+.sf-fam-track {
+    height: 8px; border-radius: var(--r-pill);
+    background: var(--bg-subtle); overflow: hidden;
+}
+.sf-fam-bar { height: 100%; border-radius: var(--r-pill); }
+.sf-fam-detail {
+    color: var(--text-dim); font-size: var(--text-sm);
+    line-height: 1.6; margin: 6px 0 0;
+}
+
+/* ── Calibration ──────────────────────────────────────────────────────────── */
+.sf-legend { display: flex; gap: var(--s5); margin-bottom: var(--s5); flex-wrap: wrap; }
+.sf-legend-item {
+    display: flex; align-items: center; gap: var(--s2);
+    color: var(--text-secondary); font-size: var(--sf-xs);
+    font-weight: 700; letter-spacing: 0.04em;
+}
+.sf-key { width: 14px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.sf-key-pred { background: var(--border-strong); }
+.sf-key-act { background: var(--accent); }
+
+.sf-cal { list-style: none; padding: 0; margin: 0; }
+.sf-cal-row {
+    display: grid; grid-template-columns: 128px minmax(0, 1fr);
+    gap: var(--s4); align-items: center;
+}
+.sf-cal-row + .sf-cal-row { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--border); }
+.sf-cal-band { display: block; color: var(--text-primary); font-weight: 700; font-size: var(--text-sm); }
+.sf-cal-n { display: block; color: var(--text-dim); font-size: var(--sf-xs); margin-top: 2px; }
+.sf-cal-bars { display: flex; flex-direction: column; gap: 5px; }
+.sf-cal-line { display: flex; align-items: center; gap: var(--s3); }
+.sf-cal-track {
+    flex: 1; height: 10px; border-radius: var(--r-pill);
+    background: var(--bg-subtle); overflow: hidden;
+}
+.sf-cal-bar { height: 100%; border-radius: var(--r-pill); }
+.sf-cal-pred { background: var(--border-strong); }
+.sf-cal-act { background: var(--accent); }
+.sf-cal-val {
+    width: 52px; text-align: right; flex-shrink: 0;
+    color: var(--text-secondary); font-size: var(--sf-xs);
+    font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.sf-cal-val-act { color: var(--text-primary); }
+
+/* ── Accuracy by final margin ─────────────────────────────────────────────── */
+.sf-band { list-style: none; padding: 0; margin: 0; }
+.sf-band-row {
+    display: grid; grid-template-columns: 168px minmax(0, 1fr) 56px;
+    gap: var(--s4); align-items: center;
+}
+.sf-band-row + .sf-band-row { margin-top: var(--s4); }
+.sf-band-name { display: block; color: var(--text-primary); font-weight: 700; font-size: var(--text-sm); }
+.sf-band-sub { display: block; color: var(--text-dim); font-size: var(--sf-xs); margin-top: 2px; }
+.sf-band-track {
+    position: relative; height: 14px; border-radius: var(--r-pill);
+    background: var(--bg-subtle); overflow: hidden;
+}
+.sf-band-bar { height: 100%; border-radius: var(--r-pill); background: var(--accent); }
+/* A band barely clearing the coin-flip line is the page's headline finding, so
+   it gets its own colour AND its own copy — never the colour alone. */
+.sf-band-bar.is-weak { background: #f0a868; }
+.sf-band-ref {
+    position: absolute; top: 0; bottom: 0; left: 50%; width: 0;
+    border-left: 2px dashed rgba(255,255,255,0.45);
+}
+.sf-band-val {
+    text-align: right; color: var(--text-primary); font-weight: 800;
+    font-family: var(--font-display); font-size: var(--text-md);
+    font-variant-numeric: tabular-nums;
+}
+.sf-band-val.is-weak { color: #f0a868; }
+.sf-band-key { color: var(--text-dim); font-size: var(--sf-xs); margin: var(--s3) 0 0; }
+
+/* ── Graded game rows ─────────────────────────────────────────────────────── */
+.sf-games {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--s3); margin-bottom: 28px;
+}
+.sf-game {
+    display: block; padding: var(--s4); text-decoration: none;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    transition: background-color var(--t-fast), border-color var(--t-fast), transform var(--t-fast);
+}
+.sf-game:hover { background: var(--bg-card-hover); border-color: var(--border-strong); }
+.sf-game:focus-visible {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+}
+.sf-game:active { transform: translateY(1px); }
+
+.sf-game-teams {
+    display: flex; align-items: center; gap: var(--s2);
+    margin-bottom: var(--s3); font-size: var(--text-sm);
+}
+.sf-side { display: flex; align-items: center; gap: 7px; min-width: 0; flex: 1; }
+.sf-side-home { justify-content: flex-end; }
+.sf-side img { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.sf-team {
+    color: var(--text-secondary); font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sf-team.is-won { color: var(--text-primary); }
+.sf-score {
+    color: var(--text-dim); font-weight: 800; font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+.sf-score.is-won { color: var(--text-primary); }
+.sf-vs { color: var(--text-dim); font-size: var(--sf-xs); flex-shrink: 0; }
+
+.sf-game-foot {
+    display: flex; align-items: center; gap: var(--s2);
+    margin-top: var(--s3); font-size: var(--sf-xs); flex-wrap: wrap;
+}
+.sf-called { color: var(--text-dim); }
+.sf-called b { color: var(--text-secondary); font-weight: 700; }
+.sf-verdict {
+    font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: var(--r-sm);
+}
+.sf-hit { color: #6ee7b7; background: rgba(52,211,153,0.14); }
+.sf-miss { color: #f0a868; background: rgba(240,168,104,0.14); }
+.sf-when { margin-left: auto; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+
+/* ── Narrow screens ───────────────────────────────────────────────────────── */
+@media (max-width: 575.98px) {
+    .sf-prose { padding: 20px 18px; }
+    .sf-panel { padding: 18px 16px; }
+    /* The label column stops being a column: at this width 128px of it is
+       wrapped text and the bars have nothing left to say. */
+    .sf-cal-row, .sf-band-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+    .sf-cal-row + .sf-cal-row { margin-top: var(--s5); padding-top: var(--s5); }
+    .sf-band-row + .sf-band-row { margin-top: var(--s5); }
+    .sf-band-val { text-align: left; }
+    .sf-games { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (hover: none) {
+    /* The whole card is the target, so it clears 44px on its own; the verdict
+       chip inside it is decoration, not a second control. */
+    .sf-game { min-height: 44px; }
+}
+
+/* Inline "How it works →" link out to a methodology page. Carries real hover,
+   focus-visible and active states — the two older call sites do their hover
+   with inline onmouseover, which leaves keyboard users nothing. */
+.howitworks {
+    color: var(--text-secondary); font-weight: 700; text-decoration: none;
+    white-space: nowrap; transition: color var(--t-fast);
+}
+.howitworks:hover { color: var(--accent); }
+.howitworks:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+    border-radius: var(--r-sm); color: var(--accent);
+}
+.howitworks:active { color: var(--text-primary); }
