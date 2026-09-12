@@ -4572,9 +4572,16 @@ def team(team_ref):
             SELECT
                 SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
                 SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
-            FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
+            FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season=%s
         ''', (team_name,)*6 + (season,))
         record = cursor.fetchone()
+        # Postseason INCLUDED. It was filtered to SeasonType.REGULAR, so the
+        # hero called Alabama 2021 12-1 when they were 13-2 — the bowl and the
+        # national-championship game were dropped. Every convention including
+        # the NCAA's counts them, and the Trends chart on this same page
+        # already plots "wins and losses per season, postseason included", so
+        # the page contradicted itself one tab apart.
+        #
         # A not-yet-played season (the upcoming view) has no completed games, so
         # the SUMs come back NULL — mark that and normalize to 0-0 so the hero
         # never renders "None-None".
@@ -4891,10 +4898,15 @@ def team(team_ref):
             conn.rollback()   # savant_weekly absent on a fresh DB
 
         # Recruiting rankings trend
+        # Scoped to the viewed season. It used to take the four most recent
+        # classes regardless, so Alabama's 2019 page showed the 2026 class —
+        # a 2026 module inside a pane whose every other block said 2019, with
+        # nothing to tell the reader it was not season-scoped. Principle 5 is
+        # "season-aware by default" and this was the one module that wasn't.
         cursor.execute('''
             SELECT year, rank, points FROM team_recruiting
-            WHERE team=%s ORDER BY year DESC LIMIT 4
-        ''', (team_name,))
+            WHERE team=%s AND year <= %s ORDER BY year DESC LIMIT 4
+        ''', (team_name, season))
         recruiting = [{'year': r[0], 'rank': r[1], 'points': round(r[2], 1) if r[2] else None}
                       for r in cursor.fetchall()]
 
