@@ -1,4 +1,9 @@
-"""Refresh game scores + completion for the active season — and nothing else.
+"""Refresh game scores + completion for the active season, every few minutes.
+
+Two riders travel with it, both non-fatal and both here because this is the one
+job that runs constantly: missing game summaries get backfilled, and the AP
+rankings fetch runs on one slot per hour (see `refresh_rankings`). Scores are
+the job; if either rider fails the scores still land.
 
 Why this exists separately from pipeline/fetch_data.py: that script is the weekly
 DESTRUCTIVE refresh (it DELETEs the season's games / player_stats / player_ppa
@@ -38,9 +43,11 @@ import os as _os, sys as _sys
 ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 if ROOT not in _sys.path:
     _sys.path.insert(0, ROOT)
+import datetime
 import gzip
 import json
 import os
+import subprocess
 import sys
 
 import cfbd
@@ -147,6 +154,58 @@ def fill_missing_summaries(conn, season, limit=12):
         print(f'summaries: {len(ids)} game(s) missing detail, {stored} stored', flush=True)
     return stored
 
+
+
+# ── AP poll piggyback ───────────────────────────────────────────────────────
+# The AP releases its Top 25 on Sunday afternoon (~14:00 ET), but the weekly
+# chain runs Sunday 08:00 ET — six hours too early, every single week. That gap
+# is meant to be covered by a separate hourly Render cron
+# (docs/RENDER_CRON.md), which has not been provisioned; the poll therefore sat
+# unfetched until someone ran the script by hand, and the site showed last
+# week's Top 25 for days.
+#
+# This job already runs every 10 minutes and is demonstrably alive, so it is the
+# cheapest reliable place to put an hourly check. Firing on one slot per hour
+# reproduces the missing cron's cadence without adding infrastructure.
+#
+# The slot is deliberately NOT the top of the hour: if the standalone hourly
+# cron (`0 * * * *`) is ever created, two concurrent runs would each try to
+# DELETE and re-INSERT the season and one would lose on the unique index. At
+# :30 the two can coexist, and the loser of any race self-heals an hour later.
+RANKINGS_MINUTE = 30
+
+
+def refresh_rankings(now=None):
+    """Run the AP rankings fetch once an hour. Returns True if it ran.
+
+    Entirely non-fatal, and isolated in a subprocess: fetch_rankings.py does its
+    work at import time and calls sys.exit(), so importing it here would end the
+    scores run. Scores are the job; this is the bonus.
+    """
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    if not (RANKINGS_MINUTE <= now.minute < RANKINGS_MINUTE + 10):
+        return False
+
+    script = os.path.join(ROOT, 'pipeline', 'fetch_rankings.py')
+    try:
+        proc = subprocess.run([sys.executable, script], capture_output=True,
+                              text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        print('rankings: timed out after 300s — skipped', flush=True)
+        return False
+    except Exception as exc:                      # noqa: BLE001 - never fatal
+        print(f'rankings: could not run ({exc.__class__.__name__}: {exc})', flush=True)
+        return False
+
+    # fetch_rankings.py prints one summary line per season and clears the site
+    # cache itself when it writes, so there is nothing to do here but surface it.
+    tail = [ln for ln in (proc.stdout or '').splitlines() if ln.strip()][-3:]
+    for line in tail:
+        print(f'rankings: {line}', flush=True)
+    if proc.returncode != 0:
+        err = (proc.stderr or '').strip().splitlines()[-1:] or ['no stderr']
+        print(f'rankings: exited {proc.returncode} — {err[0]}', flush=True)
+    return True
 
 
 def main():
@@ -295,6 +354,10 @@ def main():
             notify_cache_clear(scope=None if (finals or summaries) else 'scores')
         except Exception:
             pass
+
+    # Runs on its own hourly slot, independent of whether any score moved — a
+    # new poll arrives on quiet Sunday afternoons when nothing is being played.
+    refresh_rankings()
     return 0
 
 

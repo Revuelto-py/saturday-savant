@@ -203,7 +203,14 @@ when a completed game has no stored summary.
 
 Manual run: `python3 pipeline/fetch_scores.py` (all weeks) or `--week 1` (smaller payload).
 
-## Third Cron Job — AP rankings (`pipeline/fetch_rankings.py`)
+## AP rankings — hourly, riding the scores cron (no third cron job)
+
+> **This needs no dashboard change.** `pipeline/fetch_scores.py` runs the
+> rankings fetch itself, once an hour. The standalone cron described further
+> down was written up on 2026-09-08 and never provisioned; on 2026-09-13 the
+> Week 3 poll went unfetched for five hours as a result, which is what moved
+> this into code. Creating the standalone job is still fine — the two are built
+> not to collide — but nothing depends on it any more.
 
 Rankings are step 5 of the weekly chain, and for a while that was the only thing
 that fetched them. It isn't enough, because **the AP poll's release day moves**:
@@ -219,9 +226,29 @@ in September 2026: the fetch was working and the stored rows matched CFBD
 exactly — the poll simply hadn't been published yet when the chain last ran.
 
 Running it hourly removes the guesswork, the same way the scores job runs always
-rather than on a "game day" window.
+rather than on a "game day" window. The gap is structural, not bad luck: the
+weekly chain runs Sunday **08:00 ET** and the poll lands around **14:00 ET**, so
+a once-a-week fetch misses it by six hours every single week and then shows a
+stale Top 25 until the following Sunday.
 
-1. Render Dashboard → **New +** → **Cron Job** (a third one).
+**How it actually runs.** The scores job is already scheduled every 10 minutes
+and is demonstrably alive, so `fetch_scores.py` fires
+`pipeline/fetch_rankings.py` on one 10-minute slot per hour — 24 runs a day,
+the same cadence the standalone cron would have had, with no extra
+infrastructure to provision or forget. See `refresh_rankings()` there.
+
+The slot is **:30, not :00, on purpose.** If the standalone hourly job below is
+ever created it runs at `0 * * * *`; two concurrent runs would each try to
+DELETE and re-INSERT the season and one would lose on `uq_ap_rankings`. Offset
+by half an hour they coexist, and the loser of any race self-heals an hour
+later. The call is wrapped so it can never fail the scores run: it is a
+subprocess (the fetch script does its work at import time and calls
+`sys.exit()`), the timeout is 300s, and every exception is caught and logged.
+
+**Optional standalone job.** Nothing needs it, but if you want rankings off the
+scores job's back:
+
+1. Render Dashboard → **New +** → **Cron Job**.
 2. Same repo/branch/runtime/build command as the others.
 3. **Command:** `python3 pipeline/fetch_rankings.py`
 4. **Schedule (UTC):** `0 * * * *` — hourly, all week.
@@ -243,9 +270,9 @@ resolve is skipped rather than stored with a hole in it. `prev_rank` is always
 derived by walking the merged CFBD+ESPN polls in order, never taken from ESPN's
 own `previous` field, which disagrees with the stored preseason poll.
 
-This means **rankings now self-correct even with no dashboard change**: the
-Sunday chain runs `fetch_rankings.py` and will pick up a CFBD-lagged poll from
-ESPN. The hourly job below just makes it minutes instead of up to a week.
+This means **rankings self-correct on two axes**: the source (CFBD lags, ESPN
+covers it) and the clock (the hourly slot on the scores cron, rather than
+waiting for next Sunday's chain).
 
 **Why hourly is safe.** The script compares what CFBD returns against what is
 stored and writes nothing when they match — one CFBD call and one `SELECT` for a
