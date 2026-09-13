@@ -70,14 +70,20 @@
             entirely different from doing it against the worst. Each game's efficiency is
             rescaled by the opponent's own adjusted rating — and since those ratings depend on
             <em>their</em> opponents too, the whole system is recalculated over and over until
-            every rating is consistent with every other. Home-field advantage (worth about 20%
-            more points per drive in {{ season }}) is measured from the data and removed, so every
-            rating is expressed at a neutral site.</p>
+            every rating is consistent with every other. Home-field advantage — worth about 19%
+            more points per drive, measured across seven completed seasons rather than the one in
+            progress — is removed, so every rating is expressed at a neutral site. It is held
+            fixed on purpose: September schedules are lopsided by design, so a figure measured
+            live in week 3 reads nearly double the truth and distorts every team that happened to
+            open at home.</p>
 
             <div style="color: var(--text-primary);font-weight:700;margin:18px 0 6px">4 · Built to predict, not to reward</div>
             <p>Recent games count a little more than September ones, and early in a season every
-            team's small sample is blended toward the national average until it earns its
-            extremes. SVR answers one question: <em>"if these two teams played tonight on a
+            team's small sample is blended toward what that team was expected to be — last
+            season's rating, pulled toward average — until the new season's games outweigh it.
+            That anchor is what makes the schedule adjustment bite in September: a weak opponent
+            doesn't start out rated average, so beating them is discounted properly instead of
+            lifting a one-game team into the top ten. SVR answers one question: <em>"if these two teams played tonight on a
             neutral field, what's the margin?"</em> It doesn't care about résumés, rankings, or
             who deserved to make the playoff — which is exactly why it occasionally disagrees
             with the polls, and why that disagreement is informative.</p>

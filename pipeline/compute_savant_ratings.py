@@ -42,12 +42,16 @@ Drive inclusion rules (what counts as a possession):
       are worth their true 6/7/8 points.
 
 Home-field neutralization:
-    League-wide home vs away points-per-drive is measured from the same
-    drive sample, and each non-neutral game's raw efficiencies are scaled
-    by the square root of that ratio (home offense down, away offense up)
-    so every rating is expressed at a neutral site. Games carrying an
-    event note (bowls, playoff games, kickoff classics) are treated as
-    neutral-site.
+    Each non-neutral game's raw efficiencies are scaled by the square root
+    of a FIXED home/away points-per-drive ratio (home offense down, away
+    offense up) so every rating is expressed at a neutral site. The ratio
+    is a constant (HFA_RATIO) rather than a measurement of the season in
+    progress: the raw home/away split has no control for opponent quality,
+    and early-season schedules are deliberately unbalanced, so measuring it
+    in September reads about 2.0 instead of its true ~1.19 and mangles
+    every rating. The full derivation, and the backtest that settled it,
+    are on the constant. Games carrying an event note (bowls, playoff
+    games, kickoff classics) are treated as neutral-site.
 
 Opponent adjustment — iterative, KenPom-style:
     A team's adjusted offensive efficiency in one game is its raw
@@ -70,12 +74,16 @@ Recency weighting:
 
 Early-season stability — Bayesian prior:
     Every team's weighted game sample is blended with PRIOR_DRIVES
-    pseudo-drives at the national average efficiency. Over a full season
-    (~120+ countable drives each way) the prior contributes only a few
-    percent; if the script is re-run in September with two games played
-    it pulls extreme small-sample teams toward average instead of letting
-    a 2-0 team post an absurd rating. This replaces any hard games-played
-    minimum — teams are always ratable, just shrunk while unproven.
+    pseudo-drives at that team's PRESEASON EXPECTATION — last season's
+    Savant rating regressed toward the mean (PRIOR_REGRESS). Over a full
+    season (~120+ countable drives each way) the prior contributes only a
+    few percent; in September it dominates, which is the point. Anchoring
+    to the team rather than to the league average is what gives the
+    schedule adjustment teeth early: a weak opponent's rating no longer
+    starts at "average", so beating them earns a real discount instead of
+    a token one. This replaces any hard games-played minimum — teams are
+    always ratable, just shrunk toward what they were while unproven. A
+    team with no prior season falls back to the national average.
 
 Net Rating = Offensive Rating − Defensive Rating: the expected scoring
 margin per 10 drives (≈ one game) against an average FBS team on a
@@ -147,7 +155,58 @@ FCS_CONFS = ('CAA', 'Big Sky', 'MVFC', 'SWAC', 'MEAC', 'Southland', 'Big South',
 # Garbage time: margin at drive start beyond which the drive is excluded
 GARBAGE_MARGIN = {1: None, 2: 38, 3: 28, 4: 21}
 
-PRIOR_DRIVES   = 25      # pseudo-drives at national average blended into every team
+# Home-field advantage is a FIXED constant, not measured from the season in
+# progress. Measuring it looks principled and is badly wrong early: the raw
+# home/away split has no control for opponent quality, and September schedules
+# are deliberately unbalanced — power programs host overmatched teams. The
+# measured ratio therefore reads ~1.9-2.0 in week 2-3 and decays toward its true
+# value only as conference play balances the schedule:
+#
+#     2026 wk3   2.02        2025 full   1.255      2022 full   1.197
+#     2025 wk2   1.88        2024 full   1.222      2021 full   1.170
+#     2025 wk3   1.66        2023 full   1.189      2020 full   1.120
+#
+# Applied as sqrt(ratio) to each side, 2.02 means every home offense is cut 29%
+# and every home defense charged 42% more points — which in 2026 week 3 left
+# Texas 85th after beating Ohio State (both games at home) while one-game road
+# winners sat in the top 10. Walk-forward backtest over 2024-25, predicting each
+# week from ratings built through the week before (1,299 games):
+#
+#     measured in-season   MAE 12.90   70.5% straight up   (weeks 3-6: MAE 14.65)
+#     fixed 1.19           MAE 12.24   72.1%                (weeks 3-6: MAE 13.20)
+#
+# (both rows on the national-average prior, so the HFA change is isolated)
+#
+# Shrinking the measured value toward this constant was also tested and only
+# helped as it approached it, which is the tell that the in-season measurement
+# carries no signal worth keeping. The sweep is flat between 1.12 and 1.25 (MAE
+# prefers ~1.13, straight-up ~1.25); 1.19 is the mean of the seven completed
+# seasons above and sits in the middle of that plateau. Recompute it with
+# tools/savant_hfa.py after each season.
+HFA_RATIO      = 1.19
+
+PRIOR_DRIVES   = 25      # pseudo-drives blended into every team (target below)
+
+# What those pseudo-drives point AT. Shrinking toward the national average says
+# "an unproven team is average", which is how a team whose only countable game
+# was a win over a bad opponent lands in the top 10 in September — and, worse,
+# how the OPPONENT adjustment loses its teeth: a weak opponent's own rating is
+# shrunk to average too, so beating them earns almost no discount. Anchoring
+# each team to its own preseason expectation instead (last season's Savant,
+# regressed toward the mean) makes a weak opponent look weak from week 1, which
+# is exactly when the schedule penalty needs to bite.
+#
+#     national-average prior   MAE 12.24   72.1%   (weeks 3-6: MAE 13.20, 69.4%)
+#     preseason prior          MAE 11.96   72.5%   (weeks 3-6: MAE 12.28, 70.9%)
+#
+# (both on the fixed HFA above. Against the shipped model — measured HFA and a
+#  national-average prior — the pair is MAE 12.90 -> 11.96 and, in weeks 3-6,
+#  14.65 -> 12.28.)
+#
+# 0.65 = how much of last season's deviation from average carries over. The
+# backtest is flat from 0.5 to 0.75. A team with no prior season (new to FBS,
+# or the earliest season loaded) falls back to the national average.
+PRIOR_REGRESS  = 0.65
 RECENCY_MAX    = 0.35    # last game weighted (1 + this) × the first game
 CONVERGENCE    = 1e-9
 MAX_ITERATIONS = 500
@@ -345,7 +404,34 @@ def load_game_samples_cfbd(cur, season):
     return games, fbs, hfa_ratio
 
 
-def compute_ratings(games, hfa_ratio):
+def load_prior_targets(cur, season):
+    """{team: (off_ppd, def_ppd)} — last season's Savant ratings regressed
+    toward that season's mean, to serve as this season's Bayesian prior.
+
+    Returns {} when the previous season has no ratings (the earliest season
+    loaded, or a fresh database); callers then fall back to the national
+    average, which is the behaviour this replaced.
+    """
+    cur.execute('SELECT team, off_rating, def_rating FROM savant_ratings '
+                'WHERE season = %s AND off_rating IS NOT NULL', (season - 1,))
+    rows = cur.fetchall()
+    if len(rows) < 50:
+        print(f"prior season {season - 1}: {len(rows)} rated teams — "
+              f"falling back to the national average as the prior")
+        return {}
+    mean_o = sum(r[1] for r in rows) / len(rows)
+    mean_d = sum(r[2] for r in rows) / len(rows)
+    # Ratings are stored per 10 drives; the loop works in points per drive.
+    out = {r[0]: ((mean_o + PRIOR_REGRESS * (r[1] - mean_o)) / SCALE,
+                  (mean_d + PRIOR_REGRESS * (r[2] - mean_d)) / SCALE)
+           for r in rows}
+    print(f"prior targets from {season - 1}: {len(out)} teams, "
+          f"regressed {PRIOR_REGRESS:.2f} toward mean "
+          f"(off {mean_o:.1f}, def {mean_d:.1f})")
+    return out
+
+
+def compute_ratings(games, hfa_ratio, prior_targets=None):
     """Iterative opponent adjustment. Returns {team: dict} of ratings."""
     hfa = hfa_ratio ** 0.5
 
@@ -373,8 +459,16 @@ def compute_ratings(games, hfa_ratio):
           f"({total_drv} countable drives)")
 
     teams = list(team_games)
-    adj_o = {t: natl for t in teams}
-    adj_d = {t: natl for t in teams}
+    # Each team shrinks toward its OWN preseason expectation, not the league
+    # mean — see PRIOR_REGRESS. Unknown teams keep the old behaviour.
+    prior_targets = prior_targets or {}
+    prior_o = {t: prior_targets.get(t, (natl, natl))[0] for t in teams}
+    prior_d = {t: prior_targets.get(t, (natl, natl))[1] for t in teams}
+    n_prior = sum(1 for t in teams if t in prior_targets)
+    print(f"prior anchored to preseason expectation for {n_prior}/{len(teams)} "
+          f"teams; the rest to the national average")
+    adj_o = {t: prior_o[t] for t in teams}
+    adj_d = {t: prior_d[t] for t in teams}
 
     for it in range(MAX_ITERATIONS):
         max_delta = 0.0
@@ -391,8 +485,8 @@ def compute_ratings(games, hfa_ratio):
                 o_num += w * own_drv * go; o_den += w * own_drv
                 d_num += w * opp_drv * gd; d_den += w * opp_drv
             # Bayesian prior toward the national average
-            new_o[t] = (o_num + PRIOR_DRIVES * natl) / (o_den + PRIOR_DRIVES)
-            new_d[t] = (d_num + PRIOR_DRIVES * natl) / (d_den + PRIOR_DRIVES)
+            new_o[t] = (o_num + PRIOR_DRIVES * prior_o[t]) / (o_den + PRIOR_DRIVES)
+            new_d[t] = (d_num + PRIOR_DRIVES * prior_d[t]) / (d_den + PRIOR_DRIVES)
             max_delta = max(max_delta, abs(new_o[t] - adj_o[t]), abs(new_d[t] - adj_d[t]))
         adj_o, adj_d = new_o, new_d
         if max_delta < CONVERGENCE:
@@ -548,7 +642,15 @@ def main():
             print(f"only {len(games)} usable games (< {MIN_GAMES}) — nothing to compute, exiting")
             return
 
-        ratings = compute_ratings(games, hfa_ratio)
+        # hfa_ratio is what the sample MEASURED; it is reported for
+        # observability and deliberately not used — see HFA_RATIO.
+        if abs(hfa_ratio - HFA_RATIO) > 0.25:
+            print(f"note: measured home/away PPD ratio {hfa_ratio:.3f} is far from "
+                  f"the {HFA_RATIO} constant — expected early in a season, when "
+                  f"schedules are unbalanced and the raw split is mostly opponent "
+                  f"quality, not home field")
+        ratings = compute_ratings(games, HFA_RATIO,
+                                  load_prior_targets(cur, SEASON))
         validate(cur, ratings)
 
         # Snapshot label: max regular-season week in the sample, or the
@@ -560,27 +662,31 @@ def main():
             has_post = any(g['order'][0] == 1 for g in games)
             through_week = 20 if has_post else (max(reg_weeks) if reg_weeks else 0)
 
+        wrote = False
         if snapshot_only:
             write_snapshot(cur, ratings, through_week)
             conn.commit()
+            wrote = True
         elif write:
             write_table(cur, ratings)
             write_snapshot(cur, ratings, through_week)
             conn.commit()
+            wrote = True
         else:
             print("\n(dry run — pass --write to persist)")
     finally:
         conn.close()
 
+    # Only when rows actually changed. This used to sit at module scope and so
+    # fired on every run — a "dry run" that printed "pass --write to persist"
+    # still reached out and cleared the live site's cache.
+    if wrote:
+        try:
+            from cache_notify import notify_cache_clear
+            notify_cache_clear()
+        except Exception:
+            pass
+
 
 if __name__ == '__main__':
     main()
-
-
-# Data changed — tell the live site to drop its in-memory page cache so the
-# update is visible immediately instead of after the cache TTL.
-try:
-    from cache_notify import notify_cache_clear
-    notify_cache_clear()
-except Exception:
-    pass
