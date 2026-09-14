@@ -9708,7 +9708,16 @@ def explorer():
                    ta.off_ppa, ta.def_ppa, ta.off_success_rate, ta.def_success_rate,
                    ta.off_explosiveness, ta.def_havoc_total,
                    pg.ppg_for, pg.ppg_against,
-                   sv.sos, ta.off_scoring_opps, tst.off_plays
+                   sv.sos, ta.off_scoring_opps, tst.off_plays,
+                   -- Run/pass splits for the identity chart. team_advanced has
+                   -- no play-type breakdown; team_stats is the only table that
+                   -- carries one, on both sides of the ball.
+                   tst.off_rushing_plays_ppa, tst.off_passing_plays_ppa,
+                   tst.off_rushing_success_rate, tst.off_passing_success_rate,
+                   tst.off_rushing_explosiveness, tst.off_passing_explosiveness,
+                   tst.def_rushing_plays_ppa, tst.def_passing_plays_ppa,
+                   tst.def_rushing_success_rate, tst.def_passing_success_rate,
+                   tst.def_rushing_explosiveness, tst.def_passing_explosiveness
             FROM savant_ratings sv
             JOIN teams t ON t.name = sv.team
             LEFT JOIN sp_ratings sp ON sp.team = sv.team AND sp.season = sv.season
@@ -9738,7 +9747,10 @@ def explorer():
         for (name, logo, conf, net_sv, off_sv, def_sv,
              sp_all, sp_off, sp_def, sp_st,
              off_ppa, def_ppa, off_sr, def_sr, off_expl, havoc,
-             ppg_for, ppg_against, sos, scoring_opps, plays) in cursor.fetchall():
+             ppg_for, ppg_against, sos, scoring_opps, plays,
+             o_rush_ppa, o_pass_ppa, o_rush_sr, o_pass_sr, o_rush_ex, o_pass_ex,
+             d_rush_ppa, d_pass_ppa, d_rush_sr, d_pass_sr, d_rush_ex, d_pass_ex
+             ) in cursor.fetchall():
             teams_data.append({
                 'name': name, 'slug': slugify_team(name),
                 'url': team_url(name, season),
@@ -9753,6 +9765,19 @@ def explorer():
                     'off_expl': _r(off_expl, 3),
                     'def_havoc': _r(havoc * 100, 1) if havoc is not None else None,
                     'ppg_for': _r(ppg_for, 1), 'ppg_against': _r(ppg_against, 1),
+                },
+                # Run/pass identity: [rush, pass] per side per metric, so the
+                # chart can switch lens without another request. Rates are
+                # scaled to percentages to match the other success-rate axes.
+                'split': {
+                    'off_ppa':  [_r(o_rush_ppa, 3), _r(o_pass_ppa, 3)],
+                    'def_ppa':  [_r(d_rush_ppa, 3), _r(d_pass_ppa, 3)],
+                    'off_sr':   [_r(o_rush_sr * 100, 1) if o_rush_sr is not None else None,
+                                 _r(o_pass_sr * 100, 1) if o_pass_sr is not None else None],
+                    'def_sr':   [_r(d_rush_sr * 100, 1) if d_rush_sr is not None else None,
+                                 _r(d_pass_sr * 100, 1) if d_pass_sr is not None else None],
+                    'off_expl': [_r(o_rush_ex, 3), _r(o_pass_ex, 3)],
+                    'def_expl': [_r(d_rush_ex, 3), _r(d_pass_ex, 3)],
                 },
                 # Bubble-size dimensions (optional third axis)
                 'size': {
