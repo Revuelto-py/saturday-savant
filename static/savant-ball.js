@@ -5,9 +5,9 @@
  * spins it and breaks it back apart into the footballs it was made of, and it
  * fades before the slate is reached.
  *
- * Every small football is a real 3D ball: each point sprite ray-traces a lit
- * spheroid with its own orientation, laces and stripes, so the pieces turn and
- * catch the light as they fly. Assembled, each one lies along the big ball's
+ * Every small football is a real 3D ball: each point sprite ray-marches a lit
+ * leather football with its own orientation, seams, laces and stripes, so the
+ * pieces turn and catch the light as they fly. Assembled, each one lies along the big ball's
  * seam with its laces facing outward.
  *
  * Raw WebGL rather than three.js: the whole scene is one draw call of points,
@@ -50,7 +50,7 @@
     var aPos = new Float32Array(N * 3), aStart = new Float32Array(N * 3), aTangent = new Float32Array(N * 3);
     var aNormal = new Float32Array(N * 3), aColor = new Float32Array(N * 3), aSize = new Float32Array(N), aDelay = new Float32Array(N), aSeed = new Float32Array(N);
 
-    var STEEL = [0.56, 0.61, 0.67], BRIGHT = [0.74, 0.78, 0.83], DUST = [0.42, 0.46, 0.51];
+    var STEEL = [0.46, 0.50, 0.56], BRIGHT = [0.52, 0.56, 0.62], DUST = [0.36, 0.40, 0.45];
     var SIGNAL = [0.11, 0.61, 0.94];   // #1c9cf0
 
     function radiusAt(x) { return Math.sqrt(R * R - x * x) - D; }
@@ -111,15 +111,18 @@
         'uniform mat4 uMV, uProj;',
         'uniform float uAssemble, uBreak, uTime, uPx, uScale, uOpacity, uMaxPt;',
         'uniform vec4 uShield, uShieldB;',
-        'varying vec3 vColor, vA, vU, vW;',
-        'varying float vAlpha, vLight;',
+        'varying vec3 vColor, vA, vU, vW, vOut;',
+        'varying float vAlpha, vLight, vE, vSize, vZ, vPt;',
         'void main() {',
         '  float land = clamp((uAssemble - aDelay) / 0.5, 0.0, 1.0);',
         '  land = 1.0 - pow(1.0 - land, 3.0);',
         '  float brk = clamp((uBreak - aSeed * 0.45) / 0.55, 0.0, 1.0);',
         '  float e = land * (1.0 - brk * brk);',
-        '  vec3 p = mix(aStart, aPos, e);',
-        '  p += (1.0 - e) * e * vec3(-aStart.z, 0.0, aStart.x) * 0.3;',
+        // Start points stay behind the ball plane: a piece flying in from near the
+        // camera would balloon, then get cut by the near plane mid-flight.
+        '  vec3 st = vec3(aStart.xy, min(aStart.z, 1.5));',
+        '  vec3 p = mix(st, aPos, e);',
+        '  p += (1.0 - e) * e * vec3(-st.z, 0.0, st.x) * 0.3;',
         '  p += (1.0 - e) * 0.25 * vec3(sin(uTime * 0.6 + aSeed * 40.0), cos(uTime * 0.5 + aSeed * 31.0), 0.0);',
         '  vec4 mv = uMV * vec4(p, 1.0);',
         '  vec4 c0 = uProj * mv;',
@@ -135,86 +138,124 @@
         '  vec3 up = mix(ln, nv, e);',
         '  up -= dot(up, ax) * ax;',
         '  up = length(up) > 0.001 ? normalize(up) : normalize(cross(ax, vec3(0.3, 0.2, 1.0)));',
-        '  vA = ax; vU = up; vW = cross(ax, up);',
+        '  vA = ax; vU = up; vW = cross(ax, up); vOut = nv; vE = e;',
         // Far side of the big ball sits in shadow.
         '  vec4 ctr = uMV * vec4(0.0, 0.0, 0.0, 1.0);',
         '  float depth = clamp((mv.z - ctr.z) / (1.1 * uScale) * 0.5 + 0.5, 0.0, 1.0);',
-        '  vLight = mix(1.0, 0.35 + 0.65 * depth, e);',
+        '  vLight = mix(1.0, 0.4 + 0.6 * depth, e);',
         '  vColor = aColor;',
         '  vec2 ndc = c0.xy / c0.w;',
-        // Text shields: pieces are cleared from behind the subline (uShield) and
-        // dimmed behind the name (uShieldB), so both read over the ball.
+        // Text shields: pieces clear from behind the subline and dim behind the name.
         '  float outA = max(max(uShield.x - ndc.x, ndc.x - uShield.z), max(uShield.y - ndc.y, ndc.y - uShield.w));',
         '  float outB = max(max(uShieldB.x - ndc.x, ndc.x - uShieldB.z), max(uShieldB.y - ndc.y, ndc.y - uShieldB.w));',
         '  float isLace = step(aColor.r * 3.0, aColor.b);',
         '  float shield = smoothstep(-0.03, 0.06, outA) * mix(mix(0.35, 0.1, isLace), 1.0, smoothstep(-0.03, 0.06, outB));',
-        '  vAlpha = uOpacity * shield;',
-        '  gl_PointSize = clamp(0.115 * aSize * uScale * uPx / -mv.z, 4.0, uMaxPt);',
+        // WebGL drops a whole point once its centre leaves clip space, so a piece
+        // popped out at the canvas edge. Fade it out before that can happen.
+        '  float edge = 1.0 - smoothstep(0.86, 0.99, max(abs(ndc.x), abs(ndc.y)));',
+        '  vAlpha = uOpacity * shield * edge;',
+        '  float sz = 0.115 * aSize * uScale;',                         // piece length in view units
+        '  float pt = sz * uPx / -mv.z;',
+        '  vPt = clamp(pt, 4.0, uMaxPt);',
+        '  vSize = sz * vPt / pt;',                                      // keeps depth true if the size was clamped
+        '  vZ = mv.z;',
+        '  gl_PointSize = vPt;',
         '  gl_Position = c0;',
         '}'
     ].join('\n');
 
-    // Each sprite ray-marches a small football in its own frame: a true lens
-    // solid (two circular arcs meeting in points, not an egg-shaped ellipsoid),
-    // lit, with a lace seam and stitches on top and a stripe near each end.
-    // The march starts where the ray enters the bounding ellipsoid, which also
-    // discards the sprite's empty corners before any marching.
+    // Each sprite ray-marches a small football in its own frame: an exact lens
+    // solid (two circular arcs meeting in points), shaded as pebbled leather
+    // with four panel seams, raised white laces over a shallow groove, stripes
+    // near each end, a clearcoat highlight and a cool reflected rim. It writes
+    // its true per-pixel depth, so neighbours intersect cleanly instead of
+    // swapping whole sprites as the ball turns, and its outline is antialiased
+    // from the ray's closest approach instead of a hard, flickering discard.
     var FRAG = [
+        '#extension GL_EXT_frag_depth : enable',
         '#ifdef GL_FRAGMENT_PRECISION_HIGH',
         'precision highp float;',
         '#else',
         'precision mediump float;',
         '#endif',
-        'varying vec3 vColor, vA, vU, vW;',
-        'varying float vAlpha, vLight;',
+        'uniform float uP22, uP32;',
+        'varying vec3 vColor, vA, vU, vW, vOut;',
+        'varying float vAlpha, vLight, vE, vSize, vZ, vPt;',
         // Exact SDF of a lens of revolution: half-length 0.46, half-width 0.27.
-        // Its arcs have radius 0.5269 centred 0.2569 off the axis.
         'float sdBall(vec3 p) {',
         '  vec2 q = abs(vec2(length(p.yz), p.x));',
         '  const float r = 0.5269; const float d = 0.2569; const float b = 0.46;',
         '  return ((q.y - b) * d > q.x * b) ? length(q - vec2(0.0, b)) : length(q + vec2(d, 0.0)) - r;',
         '}',
+        'float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }',
         'void main() {',
         '  vec2 q = gl_PointCoord - 0.5; q.y = -q.y;',
         '  vec3 ro = vec3(q, 1.0);',
         '  vec3 o = vec3(dot(ro, vA), dot(ro, vU), dot(ro, vW));',
         '  vec3 dir = -vec3(vA.z, vU.z, vW.z);',
-        '  vec3 rad = vec3(0.47, 0.28, 0.28);',
+        '  vec3 rad = vec3(0.475, 0.285, 0.285);',
         '  vec3 O = o / rad, Dv = dir / rad;',
         '  float qa = dot(Dv, Dv), qb = dot(O, Dv), qc = dot(O, O) - 1.0;',
         '  float h = qb * qb - qa * qc;',
         '  if (h < 0.0) discard;',
         '  float t = (-qb - sqrt(h)) / qa;',
         '  float tEnd = (-qb + sqrt(h)) / qa;',
+        '  float minD = 1e3, tBest = t;',
         '  bool hit = false;',
-        '  vec3 p;',
-        '  for (int i = 0; i < 14; i++) {',
-        '    p = o + dir * t;',
-        '    float dist = sdBall(p);',
-        '    if (dist < 0.0015) { hit = true; break; }',
+        '  for (int i = 0; i < 24; i++) {',
+        '    float dist = sdBall(o + dir * t);',
+        '    if (dist < minD) { minD = dist; tBest = t; }',
+        '    if (dist < 0.0006) { hit = true; break; }',
         '    t += dist;',
         '    if (t > tEnd) break;',
         '  }',
-        '  if (!hit) discard;',
-        '  const vec2 k = vec2(1.0, -1.0); const float e = 0.002;',
-        '  vec3 nl = normalize(k.xyy * sdBall(p + k.xyy * e) + k.yyx * sdBall(p + k.yyx * e) +',
-        '                      k.yxy * sdBall(p + k.yxy * e) + k.xxx * sdBall(p + k.xxx * e));',
-        '  vec3 N = normalize(nl.x * vA + nl.y * vU + nl.z * vW);',
+        '  float px = 1.0 / vPt;',                                       // one screen pixel in sprite units
+        '  float cov = hit ? 1.0 : 1.0 - smoothstep(0.0, 1.25 * px, minD);',
+        '  if (cov < 0.03) discard;',
+        '  vec3 p = o + dir * tBest;',
+        '  const vec2 k = vec2(1.0, -1.0); const float ep = 0.0025;',
+        '  vec3 nl = normalize(k.xyy * sdBall(p + k.xyy * ep) + k.yyx * sdBall(p + k.yyx * ep) +',
+        '                      k.yxy * sdBall(p + k.yxy * ep) + k.xxx * sdBall(p + k.xxx * ep));',
+        // Surface marks, in the piece's frame: x along its axis, y toward its laces.
+        '  float radial = max(length(p.yz), 1e-4);',
         '  float top = step(0.0, p.y);',
-        '  float lace = top * step(abs(p.z), 0.028) * step(abs(p.x), 0.17);',
-        '  float stitch = top * step(abs(p.z), 0.075) * step(abs(fract(p.x * 20.0 + 0.5) - 0.5), 0.18) * step(abs(p.x), 0.15);',
-        '  float stripe = step(abs(abs(p.x) - 0.30), 0.022);',
-        '  vec3 base = mix(vColor, vec3(0.96), max(max(lace, stitch), stripe * 0.8));',
-        '  vec3 L = normalize(vec3(-0.35, 0.65, 0.68));',
-        '  float diff = max(dot(N, L), 0.0);',
-        '  float spec = pow(max(dot(reflect(-L, N), vec3(0.0, 0.0, 1.0)), 0.0), 24.0);',
-        '  float rim = pow(1.0 - max(N.z, 0.0), 3.0);',
-        '  vec3 col = (base * (0.2 + 0.95 * diff) + vec3(spec * 0.55) + base * rim * 0.3) * vLight;',
+        '  float aa = 1.5 * px;',
+        '  float lace = top * (1.0 - smoothstep(0.024, 0.024 + aa, abs(p.z))) * (1.0 - smoothstep(0.17, 0.17 + aa, abs(p.x)));',
+        '  float stitch = top * (1.0 - smoothstep(0.07, 0.07 + aa, abs(p.z))) * step(abs(fract(p.x * 20.0 + 0.5) - 0.5), 0.17) * step(abs(p.x), 0.15);',
+        '  float laces = max(lace, stitch);',
+        '  float groove = top * (1.0 - smoothstep(0.07, 0.11, abs(p.z))) * step(abs(p.x), 0.2) * (1.0 - laces);',
+        '  float seam = 1.0 - smoothstep(0.012, 0.012 + aa + 0.01, min(abs(p.y), abs(p.z)) / radial * 0.27);',
+        '  seam *= 1.0 - top * step(abs(p.z), 0.08) * step(abs(p.x), 0.2);',
+        '  float stripe = (1.0 - smoothstep(0.02, 0.02 + aa, abs(abs(p.x) - 0.3))) * (1.0 - seam);',
+        // Raised laces tilt the normal up; pebble grain breaks up the highlight.
+        '  nl = normalize(nl + vec3(0.0, 0.35 * laces, 0.0));',
+        '  float g = hash(floor(p * 150.0));',
+        '  vec3 N = normalize(nl.x * vA + nl.y * vU + nl.z * vW);',
+        '  vec3 leather = vColor * (0.9 + 0.2 * g);',
+        '  vec3 base = mix(leather, vec3(0.95), max(laces, stripe * 0.9));',
+        '  base *= 1.0 - 0.55 * seam - 0.35 * groove;',
+        '  vec3 V = vec3(0.0, 0.0, 1.0);',
+        '  vec3 L = normalize(vec3(-0.4, 0.7, 0.6));',
+        '  float nd = dot(N, L);',
+        '  float diff = clamp((nd + 0.2) / 1.2, 0.0, 1.0);',               // wrapped key light: soft terminator
+        '  float spec = pow(max(dot(N, normalize(L + V)), 0.0), mix(38.0, 90.0, g)) * mix(0.35, 0.8, g) * (1.0 - 0.5 * laces) * (1.0 - seam);',
+        '  float fres = pow(1.0 - max(N.z, 0.0), 4.0);',
+        '  vec3 env = mix(vec3(0.02, 0.03, 0.05), vec3(0.42, 0.50, 0.62), N.y * 0.5 + 0.5) * fres * 0.55;',
+        '  vec3 fill = vec3(0.11, 0.61, 0.94) * max(dot(N, normalize(vec3(0.7, -0.45, 0.4))), 0.0) * 0.22;',
+        '  float ao = mix(1.0, 0.4 + 0.6 * clamp(dot(N, vOut) * 0.5 + 0.5, 0.0, 1.0), vE);',
+        '  vec3 col = (base * (0.10 + 1.05 * diff) + base * fill) * ao * vLight + (vec3(spec) + env) * vLight * mix(1.0, ao, 0.5);',
         '  col = min(col, vec3(1.0));',
+        '  float a = cov * vAlpha;',
+        '#ifdef GL_EXT_frag_depth',
+        '  float zv = vZ + (1.0 - tBest) * vSize;',
+        '  gl_FragDepthEXT = ((uP22 * zv + uP32) / -zv) * 0.5 + 0.5;',
+        '#endif',
         // Valid premultiplied output: colour never exceeds alpha.
-        '  gl_FragColor = vec4(col * vAlpha, vAlpha);',
+        '  gl_FragColor = vec4(col * a, a);',
         '}'
     ].join('\n');
+
+    gl.getExtension('EXT_frag_depth');           // true per-pixel depth where available
 
     function compile(type, src) {
         var sh = gl.createShader(type);
@@ -242,10 +283,12 @@
     attrib('aColor', aColor, 3); attrib('aSize', aSize, 1); attrib('aDelay', aDelay, 1); attrib('aSeed', aSeed, 1);
 
     var U = {};
-    ['uMV', 'uProj', 'uShield', 'uShieldB', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uOpacity', 'uMaxPt'].forEach(function (n) {
+    ['uMV', 'uProj', 'uP22', 'uP32', 'uShield', 'uShieldB', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uOpacity', 'uMaxPt'].forEach(function (n) {
         U[n] = gl.getUniformLocation(prog, n);
     });
     gl.uniform1f(U.uMaxPt, gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]);
+    gl.uniform1f(U.uP22, (100 + 0.1) / (0.1 - 100));               // projection terms for FAR 100, NEAR 0.1
+    gl.uniform1f(U.uP32, 2 * 100 * 0.1 / (0.1 - 100));
 
     // Solid balls: the near ones hide the far ones.
     gl.enable(gl.DEPTH_TEST);
