@@ -150,6 +150,11 @@
                     {% for _ in range(22) %}<i class="skel"></i>{% endfor %}
                 </span>
             </div>
+            {# The hovered player, drawn large. An HTML element rather than a
+               Plotly layout image: scaling this is a compositor transform, so
+               it can ease in at 60fps, where a relayout per mousemove snapped
+               from nothing to full size and re-laid out the whole figure. #}
+            <img id="xp-hl" class="xp-hl" alt="" aria-hidden="true">
         </div>
         <div class="xp-legend">
             <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
@@ -487,7 +492,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // Resting and hovered marker diameters, in px. The jump is what makes a
     // point in a crowded cluster readable without clicking into it.
     var CHIP = 26, CHIP_HOVER = 46;
-    var HL_IDX = 0, HOVER_SX = 0, HOVER_SY = 0;
     var LAST_PTS = [], LAST_X = '', LAST_Y = '';
     var chkQual = document.getElementById('xp-qual');
     var axStats = {}; AXES.forEach(function(a){ axStats[a.key]={label:a.label, invert:a.invert, dp:a.dp, unit:a.unit||''}; });
@@ -546,12 +550,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return { source:p.headshot, x:p.stats[xk], y:p.stats[yk], xref:'x', yref:'y',
                      sizex:sx, sizey:sy, xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
         });
-        // The enlarged copy of whichever headshot is hovered. Last in the list
-        // so it draws over its neighbours instead of under them.
-        HL_IDX = layout.images.length;
-        layout.images.push({ source:'', x:0, y:0, xref:'x', yref:'y', sizex:0, sizey:0,
-                             xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' });
-        HOVER_SX = sx * 1.75; HOVER_SY = sy * 1.75;
         Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true});
         hideSkeleton();
         syncUrl({x:xk, y:yk});
@@ -714,7 +712,21 @@ document.addEventListener('DOMContentLoaded', function () {
     // legible without having to click through to the player.
     function wirePlayerHover() {
         var plot = document.getElementById('xp-plot');
+        var hl = document.getElementById('xp-hl');
         var last = -1;
+
+        function place(pt, p) {
+            // Data coordinates -> pixels inside the plot div. _offset is the
+            // axis's own origin within the figure, so this lands on the point
+            // regardless of margins or the current zoom.
+            var xa = pt.xaxis, ya = pt.yaxis;
+            if (!xa || !ya) return false;
+            hl.style.left = (xa._offset + xa.d2p(p.stats[LAST_X])) + 'px';
+            hl.style.top  = (ya._offset + ya.d2p(p.stats[LAST_Y])) + 'px';
+            hl.style.borderColor = p.color || COL.accent;
+            return true;
+        }
+
         plot.on('plotly_hover', function(d){
             var pt = d.points && d.points[0];
             if (!pt || pt.curveNumber !== 0) return;
@@ -725,21 +737,23 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!p) return;
             var x = p.stats[LAST_X], y = p.stats[LAST_Y];
             Plotly.restyle(plot, {x:[[x]], y:[[y]], 'marker.line.color':[[p.color || COL.accent]]}, [1]);
-            if (p.headshot) {
-                var u = {};
-                u['images[' + HL_IDX + '].source'] = p.headshot;
-                u['images[' + HL_IDX + '].x'] = x;
-                u['images[' + HL_IDX + '].y'] = y;
-                u['images[' + HL_IDX + '].sizex'] = HOVER_SX;
-                u['images[' + HL_IDX + '].sizey'] = HOVER_SY;
-                Plotly.relayout(plot, u);
+            if (p.headshot && place(pt, p)) {
+                // Swapping src mid-transition would flash the old face at the
+                // new position, so the grow only starts once this one is ready.
+                if (hl.getAttribute('src') !== p.headshot) {
+                    hl.classList.remove('is-on');
+                    hl.src = p.headshot;
+                }
+                // Next frame, so the browser has a start value to ease from.
+                requestAnimationFrame(function(){ hl.classList.add('is-on'); });
+            } else {
+                hl.classList.remove('is-on');
             }
         });
         plot.on('plotly_unhover', function(){
             last = -1;
             Plotly.restyle(plot, {x:[[null]], y:[[null]]}, [1]);
-            var u = {}; u['images[' + HL_IDX + '].sizex'] = 0; u['images[' + HL_IDX + '].sizey'] = 0;
-            Plotly.relayout(plot, u);
+            hl.classList.remove('is-on');
         });
     }
 
@@ -799,8 +813,22 @@ document.addEventListener('DOMContentLoaded', function () {
         var h = hex.replace('#',''); if (h.length===3) h=h.split('').map(function(c){return c+c;}).join('');
         var n = parseInt(h,16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
     }
-    function showSkeleton() { var e=document.getElementById('xp-skel'); if (e) e.hidden = false; }
-    function hideSkeleton() { var e=document.getElementById('xp-skel'); if (e) e.hidden = true; }
+    function showSkeleton() {
+        var e=document.getElementById('xp-skel');
+        if (!e) return;
+        e.classList.remove('is-out');
+        e.hidden = false;
+    }
+    function hideSkeleton() {
+        var e=document.getElementById('xp-skel');
+        if (!e || e.hidden) return;
+        // Fade, then hide. [hidden] is display:none, so setting it straight
+        // away would cut the skeleton out mid-frame; the timeout matches the
+        // CSS duration and the class is cleared by showSkeleton on the way
+        // back in, so an axis change during the fade still behaves.
+        e.classList.add('is-out');
+        setTimeout(function(){ if (e.classList.contains('is-out')) e.hidden = true; }, 240);
+    }
     function whenPlotly(fn) { if (typeof Plotly==='undefined') { setTimeout(function(){whenPlotly(fn);}, 60); return; } fn(); }
 });
 </script>

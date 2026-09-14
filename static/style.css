@@ -2483,13 +2483,25 @@ body.cmp-exporting .cmp-val { font-variant-numeric: normal; }
    a beat and then snaps into place. This holds the shape of a scatter — two
    axes and a drift of points — in the same box, so nothing moves when the real
    chart arrives. */
-.xp-plot-wrap { position: relative; }
+.xp-plot-wrap {
+    position: relative;
+    /* The skeleton is absolutely positioned, so without this the wrapper has
+       no height of its own and the region collapses to nothing until Plotly
+       sizes the figure — the skeleton was drawing into a 0px box and the page
+       jumped when the chart appeared. Matches .xp-plot's height. */
+    min-height: 640px;
+}
 .xp-skel {
     position: absolute;
     inset: 0;
     pointer-events: none;
     padding: 12px 18px 52px 58px;   /* matches the plot's own margins */
+    opacity: 1;
+    transition: opacity 220ms ease-out;
 }
+/* Faded out first, then hidden, so the chart is not swapped in on a hard cut.
+   hideSkeleton() adds this and sets [hidden] when the fade ends. */
+.xp-skel.is-out { opacity: 0; }
 .xp-skel[hidden] { display: none !important; }
 .xp-skel-axis { position: absolute; border-radius: 2px; }
 .xp-skel-y { left: 52px; top: 12px; bottom: 52px; width: 3px; }
@@ -8203,4 +8215,46 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .mu-slot-x { width: 44px; height: 44px; }
     .mu-win-btn { min-height: 44px; }
     .mu-game { min-height: 44px; }
+}
+
+/* ── Stat Explorer: hovered player ────────────────────────────────────────
+   The enlarged face that follows the pointer around the player scatter. It is
+   a plain <img> positioned over the figure rather than a Plotly layout image,
+   because growing a layout image means a relayout of the whole chart on every
+   mousemove — it snapped from zero to full size and could not be eased. Here
+   the grow is a compositor transform, so it runs at 60fps and costs the chart
+   nothing. */
+.xp-hl {
+    position: absolute;
+    width: 46px;                      /* matches CHIP_HOVER in explorer.html */
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: top;
+    background: var(--bg-card);
+    border: 2.5px solid var(--accent);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+    pointer-events: none;             /* never steals the hover it reacts to */
+    opacity: 0;
+    /* Centred on its data point, and scaled from the size of the chip it
+       replaces so the face appears to swell out of the marker. */
+    transform: translate(-50%, -50%) scale(0.56);
+    transform-origin: 50% 50%;
+    transition: transform 170ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease-out;
+    will-change: transform, opacity;
+    z-index: 2;
+}
+.xp-hl.is-on {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* Still appears, just without the swell. */
+    .xp-hl { transition: opacity 100ms linear; transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* No crossfade; the skeleton simply goes when the chart is ready. */
+    .xp-skel { transition: none; }
 }

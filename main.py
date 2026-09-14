@@ -60,6 +60,7 @@ import cfbd
 import psycopg2
 from psycopg2 import pool as pg_pool
 import gzip
+import io
 import colorsys
 from functools import lru_cache
 import json
@@ -8554,6 +8555,44 @@ def _img_fetch(url):
         return None
 
 
+# A stored headshot is a ~275KB 600px PNG. The Stat Explorer draws 150 of them
+# at about 30 CSS pixels each, so it was pulling ~34MB through this process to
+# paint thumbnails — the chart had data in 0.6s and then spent six seconds
+# fetching faces. Downscaling here rather than in the bucket keeps one copy of
+# each image in R2 and costs one resize per (url, width), because the result is
+# memoized: without that this route re-fetched every image from R2 on every
+# single page load.
+IMG_MAX_WIDTH = 512          # refuse to be used as a general-purpose resizer
+
+
+@cache.memoize(timeout=604800)
+def _img_variant(url, width, webp):
+    """Downscaled (bytes, content-type) for an allowlisted image, or None.
+
+    WebP when the caller's Accept header advertises it (about a quarter the
+    bytes of PNG at this size), PNG otherwise — the response carries
+    `Vary: Accept` so a shared cache cannot hand one to a client that asked
+    for the other.
+    """
+    hit = _img_fetch(url)
+    if hit is None:
+        return None
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(hit[0]))
+        im.thumbnail((width, width), Image.LANCZOS)
+        buf = io.BytesIO()
+        if webp:
+            im.save(buf, 'WEBP', quality=82, method=4)
+            return (buf.getvalue(), 'image/webp')
+        im.convert('RGBA').save(buf, 'PNG', optimize=True)
+        return (buf.getvalue(), 'image/png')
+    except Exception:
+        # A format Pillow cannot read is served through untouched rather than
+        # dropped — a full-size face beats no face.
+        return hit
+
+
 @app.route('/img-proxy')
 def img_proxy():
     """Same-origin passthrough for headshots/logos used by the compare
@@ -8566,7 +8605,19 @@ def img_proxy():
     netloc = urlparse(url).netloc.lower()
     if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
         return 'Forbidden', 403
-    hit = _img_fetch(url)
+    # ?w= asks for a downscaled copy. Callers that need the original — the
+    # compare export renders at full size — simply omit it.
+    try:
+        width = int(request.args.get('w', 0))
+    except (TypeError, ValueError):
+        width = 0
+    width = min(width, IMG_MAX_WIDTH) if width > 0 else 0
+
+    if width:
+        webp = 'image/webp' in (request.headers.get('Accept') or '')
+        hit = _img_variant(url, width, webp)
+    else:
+        hit = _img_fetch(url)
     if hit is None:
         return '', 502
     body, ctype = hit
@@ -8574,9 +8625,11 @@ def img_proxy():
     # ?v= content hash, so it can never change under a given URL, and without it
     # the browser still fires a revalidation request per image on every repeat
     # visit — 150 round trips to be told nothing changed.
-    return Response(body, content_type=ctype,
-                    headers={'Cache-Control': 'public, max-age=31536000, immutable',
-                             'Access-Control-Allow-Origin': '*'})
+    headers = {'Cache-Control': 'public, max-age=31536000, immutable',
+               'Access-Control-Allow-Origin': '*'}
+    if width:
+        headers['Vary'] = 'Accept'
+    return Response(body, content_type=ctype, headers=headers)
 
 
 @app.route('/compare')
@@ -9380,7 +9433,10 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, top_n=150
         # bucket sends no CORS headers, so loading them directly fails outright
         # with ERR_FAILED and the chart draws with no faces at all. Tried it;
         # that is what happens. The proxy is cached both ways (see img_proxy).
-        headshot = f'/img-proxy?url={quote(m[4], safe="")}' if m[4] else None
+        # 128px: the markers draw at ~30 CSS px and the hover copy at roughly
+        # double that, so this still has headroom on a 2x display while cutting
+        # a 275KB source to about 12KB (3KB as WebP).
+        headshot = (f'/img-proxy?url={quote(m[4], safe="")}&w=128') if m[4] else None
         out.append({
             'id': int(pid), 'name': f'{m[1] or ""} {m[2] or ""}'.strip(),
             'team': m[3] or '', 'headshot': headshot, 'logo': m[5],
@@ -10288,6 +10344,52 @@ def clear_cache():
     return ('Score caches cleared' if scope else 'Cache cleared'), 200
 
 
+def _warm_explorer_headshots(limit=200):
+    """Pre-build the downscaled headshots the Stat Explorer draws.
+
+    Warming the PAGE is not enough: the page is HTML, and the 150 faces on it
+    are fetched by the browser afterwards. Cold, each one is an R2 round trip
+    plus a resize, and the first visitor after a deploy waits several seconds
+    watching an empty chart. This is the same work, done once, off the request
+    path — it runs in the warmup thread, so a slow bucket delays nothing.
+    """
+    try:
+        conn = get_db()
+    except Exception:
+        return
+    try:
+        cur = conn.cursor()
+        # Whoever the explorer would plot: current-season players with a photo,
+        # busiest first, which is the order the page's own top-N slice uses.
+        # player_stats.player_id is TEXT and players.id is INTEGER, hence the
+        # cast — the same one every other join between these two tables uses.
+        cur.execute("""
+            SELECT DISTINCT p.headshot
+            FROM player_stats ps JOIN players p ON p.id::text = ps.player_id
+            WHERE ps.season = %s AND p.headshot IS NOT NULL
+            LIMIT %s
+        """, (CURRENT_SEASON, limit))
+        urls = [r[0] for r in cur.fetchall()]
+    except Exception as exc:
+        # Loud, not silent: a warmup that quietly finds nothing looks exactly
+        # like a warmup that worked, and the pages stay cold either way.
+        conn.rollback()
+        print(f'headshot warmup query failed: {exc.__class__.__name__}: {exc}', flush=True)
+        urls = []
+    finally:
+        release_db(conn)
+
+    done = 0
+    for url in urls:
+        for webp in (True, False):      # both halves of the Accept negotiation
+            try:
+                if _img_variant(url, 128, webp):
+                    done += 1
+            except Exception:
+                pass
+    print(f'headshot warmup: {done} variants ready ({len(urls)} players)', flush=True)
+
+
 def _warm_cache():
     import threading, time as _t
     def run():
@@ -10305,6 +10407,7 @@ def _warm_cache():
             print('cache warmup complete', flush=True)
         except Exception as e:
             print(f'cache warmup skipped: {e}', flush=True)
+        _warm_explorer_headshots()
     threading.Thread(target=run, daemon=True).start()
 
 _warm_cache()
