@@ -159,7 +159,7 @@
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" id="tab-overview" aria-controls="overview" data-bs-target="#overview">Overview</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-team-stats" aria-controls="team-stats" data-bs-target="#team-stats">Team Stats</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-player-stats" aria-controls="player-stats" data-bs-target="#player-stats">Player Stats</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-trends" aria-controls="trends" data-bs-target="#trends" id="trends-tab-btn">Trends</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-trends" aria-controls="trends" data-bs-target="#trends">Trends</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-roster" aria-controls="roster" data-bs-target="#roster">Roster</button></li>
             {# Starters is a sibling tab that opens the projected depth chart in
                place, under the hero (an in-page tab pane, not a page nav). Shown
@@ -1440,7 +1440,10 @@
         }
     }
 
-    var btn = document.getElementById('trends-tab-btn');
+    // The tab button's id is tab-trends. It once carried a second id attribute
+    // (trends-tab-btn) that this looked up; browsers keep only the first id, so
+    // the listener never attached and every chart stayed an empty card.
+    var btn = document.getElementById('tab-trends');
     if (btn) btn.addEventListener('shown.bs.tab', build);
     // if the tab is somehow already visible (e.g. anchored), build immediately
     if (document.querySelector('#trends.active')) build();

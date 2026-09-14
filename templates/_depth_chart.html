@@ -58,14 +58,11 @@
 {% endmacro %}
 
 <div class="ff" style="--tc: {{ tc }}">
+    {% if not ff_hide_title %}
     <header class="ff-head">
-        {% if not ff_hide_title %}<h2 class="ff-title">Projected {{ season }} Starters</h2>{% endif %}
-        <p class="ff-basis">
-            {% if meta.games %}Talent grades weighed against who has actually played through {{ meta.games }} game{{ '' if meta.games == 1 else 's' }}, with {{ meta.season }} stats.
-            {% elif meta.season %}Talent grades, with {{ meta.season }} production as a tiebreak until games are played.
-            {% else %}Talent grades and recent production.{% endif %}
-        </p>
+        <h2 class="ff-title">Projected {{ season }} Starters</h2>
     </header>
+    {% endif %}
 
     <div class="ff-field" role="group" aria-label="{{ team[0] }} starting lineup on the field">
         <div class="ff-half ff-half--def">
