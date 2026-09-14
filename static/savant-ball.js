@@ -149,7 +149,13 @@
         '  if (edge <= 0.0) discard;',
         '  float lace = step(abs(p.y), 0.028) * step(abs(p.x), 0.17);',
         '  float stitch = step(abs(p.y), 0.085) * step(abs(fract(p.x * 18.0 + 0.5) - 0.5), 0.14) * step(abs(p.x), 0.15);',
-        '  gl_FragColor = vec4(vColor * (1.0 - 0.62 * max(lace, stitch)), smoothstep(0.0, 0.06, edge) * vAlpha);',
+        '  vec3 col = min(vColor * (1.0 - 0.62 * max(lace, stitch)), vec3(1.0));',
+        '  float a = smoothstep(0.0, 0.06, edge) * vAlpha;',
+        // Valid premultiplied output (rgb never exceeds alpha): opacity follows
+        // brightness, so dim far-side glyphs are nearly transparent and bright
+        // ones read as light over the words. Colour with zero alpha is undefined
+        // to the page compositor and is dropped outright on some GPUs.
+        '  gl_FragColor = vec4(col * a, a * max(col.r, max(col.g, col.b)));',
         '}'
     ].join('\n');
 
@@ -186,9 +192,9 @@
 
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
-    // Pure additive light: colour adds, canvas alpha stays 0, so the ball
-    // brightens the words behind it instead of covering them.
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
+    // Premultiplied "over": the canvas stays a valid image for every browser's
+    // compositor, and on the black hero it reads almost exactly like added light.
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.clearColor(0, 0, 0, 0);
 
     hero.classList.add('has-ball');
@@ -264,7 +270,7 @@
         // Keep the ball clear of the subline as the columns tighten.
         var fx = narrow ? 0.5 : Math.min(0.66, 0.56 + Math.max(0, 1320 - vw) / 1320 * 0.35);
         var fyRest = narrow ? 0.46 : 0.53;
-        var lenPx = narrow ? 0.76 * vw : (vw < 1200 ? 0.79 : 0.68) * rect.height;
+        var lenPx = narrow ? (vw >= 860 ? 0.95 : 0.76) * vw : (vw < 1200 ? 0.79 : 0.68) * rect.height;
         if (!narrow && sub) {
             // Never let the assembled shell reach into the subline's column.
             var room = rect.left + fx * rect.width - sub.getBoundingClientRect().right - 24;

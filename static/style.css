@@ -4044,6 +4044,12 @@ table, .data-table { font-variant-numeric: tabular-nums; }
         font-size: var(--text-base);
     }
 }
+/* Portrait tablets keep the stacked order at a scale where each word still
+   spans most of the width. */
+@media (orientation: portrait) and (min-width: 860px) and (max-width: 1366px) {
+    .sb-wm { font-size: min(22vw, 240px); }
+    .sb-sub { margin-bottom: calc(min(22vw, 240px) * 0.8 + 18px); }
+}
 
 /* Reduced motion: kill transforms + transitions */
 @media (prefers-reduced-motion: reduce) {
