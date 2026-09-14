@@ -4049,6 +4049,37 @@ def standings():
                            seasons=_seasons,
                            standings_by_conf=standings_by_conf)
 
+@lru_cache(maxsize=1)
+def _svr_constants():
+    """The Savant Rating's live calibration constants, read from the pipeline.
+
+    The methodology page shows them as figures, and a copy retyped into main.py
+    would drift the first time the model is recalibrated. The pipeline script is
+    not importable from the web process (it parses argv and loads .env at import),
+    so the four assignments are read from its source instead. Any that fail to
+    parse fall back to the value in force when this was written.
+    """
+    out = {'hfa': 1.19, 'prior_drives': 25, 'regress': 0.65,
+           'garbage': {2: 38, 3: 28, 4: 21}}
+    try:
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                'pipeline', 'compute_savant_ratings.py')).read()
+    except OSError:
+        return out
+    for key, name, cast in (('hfa', 'HFA_RATIO', float),
+                            ('prior_drives', 'PRIOR_DRIVES', int),
+                            ('regress', 'PRIOR_REGRESS', float)):
+        m = re.search(rf'^{name}\s*=\s*([0-9.]+)', src, re.M)
+        if m:
+            out[key] = cast(m.group(1))
+    m = re.search(r'^GARBAGE_MARGIN\s*=\s*\{([^}]*)\}', src, re.M)
+    if m:
+        pairs = dict(re.findall(r'(\d)\s*:\s*(\d+)', m.group(1)))
+        if all(q in pairs for q in ('2', '3', '4')):
+            out['garbage'] = {int(q): int(v) for q, v in pairs.items()}
+    return out
+
+
 @app.route('/savant-rating')
 @cache.cached(timeout=86400)  # 24 hours — recomputed offline by pipeline/compute_savant_ratings.py
 def savant_rating_methodology():
@@ -4078,14 +4109,18 @@ def savant_rating_methodology():
         # COALESCE: SUM() over a season with no rows returns NULL, and the
         # template formats these with '{:,}' — which raised a TypeError and 500'd
         # the page the moment CURRENT_SEASON pointed at a season without ratings.
+        # The averages replace a hardcoded "about 21.5" that had drifted: this
+        # season's national offensive average is measured, not remembered.
         cursor.execute('''SELECT COUNT(*), COALESCE(SUM(drives_off), 0),
-                                 COALESCE(SUM(games), 0) / 2
+                                 COALESCE(SUM(games), 0) / 2,
+                                 AVG(off_rating), AVG(def_rating)
                           FROM savant_ratings WHERE season = %s''', (CURRENT_SEASON,))
-        n_teams, n_drives, n_games = cursor.fetchone()
+        n_teams, n_drives, n_games, avg_off, avg_def = cursor.fetchone()
     finally:
         release_db(conn)
     return render_template('savant_rating.html', top10=top10, season=CURRENT_SEASON,
-                           n_teams=n_teams, n_drives=n_drives, n_games=n_games)
+                           n_teams=n_teams, n_drives=n_drives, n_games=n_games,
+                           avg_off=avg_off, avg_def=avg_def, svr=_svr_constants())
 
 
 # ── Savant Forecast methodology ─────────────────────────────────────────────

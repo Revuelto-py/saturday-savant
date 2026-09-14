@@ -8471,3 +8471,202 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .dv-field-btn:hover { transform: none; }
     .dv-dialog { transform: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   METHODOLOGY PIPELINE — /savant-rating and /savant-forecast
+   Each model is drawn as the machine it is: a wire of stations from the data
+   that goes in to the number that comes out, every station carrying a real
+   figure. Below it the same stations become a vertical rail beside the prose,
+   and reading down the page lights them in turn.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pl-page { max-width: 1160px; }
+
+.pl-hero { padding-block: var(--s6) var(--s5); }
+.pl-title {
+    margin: 0; font-family: var(--font-display); font-weight: 800;
+    font-size: clamp(2.6rem, 1.9rem + 2.6vw, 4.4rem); line-height: 0.95;
+    letter-spacing: -0.02em; color: var(--text-primary);
+}
+.pl-tag {
+    margin-left: 0.3em; vertical-align: 0.95em;
+    font-size: 0.36em; letter-spacing: 0.08em; color: var(--accent);
+}
+.pl-thesis {
+    margin: var(--s4) 0 0; max-width: 56ch;
+    color: var(--text-secondary); font-size: var(--text-md); line-height: 1.65;
+}
+
+.pl-h2 {
+    margin: 0; font-family: var(--font-display); font-weight: 800;
+    font-size: var(--text-xl); line-height: 1.05; letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+/* ── The map ──────────────────────────────────────────────────────────────── */
+.pl-map {
+    margin: 0 0 72px; padding: 36px 30px 32px;
+    background: #0f1013; border: 1px solid var(--border); border-radius: var(--r-lg);
+}
+.pl-track { position: relative; }
+/* The wire. A run of accent laid over it traces from the input to whichever
+   station is under the pointer or the keyboard. */
+.pl-track::before,
+.pl-run {
+    content: ''; position: absolute; left: 9px; right: 0; top: 8px; height: 2px;
+}
+.pl-track::before { background: var(--border-strong); }
+.pl-run {
+    background: var(--accent); opacity: 0.6;
+    transform-origin: left center; transform: scaleX(var(--pl-run, 1));
+    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out;
+    animation: pl-trace 1100ms cubic-bezier(0.22, 1, 0.36, 1) 180ms backwards;
+}
+.pl-map.is-tracing .pl-run { opacity: 1; }
+@keyframes pl-trace { from { transform: scaleX(0); } }
+
+.pl-rail {
+    position: relative; list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(var(--pl-n, 6), minmax(0, 1fr));
+}
+.pl-node { position: relative; min-width: 0; padding-right: 18px; }
+.pl-link {
+    display: block; padding-top: 32px; color: inherit; text-decoration: none;
+    border-radius: var(--r-sm);
+}
+.pl-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
+.pl-port {
+    position: absolute; left: 0; top: 0; width: 18px; height: 18px;
+    border-radius: 50%; background: #0f1013; border: 2px solid var(--border-strong);
+    transition: background-color 180ms ease-out, border-color 180ms ease-out,
+                transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pl-node--in .pl-port { border-radius: 4px; }
+.pl-node--out .pl-port,
+.pl-node.is-lit .pl-port,
+.pl-node.is-current .pl-port { background: var(--accent); border-color: var(--accent); }
+.pl-link:hover .pl-port,
+.pl-link:focus-visible .pl-port { transform: scale(1.15); }
+.pl-link:active .pl-port { transform: scale(0.92); }
+
+.pl-name {
+    display: block; font-family: var(--font-display); font-weight: 700;
+    font-size: var(--text-md); line-height: 1.1; color: var(--text-primary);
+}
+.pl-fig {
+    display: block; margin-top: 10px; white-space: nowrap;
+    font-family: var(--font-display); font-weight: 800; line-height: 1;
+    font-size: clamp(1.55rem, 1.1rem + 1.2vw, 2.3rem); letter-spacing: -0.01em;
+    color: var(--text-primary); font-variant-numeric: tabular-nums;
+    transition: color 180ms ease-out;
+}
+.pl-node--out .pl-fig,
+.pl-link:hover .pl-fig,
+.pl-link:focus-visible .pl-fig { color: var(--accent); }
+.pl-cap {
+    display: block; margin-top: 8px; max-width: 19ch; text-wrap: balance;
+    color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.45;
+}
+
+/* ── Station by station ───────────────────────────────────────────────────── */
+.pl-path { margin-bottom: 72px; }
+.pl-path > .pl-h2 { margin-bottom: 36px; }
+.pl-path-grid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 64px; }
+
+/* The same wire, stood upright beside the reading. Decorative duplicate of the
+   map, so it is hidden from assistive tech; the map is the navigable one. */
+.pl-spy { position: sticky; top: var(--pl-top, 88px); align-self: start; }
+.pl-spy ol { position: relative; list-style: none; margin: 0; padding: 0; }
+.pl-spy ol::before,
+.pl-spy ol::after {
+    content: ''; position: absolute; left: 8px; top: 9px; bottom: 9px; width: 2px;
+}
+.pl-spy ol::before { background: var(--border-strong); }
+.pl-spy ol::after {
+    background: var(--accent); transform-origin: center top;
+    transform: scaleY(var(--pl-spy, 0));
+    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pl-spy li { position: relative; padding: 0 0 26px 32px; }
+.pl-spy li:last-child { padding-bottom: 0; }
+.pl-spy .pl-port { background: var(--bg-base, #0a0b0d); }
+.pl-spy li.is-done .pl-port { border-color: var(--accent); }
+.pl-spy li.is-current .pl-port { background: var(--accent); border-color: var(--accent); }
+.pl-spy-name {
+    display: block; padding-top: 1px; font-family: var(--font-display); font-weight: 700;
+    font-size: var(--text-base); line-height: 1.15; color: var(--text-dim);
+    transition: color 180ms ease-out;
+}
+.pl-spy li.is-current .pl-spy-name { color: var(--text-primary); }
+
+.pl-station {
+    scroll-margin-top: var(--pl-top, 88px);
+    padding-bottom: 56px; margin-bottom: 56px; border-bottom: 1px solid var(--border);
+}
+.pl-station:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+/* Heading, then its figure directly beneath: pushed to the far edge the figure
+   was stranded from the prose it belongs to. */
+.pl-station-head { display: grid; gap: 12px; margin-bottom: 20px; }
+.pl-station-name {
+    margin: 0; max-width: 32ch; font-family: var(--font-display); font-weight: 700;
+    font-size: var(--text-lg); line-height: 1.15; color: var(--text-primary);
+}
+.pl-station-fig { margin: 0; display: flex; align-items: baseline; gap: 12px; }
+.pl-num {
+    font-family: var(--font-display); font-weight: 800; font-size: var(--text-xl);
+    line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.pl-unit { max-width: 34ch; text-wrap: balance; color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.4; }
+
+/* ~70 rendered characters: in DM Sans 1ch is wider than an average letter, so
+   52ch is what lands in the readable band, not 70ch. */
+.pl-prose { max-width: 52ch; color: var(--text-secondary); font-size: var(--text-base); line-height: 1.8; }
+.pl-prose p { margin: 0 0 1em; }
+.pl-prose p:last-child { margin-bottom: 0; }
+.pl-prose strong, .pl-prose em { color: var(--text-primary); }
+
+.pl-defs {
+    display: grid; grid-template-columns: max-content minmax(0, 1fr);
+    gap: 14px 24px; max-width: 62ch; margin: 0 0 1.6em;
+}
+.pl-defs dt {
+    font-family: var(--font-display); font-weight: 700; font-size: var(--text-md);
+    line-height: 1.5; color: var(--text-primary);
+}
+.pl-defs dd { margin: 0; color: var(--text-secondary); line-height: 1.7; }
+
+/* ── The evidence ─────────────────────────────────────────────────────────── */
+.pl-evidence { margin-bottom: 72px; }
+.pl-evidence-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px 24px; margin-bottom: 20px;
+}
+.pl-note { color: var(--text-dim); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.pl-close { text-align: center; margin: 8px 0 24px; }
+
+/* ── Narrow: the map turns upright, the side rail steps aside ─────────────── */
+@media (max-width: 860px) {
+    .pl-map { padding: 26px 18px; margin-bottom: 56px; }
+    .pl-rail { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
+    .pl-track::before,
+    .pl-run { left: 8px; right: auto; top: 9px; bottom: 9px; width: 2px; height: auto; }
+    .pl-run { transform-origin: center top; transform: scaleY(var(--pl-run, 1)); animation-name: pl-trace-y; }
+    .pl-node { padding: 0 0 0 36px; }
+    .pl-link {
+        padding-top: 0; min-height: 44px;
+        display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline;
+    }
+    .pl-fig { grid-column: 2; grid-row: 1; margin-top: 0; font-size: 1.6rem; }
+    .pl-cap { grid-column: 1 / -1; max-width: none; margin-top: 4px; }
+    .pl-path-grid { grid-template-columns: minmax(0, 1fr); }
+    .pl-spy { display: none; }
+    .pl-station { padding-bottom: 40px; margin-bottom: 40px; }
+    .pl-defs { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .pl-defs dd { margin-bottom: 12px; }
+}
+@keyframes pl-trace-y { from { transform: scaleY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .pl-run, .pl-spy ol::after, .pl-port, .pl-fig, .pl-spy-name { transition: none; animation: none; }
+}
