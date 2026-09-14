@@ -238,7 +238,7 @@
 
     function ss(a, b, x) { x = Math.min(Math.max((x - a) / (b - a), 0), 1); return x * x * (3 - 2 * x); }
 
-    var t0 = 0, eased = 0, running = false, cleared = false, lost = false, lastCut = -1;
+    var t0 = 0, eased = 0, running = false, cleared = false, lost = false, lastCut = '';
 
     function frame(now) {
         if (lost) { running = false; return; }
@@ -260,8 +260,8 @@
         var narrow = vw < 860;
         // Keep the ball clear of the subline as the columns tighten.
         var fx = narrow ? 0.5 : Math.min(0.66, 0.56 + Math.max(0, 1320 - vw) / 1320 * 0.35);
-        var fy = (narrow ? 0.46 : 0.53) + p * 0.72;               // holds in view while it comes apart
-        var lenPx = narrow ? 0.76 * vw : (vw < 1200 ? 0.56 : 0.68) * rect.height;
+        var fy = (narrow ? 0.46 : vw < 1200 ? 0.58 : 0.53) + p * 0.72;               // holds in view while it comes apart
+        var lenPx = narrow ? 0.76 * vw : (vw < 1200 ? 0.66 : 0.68) * rect.height;
 
         emx += (mx - emx) * 0.05;
         emy += (my - emy) * 0.05;
@@ -290,9 +290,11 @@
         gl.uniform1f(U.uBreak, ss(0.1, 0.9, p));
         gl.uniform1f(U.uOpacity, op);
 
-        // The pieces stay inside the hero: nothing drifts over the slate's cards.
-        var cut = Math.max(0, Math.round(vh - rect.bottom));
-        if (cut !== lastCut) { canvas.style.clipPath = 'inset(0 0 ' + cut + 'px 0)'; lastCut = cut; }
+        // The pieces stay inside the hero: nothing drifts over the ticker above
+        // or the slate's cards below.
+        var top = Math.max(0, Math.round(rect.top)), cut = Math.max(0, Math.round(vh - rect.bottom));
+        var clip = top + ',' + cut;
+        if (clip !== lastCut) { canvas.style.clipPath = 'inset(' + top + 'px 0 ' + cut + 'px 0)'; lastCut = clip; }
 
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.drawArrays(gl.POINTS, 0, N);
