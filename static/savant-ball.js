@@ -12,6 +12,7 @@
  */
 (function () {
     var hero = document.getElementById('sbHero');
+    var sub = hero && hero.querySelector('.sb-sub');
     var canvas = document.getElementById('sbBall');
     if (!hero || !canvas) return;
 
@@ -25,7 +26,7 @@
 
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var gl = canvas.getContext('webgl', {
-        alpha: true, premultipliedAlpha: false, antialias: false,
+        alpha: true, premultipliedAlpha: true, antialias: false,
         depth: false, stencil: false, powerPreference: 'high-performance'
     });
     if (!gl) return;
@@ -38,7 +39,7 @@
     var N = window.innerWidth < 700 ? 2600 : 4600;
 
     var aPos = new Float32Array(N * 3), aStart = new Float32Array(N * 3), aTangent = new Float32Array(N * 3);
-    var aColor = new Float32Array(N * 3), aSize = new Float32Array(N), aDelay = new Float32Array(N), aSeed = new Float32Array(N);
+    var aNormal = new Float32Array(N * 3), aColor = new Float32Array(N * 3), aSize = new Float32Array(N), aDelay = new Float32Array(N), aSeed = new Float32Array(N);
 
     var STEEL = [0.80, 0.85, 0.90], WHITE = [1, 1, 1], DUST = [0.55, 0.60, 0.66];
     var SIGNAL = [0.176, 0.76, 0.99];   // #1c9cf0, lifted so it survives the additive falloff
@@ -52,6 +53,10 @@
         aPos[i * 3] = x * lift;
         aPos[i * 3 + 1] = r * Math.cos(phi) * lift;
         aPos[i * 3 + 2] = r * Math.sin(phi) * lift;
+
+        // Outward normal of a surface of revolution r(x): (−r', cos φ, sin φ).
+        var nl = Math.sqrt(1 + s * s);
+        aNormal[i * 3] = -s / nl; aNormal[i * 3 + 1] = Math.cos(phi) / nl; aNormal[i * 3 + 2] = Math.sin(phi) / nl;
 
         // Direction along the seam, so each small football lies along the big one.
         var tl = Math.sqrt(1 + s * s);
@@ -70,6 +75,7 @@
         if (kind === 'lace') { c = SIGNAL; sz = 1.15 + Math.random() * 0.35; delay = 0.45 + Math.random() * 0.15; }
         if (kind === 'dust') { c = DUST; sz *= 0.7; delay = Math.random() * 0.6; }
         if (kind === 'shell' && Math.random() < 0.03) sz *= 2.1;
+        if (kind === 'shell' || kind === 'stripe') sz *= 0.35 + 0.65 * Math.min(1, r / 0.5);
         aColor[i * 3] = c[0]; aColor[i * 3 + 1] = c[1]; aColor[i * 3 + 2] = c[2];
         aSize[i] = sz; aDelay[i] = delay; aSeed[i] = Math.random();
     }
@@ -93,10 +99,11 @@
 
     /* ── Shaders ─────────────────────────────────────────────────────────── */
     var VERT = [
-        'attribute vec3 aPos, aStart, aTangent, aColor;',
+        'attribute vec3 aPos, aStart, aTangent, aNormal, aColor;',
         'attribute float aSize, aDelay, aSeed;',
         'uniform mat4 uMV, uProj;',
         'uniform float uAssemble, uBreak, uTime, uPx, uScale, uAspect, uOpacity, uMaxPt;',
+        'uniform vec4 uShield;',
         'varying vec3 vColor; varying float vAngle, vAlpha;',
         'void main() {',
         '  float land = clamp((uAssemble - aDelay) / 0.5, 0.0, 1.0);',
@@ -113,9 +120,15 @@
         '  vAngle = mix(aSeed * 6.2831 + uTime * (0.8 + aSeed), atan(d.y, d.x), e);',
         '  vec4 ctr = uMV * vec4(0.0, 0.0, 0.0, 1.0);',
         '  float depth = clamp((mv.z - ctr.z) / (1.1 * uScale) * 0.5 + 0.5, 0.0, 1.0);',
-        '  float light = mix(1.0, mix(0.18, 1.0, depth), e);',
+        '  vec3 n = normalize((uMV * vec4(aNormal, 0.0)).xyz);',
+        '  float rim = 1.0 - abs(dot(n, normalize(-mv.xyz)));',             // edge-on surface glows, like a lit shell
+        '  float shell = (0.3 + 0.7 * depth) * (0.5 + 1.0 * pow(rim, 1.6));',
+        '  float light = mix(1.0, shell, e);',
         '  vColor = aColor * light * (0.86 + 0.14 * sin(uTime * 2.2 + aSeed * 60.0));',
-        '  vAlpha = uOpacity * mix(0.5, 0.68, e);',
+        '  vec2 ndc = c0.xy / c0.w;',
+        '  float out_ = max(max(uShield.x - ndc.x, ndc.x - uShield.z), max(uShield.y - ndc.y, ndc.y - uShield.w));',
+        '  float shield = mix(smoothstep(-0.02, 0.1, out_), 1.0, e);',
+        '  vAlpha = uOpacity * mix(0.5, 0.72, e) * shield;',
         '  gl_PointSize = clamp(0.062 * aSize * uScale * uPx / -mv.z, 2.0, uMaxPt);',
         '  gl_Position = c0;',
         '}'
@@ -159,18 +172,20 @@
         gl.enableVertexAttribArray(loc);
         gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0);
     }
-    attrib('aPos', aPos, 3); attrib('aStart', aStart, 3); attrib('aTangent', aTangent, 3);
+    attrib('aPos', aPos, 3); attrib('aStart', aStart, 3); attrib('aTangent', aTangent, 3); attrib('aNormal', aNormal, 3);
     attrib('aColor', aColor, 3); attrib('aSize', aSize, 1); attrib('aDelay', aDelay, 1); attrib('aSeed', aSeed, 1);
 
     var U = {};
-    ['uMV', 'uProj', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uAspect', 'uOpacity', 'uMaxPt'].forEach(function (n) {
+    ['uMV', 'uProj', 'uShield', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uAspect', 'uOpacity', 'uMaxPt'].forEach(function (n) {
         U[n] = gl.getUniformLocation(prog, n);
     });
     gl.uniform1f(U.uMaxPt, gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]);
 
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND);
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE);   // additive light, alpha accumulates
+    // Pure additive light: colour adds, canvas alpha stays 0, so the ball
+    // brightens the words behind it instead of covering them.
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ZERO, gl.ONE);
     gl.clearColor(0, 0, 0, 0);
 
     hero.classList.add('has-ball');
@@ -245,8 +260,8 @@
         var narrow = vw < 860;
         // Keep the ball clear of the subline as the columns tighten.
         var fx = narrow ? 0.5 : Math.min(0.66, 0.56 + Math.max(0, 1320 - vw) / 1320 * 0.35);
-        var fy = (narrow ? 0.46 : 0.5) + p * 0.72;               // holds in view while it comes apart
-        var lenPx = narrow ? 0.62 * vw : (vw < 1200 ? 0.52 : 0.62) * rect.height;
+        var fy = (narrow ? 0.46 : 0.53) + p * 0.72;               // holds in view while it comes apart
+        var lenPx = narrow ? 0.76 * vw : (vw < 1200 ? 0.56 : 0.68) * rect.height;
 
         emx += (mx - emx) * 0.05;
         emy += (my - emy) * 0.05;
@@ -258,9 +273,17 @@
         var mv = mul(place(px, py, -DIST, scale),
                  mul(rotX(emy * 0.25),
                  mul(rotY(0.55 * Math.sin(t * 0.25) + p * 2.6 + emx * 0.35),   // sways, never turns end-on at rest
-                 mul(rotZ(-0.35), rotX(t * 0.18)))));
+                 mul(rotZ(-0.35), rotX(1.2 + t * 0.18)))));
 
         gl.uniformMatrix4fv(U.uMV, false, mv);
+        var sr = sub ? sub.getBoundingClientRect() : null;
+        if (sr) {
+            var pad = 14;
+            gl.uniform4f(U.uShield, (sr.left - pad) / vw * 2 - 1, 1 - (sr.bottom + pad) / vh * 2,
+                                    (sr.right + pad) / vw * 2 - 1, 1 - (sr.top - pad) / vh * 2);
+        } else {
+            gl.uniform4f(U.uShield, 2, 2, 2, 2);
+        }
         gl.uniform1f(U.uScale, scale);
         gl.uniform1f(U.uTime, t);
         gl.uniform1f(U.uAssemble, reduce ? 1.2 : Math.min(t / 2.6, 1.2));
@@ -273,6 +296,7 @@
 
         gl.clear(gl.COLOR_BUFFER_BIT);
         gl.drawArrays(gl.POINTS, 0, N);
+        if (reduce) { running = false; return; }                // nothing moves: redraw only when woken
         requestAnimationFrame(frame);
     }
 

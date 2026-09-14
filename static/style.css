@@ -4017,6 +4017,8 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .sb-w1 { align-self: flex-start; }
 .sb-w2 { align-self: flex-end; color: var(--accent); }
 .sb-sub {
+    position: relative;
+    z-index: 6;          /* above the canvas: the copy is never under the ball's light */
     align-self: center;
     justify-self: start;
     margin: 0;
