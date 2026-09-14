@@ -3973,130 +3973,72 @@ main:focus { outline: none; }
 /* Numbers align in every table */
 table, .data-table { font-variant-numeric: tabular-nums; }
 
-/* Homepage Hero — the infinite grid.
-   Two stacked drifting grid layers: a faint base that is always visible,
-   and a gold layer unmasked only inside a radial spotlight that follows
-   the cursor (CSS vars --mx/--my set from JS in home.html). The drift is
-   transform-only on oversized layers so it stays on the compositor.
-   Touch devices keep the drift but park the spotlight at its CSS default;
-   reduced motion gets a static grid (JS skips both effects). */
-.ig-hero {
+/* Homepage hero — one football built out of thousands of footballs.
+   The canvas (static/savant-ball.js) is fixed over the viewport and sits in
+   front of the wordmark, so the ball overlaps both words; it fades out as the
+   hero scrolls away and never takes pointer events. The hero fills the screen
+   below the navbar and ticker (--sb-top is measured by the script). */
+.sb-hero {
     position: relative;
     overflow: hidden;
     background: var(--bg-base);
     border-bottom: 1px solid var(--border);
+    height: max(520px, calc(100svh - var(--sb-top, 150px)));
+}
+.sb-ball {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+}
+.sb-inner {
+    height: 100%;
+    display: grid;
+    padding-block: clamp(20px, 4vh, 44px);
+}
+.sb-wm, .sb-sub { grid-area: 1 / 1; }
+/* Set too big for the frame on purpose: the words are the hero's architecture,
+   top left and bottom right, with the ball between them. */
+.sb-wm {
+    margin: 0;
     min-height: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.ig-layer {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-}
-/* one cell (40px) of bleed on the top/left so the wrap-around never shows */
-.ig-grid {
-    position: absolute;
-    top: -40px;
-    left: -40px;
-    width: calc(100% + 40px);
-    height: calc(100% + 40px);
-    background-image:
-        linear-gradient(var(--ig-line) 1px, transparent 1px),
-        linear-gradient(90deg, var(--ig-line) 1px, transparent 1px);
-    background-size: 40px 40px;
-    will-change: transform;
-}
-.ig-base { --ig-line: rgba(141,164,190,0.30); opacity: 0.16; }
-.ig-reveal {
-    --ig-line: rgba(28, 156, 240,0.55);
-    opacity: 0.9;
-    -webkit-mask-image: radial-gradient(300px circle at var(--mx, 50%) var(--my, 38%), #000 0%, transparent 100%);
-    mask-image: radial-gradient(300px circle at var(--mx, 50%) var(--my, 38%), #000 0%, transparent 100%);
-}
-/* palette glows — accent up right, a deeper blue down left */
-.ig-glow {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(110px);
-    pointer-events: none;
-}
-.ig-glow-accent {
-    top: -22%; right: -12%;
-    width: 44%; height: 62%;
-    background: rgba(28, 156, 240,0.10);
-}
-.ig-glow-navy {
-    bottom: -30%; left: -12%;
-    width: 46%; height: 66%;
-    background: rgba(28,156,240,0.07);
-}
-/* content — centered, links interactive, everything else lets the mouse
-   through so the reveal keeps tracking */
-.ig-content {
-    position: relative;
-    z-index: 1;
-    text-align: center;
-    padding: var(--s8) var(--s6);
-    max-width: 880px;
-    /* Was pointer-events:none so the cursor reveal kept tracking through the
-       copy — which also meant none of the hero text could be selected or
-       copied. The reveal listens on .ig-hero itself, so it never needed this. */
-}
-.ig-lockup {
-    display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: var(--s3);
-    margin-bottom: var(--s4);
-}
-.ig-logo {
-    height: clamp(44px, 3vw + 26px, 64px);
-    width: auto;
-    flex-shrink: 0;
-    filter: drop-shadow(0 0 24px rgba(28, 156, 240,0.25)) drop-shadow(0 4px 12px rgba(0,0,0,0.5));
-}
-.ig-title {
+    justify-content: space-between;
     font-family: var(--font-display);
     font-weight: 800;
-    font-size: clamp(2rem, 1.4rem + 2.4vw, 3.4rem);
-    line-height: 0.95;
-    letter-spacing: 0.01em;
-    text-transform: uppercase;
+    font-size: max(64px, min(17vw, 330px));
+    line-height: 0.8;
+    letter-spacing: -0.03em;
     color: var(--text-primary);
+}
+.sb-w1 { align-self: flex-start; }
+.sb-w2 { align-self: flex-end; color: var(--accent); }
+.sb-sub {
+    align-self: center;
+    justify-self: start;
     margin: 0;
-    text-shadow: 0 2px 24px rgba(0,0,0,0.55);
-}
-.ig-title-accent { color: var(--accent); }
-.ig-sub {
+    max-width: 34ch;
     font-family: var(--font-body);
-    font-size: var(--text-sm);
+    font-size: var(--text-md);
     line-height: 1.7;
-    color: var(--text-dim);
-    margin: 0 auto;
-    max-width: 54ch;
-    /* Even the ragged edge instead of letting the last line strand two words. */
-    text-wrap: balance;
+    color: var(--text-secondary);
+    text-wrap: pretty;
 }
-
-/* Touch / no-hover devices: no cursor to follow — keep the reveal parked
-   as a soft center glow */
-@media (hover: none) {
-    .ig-reveal { opacity: 0.55; }
+@media (max-width: 1199.98px) {
+    .sb-sub { max-width: 30ch; }
 }
-/* Below 640px the lockup stacks so the wordmark keeps its scale */
-@media (max-width: 639.98px) {
-    .ig-content { padding: var(--s6) var(--s4); width: 100%; }
-    .ig-lockup { gap: var(--s3); }
-    .ig-logo { height: 38px; }
-}
-/* Reduced motion: JS never starts the drift or spotlight; also quiet the
-   grid itself so the hero reads as a calm static texture */
-@media (prefers-reduced-motion: reduce) {
-    .ig-grid { will-change: auto; }
-    .ig-reveal { opacity: 0.4; }
+/* Phones: the words stack above and below the ball, the subline above "Savant" */
+@media (max-width: 859.98px) {
+    .sb-wm { font-size: max(60px, min(22vw, 140px)); }
+    .sb-sub {
+        align-self: end;
+        max-width: 32ch;
+        margin-bottom: calc(max(60px, min(22vw, 140px)) * 0.8 + 18px);
+        font-size: var(--text-base);
+    }
 }
 
 /* Reduced motion: kill transforms + transitions */

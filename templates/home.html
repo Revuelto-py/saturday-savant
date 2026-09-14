@@ -6,30 +6,16 @@
 {% block content %}
 
 {# ── Masthead ─────────────────────────────────────────────────────────────
-     This used to be a 512px full-viewport brand block: logo, eyebrow, wordmark,
-     tagline, sentence, and a row of four links that duplicated the nav under
-     different labels. Nearly every visit to a free, no-account index page is a
-     return visit, and each one paid that toll before reaching a score.
-
-     It keeps the identity — the drifting grid, the wordmark, the night sky —
-     and gives the space back. What is worth watching this week is answered by
-     the Top Games band below, where the cards can carry it properly. ── #}
-<section class="ig-hero" id="igHero">
-    {# base grid: always faintly visible, drifting #}
-    <div class="ig-layer ig-base" aria-hidden="true"><div class="ig-grid"></div></div>
-    {# reveal grid: accent lines, unmasked only around the cursor #}
-    <div class="ig-layer ig-reveal" aria-hidden="true"><div class="ig-grid"></div></div>
-    {# palette glows — accent up right, deeper blue down left #}
-    <div class="ig-glow ig-glow-accent" aria-hidden="true"></div>
-    <div class="ig-glow ig-glow-navy" aria-hidden="true"></div>
-
-    <div class="ig-content">
-        <div class="ig-lockup">
-            <img src="/static/logo-mark-256.png" alt="" class="ig-logo">
-            <h1 class="ig-title">Saturday <span class="ig-title-accent">Savant</span></h1>
-        </div>
-        <p class="ig-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team — every season since 2016.</p>
-
+     One football built out of thousands of footballs (static/savant-ball.js):
+     they assemble on load, and scrolling spins the ball and breaks it apart
+     before the slate arrives. It fills the screen below the navbar and ticker
+     by choice, and everything in it reads without the canvas: no WebGL or no
+     JS leaves the wordmark and subline as a complete hero. ── #}
+<section class="sb-hero" id="sbHero" aria-labelledby="sbTitle">
+    <canvas class="sb-ball" id="sbBall" aria-hidden="true"></canvas>
+    <div class="page-wrapper sb-inner">
+        <h1 class="sb-wm" id="sbTitle"><span class="sb-w1">Saturday</span> <span class="sb-w2">Savant</span></h1>
+        <p class="sb-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team — every season since 2016.</p>
     </div>
 </section>
 
@@ -145,54 +131,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='savant-ball.js') }}" defer></script>
 <script>
-(function () {
-    var hero = document.getElementById('igHero');
-    if (!hero) return;
-
-    var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var canHover      = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-
-    /* ── Mouse-following reveal — updates CSS vars consumed by the mask.
-       Skipped on touch devices (the reveal stays parked at its CSS default)
-       and under reduced motion. ── */
-    if (canHover && !reducedMotion) {
-        hero.addEventListener('mousemove', function (e) {
-            var r = hero.getBoundingClientRect();
-            hero.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-            hero.style.setProperty('--my', (e.clientY - r.top) + 'px');
-        });
-        hero.addEventListener('mouseleave', function () {
-            hero.style.removeProperty('--mx');
-            hero.style.removeProperty('--my');
-        });
-    }
-
-    /* ── Infinite drift — translate the oversized grid layers one cell
-       (40px) and wrap, so the pattern scrolls forever. transform-only,
-       runs on the compositor, and pauses when the hero is off-screen. ── */
-    if (!reducedMotion) {
-        var grids = hero.querySelectorAll('.ig-grid');
-        var offset = 0, SPEED = 0.5, CELL = 40, visible = true, rafId = null;
-
-        function tick() {
-            offset = (offset + SPEED) % CELL;
-            for (var i = 0; i < grids.length; i++) {
-                grids[i].style.transform = 'translate3d(' + offset + 'px,' + offset + 'px,0)';
-            }
-            rafId = visible ? requestAnimationFrame(tick) : null;
-        }
-
-        if ('IntersectionObserver' in window) {
-            new IntersectionObserver(function (entries) {
-                visible = entries[0].isIntersecting;
-                if (visible && rafId === null) rafId = requestAnimationFrame(tick);
-            }).observe(hero);
-        }
-        rafId = requestAnimationFrame(tick);
-    }
-})();
-
 /* ── Long-slate collapse (small screens only) ─────────────────────────────
    A full week is ~86 cards. Stacked one-up on a phone that put Season Leaders
    at 83.7% down a 19,000px page, which is to say nobody ever saw them. The
