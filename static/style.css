@@ -3826,11 +3826,11 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     align-items: center;
     gap: var(--s2);
     font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 600;
-    color: var(--text-secondary);
-    font-size: var(--text-xs);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
+    font-weight: 750;
+    color: var(--text-primary);
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+    text-transform: none;
     padding-bottom: 0;
     margin-bottom: var(--s4);
     border-bottom: none;
@@ -3851,6 +3851,7 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-weight: 600;
 }
+.section-header { font-weight: 750; }   /* a heading, not a label: keeps its step above the group's 600 */
 .leader-val, .gc-score, .ticker-score, .ap-rank-num, .ap-medal,
 .compare-value, .hero-score-winner, .hero-score-loser {
     font-family: var(--font-display); font-stretch: var(--display-stretch);
@@ -3978,18 +3979,21 @@ main:focus { outline: none; }
 /* Numbers align in every table */
 table, .data-table { font-variant-numeric: tabular-nums; }
 
-/* Phones: standings team names drop to the family's narrowest width, so the
-   long names (Mississippi State, South Carolina) fit their column. */
+/* Phones: standings drop the points columns so team names keep a readable
+   size and width instead of truncating. */
 @media (max-width: 599.98px) {
-    .row-link { --display-stretch: 75%; }   /* the link's inline style reads this variable */
+    .st-pts { display: none; }
 }
 
 /* Scoreboard figures use proportional digits. Mona Sans only has a slashed
    zero in its tabular set ("tnum" swaps zero for zero.tf) and no feature to
    turn the slash off, so a final like 70–0 would read 7Ø–Ø. Single scores and
-   leader values never need column alignment; tables keep tabular figures. */
+   leader values never need column alignment. Standings records and
+   leaderboard stats are centred, so they drop tabular alignment too; other
+   tables keep it. */
 .ticker-score, .gc-score, .gh-score, .score, .leader-val, .team-hero-stats .sc-value,
-.bk-pts, .rvh-row-pts, .sf-score, .mu-score, .quarter-section td {
+.bk-pts, .rvh-row-pts, .sf-score, .mu-score, .quarter-section td,
+.standings-row td, .lb-td-stat, .lb-cell-v, .lb-cell-p, .lb-avgrow td, .lb-avgrow td * {
     font-variant-numeric: proportional-nums;
 }
 

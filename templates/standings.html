@@ -41,15 +41,15 @@
         </div>
 
         <div class="dark-card" style="overflow-x:auto">
-            <table class="data-table" style="width:100%;min-width:340px">
+            <table class="data-table" style="width:100%;min-width:300px">
                 <thead>
                     <tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
                         <th style="text-align:center;width:26px">#</th>
                         <th style="text-align:left">TEAM</th>
                         <th style="text-align:center" title="Conference record — determines standings">CONF</th>
                         <th style="text-align:center" title="Overall record">OVR</th>
-                        <th style="text-align:center" title="Points for">PF</th>
-                        <th style="text-align:center" title="Points against">PA</th>
+                        <th class="st-pts" style="text-align:center" title="Points for">PF</th>
+                        <th class="st-pts" style="text-align:center" title="Points against">PA</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -70,8 +70,8 @@
                         </td>
                         <td style="color: var(--text-primary);font-size: var(--text-sm);font-weight:700;text-align:center;padding:9px 8px">{{ t.conf_wins }}-{{ t.conf_losses }}</td>
                         <td style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.wins }}-{{ t.losses }}</td>
-                        <td style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.pf }}</td>
-                        <td style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.pa }}</td>
+                        <td class="st-pts" style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.pf }}</td>
+                        <td class="st-pts" style="color: var(--text-secondary);font-size: var(--text-sm);text-align:center;padding:9px 8px">{{ t.pa }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

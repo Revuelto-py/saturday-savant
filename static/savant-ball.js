@@ -131,7 +131,8 @@
         // dimmed behind the name (uShieldB), so both read over the ball.
         '  float outA = max(max(uShield.x - ndc.x, ndc.x - uShield.z), max(uShield.y - ndc.y, ndc.y - uShield.w));',
         '  float outB = max(max(uShieldB.x - ndc.x, ndc.x - uShieldB.z), max(uShieldB.y - ndc.y, ndc.y - uShieldB.w));',
-        '  float shield = smoothstep(-0.03, 0.06, outA) * mix(0.3, 1.0, smoothstep(-0.03, 0.06, outB));',
+        '  float isLace = step(aColor.r * 3.0, aColor.b);',              // accent glyphs dim hardest: no blue haze behind "Savant"
+        '  float shield = smoothstep(-0.03, 0.06, outA) * mix(mix(0.3, 0.08, isLace), 1.0, smoothstep(-0.03, 0.06, outB));',
         '  vAlpha = uOpacity * mix(0.5, 0.72, e) * shield;',
         '  gl_PointSize = clamp(0.062 * aSize * uScale * uPx / -mv.z, 2.0, uMaxPt);',
         '  gl_Position = c0;',
@@ -279,12 +280,14 @@
         // Its on-screen box follows from its length L and tilt: half-height is
         // L·(0.5·sin t + 0.294·cos t), half-width L·(0.5·cos t + 0.294·sin t).
         var narrow = vw < 700;
-        var tilt = narrow ? -1.0 : -0.35;          // steeper on phones, so it fills a tall frame
+        var tilt = narrow ? -1.3 : -0.35;          // near-upright on phones, so it fills a tall frame
         var fx = 0.5;
-        var lenPx = narrow
-            ? Math.min(1.02 * vw / 1.034, 0.9 * rect.height / 1.16)
-            : Math.min(0.9 * vw, 1.1 * rect.height);
-        var fy = (narrow ? 0.42 : 0.5) + p * 0.72;                 // holds in view while it comes apart
+        // The idle sway (rotY up to 0.55 rad) foreshortens the ball's length, so
+        // the target is divided by cos(0.55) to hold the size it is meant to have.
+        var lenPx = (narrow
+            ? Math.min(1.1 * vw, 0.8 * rect.height)
+            : Math.min(0.95 * vw, 1.18 * rect.height)) / Math.cos(0.55);
+        var fy = (narrow ? 0.47 : 0.5) + p * 0.72;                 // holds in view while it comes apart
 
         emx += (mx - emx) * 0.05;
         emy += (my - emy) * 0.05;
@@ -300,7 +303,7 @@
 
         gl.uniformMatrix4fv(U.uMV, false, mv);
         shieldBox(U.uShield, sub, 18);
-        shieldBox(U.uShieldB, wm, 6);
+        shieldBox(U.uShieldB, wm, 20);
         gl.uniform1f(U.uScale, scale);
         gl.uniform1f(U.uTime, t);
         gl.uniform1f(U.uAssemble, reduce ? 1.2 : Math.min(t / 2.6, 1.2));
