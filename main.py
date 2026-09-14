@@ -2644,8 +2644,6 @@ def forecast_record(season):
             'pct': round(100.0 * int(correct) / total)}
 
 
-
-
 def top_games(games, forecasts, limit=TOP_GAMES_N):
     """The handful of games worth surfacing above the chronological grid.
 
@@ -8565,14 +8563,43 @@ def _img_fetch(url):
 IMG_MAX_WIDTH = 512          # refuse to be used as a general-purpose resizer
 
 
+def _circle_crop(im, size):
+    """A square, circular-masked copy of a portrait headshot.
+
+    Plotly's layout images are rectangles; the scatter marker under them is a
+    circle. Drawing a 600x436 photo over a 26px ring therefore spilled the
+    shoulders out past the ring on every marker. Masking here rather than in
+    the browser means the image that arrives IS a circle, so there is nothing
+    left that can overshoot — and there is no SVG clip-path to keep in sync
+    with Plotly's internals.
+
+    The square crop is anchored at the TOP, not the centre: these are portraits
+    with the head near the top, and a centre crop cuts foreheads off.
+    """
+    from PIL import Image, ImageDraw
+    im = im.convert('RGBA')
+    w, h = im.size
+    side = min(w, h)
+    left = (w - side) // 2
+    im = im.crop((left, 0, left + side, side))
+    im = im.resize((size, size), Image.LANCZOS)
+
+    # 4x supersampled mask, then downscaled — a mask drawn at final size has
+    # visibly stair-stepped edges at 128px.
+    mask = Image.new('L', (size * 4, size * 4), 0)
+    ImageDraw.Draw(mask).ellipse((0, 0, size * 4 - 1, size * 4 - 1), fill=255)
+    im.putalpha(mask.resize((size, size), Image.LANCZOS))
+    return im
+
+
 @cache.memoize(timeout=604800)
-def _img_variant(url, width, webp):
+def _img_variant(url, width, webp, circle=False):
     """Downscaled (bytes, content-type) for an allowlisted image, or None.
 
     WebP when the caller's Accept header advertises it (about a quarter the
     bytes of PNG at this size), PNG otherwise — the response carries
     `Vary: Accept` so a shared cache cannot hand one to a client that asked
-    for the other.
+    for the other. Both formats carry alpha, which the circular mask needs.
     """
     hit = _img_fetch(url)
     if hit is None:
@@ -8580,10 +8607,13 @@ def _img_variant(url, width, webp):
     try:
         from PIL import Image
         im = Image.open(io.BytesIO(hit[0]))
-        im.thumbnail((width, width), Image.LANCZOS)
+        if circle:
+            im = _circle_crop(im, width)
+        else:
+            im.thumbnail((width, width), Image.LANCZOS)
         buf = io.BytesIO()
         if webp:
-            im.save(buf, 'WEBP', quality=82, method=4)
+            im.convert('RGBA').save(buf, 'WEBP', quality=82, method=4)
             return (buf.getvalue(), 'image/webp')
         im.convert('RGBA').save(buf, 'PNG', optimize=True)
         return (buf.getvalue(), 'image/png')
@@ -8615,7 +8645,7 @@ def img_proxy():
 
     if width:
         webp = 'image/webp' in (request.headers.get('Accept') or '')
-        hit = _img_variant(url, width, webp)
+        hit = _img_variant(url, width, webp, request.args.get('mask') == 'circle')
     else:
         hit = _img_fetch(url)
     if hit is None:
@@ -9330,29 +9360,6 @@ EXPLORER_PLAYER_SPEC = {
     ]},
 }
 
-# Radar/percentile profile axes per position group — a curated subset of the
-# hero-card percentiles (all higher-is-better so the shape reads cleanly).
-# (label, kind, stat_key)  kind: 'stat' category / 'ppa'
-EXPLORER_RADAR_SPEC = {
-    'QB': [('Pass Yds','passing','YDS'), ('Pass TD','passing','TD'),
-           ('Comp %','passing','PCT'), ('Yds/Att','passing','YPA'),
-           ('EPA/Play','ppa','avg_ppa_all')],
-    'RB': [('Rush Yds','rushing','YDS'), ('Rush TD','rushing','TD'),
-           ('Yds/Carry','rushing','YPC'), ('Rec Yds','receiving_wide','YDS'),
-           ('EPA/Play','ppa','avg_ppa_all')],
-    'WR': [('Rec Yds','receiving','YDS'), ('Rec TD','receiving','TD'),
-           ('Receptions','receiving','REC'), ('Yds/Rec','receiving','AVG'),
-           ('EPA/Play','ppa','avg_ppa_all')],
-    'TE': [('Rec Yds','receiving','YDS'), ('Rec TD','receiving','TD'),
-           ('Receptions','receiving','REC'), ('Yds/Rec','receiving','AVG'),
-           ('EPA/Play','ppa','avg_ppa_all')],
-    'DL': [('Tackles','def_wide','TOT'), ('Sacks','def_wide','SACKS'),
-           ('TFL','defensive','TFL'), ('EPA/Play','ppa','avg_ppa_all')],
-    'LB': [('Tackles','def_wide','TOT'), ('Sacks','def_wide','SACKS'),
-           ('TFL','defensive','TFL'), ('EPA/Play','ppa','avg_ppa_all')],
-    'DB': [('Tackles','defensive','TOT'), ('Interceptions','defensive','INT'),
-           ('Pass Defended','defensive','PD'), ('EPA/Play','ppa','avg_ppa_all')],
-}
 _DEF_WIDE = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB']
 _RB_REC_WIDE = ['WR','TE','RB','HB','FB']
 
@@ -9436,7 +9443,7 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, top_n=150
         # 128px: the markers draw at ~30 CSS px and the hover copy at roughly
         # double that, so this still has headroom on a 2x display while cutting
         # a 275KB source to about 12KB (3KB as WebP).
-        headshot = (f'/img-proxy?url={quote(m[4], safe="")}&w=128') if m[4] else None
+        headshot = (f'/img-proxy?url={quote(m[4], safe="")}&w=128&mask=circle') if m[4] else None
         out.append({
             'id': int(pid), 'name': f'{m[1] or ""} {m[2] or ""}'.strip(),
             'team': m[3] or '', 'headshot': headshot, 'logo': m[5],
@@ -9447,75 +9454,6 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, top_n=150
     return out
 
 
-def _radar_pool(cursor, kind, group, season):
-    """Resolve a radar axis's peer pool by its `kind` marker."""
-    if kind == 'ppa':
-        return _fetch_ppa_pool(cursor, COMPARE_PEER_POSITIONS[group], season)
-    if kind == 'def_wide':
-        return _fetch_stats_pool(cursor, 'defensive', _DEF_WIDE, season)
-    if kind == 'receiving_wide':
-        return _fetch_stats_pool(cursor, 'receiving', _RB_REC_WIDE, season)
-    return _fetch_stats_pool(cursor, kind, COMPARE_PEER_POSITIONS[group], season)
-
-
-def _explorer_radar(cursor, player_id, season):
-    """Percentile profile for one player: same pools, qualification, and
-    percentile math as the player hero cards, reduced to the radar axes."""
-    cursor.execute('SELECT first_name, last_name, team, position, headshot FROM players WHERE id=%s',
-                   (player_id,))
-    row = cursor.fetchone()
-    if not row:
-        return None
-    first, last, team, pos, headshot = row
-    group = POS_GROUP_MAP.get((pos or '').upper())
-    if not group or group not in EXPLORER_RADAR_SPEC:
-        return None
-    peer = COMPARE_PEER_POSITIONS[group]
-
-    # Qualified peer set for this group (from the group's counting-stat pool),
-    # applied to every stat pool so percentiles match the hero exactly.
-    qcat = QUAL_SOURCE_CATEGORY[group]
-    qstat, qmin = _qual_threshold(group, qcat, season)
-    qsource = _fetch_stats_pool(cursor, qcat, peer, season)
-    qualified_ids = {pid for pid, d in qsource.items() if (d.get(qstat) or 0) >= qmin}
-
-    def _q(pool):
-        return {pid: d for pid, d in pool.items() if pid in qualified_ids}
-
-    axes = []
-    for label, kind, st in EXPLORER_RADAR_SPEC[group]:
-        pool = _radar_pool(cursor, kind, group, season)
-        # EPA/ppa pools qualify against the same counting-stat set
-        qpool = _q(pool)
-        _, pct, _n = _rank_pct(player_id, qpool, st, higher_better=True)
-        axes.append({'label': label, 'pct': pct})
-    if all(a['pct'] is None for a in axes):
-        return None
-    return {
-        'id': player_id, 'name': f'{first or ""} {last or ""}'.strip(),
-        'team': team or '', 'pos': pos or '', 'group': group,
-        'headshot': headshot, 'axes': axes,
-    }
-
-
-@app.route('/api/explorer/radar')
-@cache.cached(timeout=21600, query_string=True)
-def api_explorer_radar():
-    """Percentile radar profile for a player in a given season (JSON)."""
-    pid = request.args.get('pid', type=int)
-    if not pid:
-        return jsonify({'error': 'missing pid'}), 400
-    s = request.args.get('season', type=int)
-    season = s if (s and s in get_available_seasons()) else CURRENT_SEASON
-    conn = get_db()
-    try:
-        cursor = conn.cursor()
-        profile = _explorer_radar(cursor, pid, season)
-    finally:
-        release_db(conn)
-    if not profile:
-        return jsonify({'error': 'no profile'}), 404
-    return jsonify(profile)
 
 
 # ── Head-to-head matchup lookup (Explorer scope=matchup) ────────────────────
@@ -9684,7 +9622,7 @@ def _matchup_stats(games, team_a):
 def explorer():
     """Stat Explorer: teams or players plotted by two selectable stats, with
     each team logo / player headshot as the marker. Team mode adds an optional
-    bubble-size dimension; player mode adds a percentile radar. All values ship
+    bubble-size dimension. All values ship
     with the page so axis switching is instant; season/scope/position reload."""
     season = requested_season()
     scope = request.args.get('scope', 'team')
@@ -10383,7 +10321,7 @@ def _warm_explorer_headshots(limit=200):
     for url in urls:
         for webp in (True, False):      # both halves of the Accept negotiation
             try:
-                if _img_variant(url, 128, webp):
+                if _img_variant(url, 128, webp, True):
                     done += 1
             except Exception:
                 pass
