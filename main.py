@@ -2644,36 +2644,127 @@ def forecast_record(season):
             'pct': round(100.0 * int(correct) / total)}
 
 
-def top_games(games, forecasts, limit=TOP_GAMES_N):
-    """The handful of games worth surfacing above the chronological grid.
+# ── Game score ───────────────────────────────────────────────────────────
+# One number per game for "how much does this game matter", used to order the
+# home page's Top Games and to mark standouts on /games. Backend only for now:
+# the weights are a judgement call, so they stay out of the UI until they have
+# been lived with. Everything it reads is already known for every game.
+HOME_TOP_N = 10
 
-    Returns [] when the slate has nothing that stands out, so a quiet week
-    renders the plain grid rather than promoting six arbitrary games.
+# Named stakes, checked in order; the first match wins.
+_EVENT_POINTS = (
+    ('National Championship', 120),
+    ('Semifinal', 90),
+    ('Quarterfinal', 70),
+    ('First Round', 55),
+    ('Championship', 50),      # conference title games
+)
+
+
+@cache.memoize(timeout=21600)
+def game_score_context(season):
+    """Team conference and Savant Net Rating maps for game_score.
+
+    Conference comes from the teams table (games carry none). Early in a season
+    too few teams have a Savant Rating to mean anything, so the previous
+    season's ratings stand in until at least 40 teams are rated.
     """
-    scored = []
-    for g in games:
-        ar, hr = g.get('away_rank'), g.get('home_rank')
-        score = 0.0
-        if ar and hr:
-            # Ranked vs ranked is the strongest signal on the board, and #1 vs
-            # #4 should outrank #18 vs #22.
-            score += 100 - (ar + hr)
-        elif ar or hr:
-            score += 45 - (ar or hr)
-        if g.get('rivalry'):
-            score += 18
-        prob = forecasts.get(g['id'])
-        if prob is not None:
-            # A coin flip is worth reading; a 97% is not.
-            score += 24 * max(0.0, 1 - 2 * abs(prob - 0.5))
-        if score > 0:
-            scored.append((score, g))
-    # A band of one or two reads as an accident rather than a selection.
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT name, conference FROM teams')
+        conf_map = dict(cur.fetchall())
+        net_map = {}
+        for yr in (season, season - 1):
+            cur.execute('SELECT team, net_rating FROM savant_ratings WHERE season = %s', (yr,))
+            rows = cur.fetchall()
+            if len(rows) >= 40:
+                net_map = {t: n for t, n in rows if n is not None}
+                break
+        return conf_map, net_map
+    except Exception:
+        conn.rollback()
+        return {}, {}
+    finally:
+        release_db(conn)
+
+
+def game_score(g, forecast=None, conf_map=None, net_map=None):
+    """How much a game matters, as a single comparable number.
+
+    Parts, largest first:
+      - AP rankings: ranked vs ranked scores 100 − (sum of ranks), so #1 vs #4
+        (95) beats #18 vs #22 (60); one ranked team scores 45 − its rank.
+      - Named stakes: playoff rounds and conference championships (55–120).
+      - Rivalry: +20 for a game in the curated rivalries table.
+      - Team strength: up to +16 from the two teams' average Savant Net Rating,
+        which lifts strong unranked matchups early in a season.
+      - Conference game: +12 when both teams share a conference (not
+        independents); an FCS opponent costs 40 instead.
+      - Closeness: a coin-flip forecast before kickoff is worth up to +24; after
+        the final, a one-score margin is worth up to +20 and a 28-point
+        blowout costs 12.
+    """
+    score = 0.0
+    ar, hr = g.get('away_rank'), g.get('home_rank')
+    if ar and hr:
+        score += 100 - (ar + hr)
+    elif ar or hr:
+        score += 45 - (ar or hr)
+
+    notes = g.get('notes') or ''
+    for key, pts in _EVENT_POINTS:
+        if key in notes:
+            score += pts
+            break
+    else:
+        if notes:
+            score += 8          # a named showcase (kickoff classic, neutral-site event)
+
+    if g.get('rivalry'):
+        score += 20
+
+    if net_map:
+        hn, an = net_map.get(g['home']), net_map.get(g['away'])
+        if hn is not None and an is not None:
+            score += 0.8 * max(0.0, min(20.0, (hn + an) / 2))
+
+    if conf_map:
+        hc, ac = conf_map.get(g['home']), conf_map.get(g['away'])
+        if hc is None or ac is None or hc in FCS_CONFS or ac in FCS_CONFS:
+            score -= 40
+        elif hc == ac and 'Independent' not in hc:
+            score += 12
+
+    if g.get('completed') and g.get('home_pts') is not None and g.get('away_pts') is not None:
+        margin = abs(g['home_pts'] - g['away_pts'])
+        # A finished blowout was not worth watching, whoever the favourite was.
+        score += 20 if margin <= 3 else 12 if margin <= 8 else 5 if margin <= 14 else -12 if margin >= 28 else 0
+    elif forecast is not None:
+        score += 24 * max(0.0, 1 - 2 * abs(forecast - 0.5))
+    return score
+
+
+def rank_games(games, forecasts, season):
+    """Every game in the slate, most important first (ties by kickoff)."""
+    conf_map, net_map = game_score_context(season)
+    return sorted(games, key=lambda g: (-game_score(g, forecasts.get(g['id']), conf_map, net_map),
+                                        g.get('day_key') or '', g['id']))
+
+
+def top_games(games, forecasts, limit=TOP_GAMES_N, season=None):
+    """The standouts /games marks inside its day grid.
+
+    Unlike the home page's top ten, this only returns games that genuinely
+    stand out, so a quiet week marks nothing rather than six arbitrary games.
+    """
+    conf_map, net_map = game_score_context(season) if season else ({}, {})
+    scored = [(game_score(g, forecasts.get(g['id']), conf_map, net_map), g) for g in games]
+    scored = [x for x in scored if x[0] >= 30]
     if len(scored) < 3:
         return []
     scored.sort(key=lambda x: (-x[0], x[1].get('day_key') or '', x[1]['id']))
     return [g for _, g in scored[:limit]]
-
 
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
@@ -2764,20 +2855,25 @@ def home(week=None, season_type='regular'):
                 conn.rollback()   # table absent on a fresh DB — no chips
         completed_forecasts = get_frozen_forecasts(cursor, [g['id'] for g in games if g['completed']])
 
+        # The home page shows the week's most important games rather than all
+        # ~86, so the games column stays in proportion to the leaders rail.
+        # The full slate lives on /games.
+        top = rank_games(games, forecasts, home_season)[:HOME_TOP_N]
+
         # Live count of FBS teams for the hero pill, so it stays accurate
         # through realignment instead of a hardcoded "130+".
         cursor.execute('SELECT COUNT(*) FROM teams WHERE conference NOT IN %s', (FCS_CONFS,))
         fbs_team_count = cursor.fetchone()[0]
         # Drive tracking lives on the game page (Drives tab); point the hero
         # pill at the most prominent recent game rather than an unrelated page.
-        featured_game_id = games[0]['id'] if games else None
+        featured_game_id = top[0]['id'] if top else None
         # Regular season only: the postseason view is already grouped by round,
         # which is a stronger ordering than anything this would compute.
 
     finally:
         release_db(conn)
     return render_template('home.html',
-        games=games, grouped_games=grouped_games, all_weeks=all_weeks,
+        games=games, top_games=top, all_weeks=all_weeks,
         selected_week=week, season_type=season_type,
         home_season=home_season,
         # "Results" only once the whole slate is in the books; a week still
@@ -2973,7 +3069,7 @@ def games_hub():
     # Same scorer the home page promotes with. No band here — the day grouping
     # is this page's organising idea and a second one would compete with it —
     # but marking the standouts gives a long Saturday some tiers.
-    top_ids = {g['id'] for g in top_games(games, forecasts)}
+    top_ids = {g['id'] for g in top_games(games, forecasts, season=season)}
 
     return render_template('games.html',
         games=games, day_groups=day_groups, seasons=seasons, season=season, forecasts=forecasts,

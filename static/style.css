@@ -402,9 +402,53 @@ html {
 }
 .game-card-v2.is-featured:hover { border-color: var(--accent); }
 
-/* Small screens fold the tail of a long slate. See the note in home.html for
-   why the collapse is applied from JS rather than rendered that way. */
-.home-games-grid.is-collapsed > .game-card-v2:nth-child(n+21) { display: none; }
+/* ── Home: Top Games ──────────────────────────────────────────────────────
+   Ten game cards in score order (game_score in main.py). The rank sits on
+   the card's top edge rather than inside it, so the shared game card stays
+   identical to /games and its live-score hooks keep working. */
+.tg-list { list-style: none; margin: 0; padding: 10px 0 0; row-gap: 22px; }   /* room for the rank badge above each row */
+.tg-item { position: relative; display: flex; min-width: 0; }
+.tg-item > .game-card-v2 { flex: 1; min-width: 0; }
+.tg-rank {
+    position: absolute;
+    z-index: 2;
+    top: -10px;
+    left: 14px;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-pill);
+    background: var(--bg-base);
+    border: 1px solid var(--border-strong);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 800;
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--text-secondary);
+    font-variant-numeric: proportional-nums;
+    pointer-events: none;
+}
+/* The top three carry a little more weight: brighter numeral, accent edge. */
+.tg-item:nth-child(-n+3) .tg-rank {
+    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border-strong));
+}
+.tg-all {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    border-radius: var(--r-sm);
+}
+.tg-all:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tg-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tg-all:active { opacity: 0.8; }
 /* Day grids fold at 8 — a day is a smaller unit than a whole slate. */
 .games-grid.day-grid.is-collapsed > .game-card-v2:nth-child(n+9) { display: none; }
 .slate-more {

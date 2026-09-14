@@ -22,15 +22,14 @@
 <div class="page-wrapper">
 <div class="row g-5">
 
-    <!-- Games Section -->
+    <!-- Top Games -->
     <div class="col-lg-8">
-
+      <section aria-labelledby="topGamesTitle">
         <div class="slate-head slate-head-week" id="slate">
-            <h2 class="section-label">
-                {% if season_type == 'postseason' %}Postseason{% else %}Week {{ selected_week }}{% endif %}{% if week_complete %} Results{% endif %}
-                <span class="section-label-season">{{ home_season }}</span>
+            <h2 class="section-label" id="topGamesTitle">Top Games
+                <span class="section-label-season">{% if season_type == 'postseason' %}Postseason{% else %}Week {{ selected_week }}{% endif %} · {{ home_season }}</span>
             </h2>
-            {% if games %}<span class="slate-head-note">{{ games|length }} game{{ '' if games|length == 1 else 's' }}, in kickoff order</span>{% endif %}
+            {% if games %}<a class="slate-head-note tg-all" href="/games?season={{ home_season }}&amp;week={{ selected_week }}&amp;stype={{ season_type }}">All {{ games|length }} games →</a>{% endif %}
             <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
                 {% for w, stype in all_weeks %}
                     {% set stype_short = 'postseason' if 'POSTSEASON' in stype else 'regular' %}
@@ -42,23 +41,22 @@
             </select>
         </div>
 
-        {% if season_type == 'postseason' %}
-            {% for label, games in grouped_games.items() %}
-                <h3 class="section-label mt-4">{{ label }}</h3>
-                <div class="home-games-grid">
-                    {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}{% endfor %}
-                </div>
-            {% else %}
-                <p class="slate-empty">No postseason games are scheduled for {{ home_season }} yet. They appear here once the bowl and playoff fields are set.</p>
+        {% if top_games %}
+        <p class="slate-caption">Ranked by what is at stake: AP rankings, rivalries, conference games, team strength, and how close the forecast or the final was.</p>
+        {# An ordered list: the order is the point. role="list" keeps the list
+           semantics that list-style:none drops in Safari. #}
+        <ol class="home-games-grid tg-list" role="list">
+            {% for game in top_games %}
+            <li class="tg-item">
+                <span class="tg-rank">{{ loop.index }}</span>
+                {{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}
+            </li>
             {% endfor %}
+        </ol>
         {% else %}
-            <div class="home-games-grid" id="slateGrid">
-                {% for game in games %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}
-                {% else %}
-                <p class="slate-empty">No games are scheduled for Week {{ selected_week }} of {{ home_season }}. Pick another week above, or see the <a href="/games">full season schedule</a>.</p>
-                {% endfor %}
-            </div>
+        <p class="slate-empty">No games are scheduled for {% if season_type == 'postseason' %}the {{ home_season }} postseason{% else %}Week {{ selected_week }} of {{ home_season }}{% endif %}. Pick another week above, or see the <a href="/games">full season schedule</a>.</p>
         {% endif %}
+      </section>
     </div>
 
     <!-- Leaders Section -->
@@ -132,61 +130,4 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='savant-ball.js') }}" defer></script>
-<script>
-/* ── Long-slate collapse (small screens only) ─────────────────────────────
-   A full week is ~86 cards. Stacked one-up on a phone that put Season Leaders
-   at 83.7% down a 19,000px page, which is to say nobody ever saw them. The
-   tail folds behind a button below the leaders breakpoint and stays open on
-   desktop, where the two columns sit side by side and the length costs
-   nothing.
-
-   Collapsing is done in JS rather than in the template so that a reader
-   without JS still gets the complete slate — the markup always contains
-   every game. ── */
-(function () {
-    var grid = document.getElementById('slateGrid');
-    if (!grid) return;
-
-    var SHOWN = 20;
-    var cards = grid.querySelectorAll('.game-card-v2');
-    if (cards.length <= SHOWN + 4) return;   // not worth a control
-
-    var mq = window.matchMedia('(max-width: 991.98px)');
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'slate-more';
-    btn.hidden = true;
-    grid.insertAdjacentElement('afterend', btn);
-
-    function label() {
-        btn.textContent = 'Show all ' + cards.length + ' games';
-        btn.setAttribute('aria-expanded', 'false');
-    }
-
-    function collapse() {
-        grid.classList.add('is-collapsed');
-        label();
-        btn.hidden = false;
-    }
-
-    function expand() {
-        grid.classList.remove('is-collapsed');
-        btn.hidden = true;
-    }
-
-    btn.addEventListener('click', function () {
-        expand();
-        /* Keep the reader where they were rather than letting the page jump. */
-        cards[SHOWN].scrollIntoView({ block: 'start', behavior: 'smooth' });
-        cards[SHOWN].focus({ preventScroll: true });
-    });
-
-    function sync(e) {
-        if (e.matches) { collapse(); } else { expand(); }
-    }
-    sync(mq);
-    (mq.addEventListener ? mq.addEventListener.bind(mq, 'change')
-                         : mq.addListener.bind(mq))(sync);
-})();
-</script>
 {% endblock %}
