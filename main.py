@@ -4082,70 +4082,36 @@ def leaderboards_teams(category='savant'):
         heat=heat,
     )
 
-# Short labels for the Teams page's conference chips.
-TEAMS_CONF_SHORT = {'American Athletic': 'American', 'Mid-American': 'MAC',
-                    'Conference USA': 'C-USA', 'FBS Independents': 'Independents'}
-
 @app.route('/teams')
-@cache.cached(timeout=21600)  # records, polls and ratings move weekly
+@cache.cached(timeout=86400)  # 24 hours — basically static
 def teams():
-    """Every FBS team grouped by conference, as a filterable directory.
-
-    Each row carries the figures a fan picks a team by: AP rank, record and
-    Savant Net Rating. Early in a season too few teams have a Savant Rating, so
-    the previous season's stands in until at least 40 teams are rated.
-    """
-    season = forward_season()
     conn = get_db()
     try:
         cursor = conn.cursor()
-        # The current season's poll (the preseason one before week 1).
-        ap_rankings = get_ap_rankings(cursor, season)
+        # The current season's poll (the preseason one before week 1), not last
+        # season's final — this grid is the league as it stands now.
+        ap_rankings = get_ap_rankings(cursor, forward_season())
         conf_logos = get_conference_logos(cursor)
-        # FCS programs exist only for opponent logos elsewhere; never list them.
-        cursor.execute('SELECT name, conference, logo_dark, color, abbreviation FROM teams '
+        # Exclude FCS programs (present only for opponent-logo lookups on
+        # schedule/game pages) so they never surface on this FBS-only grid.
+        cursor.execute('SELECT name, conference, logo_dark, color, alt_color FROM teams '
                        'WHERE conference NOT IN %s ORDER BY conference, name', (FCS_CONFS,))
         rows = cursor.fetchall()
-        net, net_season = {}, None
-        for yr in (season, season - 1):
-            cursor.execute('SELECT team, net_rating FROM savant_ratings '
-                           'WHERE season = %s AND net_rating IS NOT NULL', (yr,))
-            found = cursor.fetchall()
-            if len(found) >= 40:
-                net, net_season = dict(found), yr
-                break
     finally:
         release_db(conn)
-
-    records = {}
-    try:
-        for conf_rows in (conference_standings(season) or {}).values():
-            for t in conf_rows:
-                records[t['name']] = f"{t['wins']}-{t['losses']}"
-    except Exception:
-        records = {}
-
-    grouped = OrderedDict()
-    for name, conf, logo, color, abbr in rows:
-        conf = conf or 'Other'
-        ok_color = color if (color and color.startswith('#') and len(color) == 7) else '#2b3a55'
-        grouped.setdefault(conf, []).append({
-            'name': name, 'logo': logo, 'color': ok_color,
-            'rank': ap_rankings.get(name), 'record': records.get(name),
-            'net': net.get(name),
-            # What the live filter matches against: name and abbreviation.
-            'search': ' '.join(x for x in (name, abbr) if x).lower(),
-        })
-    ordered = [c for c in STANDINGS_CONF_ORDER if c in grouped] + \
-              sorted(c for c in grouped if c not in STANDINGS_CONF_ORDER)
-    conferences = [{
-        'name': c, 'short': TEAMS_CONF_SHORT.get(c, c),
-        'slug': re.sub(r'[^a-z0-9]+', '-', c.lower()).strip('-'),
-        'logo': conf_logos.get(c), 'teams': grouped[c],
-    } for c in ordered]
-    return render_template('teams.html', conferences=conferences, season=season,
-                           total=sum(len(c['teams']) for c in conferences),
-                           net_season=net_season)
+    conf_order = ['SEC','Big Ten','Big 12','ACC','Pac-12','American Athletic','Mountain West','Sun Belt','Mid-American','Conference USA','FBS Independents']
+    conferences = {}
+    for team in rows:
+        conf = team[1] or 'Other'
+        if conf not in conferences: conferences[conf] = []
+        conferences[conf].append(team)
+    sorted_confs = OrderedDict()
+    for conf in conf_order:
+        if conf in conferences: sorted_confs[conf] = conferences[conf]
+    for conf in conferences:
+        if conf not in sorted_confs: sorted_confs[conf] = conferences[conf]
+    return render_template('teams.html', conferences=sorted_confs, ap_rankings=ap_rankings,
+                           conf_logos=conf_logos)
 
 # Preferred display order for conferences; anything not listed (e.g. Pac-12 in
 # recent years, or historical leagues) sorts alphabetically after these.

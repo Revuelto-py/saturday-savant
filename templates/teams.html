@@ -3,154 +3,90 @@
 {% block og_description %}Every FBS college football team, grouped by conference. Jump to any program for ratings, advanced stats, schedule, roster, and season history.{% endblock %}
 
 {% block content %}
-<div class="page-wrapper tm-page">
+{% set team_total = conferences.values()|map('length')|sum %}
+<div class="page-wrapper tc-page">
 
-    <header class="tm-head">
-        <h1 class="tm-title">FBS Teams</h1>
-        <p class="tm-meta">{{ total }} teams in {{ conferences|length }} conferences · {{ season }}</p>
+    <header class="tc-head">
+        <h1 class="tc-title">FBS Teams</h1>
+        <p class="tc-meta">{{ team_total }} teams in {{ conferences|length }} conferences</p>
     </header>
 
-    {# Filter bar. The search box is script-enhanced, so it stays hidden until
-       the script runs; the conference chips are plain anchors and work without it. #}
-    <div class="tm-bar" id="tmBar">
-        <div class="tm-search" id="tmSearchWrap" hidden>
-            <label class="sr-only" for="tmSearch">Find a team</label>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-            <input id="tmSearch" type="search" placeholder="Find a team" autocomplete="off" spellcheck="false" enterkeyhint="go">
-            <span class="tm-count" id="tmCount" aria-live="polite"></span>
-        </div>
-        <nav class="tm-chips" id="tmChips" aria-label="Jump to a conference">
-            {% for c in conferences %}
-            <a class="tm-chip" href="#conf-{{ c.slug }}" data-conf="{{ c.slug }}">
-                {% if c.logo %}<img src="{{ c.logo }}" alt="" width="18" height="18" loading="lazy" decoding="async">{% endif %}{{ c.short }}
-            </a>
+    {% for conf, teams in conferences.items() %}
+    {% set clogo = conf_logos.get(conf) %}
+    <section class="tc-conf" aria-labelledby="tc-conf-{{ loop.index }}">
+        <header class="tc-conf-head">
+            {% if clogo %}<img src="{{ clogo }}" class="tc-conf-logo" alt="" width="36" height="36" loading="lazy" decoding="async">{% endif %}
+            <h2 class="tc-conf-name" id="tc-conf-{{ loop.index }}">{{ conf }}</h2>
+            <span class="tc-conf-rule" aria-hidden="true"></span>
+            <span class="tc-conf-count">{{ teams|length }} teams</span>
+        </header>
+
+        <ul class="tc-grid" role="list">
+            {% for team in teams %}
+            {# Team-colour card. Two things to preserve if this is ever touched:
+
+               Every fade ends at the SAME colour with zero alpha, never at
+               `transparent`. `transparent` is rgba(0,0,0,0), so a fade to it
+               interpolates through black and leaves a grey, muddy band.
+
+               And the lower glow's falloff has to complete INSIDE the card, or
+               the bottom edge cuts through the ellipse's brightest region and
+               draws a hard coloured line across every card. #}
+            {% set _c1 = team[3] if (team[3] and team[3][0] == '#' and team[3]|length == 7) else '#2b3a55' %}
+            {% set _alt = team[4] if (team[4] and team[4][0] == '#' and team[4]|length == 7) else '' %}
+            {# Reject a NEUTRAL alt colour, by chroma rather than brightness: a
+               third of programs list white or black as their second colour, and
+               white glowing up from the bottom of a dark card is a grey haze.
+               LSU's gold (luminance 202) and Mississippi State's grey (197) only
+               separate by chroma, 218 vs 7. A neutral alt falls back to the primary. #}
+            {% set _ar = _alt[1:3]|int(base=16) if _alt else 0 %}
+            {% set _ag = _alt[3:5]|int(base=16) if _alt else 0 %}
+            {% set _ab = _alt[5:7]|int(base=16) if _alt else 0 %}
+            {% set _chroma = [_ar, _ag, _ab]|max - [_ar, _ag, _ab]|min %}
+            {% set _c2 = _alt if (_alt and _chroma >= 40) else _c1 %}
+
+            {# How much of the team's colour a card may show, set by luminance so
+               Iowa's gold and Penn State's navy land at the same visual weight:
+               bright colours get less of themselves, dark ones more. #}
+            {% set _r = _c1[1:3]|int(base=16) %}
+            {% set _g = _c1[3:5]|int(base=16) %}
+            {% set _b = _c1[5:7]|int(base=16) %}
+            {% set _bright = (299 * _r + 587 * _g + 114 * _b) // 1000 %}
+            {% set _k = 24 if _bright >= 150 else (30 if _bright >= 90 else 38) %}
+            {% set _a0 = '%02x' | format(_k * 255 // 100) %}
+            {% set _a1 = '%02x' | format(_k * 78 * 255 // 10000) %}
+            {% set _a2 = '%02x' | format(_k * 45 * 255 // 10000) %}
+            {% set _b0 = '%02x' | format(_k * 34 * 255 // 10000) %}
+            {% set _b1 = '%02x' | format(_k * 14 * 255 // 10000) %}
+            {% set _bd = '%02x' | format(_k * 95 * 255 // 10000) %}
+            {# The hover state brightens the same wash rather than swapping it,
+               so a card answers the pointer in its own colour. #}
+            {% set _h0 = '%02x' | format([_k * 150 // 100, 70]|min * 255 // 100) %}
+            {% set rank = ap_rankings.get(team[0]) %}
+
+            <li class="tc-item">
+                <a class="tc-card" href="/team/{{ team[0] | team_slug }}"
+                   style="--tc: {{ _c1 }}; --tc-edge: {{ _c1 }}{{ _bd }}; --tc-glow: {{ _c1 }}{{ _h0 }}; --tc-clear: {{ _c1 }}00;
+                          --tc-wash:
+                            radial-gradient(ellipse 124% 74% at 50% -4%,
+                              {{ _c1 }}{{ _a0 }} 0%, {{ _c1 }}{{ _a1 }} 30%, {{ _c1 }}{{ _a2 }} 58%, {{ _c1 }}00 88%),
+                            radial-gradient(ellipse 150% 62% at 50% 104%,
+                              {{ _c2 }}{{ _b0 }} 0%, {{ _c2 }}{{ _b1 }} 46%, {{ _c2 }}00 82%);">
+                    {% if rank %}<span class="tc-rank"><span class="sr-only">AP rank </span>{{ rank }}</span>{% endif %}
+                    <span class="tc-logo">
+                        {% if team[2] %}
+                        <img src="{{ team[2] }}" alt="" loading="lazy" decoding="async" width="64" height="64">
+                        {% else %}
+                        <span class="tc-initial" aria-hidden="true">{{ team[0][0] }}</span>
+                        {% endif %}
+                    </span>
+                    <span class="tc-name">{{ team[0] }}</span>
+                </a>
+            </li>
             {% endfor %}
-        </nav>
-    </div>
-
-    <p class="tm-empty" id="tmEmpty" hidden>No FBS team matches “<span id="tmEmptyQ"></span>”. Try a school name or abbreviation, like “Ohio State” or “OSU”.</p>
-
-    <div class="tm-grid">
-        {% for c in conferences %}
-        <section class="tm-conf" id="conf-{{ c.slug }}" data-conf="{{ c.slug }}" aria-labelledby="conf-{{ c.slug }}-h">
-            <header class="tm-conf-head">
-                {% if c.logo %}<img class="tm-conf-logo" src="{{ c.logo }}" alt="" width="28" height="28" loading="lazy" decoding="async">{% endif %}
-                <h2 class="tm-conf-name" id="conf-{{ c.slug }}-h">{{ c.name }}</h2>
-                <span class="tm-conf-count">{{ c.teams|length }} teams</span>
-            </header>
-            <div class="tm-cols" aria-hidden="true"><span>Team</span><span>Rec</span><span>Net</span></div>
-            <ul class="tm-list" role="list">
-                {% for t in c.teams %}
-                <li class="tm-item" data-name="{{ t.search }}">
-                    <a class="tm-row" href="/team/{{ t.name | team_slug }}" style="--tc: {{ t.color }}">
-                        <span class="tm-logo">
-                            {% if t.logo %}<img src="{{ t.logo }}" alt="" width="22" height="22" loading="lazy" decoding="async">
-                            {% else %}<span class="tm-initial" aria-hidden="true">{{ t.name[0] }}</span>{% endif %}
-                        </span>
-                        <span class="tm-name">{% if t.rank %}<span class="tm-rank"><span class="sr-only">AP rank </span>{{ t.rank }}</span>{% endif %}{{ t.name }}</span>
-                        <span class="tm-rec">{% if t.record %}<span class="sr-only">, record </span>{{ t.record }}{% else %}<span aria-hidden="true">–</span>{% endif %}</span>
-                        <span class="tm-net{{ ' is-pos' if t.net is not none and t.net > 0 else '' }}">{% if t.net is not none %}<span class="sr-only">, Savant Net Rating </span>{{ '%+.1f'|format(t.net) }}{% else %}<span aria-hidden="true">–</span>{% endif %}</span>
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
-        </section>
-        {% endfor %}
-    </div>
-
-    {% if net_season %}
-    <p class="tm-foot">Net is the {{ net_season }} Savant Rating: the margin per 10 drives a team would expect against an average FBS team on a neutral field. <a href="/savant-rating">How the Savant Rating works</a></p>
-    {% endif %}
+        </ul>
+    </section>
+    {% endfor %}
 
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-(function () {
-    var input = document.getElementById('tmSearch');
-    var wrap = document.getElementById('tmSearchWrap');
-    var bar = document.getElementById('tmBar');
-    var chipsNav = document.getElementById('tmChips');
-    if (!input || !bar) return;
-    wrap.hidden = false;
-
-    var items = [].slice.call(document.querySelectorAll('.tm-item'));
-    var confs = [].slice.call(document.querySelectorAll('.tm-conf'));
-    var chips = {};
-    [].forEach.call(document.querySelectorAll('.tm-chip'), function (ch) { chips[ch.getAttribute('data-conf')] = ch; });
-    var count = document.getElementById('tmCount');
-    var empty = document.getElementById('tmEmpty');
-    var emptyQ = document.getElementById('tmEmptyQ');
-
-    function norm(s) {
-        return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '');
-    }
-    var names = items.map(function (li) { return norm(li.getAttribute('data-name')); });
-
-    // Narrow every conference at once; a conference with no match steps aside.
-    function apply() {
-        var raw = input.value.trim(), q = norm(raw), shown = 0;
-        items.forEach(function (li, i) {
-            var ok = !q || names[i].indexOf(q) !== -1;
-            li.hidden = !ok;
-            if (ok) shown++;
-        });
-        confs.forEach(function (sec) {
-            sec.hidden = !sec.querySelector('.tm-item:not([hidden])');
-            var ch = chips[sec.getAttribute('data-conf')];
-            if (ch) ch.classList.toggle('is-off', sec.hidden);
-        });
-        count.textContent = q ? shown + (shown === 1 ? ' team' : ' teams') : '';
-        empty.hidden = shown > 0;
-        emptyQ.textContent = raw;
-    }
-    input.addEventListener('input', apply);
-    input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-            var first = document.querySelector('.tm-item:not([hidden]) .tm-row');
-            if (first) window.location.href = first.href;
-        } else if (e.key === 'Escape' && input.value) {
-            input.value = '';
-            apply();
-        }
-    });
-    // "/" jumps to the search box from anywhere on the page.
-    document.addEventListener('keydown', function (e) {
-        var tag = (document.activeElement && document.activeElement.tagName) || '';
-        if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) {
-            e.preventDefault();
-            input.focus();
-        }
-    });
-
-    // The bar sticks under the site navbar, and anchor jumps clear both.
-    var nav = document.querySelector('.navbar');
-    function offsets() {
-        var root = document.documentElement.style;
-        root.setProperty('--tm-top', Math.round(nav ? nav.getBoundingClientRect().height : 64) + 'px');
-        root.setProperty('--tm-bar', Math.round(bar.getBoundingClientRect().height) + 'px');
-    }
-    offsets();
-    window.addEventListener('resize', offsets);
-
-    // The chip for the conference in view is marked, and on a phone the chip
-    // row scrolls to keep it visible.
-    if ('IntersectionObserver' in window) {
-        var io = new IntersectionObserver(function (entries) {
-            entries.forEach(function (e) {
-                if (!e.isIntersecting) return;
-                var ch = chips[e.target.getAttribute('data-conf')];
-                if (!ch) return;
-                Object.keys(chips).forEach(function (k) { chips[k].removeAttribute('aria-current'); });
-                ch.setAttribute('aria-current', 'true');
-                if (chipsNav.scrollWidth > chipsNav.clientWidth + 1) {
-                    chipsNav.scrollTo({ left: ch.offsetLeft - 16, behavior: 'smooth' });
-                }
-            });
-        }, { rootMargin: '-35% 0px -55% 0px' });
-        confs.forEach(function (sec) { io.observe(sec); });
-    }
-})();
-</script>
 {% endblock %}
