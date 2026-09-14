@@ -167,6 +167,7 @@
             {% if is_upcoming_season and lineup %}
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-starters" aria-controls="starters" data-bs-target="#starters">Starters</button></li>
             {% endif %}
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-transfers" aria-controls="transfers" data-bs-target="#transfers">Transfers</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-nfl-talent" aria-controls="nfl-talent" data-bs-target="#nfl-talent">NFL Talent</button></li>
         </ul>
         {% if available_seasons and available_seasons|length > 1 %}
@@ -1211,6 +1212,91 @@
 </div>
 {% endif %}
 <!-- ===== END STARTERS ===== -->
+
+<!-- ===== TRANSFERS ===== -->
+<div class="tab-pane fade" id="transfers" aria-labelledby="tab-transfers" tabindex="0">
+<div class="pt-4 tt">
+{% set tx = transfers %}
+
+    <header class="tt-head">
+        <div>
+            <h2 class="tt-title">{{ tx.year }} Transfers</h2>
+            <p class="tt-sub">
+                {% if tx.derived %}Players who changed schools into or out of {{ team[0] }} for the {{ tx.year }} season. The transfer portal opened in 2021, so these moves come from roster changes and carry no ratings or dates.
+                {% else %}Every player who entered the transfer portal to join or leave {{ team[0] }} ahead of the {{ tx.year }} season.{% endif %}
+            </p>
+        </div>
+        <a class="tt-all" href="/transfers?year={{ tx.year }}">Full {{ tx.year }} portal</a>
+    </header>
+
+    {% if tx.arrivals or tx.departures or tx.returned %}
+    <dl class="tt-sum">
+        <div class="tt-stat"><dt>Arrivals</dt><dd>{{ tx.arrivals|length }}</dd></div>
+        <div class="tt-stat"><dt>Departures</dt><dd>{{ tx.departures|length }}</dd></div>
+        <div class="tt-stat"><dt>Net</dt><dd class="{{ 'is-up' if tx.net > 0 else ('is-down' if tx.net < 0 else '') }}">{{ '+' if tx.net > 0 else ('−' if tx.net < 0 else '') }}{{ tx.net|abs }}</dd></div>
+        {% if tx.returned %}<div class="tt-stat"><dt>Returned</dt><dd>{{ tx.returned|length }}</dd></div>{% endif %}
+    </dl>
+
+    {% macro tt_row(t, dir) %}
+    <li class="tt-row">
+        {% if t.headshot %}<img class="tp-headshot tt-photo" src="{{ t.headshot }}" alt="" loading="lazy" decoding="async" width="40" height="40">
+        {% else %}<span class="tp-headshot tp-headshot--initials tt-photo" aria-hidden="true">{{ t.initials }}</span>{% endif %}
+        <span class="tt-who">
+            {% if t.player_id %}<a class="tt-name" href="{{ player_url(t.player_id, tx.year) }}">{{ t.name }}</a>
+            {% else %}<span class="tt-name">{{ t.name }}</span>{% endif %}
+            <span class="tt-meta">
+                {% if t.pos %}<span class="tp-pos-chip">{{ t.pos }}</span>{% endif %}
+                {% if t.stars %}<span>{{ t.stars }}-star</span>{% endif %}
+                {% if t.rating %}<span class="tt-rating">{{ '%.4f'|format(t.rating) }}</span>{% endif %}
+            </span>
+        </span>
+        <span class="tt-move">
+            {% if dir == 'ret' %}
+                <span class="tt-status">{{ t.status }}</span>
+            {% else %}
+                <span class="tt-dir">{{ 'from' if dir == 'in' else 'to' }}</span>
+                {% if t.other %}
+                <a class="tt-team" href="{{ team_url(t.other, tx.year) }}">
+                    {% if t.other_logo %}<img src="{{ t.other_logo }}" alt="" loading="lazy" decoding="async" width="20" height="20">{% endif %}
+                    <span>{{ t.other }}</span>
+                </a>
+                {% else %}
+                <span class="tt-status">{{ t.status or 'Unknown' }}</span>
+                {% endif %}
+            {% endif %}
+        </span>
+    </li>
+    {% endmacro %}
+
+    <div class="tt-cols">
+        <section class="tt-col" aria-labelledby="tt-in-h">
+            <h3 class="tt-col-h" id="tt-in-h">Arrivals <span class="tt-count">{{ tx.arrivals|length }}</span></h3>
+            {% if tx.arrivals %}
+            <ul class="tt-list" role="list">{% for t in tx.arrivals %}{{ tt_row(t, 'in') }}{% endfor %}</ul>
+            {% else %}<p class="tt-none">No incoming transfers.</p>{% endif %}
+        </section>
+        <section class="tt-col" aria-labelledby="tt-out-h">
+            <h3 class="tt-col-h" id="tt-out-h">Departures <span class="tt-count">{{ tx.departures|length }}</span></h3>
+            {% if tx.departures %}
+            <ul class="tt-list" role="list">{% for t in tx.departures %}{{ tt_row(t, 'out') }}{% endfor %}</ul>
+            {% else %}<p class="tt-none">No players transferred out.</p>{% endif %}
+        </section>
+    </div>
+
+    {% if tx.returned %}
+    <section class="tt-col tt-col--returned" aria-labelledby="tt-ret-h">
+        <h3 class="tt-col-h" id="tt-ret-h">Entered the portal and stayed <span class="tt-count">{{ tx.returned|length }}</span></h3>
+        <ul class="tt-list tt-list--grid" role="list">{% for t in tx.returned %}{{ tt_row(t, 'ret') }}{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    {% else %}
+    <p class="tt-empty">No transfers are recorded for {{ team[0] }} in {{ tx.year }}.</p>
+    {% endif %}
+
+</div>
+</div>
+<!-- ===== END TRANSFERS ===== -->
 
 <!-- ===== NFL TALENT ===== -->
 <div class="tab-pane fade" id="nfl-talent" aria-labelledby="tab-nfl-talent" tabindex="0">

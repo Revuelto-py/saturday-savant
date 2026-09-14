@@ -4667,6 +4667,80 @@ def _team_situational(team_name, season):
     return out
 
 
+# ── Transfers ───────────────────────────────────────────────────────────────
+@cache.memoize(timeout=21600)
+def _team_transfers(team, season):
+    """Every player who moved into or out of `team` for `season`.
+
+    A transfers row's `year` is the season the move feeds, so the 2026 class is
+    the January 2026 portal ahead of the 2026 season. Rows split three ways:
+
+      • arrivals: destination is this team and the player didn't come from it
+      • departures: origin is this team and he isn't coming back; no
+        destination yet reads as uncommitted
+      • returned: he entered from this team, then withdrew or re-committed to
+        it, so he never left
+
+    Before 2021 there was no portal: those rows are derived from roster changes
+    and carry no ratings, stars or dates (`derived`).
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT t.first_name, t.last_name, t.position, t.origin, t.destination, "
+            "       t.transfer_date, t.rating, t.stars, t.eligibility, t.player_id, "
+            "       p.headshot, o.logo_dark, d.logo_dark, t.source "
+            "FROM transfers t "
+            "LEFT JOIN players p ON p.id = t.player_id "
+            "LEFT JOIN teams o ON o.name = t.origin "
+            "LEFT JOIN teams d ON d.name = t.destination "
+            "WHERE t.year = %s AND (t.origin = %s OR t.destination = %s) "
+            "ORDER BY t.rating DESC NULLS LAST, t.stars DESC NULLS LAST, t.last_name",
+            (season, team, team))
+        rows = cur.fetchall()
+    finally:
+        release_db(conn)
+
+    def _date(iso):
+        try:
+            return datetime.datetime.strptime(iso[:10], '%Y-%m-%d').strftime('%b %-d')
+        except (TypeError, ValueError):
+            return None
+
+    arrivals, departures, returned = [], [], []
+    derived = season < 2021
+    for (first, last, pos, origin, dest, date, rating, stars, elig, pid,
+         headshot, o_logo, d_logo, source) in rows:
+        if source == 'roster':
+            derived = True
+        item = {
+            'name': f"{first or ''} {last or ''}".strip(),
+            'initials': f"{(first or '?')[0]}{(last or ' ')[0]}".strip(),
+            'pos': pos if pos and pos != '?' else None,
+            'player_id': pid, 'headshot': headshot,
+            'rating': rating, 'stars': stars, 'date': _date(date),
+        }
+        withdrew = elig == 'Withdrawn'
+        if origin == team and (withdrew or dest == team):
+            item.update(other=None, other_logo=None,
+                        status='Withdrew' if withdrew else 'Re-committed')
+            returned.append(item)
+        elif dest == team:
+            item.update(other=origin, other_logo=o_logo, status=None)
+            arrivals.append(item)
+        elif origin == team:
+            item.update(other=dest or None, other_logo=d_logo if dest else None,
+                        status=None if dest else 'Uncommitted')
+            departures.append(item)
+
+    return {
+        'year': season, 'derived': derived,
+        'arrivals': arrivals, 'departures': departures, 'returned': returned,
+        'net': len(arrivals) - len(departures),
+    }
+
+
 # ── NFL Talent ──────────────────────────────────────────────────────────────
 @cache.memoize(timeout=86400)
 def _team_nfl_talent(team):
@@ -5348,6 +5422,9 @@ def team(team_ref):
         # NFL Talent — all-time draft/UDFA alumni (not season-scoped)
         nfl_talent = _team_nfl_talent(team_name)
 
+        # Transfers in and out for the viewed season (portal class feeding it).
+        transfers = _team_transfers(team_name, season)
+
         # Discipline (turnovers, penalties, possession) and the season's record
         # against the closing spread. Both are season-scoped; the box-score half
         # is empty for the current season because the table stops at 2025.
@@ -5356,7 +5433,7 @@ def team(team_ref):
         return render_template('team.html',
                 team=team_info, record=record, projected_record=projected_record,
                 season_stats=season_stats,
-                returning=returning, nfl_talent=nfl_talent,
+                returning=returning, nfl_talent=nfl_talent, transfers=transfers,
                 situational=situational,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,
