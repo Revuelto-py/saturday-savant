@@ -6203,6 +6203,20 @@ def game_detail(game_id):
                         f"Q{play_period} · {play_clock}" if play_clock else f"Q{play_period}",
                     ] if b]
 
+                    # Colour bucket for the chart. Coarser than `label` on
+                    # purpose: five colours a reader can hold in their head beat
+                    # thirteen they have to keep looking up, and the legend is
+                    # only worth reading if it is short.
+                    if is_turnover:
+                        bucket = 'turnover'
+                    elif label == 'Penalty':
+                        bucket = 'penalty'
+                    elif label in ('FG', 'FG Miss', 'Punt'):
+                        bucket = 'kick'
+                    elif kind in ('rush', 'pass'):
+                        bucket = kind
+                    else:
+                        bucket = 'kick'
                     is_score = bool(p.get('scoringPlay', False))
                     width = round(end_pct - start_pct, 2)
                     # ESPN prefixes every description with the game clock, which
@@ -6212,6 +6226,7 @@ def game_detail(game_id):
                         'label':       label,
                         'color':       color,
                         'kind':        kind,
+                        'bucket':      bucket,
                         'start_pct':   round(start_pct, 2),
                         'width_pct':   width,
                         'yards':       net_yards,
@@ -6241,6 +6256,7 @@ def game_detail(game_id):
                         'label':       (drive_result or 'Drive')[:10],
                         'color':       '#6b7280',
                         'kind':        'other',
+                        'bucket':      'kick',
                         'start_pct':   round(min(start_yl_abs, fallback_end), 2),
                         'width_pct':   round(abs(fallback_end - start_yl_abs), 2),
                         'yards':       drive_yards,

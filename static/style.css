@@ -8278,9 +8278,31 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    snaps that gained nothing included.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+.dv-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: var(--s5); flex-wrap: wrap; margin-bottom: var(--s5);
+}
 .dv-intro {
-    max-width: 56ch; margin: 0 0 var(--s5);
+    max-width: 52ch; margin: 0;
     color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.65;
+}
+/* The key to the bar colours. Built from the buckets this game actually
+   produced, so it never lists a colour that is not on the page. */
+.dv-legend {
+    display: flex; align-items: center; gap: var(--s4);
+    flex-wrap: wrap; padding-top: 2px;
+}
+.dv-key {
+    display: inline-flex; align-items: center; gap: 7px;
+    color: var(--text-secondary); font-size: 0.75rem; font-weight: 700;
+    white-space: nowrap;
+}
+.dv-swatch {
+    width: 22px; height: 11px; border-radius: var(--r-pill); flex-shrink: 0;
+}
+/* A score is a ring on the bar, not a sixth colour — the swatch says so. */
+.dv-swatch.is-score {
+    background: transparent; border: 2px solid #ffffff;
 }
 
 .dv-card {
@@ -8413,10 +8435,12 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em;
     background: rgba(255,255,255,0.07); color: var(--text-secondary); white-space: nowrap;
 }
-/* The two snap types the field draws an icon for get the field's own colours,
-   so the list and the picture name the same thing the same way. */
-.dv-p-tag[data-kind="pass"] { background: rgba(139,74,34,0.30); color: #e8b894; }
-.dv-p-tag[data-kind="rush"] { background: rgba(232,163,61,0.18); color: #e8a33d; }
+/* Tags take the bar colours, so the list and the picture name the same play
+   the same way. Keyed on the colour bucket, not the snap kind, to match. */
+.dv-p-tag[data-bucket="rush"]     { background: rgba(240,180,41,0.16);  color: #f0b429; }
+.dv-p-tag[data-bucket="pass"]     { background: rgba(108,184,240,0.16); color: #6cb8f0; }
+.dv-p-tag[data-bucket="penalty"]  { background: rgba(201,166,245,0.16); color: #c9a6f5; }
+.dv-p-tag[data-bucket="turnover"] { background: rgba(240,112,90,0.16);  color: #f0705a; }
 .dv-p-text { color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.55; }
 .dv-play-row.is-score .dv-p-text { color: var(--text-primary); font-weight: 600; }
 .dv-p-gain {
