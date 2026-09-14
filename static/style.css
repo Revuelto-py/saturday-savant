@@ -4032,8 +4032,10 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 @media (max-width: 1199.98px) {
     .sb-sub { max-width: 30ch; }
 }
-/* Phones: the words stack above and below the ball, the subline above "Savant" */
-@media (max-width: 859.98px) {
+/* Phones and portrait tablets: the words stack above and below the ball, the
+   subline above "Savant". A portrait tablet in the side-by-side layout left
+   the ball floating between the words, touching neither. */
+@media (max-width: 859.98px), (orientation: portrait) and (max-width: 1366px) {
     .sb-wm { font-size: max(60px, min(22vw, 140px)); }
     .sb-sub {
         align-self: end;

@@ -13,6 +13,7 @@
 (function () {
     var hero = document.getElementById('sbHero');
     var sub = hero && hero.querySelector('.sb-sub');
+    var w1 = hero && hero.querySelector('.sb-w1');
     var canvas = document.getElementById('sbBall');
     if (!hero || !canvas) return;
 
@@ -25,6 +26,8 @@
     window.addEventListener('resize', measureTop);
 
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Same breakpoint as the stacked layout in style.css (.sb-* phone/portrait block).
+    var stacked = window.matchMedia('(max-width: 859.98px), (orientation: portrait) and (max-width: 1366px)');
     var gl = canvas.getContext('webgl', {
         alpha: true, premultipliedAlpha: true, antialias: false,
         depth: false, stencil: false, powerPreference: 'high-performance'
@@ -257,11 +260,26 @@
         }
         cleared = false;
 
-        var narrow = vw < 860;
+        var narrow = stacked.matches;
         // Keep the ball clear of the subline as the columns tighten.
         var fx = narrow ? 0.5 : Math.min(0.66, 0.56 + Math.max(0, 1320 - vw) / 1320 * 0.35);
-        var fy = (narrow ? 0.46 : vw < 1200 ? 0.58 : 0.53) + p * 0.72;               // holds in view while it comes apart
-        var lenPx = narrow ? 0.76 * vw : (vw < 1200 ? 0.66 : 0.68) * rect.height;
+        var fyRest = narrow ? 0.46 : 0.53;
+        var lenPx = narrow ? 0.76 * vw : (vw < 1200 ? 0.79 : 0.68) * rect.height;
+        if (!narrow && sub) {
+            // Never let the assembled shell reach into the subline's column.
+            var room = rect.left + fx * rect.width - sub.getBoundingClientRect().right - 24;
+            lenPx = Math.min(lenPx, Math.max(0, 2 * room));
+        }
+        if (narrow && sub && w1) {
+            // Stacked: fit the ball into the gap between "Saturday" and the subline,
+            // biased up so it grazes the word and clears the copy (its on-screen
+            // height is about 0.62 of its length at this tilt).
+            var wb = w1.getBoundingClientRect().bottom, st = sub.getBoundingClientRect().top;
+            var gap = Math.max(0, st - wb);
+            lenPx = Math.min(lenPx, 1.677 * gap);
+            fyRest = ((wb + st) / 2 - 0.06 * gap - rect.top) / Math.max(rect.height, 1);
+        }
+        var fy = fyRest + p * 0.72;                                // holds in view while it comes apart
 
         emx += (mx - emx) * 0.05;
         emy += (my - emy) * 0.05;
