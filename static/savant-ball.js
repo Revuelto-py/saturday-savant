@@ -1,7 +1,7 @@
 /* Homepage hero: one football built out of thousands of footballs.
  *
  * On load the small footballs fly in and assemble into the big one (the blue
- * laces stitch in last). Scrolling spins it and breaks it back apart into the
+ * laces stitch in last); it fills the hero, with the name across it. Scrolling spins it and breaks it back apart into the
  * footballs it was made of, and it fades before the slate is reached.
  *
  * Raw WebGL rather than three.js: the whole scene is one draw call of points,
@@ -13,7 +13,7 @@
 (function () {
     var hero = document.getElementById('sbHero');
     var sub = hero && hero.querySelector('.sb-sub');
-    var w1 = hero && hero.querySelector('.sb-w1');
+    var wm = hero && hero.querySelector('.sb-wm');
     var canvas = document.getElementById('sbBall');
     if (!hero || !canvas) return;
 
@@ -26,8 +26,6 @@
     window.addEventListener('resize', measureTop);
 
     var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // Same breakpoint as the stacked layout in style.css (.sb-* phone/portrait block).
-    var stacked = window.matchMedia('(max-width: 859.98px), (orientation: portrait) and (max-width: 1366px)');
     var gl = canvas.getContext('webgl', {
         alpha: true, premultipliedAlpha: true, antialias: false,
         depth: false, stencil: false, powerPreference: 'high-performance'
@@ -106,7 +104,7 @@
         'attribute float aSize, aDelay, aSeed;',
         'uniform mat4 uMV, uProj;',
         'uniform float uAssemble, uBreak, uTime, uPx, uScale, uAspect, uOpacity, uMaxPt;',
-        'uniform vec4 uShield;',
+        'uniform vec4 uShield, uShieldB;',
         'varying vec3 vColor; varying float vAngle, vAlpha;',
         'void main() {',
         '  float land = clamp((uAssemble - aDelay) / 0.5, 0.0, 1.0);',
@@ -129,8 +127,11 @@
         '  float light = mix(1.0, shell, e);',
         '  vColor = aColor * light * (0.86 + 0.14 * sin(uTime * 2.2 + aSeed * 60.0));',
         '  vec2 ndc = c0.xy / c0.w;',
-        '  float out_ = max(max(uShield.x - ndc.x, ndc.x - uShield.z), max(uShield.y - ndc.y, ndc.y - uShield.w));',
-        '  float shield = mix(smoothstep(-0.02, 0.1, out_), 1.0, e);',
+        // Text shields: glyphs are cleared from behind the subline (uShield) and
+        // dimmed behind the name (uShieldB), so both read over the ball.
+        '  float outA = max(max(uShield.x - ndc.x, ndc.x - uShield.z), max(uShield.y - ndc.y, ndc.y - uShield.w));',
+        '  float outB = max(max(uShieldB.x - ndc.x, ndc.x - uShieldB.z), max(uShieldB.y - ndc.y, ndc.y - uShieldB.w));',
+        '  float shield = smoothstep(-0.03, 0.06, outA) * mix(0.3, 1.0, smoothstep(-0.03, 0.06, outB));',
         '  vAlpha = uOpacity * mix(0.5, 0.72, e) * shield;',
         '  gl_PointSize = clamp(0.062 * aSize * uScale * uPx / -mv.z, 2.0, uMaxPt);',
         '  gl_Position = c0;',
@@ -185,7 +186,7 @@
     attrib('aColor', aColor, 3); attrib('aSize', aSize, 1); attrib('aDelay', aDelay, 1); attrib('aSeed', aSeed, 1);
 
     var U = {};
-    ['uMV', 'uProj', 'uShield', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uAspect', 'uOpacity', 'uMaxPt'].forEach(function (n) {
+    ['uMV', 'uProj', 'uShield', 'uShieldB', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uAspect', 'uOpacity', 'uMaxPt'].forEach(function (n) {
         U[n] = gl.getUniformLocation(prog, n);
     });
     gl.uniform1f(U.uMaxPt, gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]);
@@ -245,6 +246,14 @@
         }, { passive: true });
     }
 
+    // An element's padded screen box in clip space, for the shader's text shields.
+    function shieldBox(loc, el, pad) {
+        if (!el) { gl.uniform4f(loc, 2, 2, 2, 2); return; }
+        var b = el.getBoundingClientRect();
+        gl.uniform4f(loc, (b.left - pad) / vw * 2 - 1, 1 - (b.bottom + pad) / vh * 2,
+                          (b.right + pad) / vw * 2 - 1, 1 - (b.top - pad) / vh * 2);
+    }
+
     function ss(a, b, x) { x = Math.min(Math.max((x - a) / (b - a), 0), 1); return x * x * (3 - 2 * x); }
 
     var t0 = 0, eased = 0, running = false, cleared = false, lost = false, lastCut = '';
@@ -266,26 +275,16 @@
         }
         cleared = false;
 
-        var narrow = stacked.matches;
-        // Keep the ball clear of the subline as the columns tighten.
-        var fx = narrow ? 0.5 : Math.min(0.66, 0.56 + Math.max(0, 1320 - vw) / 1320 * 0.35);
-        var fyRest = narrow ? 0.46 : 0.53;
-        var lenPx = narrow ? (vw >= 860 ? 0.95 : 0.76) * vw : (vw < 1200 ? 0.79 : 0.68) * rect.height;
-        if (!narrow && sub) {
-            // Never let the assembled shell reach into the subline's column.
-            var room = rect.left + fx * rect.width - sub.getBoundingClientRect().right - 24;
-            lenPx = Math.min(lenPx, Math.max(0, 2 * room));
-        }
-        if (narrow && sub && w1) {
-            // Stacked: fit the ball into the gap between "Saturday" and the subline,
-            // biased up so it grazes the word and clears the copy (its on-screen
-            // height is about 0.62 of its length at this tilt).
-            var wb = w1.getBoundingClientRect().bottom, st = sub.getBoundingClientRect().top;
-            var gap = Math.max(0, st - wb);
-            lenPx = Math.min(lenPx, 1.677 * gap);
-            fyRest = ((wb + st) / 2 - 0.06 * gap - rect.top) / Math.max(rect.height, 1);
-        }
-        var fy = fyRest + p * 0.72;                                // holds in view while it comes apart
+        // The ball fills the hero, centred, with the name across its lower third.
+        // Its on-screen box follows from its length L and tilt: half-height is
+        // L·(0.5·sin t + 0.294·cos t), half-width L·(0.5·cos t + 0.294·sin t).
+        var narrow = vw < 700;
+        var tilt = narrow ? -1.0 : -0.35;          // steeper on phones, so it fills a tall frame
+        var fx = 0.5;
+        var lenPx = narrow
+            ? Math.min(1.02 * vw / 1.034, 0.9 * rect.height / 1.16)
+            : Math.min(0.9 * vw, 1.1 * rect.height);
+        var fy = (narrow ? 0.42 : 0.5) + p * 0.72;                 // holds in view while it comes apart
 
         emx += (mx - emx) * 0.05;
         emy += (my - emy) * 0.05;
@@ -297,17 +296,11 @@
         var mv = mul(place(px, py, -DIST, scale),
                  mul(rotX(emy * 0.25),
                  mul(rotY(0.55 * Math.sin(t * 0.25) + p * 2.6 + emx * 0.35),   // sways, never turns end-on at rest
-                 mul(rotZ(-0.35), rotX(1.2 + t * 0.18)))));
+                 mul(rotZ(tilt), rotX(1.2 + t * 0.18)))));
 
         gl.uniformMatrix4fv(U.uMV, false, mv);
-        var sr = sub ? sub.getBoundingClientRect() : null;
-        if (sr) {
-            var pad = 14;
-            gl.uniform4f(U.uShield, (sr.left - pad) / vw * 2 - 1, 1 - (sr.bottom + pad) / vh * 2,
-                                    (sr.right + pad) / vw * 2 - 1, 1 - (sr.top - pad) / vh * 2);
-        } else {
-            gl.uniform4f(U.uShield, 2, 2, 2, 2);
-        }
+        shieldBox(U.uShield, sub, 18);
+        shieldBox(U.uShieldB, wm, 6);
         gl.uniform1f(U.uScale, scale);
         gl.uniform1f(U.uTime, t);
         gl.uniform1f(U.uAssemble, reduce ? 1.2 : Math.min(t / 2.6, 1.2));

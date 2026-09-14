@@ -372,7 +372,7 @@ document.addEventListener('DOMContentLoaded', function () {
         card:   (css.getPropertyValue('--bg-card') || '#17181c').trim()
     };
     var HOVER = { bgcolor: COL.card, bordercolor: 'rgba(255,255,255,0.15)',
-                  font: { family: 'DM Sans, sans-serif', size: 13, color: '#e7e9ea' } };
+                  font: { family: 'Mona Sans, sans-serif', size: 13, color: '#e7e9ea' } };
 
     var seasonSel = document.getElementById('xp-season');
     function reloadWith(params) {
@@ -595,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var side = spSide === 'off' ? 'Offense' : 'Defense';
         return {
             paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-            font:{family:'DM Sans, sans-serif', color:COL.text, size:12},
+            font:{family:'Mona Sans, sans-serif', color:COL.text, size:12},
             margin:{l:58, r:18, t:12, b:52}, showlegend:false, dragmode:false,
             xaxis:{ title:{text: side + ' — rushing ' + m.label, font:{size:12,color:COL.text}},
                     range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true },
@@ -822,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function baseLayout(xk, yk, xr, yr, f, statsObj) {
         return {
             paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-            font:{family:'DM Sans, sans-serif', color:COL.text, size:12},
+            font:{family:'Mona Sans, sans-serif', color:COL.text, size:12},
             margin:{l:58, r:18, t:12, b:52}, showlegend:false, dragmode:false,
             xaxis:{ title:{text: statsObj[xk].label + (statsObj[xk].invert?'  (reversed — right is better)':''), font:{size:12,color:COL.text}},
                     range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true },
