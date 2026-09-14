@@ -1226,7 +1226,7 @@
                 {% else %}Every player who entered the transfer portal to join or leave {{ team[0] }} ahead of the {{ tx.year }} season.{% endif %}
             </p>
         </div>
-        <a class="tt-all" href="/transfers?year={{ tx.year }}">Full {{ tx.year }} portal</a>
+        <a class="tt-all" href="/transfers?year={{ tx.year }}">{{ 'All ' ~ tx.year ~ ' transfers' if tx.derived else 'Full ' ~ tx.year ~ ' portal' }}</a>
     </header>
 
     {% if tx.arrivals or tx.departures or tx.returned %}
@@ -1239,7 +1239,11 @@
 
     {% macro tt_row(t, dir) %}
     <li class="tt-row">
-        {% if t.headshot %}<img class="tp-headshot tt-photo" src="{{ t.headshot }}" alt="" loading="lazy" decoding="async" width="40" height="40">
+        {# A headshot URL can 404 (players whose photo was never published); fall
+           back to initials instead of leaving an empty circle. #}
+        {% if t.headshot %}<img class="tp-headshot tt-photo" src="{{ t.headshot }}" alt="" loading="lazy" decoding="async" width="40" height="40"
+             onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+        <span class="tp-headshot tp-headshot--initials tt-photo" aria-hidden="true" hidden>{{ t.initials }}</span>
         {% else %}<span class="tp-headshot tp-headshot--initials tt-photo" aria-hidden="true">{{ t.initials }}</span>{% endif %}
         <span class="tt-who">
             {% if t.player_id %}<a class="tt-name" href="{{ player_url(t.player_id, tx.year) }}">{{ t.name }}</a>
