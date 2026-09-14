@@ -4006,8 +4006,8 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 }
 
 /* Homepage hero — one football built out of thousands of footballs.
-   The ball fills the hero (static/savant-ball.js draws it on a fixed canvas,
-   clipped to the hero); the name runs across its lower third with the subline
+   The ball fills the hero (static/savant-ball.js draws it on a canvas inside
+   the hero, which clips it); the name runs across its lower third with the subline
    beneath, both above the canvas so the words always read over the light.
    The hero fills the screen below the navbar and ticker (--sb-top is measured
    by the script). */
@@ -4019,7 +4019,9 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     height: max(560px, calc(100svh - var(--sb-top, 150px)));
 }
 .sb-ball {
-    position: fixed;
+    /* Inside the hero, so it scrolls with the page on the compositor; a fixed
+       canvas moved from JS jittered against scroll on phones. */
+    position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
