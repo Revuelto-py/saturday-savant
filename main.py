@@ -1392,80 +1392,90 @@ def get_game_label(notes):
 _LINEUP_OL    = {'OL','OT','OG','G','C','LT','LG','RG','RT'}
 _LINEUP_SKILL = {'QB','RB','HB','FB','WR','TE','ATH','APB'}
 
-def compute_starter_scores(cursor, roster, use_ea=True):
+# Production groups for the starter blend: whose snaps compete with whose.
+_PROD_GROUP = {
+    'QB': 'QB',
+    'RB': 'RB', 'HB': 'RB', 'FB': 'RB', 'APB': 'RB',
+    'WR': 'WR', 'ATH': 'WR', 'TE': 'TE',
+    'DL': 'DL', 'DE': 'DL', 'DT': 'DL', 'NT': 'DL', 'EDGE': 'DL',
+    'LB': 'LB', 'ILB': 'LB', 'OLB': 'LB', 'MLB': 'LB',
+    'CB': 'DB', 'DB': 'DB', 'S': 'DB', 'SS': 'DB', 'FS': 'DB', 'SAF': 'DB',
+}
+
+
+def _starter_stats(cursor, ids, season):
+    """{player_id: {'category.STAT': value}} for one season, keyed on player_id
+    so a transfer carries his production with him."""
+    out = {}
+    if not ids:
+        return out
+    cursor.execute(
+        "SELECT player_id, category, stat_type, MAX(CAST(stat AS REAL)) "
+        "FROM player_stats "
+        "WHERE player_id = ANY(%s) AND season = %s "
+        "  AND category IN ('passing','rushing','receiving','defensive','interceptions') "
+        "GROUP BY player_id, category, stat_type",
+        (ids, season))
+    for pid, cat, st, val in cursor.fetchall():
+        out.setdefault(str(pid), {})[f'{cat}.{st}'] = val or 0
+    return out
+
+
+def _production_volume(s, group):
+    """How much a player actually played, in his group's own currency."""
+    if not s or not group:
+        return 0.0
+    g = lambda k: float(s.get(k, 0) or 0)
+    if group == 'QB':
+        return g('passing.ATT')
+    if group == 'RB':
+        return g('rushing.CAR') + 0.5 * g('receiving.REC')
+    if group in ('WR', 'TE'):
+        return g('receiving.REC') + g('receiving.YDS') / 15.0
+    return (g('defensive.TOT') + 2 * g('defensive.SACKS') + 1.5 * g('defensive.TFL')
+            + 1.5 * g('defensive.PD') + 3 * g('interceptions.INT') + 0.5 * g('defensive.QB HUR'))
+
+
+def compute_starter_scores(cursor, roster, use_ea=True, prod_season=None, weight=0.0, stats=None):
     """Return {player_id(str): score} used to pick lineup starters.
 
-    `use_ea` toggles the EA-rating supplement (default on); pass False for a
-    production-only baseline or as a kill-switch.
+    Two signals, blended:
 
-    Starters are chosen by real 2025 signal, not roster order or jersey.
-    Every lookup keys on the stable player_id rather than the current team,
-    so a player who transferred in for 2026 is still scored on the
-    production he recorded at his prior team (the same id-based attribution
-    the player page and leaderboards already rely on):
+      • Talent: the EA Sports College Football 27 overall rating
+        (pipeline/fetch_ea_ratings.py). Internal-only, never shown in the UI.
+      • Who is actually playing: each player's share of his position group's
+        production in `prod_season` (pass attempts for quarterbacks, carries
+        plus catches for backs, catches and yards for receivers and tight ends,
+        weighted tackles and splash plays for defenders), relative to the
+        group's leader on the same roster. That share earns up to `weight`
+        points on top of the rating.
 
-      • skill offense (QB/RB/WR/TE) -> player_usage.overall, the share of
-        team plays the player was involved in — the closest available proxy
-        for snap count, which CFBD does not provide. Total scrimmage yards
-        break ties / cover the rare skill player with no usage row.
-      • defense (DL/DE/DT/LB/CB/S/DB) -> a weighted production score built
-        from tackles (the volume signal for a full-time defender) plus
-        splash plays: TOT + 2·SACKS + 1.5·TFL + 1.5·PD + 3·INT + 0.5·QB HUR.
-      • offensive line -> no individual OL production exists in any
-        integrated data source (no snap counts, and linemen accrue no
-        box-score stats), so OL falls back to seniority (class year), with
-        jersey as a deterministic tiebreak. This is a documented proxy, not
-        a production measure — the set of five is reasonable but the
-        specific LT/LG/C/RG/RT labels are not individually verifiable.
+    project_starters() sets `weight` from games played: in season the share is
+    worth up to 30 points once a team has played three games, so the player who
+    has taken the snaps starts over a higher-rated backup. In the offseason it
+    is last season's share at 8 points, a tiebreak between close ratings rather
+    than a verdict.
 
-    EA Sports College Football 27 overall rating (pipeline/fetch_ea_ratings.py) is the
-    SOLE signal for rated players: a rated player's score is exactly his EA
-    overall, so at every position the higher EA grade always starts and
-    production never reorders rated players. The 2025 production above is used
-    only to rank players who have NO EA rating (they sit below the rated pool
-    and start only where a position has no rated player at all). EA ratings are
-    internal-only and never surfaced in the UI (licensed/proprietary data); a
-    missing/unpopulated ea_ratings table degrades to production-only scoring.
+    Players EA has no rating for are scored from production alone, mapped into
+    the rated range so an unrated proven starter still beats a rated backup.
+    The offensive line has no individual box score in any source, so linemen
+    are ordered by rating, then seniority, and get no production bonus.
     """
     ids = [str(p[4]) for p in roster if p[4] is not None]
     int_ids = [int(p[4]) for p in roster if p[4] is not None]
     if not ids:
         return {}
+    if prod_season is None:
+        prod_season = CURRENT_SEASON
+    if stats is None:
+        stats = _starter_stats(cursor, ids, prod_season)
 
-    # Production signals come from the most recent completed season — the
-    # lineup is a forward projection, so pin these reads to CURRENT_SEASON
-    # (historical backfill must not shift starter scores).
     usage = {}
     cursor.execute('SELECT player_id, overall FROM player_usage WHERE player_id = ANY(%s) AND season=%s',
-                   (int_ids, CURRENT_SEASON))
+                   (int_ids, prod_season))
     for pid, overall in cursor.fetchall():
         usage[str(pid)] = float(overall or 0)
 
-    dstat = {}
-    cursor.execute('''
-        SELECT player_id, stat_type, MAX(CAST(stat AS REAL))
-        FROM player_stats
-        WHERE player_id = ANY(%s) AND season = %s AND category IN ('defensive','interceptions')
-        GROUP BY player_id, stat_type
-    ''', (ids, CURRENT_SEASON))
-    for pid, st, val in cursor.fetchall():
-        dstat.setdefault(pid, {})[st] = val or 0
-
-    yds = {}
-    cursor.execute('''
-        SELECT player_id, SUM(CAST(stat AS REAL))
-        FROM player_stats
-        WHERE player_id = ANY(%s) AND season = %s
-          AND category IN ('passing','rushing','receiving') AND stat_type = 'YDS'
-        GROUP BY player_id
-    ''', (ids, CURRENT_SEASON))
-    for pid, total in cursor.fetchall():
-        yds[str(pid)] = float(total or 0)
-
-    # EA Sports College Football 27 overall rating, matched to our players by
-    # name+team at ingest (see pipeline/fetch_ea_ratings.py) — the PRIMARY talent signal.
-    # Internal-only, never displayed. Table may not exist on a fresh DB, so a
-    # missing table degrades gracefully to production-only scoring.
     ea = {}
     if use_ea:
         try:
@@ -1476,49 +1486,35 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         except Exception:
             cursor.connection.rollback()  # ea_ratings not populated yet
 
-    # EA-primary scoring. build_lineup() sorts each position pool independently,
-    # so a score only has to order players *within* a position group. A rated
-    # player's score is exactly his EA overall (0–99) — production never reorders
-    # rated players, so among rated players the higher EA grade always starts.
-    #
-    # A player EA has NO rating for is scored from 2025 production instead. EA's
-    # dataset omits some obvious returning starters (e.g. Georgia's Gunner
-    # Stockton — no EA row at all), so for skill/defense positions a strong
-    # enough production score can rise INTO the rated range and outrank a rated
-    # backup: a proven starter should never be projected behind a rated third-
-    # stringer just because EA lacks a grade for him. The offensive line has no
-    # individual box-score signal (seniority proxy only), so OL keeps a low
-    # fallback band that stays below the rated pool.
-    UNRATED_BASE = 48.0     # OL fallback floor (EA ratings run 47–99)…
-    UNRATED_SPREAD = 22.0   # …OL ordered among themselves by seniority (48–70)
-    # Skill/defense: production maps into the rated range so a returning starter
-    # (dominant usage / tackle volume) beats a rated backup, capped below the
-    # genuinely elite so raw volume can't leapfrog a highly-rated true starter.
-    STARTER_BASE = 50.0
+    UNRATED_BASE = 48.0     # OL fallback floor (EA ratings run 47-99)...
+    UNRATED_SPREAD = 22.0   # ...OL ordered among themselves by seniority (48-70)
+    STARTER_BASE = 50.0     # unrated skill/defense: production maps into the rated range
     STARTER_SLOPE = 48.0
     STARTER_CAP = 88.0
-
     year_rank = {'4': 4, '3': 3, '2': 2, '1': 1}
 
+    # Each group's production leader on this roster sets that group's scale.
+    group_of, volume, group_max = {}, {}, {}
+    for p in roster:
+        if p[4] is None:
+            continue
+        pid = str(p[4])
+        grp = _PROD_GROUP.get((p[2] or '').upper())
+        group_of[pid] = grp
+        v = _production_volume(stats.get(pid), grp)
+        volume[pid] = v
+        if grp:
+            group_max[grp] = max(group_max.get(grp, 0.0), v)
+
     def _quality(p, pid, pos):
-        """0..1 production/quality signal for a player, by position group. Used
-        as the within-group tiebreak for rated players and the ranking signal
-        for unrated ones."""
         if pos in _LINEUP_OL:
-            # No individual OL box score exists in any source — seniority
-            # (class year) is the only available proxy.
             return min(1.0, year_rank.get(str(p[8]), 0) / 4.0)
+        s = stats.get(pid, {})
         if pos in _LINEUP_SKILL:
-            # Usage share of team plays is the snap-count proxy; scrimmage
-            # yards nudge ties and cover players with no usage row.
-            u = usage.get(pid, 0.0)
-            y = yds.get(pid, 0.0)
-            return min(1.0, u + min(y, 4000.0) / 4000.0 * 0.15)
-        # defense: tackle-weighted production, squashed into 0..1
-        d = dstat.get(pid, {})
-        s = (d.get('TOT', 0) + 2 * d.get('SACKS', 0) + 1.5 * d.get('TFL', 0)
-             + 1.5 * d.get('PD', 0) + 3 * d.get('INT', 0) + 0.5 * d.get('QB HUR', 0))
-        return s / (s + 35.0)
+            yds = sum(float(s.get(k, 0) or 0) for k in ('passing.YDS', 'rushing.YDS', 'receiving.YDS'))
+            return min(1.0, usage.get(pid, 0.0) + min(yds, 4000.0) / 4000.0 * 0.15)
+        v = _production_volume(s, 'DL')   # the defensive formula, whatever the group
+        return v / (v + 35.0)
 
     scores = {}
     for p in roster:
@@ -1530,13 +1526,96 @@ def compute_starter_scores(cursor, roster, use_ea=True):
         q = max(0.0, min(1.0, _quality(p, pid, pos)))
         ovr = ea.get(pid)
         if ovr is not None:
-            base = ovr                                    # rated players ordered purely by EA overall
+            base = ovr
+            if pos in _LINEUP_OL:
+                base += q * 0.5                        # seniority only breaks rating ties
         elif pos in _LINEUP_OL:
-            base = UNRATED_BASE + UNRATED_SPREAD * q      # OL: weak seniority proxy stays below the rated pool
+            base = UNRATED_BASE + UNRATED_SPREAD * q
         else:
-            base = min(STARTER_CAP, STARTER_BASE + STARTER_SLOPE * q)  # skill/def: production stands in for a missing EA grade
+            base = min(STARTER_CAP, STARTER_BASE + STARTER_SLOPE * q)
+        grp = group_of.get(pid)
+        if grp and pos not in _LINEUP_OL and group_max.get(grp):
+            base += weight * (volume[pid] / group_max[grp])
         scores[pid] = base + (99 - min(jersey, 99)) * 1e-4  # deterministic final tiebreak
     return scores
+
+
+_CLASS_LABEL = {'1': 'Fr', '2': 'So', '3': 'Jr', '4': 'Sr'}
+
+
+def _starter_line(slot, s):
+    """The one stat that says what a starter has done this season, or ''."""
+    s = s or {}
+    n = lambda k: float(s.get(k, 0) or 0)
+    i = lambda k: int(round(n(k)))
+    pos = slot.rstrip('123')
+    if pos == 'QB' and n('passing.ATT'):
+        return f"{i('passing.YDS'):,} yds · {i('passing.TD')} TD"
+    if pos == 'RB' and n('rushing.CAR'):
+        return f"{i('rushing.CAR')} car · {i('rushing.YDS'):,} yds"
+    if pos in ('WR', 'TE') and n('receiving.REC'):
+        return f"{i('receiving.REC')} rec · {i('receiving.YDS'):,} yds"
+    if pos in ('DE', 'DT', 'LB', 'CB', 'S'):
+        tot, sacks = n('defensive.TOT'), n('defensive.SACKS')
+        ints, tfl = n('interceptions.INT'), n('defensive.TFL')
+        if not (tot or sacks or ints):
+            return ''
+        if sacks:
+            extra = f"{sacks:g} sk"
+        elif ints:
+            extra = f"{int(ints)} INT"
+        elif tfl:
+            extra = f"{tfl:g} TFL"
+        else:
+            extra = ''
+        return f"{int(tot)} tkl" + (f" · {extra}" if extra else '')
+    return ''
+
+
+def project_starters(cursor, team_name, roster):
+    """Projected starting lineup plus what it was based on.
+
+    Returns (lineup, meta) where meta = {'season': production season,
+    'games': games the team has completed this season}. Each lineup player
+    carries `line` (a season stat line) and `year` (class, e.g. 'RS Jr').
+    """
+    if not roster:
+        return {}, {}
+    cursor.execute(
+        "SELECT COUNT(*) FROM games "
+        "WHERE season = %s AND completed = 1 AND (home_team = %s OR away_team = %s)",
+        (UPCOMING_SEASON, team_name, team_name))
+    games = cursor.fetchone()[0] or 0
+    prod_season = UPCOMING_SEASON if games else UPCOMING_SEASON - 1
+    weight = 8.0 + 22.0 * min(1.0, games / 3.0) if games else 8.0
+
+    ids = [str(p[4]) for p in roster if p[4] is not None]
+    stats = _starter_stats(cursor, ids, prod_season)
+    scores = compute_starter_scores(cursor, roster, prod_season=prod_season, weight=weight, stats=stats)
+
+    ea_pos = {}
+    int_ids = [int(p[4]) for p in roster if p[4] is not None]
+    if int_ids:
+        try:
+            cursor.execute('SELECT player_id, position FROM ea_ratings '
+                           'WHERE player_id = ANY(%s) AND position IS NOT NULL', (int_ids,))
+            ea_pos = {str(pid): pos.upper() for pid, pos in cursor.fetchall()}
+        except Exception:
+            cursor.connection.rollback()  # ea_ratings not populated yet
+    lineup = build_lineup(roster, scores, ea_pos)
+
+    years = {}
+    for p in roster:
+        if p[4] is None or len(p) < 9:
+            continue
+        label = _CLASS_LABEL.get(str(p[8]), '')
+        if label and len(p) > 9 and p[9]:
+            label = 'RS ' + label
+        years[str(p[4])] = label
+    for slot, pl in lineup.items():
+        pl['line'] = _starter_line(slot, stats.get(str(pl['idx'])))
+        pl['year'] = years.get(str(pl['idx']), '')
+    return lineup, {'season': prod_season, 'games': games}
 
 
 def build_lineup(roster, starter_scores=None, ea_pos=None):
@@ -5010,21 +5089,7 @@ def team(team_ref):
         # projection. Starters are keyed on player_id (transfer-aware, see
         # compute_starter_scores), not roster order; full roster tuples are
         # passed so OL seniority (the year column) is available to the slotter.
-        lineup = {}
-        if is_upcoming:
-            starter_scores = compute_starter_scores(cursor, roster)
-            # Specific EA positions (LT/LG/C/RG/RT, LE/RE, MLB/LOLB/ROLB, CB/FS/SS…)
-            # so players slot into their actual spot, not just a generic OL/DL pool.
-            ea_pos = {}
-            roster_int_ids = [int(p[4]) for p in roster if p[4] is not None]
-            if roster_int_ids:
-                try:
-                    cursor.execute('SELECT player_id, position FROM ea_ratings '
-                                   'WHERE player_id = ANY(%s) AND position IS NOT NULL', (roster_int_ids,))
-                    ea_pos = {str(pid): pos.upper() for pid, pos in cursor.fetchall()}
-                except Exception:
-                    cursor.connection.rollback()  # ea_ratings not populated yet
-            lineup = build_lineup(roster, starter_scores, ea_pos)
+        lineup, starter_meta = project_starters(cursor, team_name, roster) if is_upcoming else ({}, {})
 
         cursor.execute('SELECT player_name, category, stat_type, stat FROM player_stats WHERE team=%s AND season=%s', (team_name, season))
         all_stats = pivot_stats(cursor.fetchall())
@@ -5305,7 +5370,7 @@ def team(team_ref):
                 standings=standings, team_conf_record=team_conf_record,
                 team_season_conf=team_season_conf,
                 schedule=schedule, schedule_next=schedule_next,
-                roster=roster, lineup=lineup,
+                roster=roster, lineup=lineup, starter_meta=starter_meta,
                 schedule_has_projections=schedule_has_projections,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
@@ -5365,23 +5430,11 @@ def team_starters(team_ref):
         ''', (team_name, season))
         roster = cursor.fetchall()
 
-        lineup = {}
-        if roster:
-            starter_scores = compute_starter_scores(cursor, roster)
-            ea_pos = {}
-            roster_int_ids = [int(p[4]) for p in roster if p[4] is not None]
-            if roster_int_ids:
-                try:
-                    cursor.execute('SELECT player_id, position FROM ea_ratings '
-                                   'WHERE player_id = ANY(%s) AND position IS NOT NULL', (roster_int_ids,))
-                    ea_pos = {str(pid): pos.upper() for pid, pos in cursor.fetchall()}
-                except Exception:
-                    cursor.connection.rollback()
-            lineup = build_lineup(roster, starter_scores, ea_pos)
+        lineup, starter_meta = project_starters(cursor, team_name, roster)
 
         team_rank = get_ap_rankings(cursor, CURRENT_SEASON).get(team_name)
         return render_template('starters.html',
-                team=team_info, lineup=lineup, season=season,
+                team=team_info, lineup=lineup, season=season, starter_meta=starter_meta,
                 team_slug=team_ref, team_rank=team_rank)
     finally:
         release_db(conn)

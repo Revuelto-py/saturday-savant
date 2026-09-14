@@ -31,7 +31,7 @@
 
 <div class="page-wrapper dc-wrap">
     {% if lineup %}
-    {% include "_depth_chart.html" %}
+    {% set ff_hide_title = true %}{% include "_depth_chart.html" %}
     {% else %}
     <div class="pending-panel">The {{ season }} projected depth chart isn't available yet — {{ team[0] }}'s upcoming roster hasn't been posted. Check back once the offseason roster is set.</div>
     {% endif %}

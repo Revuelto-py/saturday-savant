@@ -1,92 +1,109 @@
-{# Projected depth-chart formation — shared by the team page's Starters tab
-   (in-page pane) and the standalone /team/<x>/starters page. Expects `lineup`
-   (slot -> player dict) and `season` in context; player_url/current_season are
-   globals. #}
-{% macro dc_card(slot, unit) %}
+{# Projected starting lineup, drawn on a field — shared by the team page's
+   Starters tab and the standalone /team/<x>/starters page. Expects `lineup`
+   (slot -> player dict with line/year), `season`, `team` (team[4] = colour)
+   and `starter_meta` ({'season', 'games'}). Desktop draws both units on one
+   field, defense above the line of scrimmage; below 992px the same lineup is
+   a position-by-position list, because 22 players on a phone-width field are
+   unreadable. #}
+{% set tc = team[4] if (team[4] and team[4][0] == '#' and team[4]|length == 7) else '#2b3a55' %}
+{% set meta = starter_meta or {} %}
+
+{% macro pos_of(slot) %}{{ slot | replace('1','') | replace('2','') | replace('3','') }}{% endmacro %}
+
+{% macro token(slot, side) %}
 {% set p = lineup.get(slot) %}
-{% set label = slot | replace('1','') | replace('2','') | replace('3','') %}
+{% set pos = pos_of(slot) %}
 {% if p %}
-<a class="lf-card lf-unit-{{ unit }}" href="{{ player_url(p.idx, season) }}" title="{{ p.first }} {{ p.name }} — {{ label }}">
-    <div class="lf-card-inner">
-        {% if p.headshot %}<img src="{{ p.headshot }}" class="lf-photo" alt="{{ p.first }} {{ p.name }} headshot" loading="lazy">
-        {% else %}<div class="lf-photo-fallback">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</div>{% endif %}
-        <div class="lf-meta">
-            <div class="lf-jersey">#{{ p.jersey if p.jersey else '—' }}</div>
-            <div class="lf-name">{{ p.name }}</div>
-        </div>
-    </div>
-    <span class="lf-tag">{{ label }}</span>
+{% set sub = p.line or p.year %}
+<a class="ff-p ff-{{ side }}" href="{{ player_url(p.idx, season) }}"
+   aria-label="{{ p.first }} {{ p.name }}, {{ pos }}{{ ', ' ~ sub if sub else '' }}">
+    <span class="ff-ring">
+        {% if p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" decoding="async" width="64" height="64">
+        {% else %}<span class="ff-init" aria-hidden="true">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</span>{% endif %}
+        <span class="ff-pos" aria-hidden="true">{{ pos }}</span>
+    </span>
+    <span class="ff-name" aria-hidden="true">{% if p.jersey %}<span class="ff-num">{{ p.jersey }}</span>{% endif %}{{ p.name }}</span>
+    <span class="ff-line" aria-hidden="true">{{ sub or '' }}</span>
 </a>
 {% else %}
-<div class="lf-card lf-card--empty lf-unit-{{ unit }}">
-    <div class="lf-card-inner"><div class="lf-empty">—</div><div class="lf-meta"><div class="lf-jersey">—</div><div class="lf-name">&nbsp;</div></div></div>
-    <span class="lf-tag">{{ label }}</span>
+<div class="ff-p ff-{{ side }} is-open">
+    <span class="ff-ring"><span class="ff-pos">{{ pos }}</span></span>
+    <span class="ff-name">Open</span>
+    <span class="ff-line"></span>
 </div>
 {% endif %}
 {% endmacro %}
 
-<div class="dc-controls">
-    <div class="lineup-toggle" role="tablist" aria-label="Formation side">
-        <button id="dc-btn-off" class="active" role="tab" aria-selected="true" aria-controls="dc-offense" onclick="dcSide('offense')">Offense</button>
-        <button id="dc-btn-def" role="tab" aria-selected="false" aria-controls="dc-defense" onclick="dcSide('defense')">Defense</button>
-    </div>
-    <div class="dc-form-label" id="dc-form-label" aria-live="polite">Shotgun · 11 personnel</div>
-</div>
+{% macro row(slot, side) %}
+{% set p = lineup.get(slot) %}
+{% set pos = pos_of(slot) %}
+<li>
+{% if p %}
+    <a class="fl-row" href="{{ player_url(p.idx, season) }}">
+        <span class="fl-pos fl-{{ side }}">{{ pos }}</span>
+        <span class="fl-photo">
+            {% if p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" decoding="async" width="40" height="40">
+            {% else %}<span class="ff-init" aria-hidden="true">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</span>{% endif %}
+        </span>
+        <span class="fl-who">
+            <span class="fl-name">{{ p.first }} {{ p.name }}</span>
+            <span class="fl-line">{{ p.line or p.year or '' }}</span>
+        </span>
+        <span class="fl-num">{% if p.jersey %}#{{ p.jersey }}{% endif %}</span>
+    </a>
+{% else %}
+    <div class="fl-row is-open"><span class="fl-pos fl-{{ side }}">{{ pos }}</span><span class="fl-photo"></span><span class="fl-who"><span class="fl-name">Open</span></span></div>
+{% endif %}
+</li>
+{% endmacro %}
 
-<!-- Both formations share one grid cell; the inactive one stays in layout
-     (visibility:hidden), so the field is exactly as tall as the taller side and
-     the two are always equal height with no jump on toggle. -->
-<div class="dc-field">
-    <div class="dc-formation" id="dc-offense">
-        <div class="dc-row dc-row--line">
-            {{ dc_card('WR1','skill') }}{{ dc_card('WR3','skill') }}{{ dc_card('LT','ol') }}{{ dc_card('LG','ol') }}{{ dc_card('C','ol') }}{{ dc_card('RG','ol') }}{{ dc_card('RT','ol') }}{{ dc_card('TE','skill') }}{{ dc_card('WR2','skill') }}
-        </div>
-        <div class="dc-row dc-row--backfield">
-            {{ dc_card('QB','skill') }}{{ dc_card('RB','skill') }}
-        </div>
-    </div>
+<div class="ff" style="--tc: {{ tc }}">
+    <header class="ff-head">
+        {% if not ff_hide_title %}<h2 class="ff-title">Projected {{ season }} Starters</h2>{% endif %}
+        <p class="ff-basis">
+            {% if meta.games %}Talent grades weighed against who has actually played through {{ meta.games }} game{{ '' if meta.games == 1 else 's' }}, with {{ meta.season }} stats.
+            {% elif meta.season %}Talent grades, with {{ meta.season }} production as a tiebreak until games are played.
+            {% else %}Talent grades and recent production.{% endif %}
+        </p>
+    </header>
 
-    <!-- DEFENSE: two-deep safeties up top (Cover 2), linebackers in the box,
-         then the line of scrimmage — the D-line flanked by the cornerbacks out
-         on the numbers, so the corners sit right beside the front. -->
-    <div class="dc-formation dc-hidden" id="dc-defense">
-        <div class="dc-row dc-row--safeties">
-            {{ dc_card('S1','db') }}{{ dc_card('S2','db') }}
-        </div>
-        <div class="dc-row dc-row--lb">
-            {{ dc_card('LB1','lb') }}{{ dc_card('LB2','lb') }}{{ dc_card('LB3','lb') }}
-        </div>
-        <div class="dc-row dc-row--front">
-            {{ dc_card('CB1','db') }}
-            <div class="dc-dl-group">
-                {{ dc_card('DE1','dl') }}{{ dc_card('DT1','dl') }}{{ dc_card('DT2','dl') }}{{ dc_card('DE2','dl') }}
+    <div class="ff-field" role="group" aria-label="{{ team[0] }} starting lineup on the field">
+        <div class="ff-half ff-half--def">
+            <span class="ff-side">Defense</span>
+            <div class="ff-row ff-row--s">{{ token('S1','d') }}{{ token('S2','d') }}</div>
+            <div class="ff-row ff-row--lb">{{ token('LB2','d') }}{{ token('LB1','d') }}{{ token('LB3','d') }}</div>
+            <div class="ff-row ff-row--front">
+                {{ token('CB1','d') }}
+                <div class="ff-group">{{ token('DE1','d') }}{{ token('DT1','d') }}{{ token('DT2','d') }}{{ token('DE2','d') }}</div>
+                {{ token('CB2','d') }}
             </div>
-            {{ dc_card('CB2','db') }}
+        </div>
+        <div class="ff-los" aria-hidden="true"></div>
+        <div class="ff-half ff-half--off">
+            <div class="ff-row ff-row--line">
+                <div class="ff-group ff-group--wide">{{ token('WR1','o') }}{{ token('WR3','o') }}</div>
+                <div class="ff-group ff-group--ol">{{ token('LT','o') }}{{ token('LG','o') }}{{ token('C','o') }}{{ token('RG','o') }}{{ token('RT','o') }}</div>
+                <div class="ff-group ff-group--wide">{{ token('TE','o') }}{{ token('WR2','o') }}</div>
+            </div>
+            <div class="ff-row ff-row--back">{{ token('QB','o') }}{{ token('RB','o') }}</div>
+            <span class="ff-side">Offense</span>
         </div>
     </div>
-</div>
 
-<div class="dc-footer">
-    <div class="lineup-legend">
-        <span class="lg-item"><span class="lg-dot" style="background: var(--gold)"></span>Playmakers</span>
-        <span class="lg-item"><span class="lg-dot" style="background: var(--text-dim)"></span>Offensive Line</span>
-        <span class="lg-item"><span class="lg-dot" style="background: var(--red)"></span>Defensive Line</span>
-        <span class="lg-item"><span class="lg-dot" style="background: var(--blue)"></span>Linebackers</span>
-        <span class="lg-item"><span class="lg-dot" style="background: var(--green)"></span>Secondary</span>
+    <div class="ff-list">
+        <section aria-labelledby="fl-off-h">
+            <h3 class="fl-h" id="fl-off-h">Offense</h3>
+            <ul class="fl-rows" role="list">
+                {% for s in ['QB','RB','WR1','WR2','WR3','TE','LT','LG','C','RG','RT'] %}{{ row(s, 'o') }}{% endfor %}
+            </ul>
+        </section>
+        <section aria-labelledby="fl-def-h">
+            <h3 class="fl-h" id="fl-def-h">Defense</h3>
+            <ul class="fl-rows" role="list">
+                {% for s in ['DE1','DT1','DT2','DE2','LB1','LB2','LB3','CB1','CB2','S1','S2'] %}{{ row(s, 'd') }}{% endfor %}
+            </ul>
+        </section>
     </div>
-    <p class="lineup-note dc-note">Projected from player talent grades and {{ current_season }} production, transfers included. Individual offensive-line snaps aren't tracked in the available data, so line spots are approximate.</p>
-</div>
 
-<script>
-function dcSide(side) {
-    var off = side === 'offense';
-    var o = document.getElementById('dc-offense'), d = document.getElementById('dc-defense');
-    if (o) o.classList.toggle('dc-hidden', !off);
-    if (d) d.classList.toggle('dc-hidden', off);
-    var bo = document.getElementById('dc-btn-off'), bd = document.getElementById('dc-btn-def');
-    bo.classList.toggle('active', off); bo.setAttribute('aria-selected', off);
-    bd.classList.toggle('active', !off); bd.setAttribute('aria-selected', !off);
-    var lbl = document.getElementById('dc-form-label');
-    if (lbl) lbl.textContent = off ? 'Shotgun · 11 personnel' : 'Cover 2 · 4-3 front';
-}
-</script>
+    <p class="ff-note">Transfers are included. Individual offensive-line snaps aren't tracked in the available data, so line spots are ordered by talent grade and experience.</p>
+</div>

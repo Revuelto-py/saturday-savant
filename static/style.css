@@ -4137,105 +4137,6 @@ table, .data-table { font-variant-numeric: tabular-nums; }
    playmakers, slate for the line, red/blue/green for the front, second
    level and secondary) rather than a bespoke palette.
    ══════════════════════════════════════════════════════════════════════ */
-/* Shared projected-lineup bits reused by the standalone depth chart (.dc-*):
-   the disclaimer note, the offense/defense toggle, the unit legend, and the
-   .lf-card player card + .lf-unit-* colours further down. The old embedded
-   field/row layout lived here too; it has been replaced by the .dc-* system. */
-.lineup-note { color: var(--text-dim); font-size: var(--text-xs); }
-
-/* Offense / Defense segmented toggle */
-.lineup-toggle {
-    display: inline-flex; flex-shrink: 0;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-pill); padding: 3px;
-}
-.lineup-toggle button {
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700;
-    font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--text-secondary); background: transparent; border: none;
-    padding: 7px 20px; border-radius: var(--r-pill); cursor: pointer;
-    transition: color var(--t-fast), background var(--t-fast);
-}
-.lineup-toggle button:hover { color: var(--text-primary); }
-.lineup-toggle button.active { color: #1a1200; background: var(--gold); }
-
-/* Player card — sized so the widest row (the 9-across offense line: 3 WR +
-   5 OL + TE) fills the field on desktop without overflowing, and scales down
-   with the viewport so it still fits a phone. */
-.lf-card {
-    width: clamp(46px, 7.4vw, 96px);
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    text-decoration: none;
-}
-.lf-card-inner {
-    position: relative; width: 100%;
-    background: var(--bg-card); border: 1px solid var(--border-strong);
-    border-radius: var(--r-md); overflow: hidden;
-    transition: transform var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
-}
-.lf-card-inner::before { /* unit accent bar */
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: var(--lf-accent, var(--gold)); z-index: 2;
-}
-a.lf-card:hover .lf-card-inner {
-    transform: translateY(-3px);
-    border-color: var(--lf-accent, var(--gold));
-    box-shadow: 0 8px 20px rgba(0,0,0,0.55);
-}
-a.lf-card:focus-visible { outline: none; }
-a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--gold)); box-shadow: 0 0 0 2px var(--lf-accent, var(--gold)); }
-.lf-photo { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; object-position: top center; display: block; background: var(--bg-subtle); }
-.lf-photo-fallback {
-    width: 100%; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center;
-    background: var(--bg-subtle); color: var(--text-dim);
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800; font-size: var(--text-lg);
-}
-.lf-meta { padding: 4px 4px 6px; text-align: center; width: 100%; }
-.lf-jersey { color: var(--text-primary); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800; font-size: var(--text-sm); line-height: 1.05; }
-.lf-name { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lf-tag {
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700;
-    font-size: var(--text-xs); letter-spacing: 0.09em;
-    padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid transparent;
-}
-/* empty slot */
-.lf-card--empty .lf-card-inner { border-style: dashed; }
-.lf-empty { aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: var(--text-lg); }
-.lf-card--empty .lf-jersey, .lf-card--empty .lf-name { color: var(--text-dim); }
-
-/* Unit colour coding — pulled from the site's semantic accent tokens */
-.lf-unit-skill { --lf-accent: var(--gold); }
-.lf-unit-skill .lf-tag { color: var(--gold); background: rgba(28, 156, 240,0.12); border-color: var(--border-gold); }
-.lf-unit-ol { --lf-accent: var(--text-dim); }
-.lf-unit-ol .lf-tag { color: var(--text-secondary); background: rgba(255,255,255,0.06); border-color: var(--border-strong); }
-.lf-unit-dl { --lf-accent: var(--red); }
-.lf-unit-dl .lf-tag { color: #ff9aa2; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); }
-.lf-unit-lb { --lf-accent: var(--blue); }
-.lf-unit-lb .lf-tag { color: #9ad4ff; background: rgba(28,156,240,0.12); border-color: rgba(28,156,240,0.3); }
-.lf-unit-db { --lf-accent: var(--green); }
-.lf-unit-db .lf-tag { color: #6ee7b7; background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.3); }
-
-/* Legend */
-.lineup-legend {
-    display: flex; flex-wrap: wrap; gap: var(--s2) var(--s5);
-    margin-top: var(--s4); padding-top: var(--s4);
-    border-top: 1px solid var(--border);
-}
-.lineup-legend .lg-item { display: flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: var(--text-xs); }
-.lineup-legend .lg-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
-
-@media (max-width: 767.98px) {
-    .lf-name { font-size: var(--text-xs); }
-    .lineup-toggle button { padding: 6px 14px; }
-}
-@media (max-width: 575.98px) {
-    .lf-jersey { font-size: var(--text-xs); }
-}
-@media (prefers-reduced-motion: reduce) {
-    a.lf-card:hover .lf-card-inner { transform: none; }
-}
-
 /* ══ Projected depth chart — standalone /team/<x>/starters page ═══════════
    A dedicated page for the projected starting 11. The whole formation fits
    the viewport without scrolling: the field is a FIXED height and each side
@@ -4281,117 +4182,9 @@ a.lf-card:focus-visible .lf-card-inner { border-color: var(--lf-accent, var(--go
 
 .dc-wrap { padding-top: clamp(16px, 2.2vw, 26px); }
 
-/* Controls row: side toggle (reuses .lineup-toggle) + formation caption */
-.dc-controls {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px; flex-wrap: wrap; margin-bottom: clamp(12px, 1.8vw, 20px);
-}
-.dc-form-label {
-    color: var(--text-dim); font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 600;
-    font-size: var(--text-xs); letter-spacing: 0.12em; text-transform: uppercase;
-}
-
-/* The field — fixed height, so both sides share one frame */
-.dc-field {
-    position: relative; overflow: hidden;
-    display: grid;   /* both formations share one cell → field is as tall as the
-                        taller side (defense), so its 4 rows can never clip. */
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg);
-}
-.dc-field::before { /* faint yard lines */
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 48px);
-    -webkit-mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
-    mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
-}
-.dc-field::after { /* line-of-scrimmage glow */
-    content: ''; position: absolute; left: 0; right: 0; top: 36%; height: 40%;
-    background: radial-gradient(ellipse at 50% 50%, rgba(28,156,240,0.07), transparent 70%); pointer-events: none;
-}
-/* Both formations occupy the same grid cell and BOTH stay in layout (the
-   inactive one is only visibility:hidden), so the field height is driven by the
-   taller side — defense — and the two are always exactly the same height with
-   no jump on toggle. Defense sets that height from its 4 rows + real gaps;
-   offense's 2 rows fill the same height with space-evenly. */
-.dc-formation {
-    grid-area: 1 / 1; z-index: 1;
-    padding: clamp(10px, 1.5vw, 20px) clamp(14px, 3vw, 40px);
-    display: flex; flex-direction: column;
-    transition: opacity 0.2s ease;
-}
-#dc-offense { justify-content: space-evenly; }
-/* Three levels now (safeties / linebackers / LOS-with-corners). A generous gap
-   keeps the two-high safeties reading as a deep Cover-2 shell above the front. */
-#dc-defense { justify-content: center; gap: clamp(18px, 3vw, 52px); }
-.dc-hidden { visibility: hidden; opacity: 0; }
-
-/* Rows keep their real formation shape horizontally; vertical spacing is left
-   to the parent's space-evenly so both sides fill the same height. */
-.dc-row { display: flex; justify-content: center; align-items: flex-start; gap: clamp(6px, 1.2vw, 16px); }
-/* Offense line: WRs split just outside the tackles (5 OL + TE between). */
-.dc-row--line { flex-wrap: nowrap; gap: clamp(4px, 0.9vw, 12px); }
-.dc-row--line > .lf-card:first-child { margin-right: clamp(8px, 1.7vw, 24px); }
-.dc-row--line > .lf-card:last-child  { margin-left:  clamp(8px, 1.7vw, 24px); }
-/* Shotgun backfield: QB + RB, RB set a touch off and back. */
-.dc-row--backfield { gap: clamp(30px, 7vw, 96px); }
-.dc-row--backfield > .lf-card:last-child { margin-top: clamp(8px, 1.8vw, 20px); }
-/* Cover-2 safeties split the deep middle (two high). */
-.dc-row--safeties { gap: clamp(84px, 18vw, 280px); }
-/* Linebackers spread across the box. */
-.dc-row--lb    { gap: clamp(30px, 7vw, 108px); }
-/* Line of scrimmage: the D-line as a center cluster with the cornerbacks out on
-   the numbers, so the corners sit right beside the front (not a separate deep
-   level). Dropping the old separate CB level frees a row of height for the
-   larger cards. */
-.dc-row--front { justify-content: space-between; align-items: flex-start; width: 100%; max-width: min(96%, 940px); margin: 0 auto; }
-.dc-dl-group { display: flex; justify-content: center; gap: clamp(6px, 1.4vw, 20px); }
-
-/* Card sizing scoped to this page — bigger than the roster thumbnails for
-   readability, a shade shorter than square (5/4) to keep the four-row defense
-   compact. The position tag overlays the photo corner (not a pill below), which
-   trims a row of height. The field grows with the cards (content-driven), so
-   larger cards never clip — they just make the field a little taller. */
-.dc-field .lf-card { width: clamp(64px, 8vw, 108px); position: relative; gap: 0; }
-.dc-field .lf-photo,
-.dc-field .lf-photo-fallback,
-.dc-field .lf-empty { aspect-ratio: 5 / 4; }
-.dc-field .lf-tag {
-    position: absolute; top: 4px; left: 4px; z-index: 3;
-    font-size: var(--text-xs); padding: 1px 5px; letter-spacing: 0.06em;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.55); backdrop-filter: blur(2px);
-}
-
-.dc-footer {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 16px var(--s6); flex-wrap: wrap;
-    margin-top: clamp(12px, 1.8vw, 20px);
-}
-.dc-footer .lineup-legend { margin: 0; padding: 0; border: none; }
-.dc-note { margin: 0; max-width: 640px; }
-
-@media (max-width: 767.98px) {
-    /* Mobile may scroll; keep it tidy with a stacked footer. Field height stays
-       content-driven so the defense never clips. */
-    .dc-controls { margin-bottom: 12px; }
-    .dc-form-label { display: none; }
-    .dc-footer { flex-direction: column; align-items: flex-start; gap: 12px; }
-    .dc-row--safeties { gap: clamp(56px, 22vw, 160px); }
-}
 @media (max-width: 575.98px) {
-    /* Nine cards share the offense line (3 WR + 5 OL + TE) — the widest row —
-       so on a phone shrink cards and trim the WR split just enough that all
-       nine fit without the end receivers clipping at the field edge. */
-    .dc-field .lf-card { width: clamp(30px, 8vw, 52px); }
-    .dc-row--line { gap: 2px; }
-    .dc-row--line > .lf-card:first-child { margin-right: 4px; }
-    .dc-row--line > .lf-card:last-child { margin-left: 4px; }
-    .dc-field .lf-tag { font-size: var(--text-xs); padding: 1px 3px; }
     .dc-title { font-size: 1.7rem; }
     .dc-hero-logo { height: 48px; }
-}
-@media (prefers-reduced-motion: reduce) {
-    /* No crossfade — snap between sides. */
-    .dc-formation { transition: none; }
 }
 
 /* Roster-tab entry point → the standalone depth chart */
@@ -6429,7 +6222,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .rp-item { min-height: 44px; }
     th.stat-header { height: 44px; }
     .show-all-btn { min-height: 44px; }
-    a.lf-card { min-width: 44px; }
     #dc-btn-off, #dc-btn-def { min-height: 44px; }
     /* The forecast disclosure: 320x29 measured. */
     .fc-why-toggle { min-height: 44px; }
@@ -8857,4 +8649,255 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 @media (prefers-reduced-motion: reduce) {
     .tc-card, .tc-card::before, .tc-logo img { transition: none; }
     .tc-card:hover, .tc-card:active, .tc-card:hover .tc-logo img { transform: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROJECTED STARTERS — team page Starters tab and /team/<x>/starters
+   A Madden-style field: defense above the line of scrimmage, offense below,
+   every starter a headshot token with position, name and a real season stat.
+   The field is tinted with the team's colour (--tc). Below 992px the same
+   lineup becomes a position-by-position list (.ff-list).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.ff { --ff-token: clamp(84px, 7.4vw, 112px); --ff-ring: clamp(52px, 4.4vw, 64px); }
+.ff-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-bottom: var(--s5); }
+.ff-title {
+    margin: 0;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 750;
+    font-size: var(--text-xl);
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+.ff-basis { margin: 0; max-width: 62ch; font-size: var(--text-sm); line-height: 1.5; color: var(--text-secondary); }
+
+/* ── The field ── */
+.ff-field {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: clamp(18px, 2.2vw, 30px) clamp(40px, 4vw, 64px);
+    border-radius: var(--r-lg);
+    border: 1px solid color-mix(in srgb, var(--tc) 35%, var(--border-strong));
+    background:
+        radial-gradient(ellipse 70% 55% at 50% 50%, color-mix(in srgb, var(--tc) 22%, #0b0d10) 0%, #0b0d10 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 40px -24px rgba(0,0,0,0.8);
+}
+/* Yard lines every band, and two columns of short hash ticks, like broadcast turf. */
+.ff-field::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        repeating-linear-gradient(180deg, rgba(255,255,255,0.13) 0 1px, rgba(255,255,255,0) 1px 22px),
+        repeating-linear-gradient(180deg, rgba(255,255,255,0.13) 0 1px, rgba(255,255,255,0) 1px 22px),
+        repeating-linear-gradient(180deg, rgba(255,255,255,0.05) 0 1px, rgba(255,255,255,0) 1px 88px);
+    background-size: 14px 100%, 14px 100%, 100% 100%;
+    background-position: 32% 0, 68% 0, 0 0;
+    background-repeat: no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.ff-half { position: relative; display: flex; flex-direction: column; gap: clamp(10px, 1.4vw, 18px); }
+.ff-half--def { padding-bottom: clamp(14px, 1.6vw, 22px); }
+.ff-half--off { padding-top: clamp(14px, 1.6vw, 22px); }
+
+/* Line of scrimmage: the team's colour, lifted toward white so navy still reads. */
+.ff-los {
+    height: 2px;
+    margin-inline: calc(-1 * clamp(40px, 4vw, 64px));
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--tc) 55%, #fff 45%) 0%,
+        color-mix(in srgb, var(--tc) 55%, #fff 45%) 100%);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--tc) 70%, #fff 30%);
+    opacity: 0.85;
+}
+.ff-side {
+    position: absolute;
+    left: calc(-1 * clamp(28px, 2.8vw, 44px));
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: 0.6875rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+.ff-half--def .ff-side { top: 4px; }
+.ff-half--off .ff-side { bottom: 4px; }
+
+.ff-row { display: flex; justify-content: center; align-items: flex-start; gap: clamp(6px, 1vw, 14px); }
+.ff-group { display: flex; gap: clamp(4px, 0.7vw, 10px); }
+.ff-row--s { gap: clamp(120px, 22vw, 340px); }
+.ff-row--lb { gap: clamp(40px, 8vw, 130px); }
+.ff-row--front { justify-content: space-between; max-width: 1040px; margin-inline: auto; width: 100%; }
+.ff-row--line { justify-content: space-between; max-width: 1180px; margin-inline: auto; width: 100%; }
+.ff-group--wide { gap: clamp(10px, 2vw, 34px); }
+.ff-row--back { gap: clamp(24px, 4vw, 60px); }
+.ff-row--back > .ff-p:last-child { margin-top: clamp(10px, 1.4vw, 18px); }   /* shotgun: back set beside and behind */
+
+/* ── A player token ── */
+.ff-p {
+    width: var(--ff-token);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 2px 4px;
+    border-radius: var(--r-md);
+    color: var(--text-primary);
+    text-decoration: none;
+    text-align: center;
+    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease-out;
+}
+.ff-ring {
+    position: relative;
+    width: var(--ff-ring);
+    height: var(--ff-ring);
+    margin-bottom: 9px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--tc) 30%, #14161b);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tc) 60%, #fff 25%), 0 8px 16px -6px rgba(0,0,0,0.7);
+    transition: box-shadow 200ms ease-out;
+}
+.ff-ring img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: top center;
+    display: block;
+}
+.ff-init {
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+/* Position sits on the ring's lower edge, like a jersey tag. */
+.ff-pos {
+    position: absolute;
+    left: 50%;
+    bottom: -9px;
+    transform: translateX(-50%);
+    min-width: 26px;
+    padding: 1px 6px;
+    border-radius: var(--r-pill);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 800;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    line-height: 1.45;
+    white-space: nowrap;
+}
+.ff-o .ff-pos { background: #0c2a44; color: #9ad4ff; border: 1px solid rgba(28,156,240,0.55); }
+.ff-d .ff-pos { background: #22252c; color: #e7e9ea; border: 1px solid rgba(255,255,255,0.28); }
+.ff-name {
+    max-width: 100%;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: 0.875rem;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+}
+.ff-num { margin-right: 3px; font-weight: 600; font-size: 0.75rem; color: var(--text-secondary); }
+.ff-line {
+    min-height: 1.3em;
+    max-width: 100%;
+    font-size: 0.6875rem;
+    line-height: 1.3;
+    color: #b4b9bf;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: proportional-nums;
+}
+a.ff-p:hover { transform: translateY(-3px); background: rgba(255,255,255,0.05); }
+a.ff-p:hover .ff-ring { box-shadow: 0 0 0 2px var(--accent), 0 10px 20px -6px rgba(0,0,0,0.8); }
+a.ff-p:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+a.ff-p:active { transform: translateY(-1px) scale(0.97); }
+.ff-p.is-open .ff-ring { background: transparent; box-shadow: 0 0 0 1px var(--border-strong); border: 1px dashed var(--border-strong); }
+.ff-p.is-open .ff-name { color: var(--text-secondary); }
+
+.ff-note { margin: var(--s4) 0 0; max-width: 72ch; font-size: var(--text-xs); line-height: 1.6; color: var(--text-secondary); }
+
+/* ── Phone and tablet: the lineup as a list ── */
+.ff-list { display: none; }
+@media (max-width: 991.98px) {
+    .ff-field { display: none; }
+    .ff-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); }
+}
+@media (max-width: 639.98px) { .ff-list { grid-template-columns: minmax(0, 1fr); } }
+.fl-h {
+    margin: 0 0 var(--s2);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 750;
+    font-size: var(--text-lg);
+    color: var(--text-primary);
+}
+.fl-rows {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tc) 12%, var(--bg-card)) 0%, var(--bg-card) 160px);
+}
+.fl-row {
+    display: grid;
+    grid-template-columns: 38px 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 56px;
+    padding: 6px 10px;
+    border-radius: var(--r-md);
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: background-color 150ms ease-out;
+}
+.fl-rows li + li .fl-row { box-shadow: inset 0 1px 0 var(--border); }
+a.fl-row:hover { background: rgba(255,255,255,0.05); }
+a.fl-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+a.fl-row:active { background: rgba(255,255,255,0.09); }
+.fl-pos {
+    justify-self: start;
+    padding: 1px 6px;
+    border-radius: var(--r-pill);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 800;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+.fl-o { background: #0c2a44; color: #9ad4ff; border: 1px solid rgba(28,156,240,0.55); }
+.fl-d { background: #22252c; color: #e7e9ea; border: 1px solid rgba(255,255,255,0.28); }
+.fl-photo {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--tc) 30%, #14161b);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tc) 60%, #fff 25%);
+}
+.fl-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.fl-who { min-width: 0; display: flex; flex-direction: column; }
+.fl-name {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: var(--text-base);
+    line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fl-line { font-size: var(--text-xs); color: var(--text-secondary); font-variant-numeric: proportional-nums; }
+.fl-num { font-family: var(--font-display); font-weight: 700; font-size: var(--text-sm); color: var(--text-secondary); }
+.fl-row.is-open .fl-name { color: var(--text-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+    .ff-p, .ff-ring, .fl-row { transition: none; }
+    a.ff-p:hover, a.ff-p:active { transform: none; }
 }
