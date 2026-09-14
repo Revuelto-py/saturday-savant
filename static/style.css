@@ -8269,3 +8269,181 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 @media (hover: none) {
     .sp-toggle .lb-mode-btn { min-height: 44px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DRIVES — game page
+   A drive is something that happened in a place, so it is drawn on the place:
+   one bar per snap that moved the ball, stacked in order up the field. The
+   field itself is the control — clicking it opens the full play list, the
+   snaps that gained nothing included.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.dv-intro {
+    max-width: 56ch; margin: 0 0 var(--s5);
+    color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.65;
+}
+
+.dv-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: var(--s5);
+    margin-bottom: var(--s4);
+}
+
+.dv-head { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s4); }
+.dv-logo { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
+.dv-id { min-width: 0; }
+.dv-title {
+    margin: 0; font-family: var(--font-display); font-weight: 800;
+    font-size: var(--text-md); line-height: 1.1; color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+.dv-mix { margin: 2px 0 0; color: var(--text-secondary); font-size: 0.8125rem; }
+.dv-meta {
+    margin-left: auto; display: flex; align-items: center; gap: var(--s3);
+    flex-wrap: wrap; justify-content: flex-end;
+}
+.dv-when, .dv-line {
+    color: var(--text-dim); font-size: 0.75rem; font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.dv-badge {
+    padding: 4px 10px; border-radius: var(--r-pill);
+    font-size: 0.75rem; font-weight: 800; letter-spacing: 0.07em;
+    text-transform: uppercase; white-space: nowrap;
+}
+
+/* ── The field, as a control ──────────────────────────────────────────────── */
+.dv-field-btn {
+    display: block; position: relative; width: 100%; padding: 0;
+    background: none; border: 2px solid transparent; border-radius: var(--r-md);
+    cursor: pointer; text-align: left;
+    /* The authored moment: the field lifts and its rim lights as the pointer
+       arrives, so the picture reads as the way in rather than as decoration.
+       Transform and box-shadow only — the SVG inside never re-lays out. */
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 160ms ease-out;
+}
+.dv-field-btn:hover {
+    transform: translateY(-3px);
+    border-color: rgba(28,156,240,0.55);
+    box-shadow: 0 14px 30px -12px rgba(0,0,0,0.75), 0 0 0 1px rgba(28,156,240,0.18);
+}
+.dv-field-btn:focus-visible {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(28,156,240,0.35), 0 14px 30px -12px rgba(0,0,0,0.75);
+}
+.dv-field-btn:active { transform: translateY(-1px); }
+.dv-field { display: block; width: 100%; height: auto; border-radius: var(--r-md); }
+
+/* The affordance rides in the corner of the field rather than below it, so the
+   card does not grow a row of chrome per drive. */
+.dv-cta {
+    position: absolute; right: 12px; top: 12px;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 10px; border-radius: var(--r-pill);
+    background: rgba(10,11,13,0.74); border: 1px solid rgba(255,255,255,0.16);
+    color: #f0f3f5; font-size: 0.75rem; font-weight: 700;
+    opacity: 0; transform: translateY(-4px);
+    transition: opacity 180ms ease-out, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+}
+.dv-field-btn:hover .dv-cta,
+.dv-field-btn:focus-visible .dv-cta { opacity: 1; transform: translateY(0); }
+
+/* ── The drive dialog ─────────────────────────────────────────────────────── */
+.dv-modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: var(--s4); }
+.dv-modal[hidden] { display: none; }
+.dv-scrim {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(3px);
+    opacity: 0; transition: opacity 200ms ease-out;
+}
+.dv-dialog {
+    position: relative; width: min(760px, 100%); max-height: min(78vh, 720px);
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg-card); border: 1px solid var(--border-strong);
+    border-radius: var(--r-lg); box-shadow: 0 32px 70px -20px rgba(0,0,0,0.85);
+    opacity: 0; transform: translateY(10px) scale(0.985);
+    transition: opacity 200ms ease-out, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dv-modal.is-open .dv-scrim { opacity: 1; }
+.dv-modal.is-open .dv-dialog { opacity: 1; transform: translateY(0) scale(1); }
+
+.dv-dialog-head {
+    display: flex; align-items: flex-start; gap: var(--s4);
+    padding: var(--s5); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.dv-dialog-title {
+    margin: 0; font-family: var(--font-display); font-weight: 800;
+    font-size: var(--text-lg); line-height: 1.15; color: var(--text-primary);
+}
+.dv-dialog-sub {
+    margin: 4px 0 0; color: var(--text-secondary); font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+}
+.dv-close {
+    margin-left: auto; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; padding: 0;
+    background: none; border: 1px solid var(--border); border-radius: var(--r-sm);
+    color: var(--text-secondary); cursor: pointer;
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+.dv-close:hover { color: var(--text-primary); background: var(--bg-card-hover); border-color: var(--border-strong); }
+.dv-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--text-primary); }
+.dv-close:active { background: var(--bg-subtle); }
+
+.dv-plays { list-style: none; margin: 0; padding: var(--s3) var(--s4) var(--s5); overflow-y: auto; }
+.dv-play-row {
+    display: grid; grid-template-columns: 62px 60px minmax(0, 1fr) 52px;
+    gap: var(--s3); align-items: baseline;
+    padding: 10px var(--s2); border-radius: var(--r-sm);
+}
+.dv-play-row + .dv-play-row { border-top: 1px solid var(--border); }
+.dv-play-row.is-score { background: rgba(28,156,240,0.10); }
+.dv-play-row.is-turnover { background: rgba(220,38,38,0.09); }
+
+.dv-p-down {
+    color: var(--text-dim); font-size: 0.75rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.dv-p-tag {
+    justify-self: start; padding: 2px 7px; border-radius: var(--r-sm);
+    font-size: 0.75rem; font-weight: 800; letter-spacing: 0.04em;
+    background: rgba(255,255,255,0.07); color: var(--text-secondary); white-space: nowrap;
+}
+/* The two snap types the field draws an icon for get the field's own colours,
+   so the list and the picture name the same thing the same way. */
+.dv-p-tag[data-kind="pass"] { background: rgba(139,74,34,0.30); color: #e8b894; }
+.dv-p-tag[data-kind="rush"] { background: rgba(232,163,61,0.18); color: #e8a33d; }
+.dv-p-text { color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.55; }
+.dv-play-row.is-score .dv-p-text { color: var(--text-primary); font-weight: 600; }
+.dv-p-gain {
+    text-align: right; font-weight: 800; font-size: 0.8125rem;
+    color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+.dv-p-gain.is-pos { color: #6ee7b7; }
+.dv-p-gain.is-neg { color: #f0a868; }
+
+@media (max-width: 639.98px) {
+    .dv-card { padding: var(--s4); }
+    .dv-head { flex-wrap: wrap; }
+    .dv-meta { margin-left: 0; width: 100%; justify-content: flex-start; }
+    .dv-cta { opacity: 1; transform: none; }   /* no hover to reveal it on touch */
+    .dv-play-row { grid-template-columns: 56px minmax(0, 1fr) 48px; }
+    .dv-p-tag { grid-column: 1; }
+    .dv-p-down { display: none; }              /* the description repeats the down */
+    .dv-dialog { max-height: 86vh; }
+}
+
+@media (hover: none) {
+    .dv-field-btn:hover { transform: none; box-shadow: none; border-color: transparent; }
+    .dv-close { width: 44px; height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dv-field-btn, .dv-cta, .dv-scrim, .dv-dialog { transition-duration: 1ms; }
+    .dv-field-btn:hover { transform: none; }
+    .dv-dialog { transform: none; }
+}

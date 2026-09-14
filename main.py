@@ -5391,50 +5391,63 @@ def rankings():
 _NON_SCRIMMAGE_TYPES = ('kickoff', 'timeout', 'end period', 'end of half', 'end of game', 'end of quarter')
 
 def _classify_play(play_type_text):
-    """(label, color, is_turnover) for one play, or None to skip the play
-    entirely (kickoffs/timeouts/period markers aren't scrimmage snaps)."""
+    """(label, color, is_turnover, kind) for one play, or None to skip it
+    entirely (kickoffs/timeouts/period markers aren't scrimmage snaps).
+
+    `kind` is what the drive chart draws an icon for, so it answers "how was
+    this snap run", not "how did it end": a sack, an incompletion and an
+    interception are all pass plays. Anything that is not a snap of either type
+    — a kick, a penalty, a loose-ball recovery — is 'other' and gets no icon
+    rather than a guessed one.
+    """
     t = (play_type_text or '').lower()
     if any(s in t for s in _NON_SCRIMMAGE_TYPES):
         return None
     if 'interception' in t:
-        return ('INT', '#dc2626', True)
+        return ('INT', '#dc2626', True, 'pass')
     if 'fumble' in t:
         if 'recovery (own)' in t:
-            return ('Fumble', '#6b7280', False)
-        return ('FUM', '#dc2626', True)
+            return ('Fumble', '#6b7280', False, 'other')
+        return ('FUM', '#dc2626', True, 'other')
     if 'sack' in t:
-        return ('Sack', '#ef4444', False)
+        return ('Sack', '#ef4444', False, 'pass')
     if 'safety' in t:
-        return ('Safety', '#dc2626', False)
+        return ('Safety', '#dc2626', False, 'other')
     if 'penalty' in t:
-        return ('Penalty', '#eab308', False)
+        return ('Penalty', '#eab308', False, 'other')
     if 'field goal' in t:
         if 'missed' in t or 'blocked' in t:
-            return ('FG Miss', '#6b7280', False)
-        return ('FG', '#f97316', False)
+            return ('FG Miss', '#6b7280', False, 'other')
+        return ('FG', '#f97316', False, 'other')
     if 'punt' in t:
-        return ('Punt', '#a855f7', False)
+        return ('Punt', '#a855f7', False, 'other')
     if 'incompletion' in t:
-        return ('Inc', '#6b7280', False)
+        return ('Inc', '#6b7280', False, 'pass')
     if 'reception' in t or 'pass' in t:
-        return ('Pass', '#3b82f6', False)
+        return ('Pass', '#3b82f6', False, 'pass')
     if 'rush' in t or 'run' in t or 'kneel' in t:
-        return ('Rush', '#22c55e', False)
-    return ('Play', '#6b7280', False)
+        return ('Rush', '#22c55e', False, 'rush')
+    return ('Play', '#6b7280', False, 'other')
 
 def _classify_drive_result(display_result):
-    """(badge_label, bg_color, text_color) for a drive's header badge."""
+    """(badge_label, bg_color, text_color) for a drive's header badge.
+
+    The two bright fills carry near-black text, not white. White on this orange
+    measures 3.3:1 and on this green 3.1:1 — both under the 4.5:1 the site holds
+    itself to — while #1a1200 lifts them to roughly 7:1. Red keeps white because
+    it is dark enough that the inverse would be worse.
+    """
     r = (display_result or '').lower()
     if 'fumble' in r or 'interception' in r or 'pick' in r:
         return ('TURNOVER', '#dc2626', '#fff')
     if 'safety' in r:
         return ('SAFETY', '#dc2626', '#fff')
     if 'touchdown' in r:
-        return ('TOUCHDOWN', '#16a34a', '#fff')
+        return ('TOUCHDOWN', '#16a34a', '#1a1200')
     if 'missed' in r and 'field goal' in r or r == 'missed fg':
         return ('MISSED FG', 'rgba(255,255,255,0.08)', 'rgba(255,255,255,0.5)')
     if 'field goal' in r:
-        return ('FIELD GOAL', '#f97316', '#fff')
+        return ('FIELD GOAL', '#f97316', '#1a1200')
     if 'punt' in r:
         return ('PUNT', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.6)')
     if 'downs' in r:
@@ -6152,7 +6165,7 @@ def game_detail(game_id):
                 drive_play_list = []
                 prev_abs = start_yl_abs
                 for idx, (p, classified, a0) in enumerate(scrimmage):
-                    label, color, is_turnover = classified
+                    label, color, is_turnover, kind = classified
                     ptype = (p.get('type') or {}).get('text', '')
                     stat_yards = int(p.get('statYardage', 0) or 0)
                     if a0 is None:
@@ -6190,14 +6203,31 @@ def game_detail(game_id):
                         f"Q{play_period} · {play_clock}" if play_clock else f"Q{play_period}",
                     ] if b]
 
+                    is_score = bool(p.get('scoringPlay', False))
+                    width = round(end_pct - start_pct, 2)
+                    # ESPN prefixes every description with the game clock, which
+                    # the popup already shows in its own column.
+                    text = re.sub(r'^\(\d{1,2}:\d{2}\)\s*', '', (p.get('text') or '').strip())
                     drive_play_list.append({
                         'label':       label,
                         'color':       color,
+                        'kind':        kind,
                         'start_pct':   round(start_pct, 2),
-                        'width_pct':   round(end_pct - start_pct, 2),
+                        'width_pct':   width,
                         'yards':       net_yards,
                         'is_turnover': is_turnover,
-                        'is_scoring':  bool(p.get('scoringPlay', False)),
+                        'is_scoring':  is_score,
+                        # The chart draws field position, so a snap that moved
+                        # the ball nowhere has nothing to draw — an incompletion
+                        # was rendering as a minimum-width bar and reading as
+                        # eight yards of gain. It still belongs in the drive's
+                        # play list, which is why this is a flag and not a
+                        # filter.
+                        'advances':    bool(width >= 0.2 or is_score),
+                        'down_dist':   down_dist,
+                        'clock':       play_clock,
+                        'period':      play_period,
+                        'text':        text,
                         'tooltip':     ' | '.join(tooltip_bits),
                     })
 
@@ -6210,16 +6240,27 @@ def game_detail(game_id):
                     drive_play_list.append({
                         'label':       (drive_result or 'Drive')[:10],
                         'color':       '#6b7280',
+                        'kind':        'other',
                         'start_pct':   round(min(start_yl_abs, fallback_end), 2),
                         'width_pct':   round(abs(fallback_end - start_yl_abs), 2),
                         'yards':       drive_yards,
                         'is_turnover': False,
                         'is_scoring':  is_scoring_drive,
+                        'advances':    True,
+                        'down_dist':   '',
+                        'clock':       '',
+                        'period':      quarter,
+                        'text':        f"{drive_result} · {drive_yards} yards. Play-by-play "
+                                       f"detail was not available for this drive.",
                         'tooltip':     f"{drive_result} · {drive_yards} yds",
                     })
 
                 drives.append({
                     'team': team_name,
+                    # "4 rush, 6 pass" — counted by how the snap was run, so
+                    # sacks and incompletions land on the passing side.
+                    'rush_count': sum(1 for q in drive_play_list if q['kind'] == 'rush'),
+                    'pass_count': sum(1 for q in drive_play_list if q['kind'] == 'pass'),
                     'is_home': play_side == 'home',
                     'result': drive_result,
                     'plays_count': drive_plays_n,

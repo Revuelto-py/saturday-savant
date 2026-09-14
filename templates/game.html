@@ -1266,177 +1266,301 @@ if (typeof Plotly !== 'undefined') {
 <div id="tab-content-drives" style="display:none">
 
 {% if drives %}
+<p class="dv-intro">Each scoring drive as it happened on the field — one bar per snap that moved
+the ball, stacked in order. Open a drive for every play, including the ones that gained nothing.</p>
+
 {% for drive in drives %}
 {% set d_logo = game[9] if drive.is_home else game[10] %}
+<article class="dv-card">
 
-<div class="drive-card">
-
-    <!-- Drive header -->
-    <div class="drive-header">
-        <div style="display:flex;align-items:center;gap:10px">
-            {% if d_logo %}<img src="{{ d_logo }}" alt="{{ drive.team }} logo" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">{% endif %}
-            <span class="t-label">{{ drive.team }}</span>
-            <span class="t-meta">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
+    <header class="dv-head">
+        {% if d_logo %}<img class="dv-logo" src="{{ d_logo }}" alt="" loading="lazy">{% endif %}
+        <div class="dv-id">
+            <h2 class="dv-title">{{ drive.team }}</h2>
+            <p class="dv-mix">
+                {%- set bits = [] -%}
+                {%- if drive.rush_count %}{% set _ = bits.append('%d rush'|format(drive.rush_count)) %}{% endif -%}
+                {%- if drive.pass_count %}{% set _ = bits.append('%d pass'|format(drive.pass_count)) %}{% endif -%}
+                {{ bits|join(', ') if bits else '%d plays'|format(drive.plays_count) }}
+            </p>
         </div>
-        <div style="display:flex;align-items:center;gap:12px">
-            <span class="t-support" style="font-size: var(--text-sm)">{{ drive.plays_count }} plays · {{ drive.yards }} yds{% if drive.time_elapsed %} · {{ drive.time_elapsed }}{% endif %}</span>
-            <span class="drive-badge" style="background:{{ drive.badge_bg }};color:{{ drive.badge_color }}">{{ drive.badge_label }}</span>
+        <div class="dv-meta">
+            <span class="dv-when">Q{{ drive.quarter }}{% if drive.start_clock %} · {{ drive.start_clock }}{% endif %}</span>
+            <span class="dv-line">{{ drive.plays_count }} plays · {{ drive.yards }} yds{% if drive.time_elapsed %} · {{ drive.time_elapsed }}{% endif %}</span>
+            <span class="dv-badge" style="background:{{ drive.badge_bg }};color:{{ drive.badge_color }}">{{ drive.badge_label }}</span>
         </div>
-    </div>
+    </header>
 
-    <!-- Field — empty SVG shell populated by the render script below -->
-    <div class="drive-field-wrap">
-        <svg class="drive-field"
+    {# The field is the control. A drive is a thing that happened in a place, so
+       the thing you click to read it should be the picture of the place. #}
+    <button type="button" class="dv-field-btn"
+            data-drive-id="{{ loop.index0 }}"
+            aria-haspopup="dialog"
+            aria-label="{{ drive.team }} {{ drive.badge_label|lower }} drive, Q{{ drive.quarter }} — open all {{ drive.plays_count }} plays">
+        <svg class="dv-field"
              data-drive-id="{{ loop.index0 }}"
              data-home-logo="{{ game[9] or '' }}"
              data-away-logo="{{ game[10] or '' }}"
              data-home-color="{{ home_color }}"
              data-away-color="{{ away_color }}"
-             data-home-abbr="{{ home_team[:12] | upper }}"
-             data-away-abbr="{{ away_team[:12] | upper }}"
-             viewBox="0 0 1100 320" preserveAspectRatio="xMidYMid meet"></svg>
-    </div>
-    <script type="application/json" id="drive-data-{{ loop.index0 }}">{{ drive.plays | tojson }}</script>
+             data-is-home="{{ '1' if drive.is_home else '0' }}"
+             viewBox="0 0 1100 380" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+        <span class="dv-cta">
+            <span>All {{ drive.plays_count }} plays</span>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+                 stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 6l6 6-6 6"/>
+            </svg>
+        </span>
+    </button>
 
-    <!-- Legend — filled in by the render script with only the play types this drive actually has -->
-    <div class="drive-legend" data-drive-id="{{ loop.index0 }}"></div>
-</div>
+    <script type="application/json" id="dv-data-{{ loop.index0 }}">{{ {
+        'team': drive.team, 'badge': drive.badge_label, 'quarter': drive.quarter,
+        'clock': drive.start_clock, 'plays_count': drive.plays_count,
+        'yards': drive.yards, 'time': drive.time_elapsed, 'result': drive.result,
+        'plays': drive.plays } | tojson }}</script>
+</article>
 {% endfor %}
 
-<script>
-(function() {
-    var SVG_NS = 'http://www.w3.org/2000/svg';
-    var SVG_W = 1100, SVG_H = 320;
-    var EZ_W = 80, FIELD_X = 80, FIELD_W = 940;
-    var FIELD_H = 286; // field + endzones; the remaining ~34px is the yard-number strip
+{# One dialog, reused. Twenty drives would otherwise mean twenty copies of the
+   same markup in the document for a surface only one of them can occupy. #}
+<div class="dv-modal" id="dvModal" hidden>
+    <div class="dv-scrim" data-dv-close></div>
+    <div class="dv-dialog" role="dialog" aria-modal="true" aria-labelledby="dvModalTitle">
+        <header class="dv-dialog-head">
+            <div>
+                <h2 class="dv-dialog-title" id="dvModalTitle"></h2>
+                <p class="dv-dialog-sub" id="dvModalSub"></p>
+            </div>
+            <button type="button" class="dv-close" data-dv-close aria-label="Close drive">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18"/>
+                </svg>
+            </button>
+        </header>
+        <ol class="dv-plays" id="dvPlays"></ol>
+    </div>
+</div>
 
-    function svgEl(tag, attrs) {
-        var e = document.createElementNS(SVG_NS, tag);
+<script>
+(function () {
+    var NS = 'http://www.w3.org/2000/svg';
+    var W = 1100, H = 380;
+    var EZ = 86, FX = EZ, FW = W - EZ * 2;
+    var FH = 322;                       // field box; the strip below carries the numbers
+
+    function el(tag, attrs) {
+        var e = document.createElementNS(NS, tag);
         for (var k in attrs) e.setAttribute(k, attrs[k]);
         return e;
     }
-    function yardX(pct) { return FIELD_X + (pct / 100) * FIELD_W; }
-    function hexToRgbTriplet(hex) {
+    function rgb(hex) {
         hex = (hex || '1e3a5f').replace('#', '');
-        if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+        if (hex.length === 3) hex = hex.split('').map(function (c) { return c + c; }).join('');
         var n = parseInt(hex, 16);
         if (isNaN(n)) return '30,58,95';
         return [(n >> 16) & 255, (n >> 8) & 255, n & 255].join(',');
     }
+    function yardX(pct) { return FX + (pct / 100) * FW; }
+
+    /* Two marks, both single filled silhouettes on a 24x24 grid, scaled to the
+       bar. A pass is the ball; a rush is the carrier. Anything that is neither
+       gets no icon rather than a third symbol nobody can name.
+       The runner is mirrored to face the way the offence is moving, so the
+       staircase reads as travel rather than as a column of stickers. */
+    var RUNNER = 'M13.5 5.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM9.8 8.9 7 12l2.2 1.6L8 19h2l1.4-4.6'
+               + '2.1 1.9V19h2v-5.2l-2.6-2.3.8-3c1 1.2 2.6 2 4.3 2v-2c-1.4 0-2.6-.8-3.3-1.9'
+               + 'l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5 0-.8.2L8 5.6V9h2V7.1l1.8-.7z';
+
+    function icon(kind, x, y, size, faceRight) {
+        var g = el('g', { transform: 'translate(' + x + ',' + y + ') scale(' + (size / 24) + ')' });
+        if (kind === 'pass') {
+            // Flat, symmetrical, seam and four laces — an icon of a ball, not a
+            // rendering of one. Tilted the way a thrown ball sits.
+            var b = el('g', { transform: 'rotate(-28 12 12)' });
+            b.appendChild(el('path', {
+                d: 'M12 5.2c4.6 0 8.4 3 8.4 6.8S16.6 18.8 12 18.8 3.6 15.8 3.6 12 7.4 5.2 12 5.2z',
+                fill: '#c9763a' }));
+            b.appendChild(el('path', { d: 'M7.6 12h8.8', stroke: '#fdf6ee',
+                                       'stroke-width': 1.5, 'stroke-linecap': 'round' }));
+            b.appendChild(el('path', { d: 'M9.6 10.3v3.4M12 10.1v3.8M14.4 10.3v3.4',
+                                       stroke: '#fdf6ee', 'stroke-width': 1.4, 'stroke-linecap': 'round' }));
+            g.appendChild(b);
+        } else if (kind === 'rush') {
+            var r = el('path', { d: RUNNER, fill: '#e8a33d' });
+            if (!faceRight) r.setAttribute('transform', 'translate(24,0) scale(-1,1)');
+            g.appendChild(r);
+        }
+        return g;
+    }
 
     function buildField(svg) {
         while (svg.firstChild) svg.removeChild(svg.firstChild);
+        var away = rgb(svg.dataset.awayColor), home = rgb(svg.dataset.homeColor);
+        var uid = 'dvclip' + svg.dataset.driveId;
 
-        var homeColor = hexToRgbTriplet(svg.dataset.homeColor);
-        var awayColor = hexToRgbTriplet(svg.dataset.awayColor);
+        var defs = el('defs', {});
+        var clip = el('clipPath', { id: uid });
+        clip.appendChild(el('rect', { x: 0, y: 0, width: W, height: FH, rx: 10 }));
+        defs.appendChild(clip);
+        svg.appendChild(defs);
 
-        svg.appendChild(svgEl('rect', { x: FIELD_X, y: 0, width: FIELD_W, height: FIELD_H, fill: '#1b4332' }));
-        svg.appendChild(svgEl('rect', { x: 0, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(' + awayColor + ',0.55)' }));
-        svg.appendChild(svgEl('rect', { x: SVG_W - EZ_W, y: 0, width: EZ_W, height: FIELD_H, fill: 'rgba(' + homeColor + ',0.55)' }));
+        var field = el('g', { 'clip-path': 'url(#' + uid + ')' });
+        field.appendChild(el('rect', { x: 0, y: 0, width: W, height: FH, fill: '#224c37' }));
+        // Mown stripes. Ten bands of alternating tone, the way a field is cut.
+        for (var s = 0; s < 10; s++) {
+            if (s % 2) continue;
+            field.appendChild(el('rect', { x: FX + s * (FW / 10), y: 0, width: FW / 10, height: FH,
+                                           fill: '#ffffff', opacity: 0.05 }));
+        }
+        field.appendChild(el('rect', { x: 0, y: 0, width: EZ, height: FH, fill: 'rgba(' + away + ',0.92)' }));
+        field.appendChild(el('rect', { x: W - EZ, y: 0, width: EZ, height: FH, fill: 'rgba(' + home + ',0.92)' }));
 
-        var labels = ['10', '20', '30', '40', '50', '40', '30', '20', '10'];
-        for (var i = 1; i <= 9; i++) {
-            var x = FIELD_X + (i * 10 / 100) * FIELD_W;
-            svg.appendChild(svgEl('line', { x1: x, y1: 0, x2: x, y2: FIELD_H, stroke: 'white', 'stroke-width': 1, opacity: 0.35 }));
-            var t = svgEl('text', { x: x, y: FIELD_H + 20, 'font-size': 11, fill: 'rgba(255,255,255,0.5)', 'text-anchor': 'middle' });
-            t.textContent = labels[i - 1];
+        // Yard lines every 10, hash rows at the quarter heights.
+        for (var i = 0; i <= 10; i++) {
+            var x = FX + (i / 10) * FW;
+            field.appendChild(el('line', { x1: x, y1: 0, x2: x, y2: FH,
+                stroke: '#ffffff', 'stroke-width': i === 0 || i === 10 ? 2.5 : 1.4,
+                opacity: i === 0 || i === 10 ? 0.55 : 0.24 }));
+        }
+        [FH * 0.30, FH * 0.70].forEach(function (hy) {
+            for (var m = 1; m < 100; m++) {
+                if (m % 10 === 0) continue;
+                var hx = FX + (m / 100) * FW;
+                field.appendChild(el('line', { x1: hx, y1: hy - 4, x2: hx, y2: hy + 4,
+                                               stroke: '#ffffff', 'stroke-width': 1.2, opacity: 0.16 }));
+            }
+        });
+        svg.appendChild(field);
+
+        // End-zone logos
+        var aL = svg.dataset.awayLogo, hL = svg.dataset.homeLogo;
+        if (aL) svg.appendChild(el('image', { href: aL, x: EZ / 2 - 23, y: FH / 2 - 23,
+                                              width: 46, height: 46, preserveAspectRatio: 'xMidYMid meet', opacity: 0.95 }));
+        if (hL) svg.appendChild(el('image', { href: hL, x: W - EZ / 2 - 23, y: FH / 2 - 23,
+                                              width: 46, height: 46, preserveAspectRatio: 'xMidYMid meet', opacity: 0.95 }));
+
+        // Numbers below the field: goal line, 20s and the 50, as a field is marked.
+        [['G', 0], ['20', 30], ['50', 50], ['20', 70], ['G', 100]].forEach(function (n) {
+            var t = el('text', { x: yardX(n[1]), y: FH + 40, 'text-anchor': 'middle',
+                'font-size': 21, 'font-weight': 700, 'letter-spacing': '0.06em',
+                fill: 'rgba(255,255,255,0.52)' });
+            t.textContent = n[0];
             svg.appendChild(t);
-        }
-        for (var j = 1; j < 19; j++) {
-            if (j % 2 === 0) continue; // every 10 yards already drawn above
-            var hx = FIELD_X + (j * 5 / 100) * FIELD_W;
-            svg.appendChild(svgEl('line', { x1: hx, y1: 0, x2: hx, y2: FIELD_H, stroke: 'white', 'stroke-width': 1, opacity: 0.15 }));
-        }
-
-        var awayLogo = svg.dataset.awayLogo;
-        if (awayLogo) {
-            svg.appendChild(svgEl('image', { href: awayLogo, x: EZ_W / 2 - 24, y: FIELD_H / 2 - 30, width: 48, height: 48, preserveAspectRatio: 'xMidYMid meet' }));
-        }
-        var at = svgEl('text', { x: EZ_W / 2, y: FIELD_H / 2 + 36, 'font-size': 9, fill: 'rgba(255,255,255,0.6)', 'text-anchor': 'middle', 'letter-spacing': '0.1em' });
-        at.textContent = svg.dataset.awayAbbr || '';
-        svg.appendChild(at);
-
-        var homeLogo = svg.dataset.homeLogo;
-        if (homeLogo) {
-            svg.appendChild(svgEl('image', { href: homeLogo, x: SVG_W - EZ_W / 2 - 24, y: FIELD_H / 2 - 30, width: 48, height: 48, preserveAspectRatio: 'xMidYMid meet' }));
-        }
-        var ht = svgEl('text', { x: SVG_W - EZ_W / 2, y: FIELD_H / 2 + 36, 'font-size': 9, fill: 'rgba(255,255,255,0.6)', 'text-anchor': 'middle', 'letter-spacing': '0.1em' });
-        ht.textContent = svg.dataset.homeAbbr || '';
-        svg.appendChild(ht);
+        });
     }
 
     function renderPlays(svg, plays) {
-        if (!plays.length) return;
-        var available = FIELD_H - 16;
-        var step = Math.min(30, Math.max(available / plays.length, 16));
-        var barH = Math.max(step - 2, 14);
+        var shown = plays.filter(function (p) { return p.advances; });
+        if (!shown.length) return;
+        var top = 14, bottom = FH - 12;
+        var step = Math.min(30, (bottom - top) / shown.length);
+        var barH = Math.max(Math.min(step - 5, 22), 11);
+        var toRight = svg.dataset.isHome !== '1';
 
-        plays.forEach(function(p, i) {
-            var y = FIELD_H - 6 - (i + 1) * step + (step - barH) / 2;
+        shown.forEach(function (p, i) {
+            var y = bottom - (i + 1) * step + (step - barH) / 2;
             var x = yardX(p.start_pct);
-            var w = Math.max((p.width_pct / 100) * FIELD_W, 8);
+            var w = Math.max((p.width_pct / 100) * FW, 6);
+            var g = el('g', { class: 'dv-play' });
 
-            var rect = svgEl('rect', { x: x, y: y, width: w, height: barH, rx: 3, fill: p.color, opacity: 0.9 });
-            if (p.is_scoring) {
-                rect.setAttribute('stroke', '#fff');
-                rect.setAttribute('stroke-width', 2);
-            }
-            rect.style.cursor = 'pointer';
-            rect.addEventListener('mouseover', function(e) {
-                rect.setAttribute('opacity', 1);
-                rect.setAttribute('stroke', '#fff');
-                rect.setAttribute('stroke-width', 2);
-                if (window.showDriveTooltip) window.showDriveTooltip(e, p.tooltip);
-            });
-            rect.addEventListener('mouseout', function() {
-                rect.setAttribute('opacity', 0.9);
-                if (!p.is_scoring) {
-                    rect.removeAttribute('stroke');
-                    rect.removeAttribute('stroke-width');
-                }
-                if (window.hideDriveTooltip) window.hideDriveTooltip();
-            });
-            svg.appendChild(rect);
+            // Clamp the radius to the bar's own half-width: a one-yard gain is
+            // ~9px wide, and a fixed barH/2 radius turned it into an ellipse
+            // that read as a stray dot rather than a short play.
+            var r = el('rect', { x: x, y: y, width: w, height: barH,
+                                 rx: Math.min(barH / 2, w / 2),
+                                 fill: p.is_scoring ? '#ffffff' : 'rgba(255,255,255,0.88)' });
+            if (p.is_scoring) { r.setAttribute('stroke', 'rgba(0,0,0,0.35)'); r.setAttribute('stroke-width', 1); }
+            g.appendChild(r);
 
-            if (w >= 24) {
-                var label = w < 45 ? (p.label || '').charAt(0) : p.label;
-                var txt = svgEl('text', { x: x + 4, y: y + barH / 2 + 4, 'font-size': 10, fill: 'white', 'font-weight': 600 });
-                txt.style.pointerEvents = 'none';
-                txt.textContent = label;
-                svg.appendChild(txt);
+            // The icon sits at the snap end of the bar — where the play began.
+            var ix = toRight ? x - barH * 1.14 : x + w + barH * 0.10;
+            if (p.kind === 'pass' || p.kind === 'rush') {
+                g.appendChild(icon(p.kind, ix, y + barH / 2 - barH * 0.52, barH * 1.04, toRight));
             }
+            svg.appendChild(g);
         });
     }
 
-    function renderLegend(container, plays) {
-        var colorByLabel = {};
-        var order = [];
-        plays.forEach(function(p) {
-            if (!(p.label in colorByLabel)) { colorByLabel[p.label] = p.color; order.push(p.label); }
-        });
-        container.innerHTML = '';
-        order.forEach(function(label) {
-            var item = document.createElement('div');
-            item.className = 'drive-legend-item';
-            var sw = document.createElement('span');
-            sw.className = 'drive-legend-swatch';
-            sw.style.background = colorByLabel[label];
-            var lbl = document.createElement('span');
-            lbl.textContent = label;
-            item.appendChild(sw);
-            item.appendChild(lbl);
-            container.appendChild(item);
-        });
-    }
-
-    document.querySelectorAll('.drive-field').forEach(function(svg) {
+    document.querySelectorAll('.dv-field').forEach(function (svg) {
         buildField(svg);
-        var dataEl = document.getElementById('drive-data-' + svg.dataset.driveId);
-        var plays = [];
-        try { plays = dataEl ? JSON.parse(dataEl.textContent) : []; } catch (e) { plays = []; }
-        renderPlays(svg, plays);
-        var legend = document.querySelector('.drive-legend[data-drive-id="' + svg.dataset.driveId + '"]');
-        if (legend) renderLegend(legend, plays);
+        var d = document.getElementById('dv-data-' + svg.dataset.driveId);
+        var data = {};
+        try { data = d ? JSON.parse(d.textContent) : {}; } catch (e) { data = {}; }
+        renderPlays(svg, data.plays || []);
+    });
+
+    /* ── The drive dialog ───────────────────────────────────────────────── */
+    var modal = document.getElementById('dvModal');
+    var titleEl = document.getElementById('dvModalTitle');
+    var subEl = document.getElementById('dvModalSub');
+    var listEl = document.getElementById('dvPlays');
+    var opener = null;
+
+    function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+        });
+    }
+
+    function open(id) {
+        var d = document.getElementById('dv-data-' + id);
+        if (!d) return;
+        var data = JSON.parse(d.textContent);
+        titleEl.textContent = data.team + ' — ' + (data.result || data.badge || 'Drive');
+        var bits = ['Q' + data.quarter + (data.clock ? ' · ' + data.clock : ''),
+                    data.plays_count + ' plays', data.yards + ' yards'];
+        if (data.time) bits.push(data.time);
+        subEl.textContent = bits.join('  ·  ');
+
+        listEl.innerHTML = (data.plays || []).map(function (p) {
+            var gain = p.yards > 0 ? '+' + p.yards : (p.yards < 0 ? String(p.yards) : '—');
+            var cls = p.is_scoring ? ' is-score' : (p.is_turnover ? ' is-turnover' : '');
+            return '<li class="dv-play-row' + cls + '">' +
+                '<span class="dv-p-down">' + esc(p.down_dist || '—') + '</span>' +
+                '<span class="dv-p-tag" data-kind="' + esc(p.kind) + '">' + esc(p.label) + '</span>' +
+                '<span class="dv-p-text">' + esc(p.text || p.tooltip) + '</span>' +
+                '<span class="dv-p-gain' + (p.yards > 0 ? ' is-pos' : (p.yards < 0 ? ' is-neg' : '')) + '">' +
+                    esc(gain) + '</span>' +
+                '</li>';
+        }).join('') || '<li class="dv-play-row"><span class="dv-p-text">No play detail for this drive.</span></li>';
+
+        opener = document.activeElement;
+        modal.hidden = false;
+        // Next frame so the transition has a start value to ease from.
+        requestAnimationFrame(function () { modal.classList.add('is-open'); });
+        document.body.style.overflow = 'hidden';
+        modal.querySelector('.dv-close').focus();
+        document.addEventListener('keydown', onKey);
+    }
+
+    function close() {
+        modal.classList.remove('is-open');
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', onKey);
+        var done = function () { modal.hidden = true; };
+        // Match the CSS duration; the guard covers a browser that fires nothing.
+        setTimeout(done, 200);
+        if (opener && opener.focus) opener.focus();
+    }
+
+    function onKey(e) {
+        if (e.key === 'Escape') { close(); return; }
+        if (e.key !== 'Tab') return;
+        // Focus stays inside the dialog while it owns the screen.
+        var f = modal.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])');
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    document.querySelectorAll('.dv-field-btn').forEach(function (b) {
+        b.addEventListener('click', function () { open(b.dataset.driveId); });
+    });
+    modal.querySelectorAll('[data-dv-close]').forEach(function (b) {
+        b.addEventListener('click', close);
     });
 })();
 </script>
