@@ -344,13 +344,12 @@ html {
    above the tracked-caps card titles under them (Passing Yards, etc.). */
 .slate-head .section-label {
     margin: 0;
-    font-size: var(--text-lg);
+    font-size: var(--text-xl);   /* both column heads match: Week results and Season Leaders sit on one row */
     font-weight: 750;
     letter-spacing: -0.01em;
     text-transform: none;
     color: var(--text-primary);
 }
-.slate-head-week .section-label { font-size: var(--text-xl); }
 .slate-head-note {
     /* Sits with the heading it qualifies, not flung to the far edge of an
        800px column by the head's space-between. */
