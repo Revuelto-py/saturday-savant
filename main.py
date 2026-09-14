@@ -5018,8 +5018,9 @@ def team(team_ref):
         # Weekly Savant snapshots (compute_savant_ratings writes one per cron
         # run in-season): the latest week labels the displayed rating as
         # "Through Week N", and the full series drives the within-season
-        # progression chart on the Trends tab. Seasons without snapshots
-        # (2016–2024) show neither — their end-of-season display is unchanged.
+        # progression chart on the Trends tab. Every season from 2016 has a
+        # full series now (backfill/backfill_savant_history.py), so the guard
+        # below is for a fresh database rather than for older seasons.
         # Week 20 is the postseason sentinel: the season is complete, so no
         # "through week" label applies.
         svr_week = None
