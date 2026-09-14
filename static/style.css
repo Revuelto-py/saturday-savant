@@ -340,8 +340,17 @@ html {
     margin-bottom: var(--s6);
     border-bottom: 1px solid var(--border-strong);
 }
-.slate-head-week .section-label { font-size: var(--text-md); }
-.slate-head .section-label { margin: 0; font-size: var(--text-sm); }
+/* The homepage's two section heads are headings, not labels: a clear step
+   above the tracked-caps card titles under them (Passing Yards, etc.). */
+.slate-head .section-label {
+    margin: 0;
+    font-size: var(--text-lg);
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--text-primary);
+}
+.slate-head-week .section-label { font-size: var(--text-xl); }
 .slate-head-note {
     /* Sits with the heading it qualifies, not flung to the far edge of an
        800px column by the head's space-between. */
@@ -3992,7 +4001,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
    leaderboard stats are centred, so they drop tabular alignment too; other
    tables keep it. */
 .ticker-score, .gc-score, .gh-score, .score, .leader-val, .team-hero-stats .sc-value,
-.bk-pts, .rvh-row-pts, .sf-score, .mu-score, .quarter-section td,
+.bk-pts, .rvh-row-pts, .sf-score, .mu-score, .data-table td.t-value,
 .standings-row td, .lb-td-stat, .lb-cell-v, .lb-cell-p, .lb-avgrow td, .lb-avgrow td * {
     font-variant-numeric: proportional-nums;
 }
