@@ -6278,14 +6278,25 @@ def game_detail(game_id):
                         if _aid:
                             _aid_name[_aid] = _ad.get('displayName', '')
             valid_player_ids, game_player_ids = set(), {}
+            # ESPN athlete id -> OUR mirrored headshot. The box score ships
+            # ESPN's own CDN URL for each athlete, and using it directly is why
+            # this page showed a different photo from the rest of the site for
+            # the same player: everywhere else reads players.headshot, which is
+            # the R2 mirror. Prefer the mirror here too so a player looks the
+            # same on every page; ESPN's URL stays as the fallback for anyone we
+            # have no row for.
+            mirror_by_aid = {}
             if _aid_name:
                 _vc = get_db()
                 try:
                     _vcur = _vc.cursor()
                     _il = [int(a) for a in _aid_name if a.isdigit()]
                     if _il:
-                        _vcur.execute('SELECT id FROM players WHERE id = ANY(%s)', (_il,))
-                        valid_player_ids |= {str(r[0]) for r in _vcur.fetchall()}
+                        _vcur.execute('SELECT id, headshot FROM players WHERE id = ANY(%s)', (_il,))
+                        for _r in _vcur.fetchall():
+                            valid_player_ids.add(str(_r[0]))
+                            if _r[1]:
+                                mirror_by_aid[str(_r[0])] = _r[1]
                     _vcur.execute('SELECT DISTINCT player_id FROM player_stats WHERE player_id = ANY(%s)',
                                   (list(_aid_name),))
                     valid_player_ids |= {r[0] for r in _vcur.fetchall()}
@@ -6318,16 +6329,18 @@ def game_detail(game_id):
                         ad = ae.get('athlete', {})
                         hs = ad.get('headshot')
                         aid = str(ad.get('id', ''))
+                        espn_hs = hs.get('href', '') if isinstance(hs, dict) else (hs or '')
+                        shot = mirror_by_aid.get(aid) or espn_hs
                         if aid and aid not in athlete_lookup:
                             athlete_lookup[aid] = {
                                 'name':     ad.get('displayName', ''),
-                                'headshot': hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
+                                'headshot': shot,
                                 'team':     t_name,
                             }
                         ath_name = ad.get('displayName', '')
                         athletes.append({
                             'name':      ath_name,
-                            'headshot':  hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
+                            'headshot':  shot,
                             'stats':     dict(zip(labels, ae.get('stats', []))),
                             'player_id': (aid if aid in valid_player_ids
                                           else name_to_player_id.get(ath_name.lower())),
@@ -6363,8 +6376,13 @@ def game_detail(game_id):
                         ath_name = info.get('name', '')
                         ath_hs   = info.get('headshot', '')
                     else:
+                        # Same rule as the box score above: our mirror first, so
+                        # the leaders panel and the player's own page show the
+                        # same face. ESPN's URL is the fallback.
+                        aid    = str(ath.get('id') or '') or _id_from_ref(ath, r'/athletes/(\d+)')
                         hs     = ath.get('headshot')
-                        ath_hs = hs.get('href', '') if isinstance(hs, dict) else (hs or '')
+                        ath_hs = (mirror_by_aid.get(aid)
+                                  or (hs.get('href', '') if isinstance(hs, dict) else (hs or '')))
                     team_obj  = leader.get('team') or {}
                     team_name = team_obj.get('displayName', '')
                     if not team_name:
@@ -6430,7 +6448,11 @@ def game_detail(game_id):
                                             pass
                                     best_entry = {
                                         'name':       ad.get('displayName', ''),
-                                        'headshot':   hs.get('href', '') if isinstance(hs, dict) else (hs or ''),
+                                        # Mirror first, ESPN as fallback — the
+                                        # third and last place this page sourced
+                                        # a face straight from the box score.
+                                        'headshot':   (mirror_by_aid.get(str(ad.get('id') or ''))
+                                                       or (hs.get('href', '') if isinstance(hs, dict) else (hs or ''))),
                                         'team':       t_name,
                                         'stat':       ' · '.join(dv_parts) or f"{yds} YDS",
                                         'is_home':    side == 'home',

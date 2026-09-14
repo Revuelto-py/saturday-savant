@@ -28,6 +28,19 @@
 # the transfer-portal windows, signing day, and the post-draft NFL update.
 
 set -euo pipefail
+
+# Eight steps below are deliberately non-fatal: a third-party hiccup must not
+# abort the chain and leave the week half-refreshed. The cost of that is that a
+# step can fail every week and say so in one line, 19 steps up, while the run
+# still ends "weekly pipeline complete" — which is how the headshot refresh
+# drifted to 3,379 stale images before anyone noticed. Failures are tallied and
+# reprinted at the end, so the last thing the log says is what went wrong.
+SOFT_FAILURES=""
+note_fail() {
+    SOFT_FAILURES="${SOFT_FAILURES}  - $1
+"
+    echo "  $1"
+}
 cd "$(dirname "$0")"
 
 PY="${PYTHON:-python3}"
@@ -39,14 +52,14 @@ $PY pipeline/fetch_data.py
 # `games`, so everything derived below (Savant snapshots, precompute, forecasts)
 # sees the corrected week. It runs again at the end for the tables written later.
 echo "── [2/19] label week 0 (apply_week_zero) ──"
-$PY pipeline/apply_week_zero.py || echo "  week 0 pass failed — weeks unchanged, continuing"
+$PY pipeline/apply_week_zero.py || note_fail "week 0 pass failed — weeks unchanged, continuing"
 # Player game logs. main.py caches these per player-season and only rebuilds one
 # when the cached copy predates the newest completed kickoff — refreshing them
 # here in bulk (~17 CFBD calls for the whole player base) keeps that rebuild out
 # of the request path, where it is ~13 blocking ESPN calls in a web worker.
 # Runs after the week-0 pass because it reads `games.week` for each entry.
 echo "── [3/19] player game logs, active season (backfill_game_logs) ──"
-$PY backfill/backfill_game_logs.py --current || echo "  game-log refresh failed — logs rebuild lazily, continuing"
+$PY backfill/backfill_game_logs.py --current || note_fail "game-log refresh failed — logs rebuild lazily, continuing"
 echo "── [4/19] team stats (fetch_team_stats) ──"
 $PY pipeline/fetch_team_stats.py
 echo "── [5/19] advanced team stats (fetch_advanced) ──"
@@ -58,7 +71,7 @@ $PY pipeline/fetch_rankings.py
 echo "── [8/19] head coaches, current season (fetch_coaches) ──"
 # Supplementary (team-page hero only) and CFBD publishes the new season late, so
 # a failure/empty response must not abort the pipeline — keep going regardless.
-$PY pipeline/fetch_coaches.py || echo "  coach fetch failed — non-critical, continuing"
+$PY pipeline/fetch_coaches.py || note_fail "coach fetch failed — non-critical, continuing"
 echo "── [9/19] team rosters, current season (fetch_2026_roster) ──"
 # Rosters churn all season (injuries, dismissals, mid-year departures), and this
 # is what removes a departed player: Trebor Pena sat on Penn State's roster
@@ -67,14 +80,14 @@ echo "── [9/19] team rosters, current season (fetch_2026_roster) ──"
 # headshots are fetched per active player — so a newcomer picked up here gets a
 # rating and a photo in the same run. Non-fatal, and it aborts internally
 # rather than writing a partial roster if CFBD drops teams mid-fetch.
-$PY pipeline/fetch_2026_roster.py || echo "  roster fetch failed — keeping last week's roster, continuing"
+$PY pipeline/fetch_2026_roster.py || note_fail "roster fetch failed — keeping last week's roster, continuing"
 echo "── [10/19] EA ratings, starter-model input (fetch_ea_ratings) ──"
 # Internal-only signal for lineup/starter selection, never displayed. EA
 # publishes roster updates through the season, so a stale table quietly means
 # wrong starters. Non-fatal by design: it scrapes a third-party page, and the
 # script refuses to overwrite on a short/blocked fetch (EA_MIN_ROWS), so the
 # worst case is last week's ratings — not a broken pipeline.
-$PY pipeline/fetch_ea_ratings.py || echo "  EA ratings fetch failed — keeping previous ratings, continuing"
+$PY pipeline/fetch_ea_ratings.py || note_fail "EA ratings fetch failed — keeping previous ratings, continuing"
 echo "── [11/19] player headshots, current roster (refresh_headshots) ──"
 # Only the current roster: historical images change ~1% a year against ~47% for
 # the roster at a season's photo drop, so the weekly pass sweeps 15k players
@@ -82,7 +95,7 @@ echo "── [11/19] player headshots, current roster (refresh_headshots) ──
 # mirror — this container has none), so it moves bytes only where a photo
 # actually changed. Non-fatal: a CDN hiccup leaves last week's images, which is
 # a stale photo, not a broken page.
-$PY pipeline/refresh_headshots.py --active-only || echo "  headshot refresh failed — keeping existing images, continuing"
+$PY pipeline/refresh_headshots.py --active-only || note_fail "headshot refresh failed — keeping existing images, continuing"
 echo "── [12/19] game summaries / drives (fetch_game_summaries) ──"
 $PY pipeline/fetch_game_summaries.py
 # Play-level passing (air yards / pass location / YAC). Sits after the box-score
@@ -90,7 +103,7 @@ $PY pipeline/fetch_game_summaries.py
 # Non-fatal: these feed additive charts that nothing downstream reads, so a CFBD
 # hiccup here must not abort the ratings and precompute below.
 echo "── [13/19] play-level passing: air yards / location / YAC (fetch_passing) ──"
-$PY pipeline/fetch_passing.py || echo "  (passing fetch failed — charts keep last week's data)"
+$PY pipeline/fetch_passing.py || note_fail "(passing fetch failed — charts keep last week's data)"
 echo "── [14/19] Savant ratings (compute_savant_ratings) ──"
 $PY pipeline/compute_savant_ratings.py --write   # --write persists; without it the script only dry-runs
 echo "── [15/19] percentile peer pools (backfill_pools) ──"
@@ -105,6 +118,14 @@ $PY pipeline/predict_games.py
 # of the week and are written above from CFBD, which calls a Week 0 game week 1
 # — so they need relabelling after those steps, not before.
 echo "── [19/19] label week 0 in the tables written since (apply_week_zero) ──"
-$PY pipeline/apply_week_zero.py || echo "  week 0 pass failed — weeks unchanged, continuing"
+$PY pipeline/apply_week_zero.py || note_fail "week 0 pass failed — weeks unchanged, continuing"
 
-echo "weekly pipeline complete"
+if [ -n "$SOFT_FAILURES" ]; then
+    echo ""
+    echo "================================================================"
+    echo "weekly pipeline complete — BUT WITH NON-FATAL FAILURES:"
+    printf "%s" "$SOFT_FAILURES"
+    echo "================================================================"
+else
+    echo "weekly pipeline complete — all steps clean"
+fi
