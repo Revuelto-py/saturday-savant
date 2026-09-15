@@ -41,7 +41,7 @@
 
 {% block content %}
 <!-- HERO -->
-<div class="player-hero{{ ' has-phb' if (player.nfl_status or transfers_history or honors) }}" style="
+<div class="player-hero" style="
     background: linear-gradient(135deg, {{ c1 }} 0%, #0a0b0d 50%, {{ c2 }}88 100%);
     position: relative; overflow: hidden; min-height: 200px;
     border-bottom: 1px solid var(--border);">
@@ -251,63 +251,74 @@
         </div>
     </div>
 
-    {% if player.nfl_status or transfers_history or honors %}
-    {# One glass card in the hero's corner, not a stack of separate pills:
-       awards grouped by season with short names (each explains itself on
-       hover, tap or focus), then transfers, then the NFL outcome. #}
-    <aside class="ph-hero-badges" aria-label="Career">
-      <div class="phb">
-        {% if honors %}
-        <div class="phb-sec phb-awards">
-            {% for y in honors.years %}
-            <div class="phb-year">
-                <span class="phb-yr">{{ y.season }}</span>
-                <span class="phb-chips">
-                {% for a in y.awards %}
-                <button type="button" class="phb-award{{ ' is-major' if a.rank <= 3 }}" aria-describedby="phb-tip-{{ y.season }}-{{ loop.index }}">
-                    <svg class="ab-trophy" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
-                    {{ a.short }}
-                    {% if a.desc %}<span class="phb-tip" role="tooltip" id="phb-tip-{{ y.season }}-{{ loop.index }}"><b>{{ a.name }}</b>{{ a.desc }}</span>{% endif %}
-                </button>
-                {% endfor %}
-                </span>
+    {% if player.nfl_status or transfers_history or player_awards %}
+    {# Compact status badges — awards, transfer history, and NFL draft status
+       share the same bottom-right band so none pushes the hero content around #}
+    <div class="ph-hero-badges">
+        {% if player_awards %}
+        {# Wrapping cluster, not one chip per row — award sweeps (6-7 trophies
+           in a season) must not push the badge band above the hero. #}
+        <div class="award-badge-cluster">
+            {% for aw in player_awards %}
+            <div class="award-badge" title="{{ aw.award }} · {{ aw.season }}">
+                <svg class="ab-trophy" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
+                <span>{{ aw.award }}</span>
+                <span class="ab-year">{{ aw.season }}</span>
             </div>
             {% endfor %}
         </div>
         {% endif %}
-
-        {% if transfers_history %}
-        <div class="phb-sec phb-transfers">
-            <span class="phb-k">Transfer</span>
-            <span class="phb-path">
-            {% for t in transfers_history %}
-                {% if loop.first %}
-                {% set ol = transfer_team_logos.get(t.origin) %}
-                <span class="phb-team">{% if ol %}<img src="{{ ol }}" alt="" width="18" height="18" loading="lazy">{% endif %}{{ team_abbrevs.get(t.origin, t.origin) }}</span>
-                {% endif %}
-                {% set dl = transfer_team_logos.get(t.destination) %}
-                <span class="phb-arrow" aria-label="to"></span>
-                <span class="phb-team">{% if dl %}<img src="{{ dl }}" alt="" width="18" height="18" loading="lazy">{% endif %}{{ team_abbrevs.get(t.destination, t.destination) }}<span class="phb-sub">{{ t.year }}{% if t.stars > 0 %} · {{ t.stars }}&#9733;{% endif %}</span></span>
-            {% endfor %}
-            </span>
+        {% for t in transfers_history %}
+        <div class="transfer-badge" title="{{ t.origin }} → {{ t.destination }} · {{ t.year }}">
+            <span class="tb-label">Transfer</span>
+            {% set origin_logo = transfer_team_logos.get(t.origin) %}
+            {% if origin_logo %}<img src="{{ origin_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" alt="{{ t.origin }}">{% endif %}
+            <span>{{ team_abbrevs.get(t.origin, t.origin) }}</span>
+            <span style="color: var(--text-secondary)">&#x2192;</span>
+            {% set dest_logo = transfer_team_logos.get(t.destination) %}
+            {% if dest_logo %}<img src="{{ dest_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" alt="{{ t.destination }}">{% endif %}
+            <span>{{ team_abbrevs.get(t.destination, t.destination) }}</span>
+            <span style="color: var(--text-secondary)">&middot;</span>
+            <span>{{ t.year }}</span>
+            {% if t.stars > 0 %}<span style="color:var(--gold)">{{ '★' * t.stars }}</span>{% endif %}
         </div>
-        {% endif %}
+        {% endfor %}
 
-        {% if player.nfl_status in ('drafted', 'udfa', 'graduated') %}
-        <div class="phb-sec phb-nfl">
-            {% if player.nfl_status == 'graduated' %}
-            <span class="phb-k">Status</span><b>Graduated</b>
-            {% else %}
-            {% if player.nfl_team_logo %}<img src="{{ player.nfl_team_logo }}" alt="" width="26" height="26" loading="lazy">{% endif %}
-            <span>
-                <b>{% if player.nfl_status == 'drafted' %}Round {{ player.draft_round }}, Pick {{ player.draft_pick }}{% else %}Undrafted free agent{% endif %} · {{ player.nfl_team }}</b>
-                <span class="phb-sub">{% if player.nfl_status == 'drafted' %}{{ player.draft_year }} NFL Draft{% else %}Signed as UDFA{% endif %}</span>
-            </span>
+        {% if player.nfl_status %}
+        <div class="nfl-status-badge d-flex align-items-center gap-2">
+            {% if player.nfl_status == 'drafted' %}
+                {% if player.nfl_team_logo %}
+                <img src="{{ player.nfl_team_logo }}" alt="{{ player.nfl_team }} logo" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
+                {% endif %}
+                <div>
+                    <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
+                        Round {{ player.draft_round }}, Pick {{ player.draft_pick }} · {{ player.nfl_team }}
+                    </div>
+                    <div style="font-size: var(--text-xs);color: var(--text-secondary)">
+                        {{ player.draft_year }} NFL Draft
+                    </div>
+                </div>
+
+            {% elif player.nfl_status == 'udfa' %}
+                {% if player.nfl_team_logo %}
+                <img src="{{ player.nfl_team_logo }}" alt="{{ player.nfl_team }} logo" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
+                {% endif %}
+                <div>
+                    <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
+                        UDFA · {{ player.nfl_team }}
+                    </div>
+                    <div style="font-size: var(--text-xs);color: var(--text-secondary)">
+                        Undrafted Free Agent
+                    </div>
+                </div>
+
+            {% elif player.nfl_status == 'graduated' %}
+                <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">Graduated</div>
+
             {% endif %}
         </div>
         {% endif %}
-      </div>
-    </aside>
+    </div>
     {% endif %}
 </div>
 
