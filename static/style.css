@@ -9102,3 +9102,142 @@ a.tt-name:active { opacity: 0.8; }
 @media (prefers-reduced-motion: reduce) {
     .tt-row, .tt-team { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GAME PREVIEW — projected starters, head to head
+   Under the team percentiles on an upcoming game. Each row is one position:
+   the away starter on the left (reading toward the centre), the position in
+   the middle, the home starter on the right. Same order as the Starters tab's
+   list: offense QB → line, defense front → secondary.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.gps { margin-top: var(--s8); }
+.gps-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--s3);
+    padding-bottom: var(--s3);
+    margin-bottom: var(--s2);
+    border-bottom: 1px solid var(--border-strong);
+}
+.gps-title {
+    margin: 0;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 750;
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    text-align: center;
+}
+.gps-team { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.gps-team-h { justify-content: flex-end; }
+.gps-team img { flex-shrink: 0; object-fit: contain; }
+.gps-team b {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 750;
+    font-size: var(--text-base);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.gps-unit + .gps-unit { margin-top: var(--s5); }
+.gps-unit-k {
+    margin: var(--s3) 0 var(--s2);
+    text-align: center;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.gps-rows { list-style: none; margin: 0; padding: 0; }
+.gps-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--s3);
+    padding: 4px 0;
+}
+.gps-row + .gps-row { box-shadow: inset 0 1px 0 var(--border); }
+
+.gps-p {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 52px;
+    padding: 6px 10px;
+    border-radius: var(--r-md);
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: background-color 150ms ease-out;
+}
+/* Away reads toward the centre: photo on the outside, text against the position. */
+.gps-p-a { flex-direction: row-reverse; text-align: right; }
+a.gps-p:hover { background: rgba(255,255,255,0.05); }
+a.gps-p:hover .gps-name { color: var(--accent); }
+a.gps-p:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+a.gps-p:active { background: rgba(255,255,255,0.09); }
+.gps-p.is-open .gps-name { color: var(--text-secondary); font-weight: 600; }
+
+.gps-photo {
+    flex-shrink: 0;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--bg-subtle);
+    box-shadow: 0 0 0 1px var(--border-strong);
+}
+.gps-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.gps-init {
+    width: 100%; height: 100%;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 800;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.gps-who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.gps-name {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: var(--text-base);
+    line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: color 150ms ease-out;
+}
+.gps-num { font-weight: 600; font-size: 0.75rem; color: var(--text-secondary); }
+.gps-line {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-variant-numeric: proportional-nums;
+}
+.gps-pos {
+    justify-self: center;
+    min-width: 40px;
+    padding: 2px 6px;
+    border-radius: var(--r-pill);
+    text-align: center;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 800;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+.gps-pos-o { background: #0c2a44; color: #9ad4ff; border: 1px solid rgba(28,156,240,0.55); }
+.gps-pos-d { background: #22252c; color: #e7e9ea; border: 1px solid rgba(255,255,255,0.28); }
+
+/* Phones: keep the mirror, drop the stat line and photo size so both names fit. */
+@media (max-width: 599.98px) {
+    .gps-row { grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 4px; }
+    .gps-p { gap: 6px; padding: 6px 4px; min-height: 48px; }
+    .gps-photo { width: 28px; height: 28px; }
+    .gps-name { font-size: var(--text-sm); }
+    .gps-num { display: none; }
+    .gps-line { font-size: 0.6875rem; }
+    .gps-pos { min-width: 34px; padding: 2px 4px; font-size: 0.6875rem; }
+    .gps-title { font-size: var(--text-base); }
+    .gps-team b { font-size: var(--text-sm); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gps-p, .gps-name { transition: none; }
+}

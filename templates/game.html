@@ -519,6 +519,59 @@
             <span class="gpx-key"><i class="p2"></i>average</span>
             <span class="gpx-key"><i class="p4"></i>great.</span>
         </p>
+
+        {# ── Projected starters, position against position ── #}
+        {% if starters and starters.away and starters.home %}
+        {% macro gps_side(p, side, pos) %}
+            {% if p %}
+            <a class="gps-p gps-p-{{ side }}" href="{{ player_url(p.idx, game_season) }}"
+               aria-label="{{ p.first }} {{ p.name }}, {{ away_team if side == 'a' else home_team }} {{ pos }}{{ ', ' ~ (p.line or p.year) if (p.line or p.year) else '' }}">
+                <span class="gps-photo">
+                    {% if p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" decoding="async" width="36" height="36">
+                    {% else %}<span class="gps-init" aria-hidden="true">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</span>{% endif %}
+                </span>
+                <span class="gps-who" aria-hidden="true">
+                    <span class="gps-name">{{ p.name }}{% if p.jersey %} <span class="gps-num">#{{ p.jersey }}</span>{% endif %}</span>
+                    <span class="gps-line">{{ p.line or p.year or '' }}</span>
+                </span>
+            </a>
+            {% else %}
+            <span class="gps-p gps-p-{{ side }} is-open"><span class="gps-who"><span class="gps-name">Open</span></span></span>
+            {% endif %}
+        {% endmacro %}
+
+        <div class="gps" id="starters" aria-labelledby="gps-h">
+            <header class="gps-head">
+                <span class="gps-team">
+                    {% if game[10] %}<img src="{{ game[10] }}" alt="" width="24" height="24" loading="lazy">{% endif %}
+                    <b>{{ away_team }}</b>
+                </span>
+                <h3 class="gps-title" id="gps-h">Projected starters</h3>
+                <span class="gps-team gps-team-h">
+                    <b>{{ home_team }}</b>
+                    {% if game[9] %}<img src="{{ game[9] }}" alt="" width="24" height="24" loading="lazy">{% endif %}
+                </span>
+            </header>
+
+            {% for unit, slots in [
+                ('Offense', ['QB','RB','WR1','WR2','WR3','TE','LT','LG','C','RG','RT']),
+                ('Defense', ['DE1','DT1','DT2','DE2','LB1','LB2','LB3','CB1','CB2','S1','S2']) ] %}
+            <section class="gps-unit" aria-label="{{ unit }}">
+                <h4 class="gps-unit-k">{{ unit }}</h4>
+                <ul class="gps-rows" role="list">
+                    {% for slot in slots %}
+                    {% set pos = slot | replace('1','') | replace('2','') | replace('3','') %}
+                    <li class="gps-row">
+                        {{ gps_side(starters.away.get(slot), 'a', pos) }}
+                        <span class="gps-pos gps-pos-{{ 'o' if unit == 'Offense' else 'd' }}">{{ pos }}</span>
+                        {{ gps_side(starters.home.get(slot), 'h', pos) }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </section>
+            {% endfor %}
+        </div>
+        {% endif %}
     </section>
     {% endif %}
 

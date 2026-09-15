@@ -1618,6 +1618,36 @@ def project_starters(cursor, team_name, roster):
     return lineup, {'season': prod_season, 'games': games}
 
 
+@cache.memoize(timeout=21600)
+def _game_starters(team, season):
+    """Projected starting lineup for one side of an upcoming game.
+
+    Same projection as the team page's Starters tab (project_starters: talent
+    grades blended with the season's production), so the game preview and the
+    team page never disagree about who starts. {} when the team has no roster
+    for the season (e.g. an FCS opponent).
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot, "
+            "       r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0) "
+            "FROM rosters r JOIN players p ON p.id = r.player_id "
+            "WHERE r.team = %s AND r.season = %s",
+            (team, season))
+        roster = cur.fetchall()
+        if not roster:
+            return {}
+        lineup, _meta = project_starters(cur, team, roster)
+        return lineup
+    except Exception:
+        conn.rollback()
+        return {}
+    finally:
+        release_db(conn)
+
+
 def build_lineup(roster, starter_scores=None, ea_pos=None):
     """Slot the highest-scoring available player into each formation spot.
     `starter_scores` comes from compute_starter_scores(); absent, everyone
@@ -6076,6 +6106,10 @@ def game_detail(game_id):
             market=_game_market(game_id),
             preview={'away': _preview_team(away_team, game_season),
                      'home': _preview_team(home_team, game_season)},
+            # Projected starters for both sides, position against position. Only
+            # FBS teams have a projection; an FCS opponent leaves the block out.
+            starters={'away': _game_starters(away_team, game_season) if away_is_fbs else {},
+                      'home': _game_starters(home_team, game_season) if home_is_fbs else {}},
             # The stacked mobile comparison loses the left/right mapping the
             # mirrored desktop rows carry, so each row states its own side.
             # teams.abbreviation is what the ticker already uses.
