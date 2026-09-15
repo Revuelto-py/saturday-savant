@@ -9110,7 +9110,7 @@ a.tt-name:active { opacity: 0.8; }
    the middle, the home starter on the right. Same order as the Starters tab's
    list: offense QB → line, defense front → secondary.
    ═══════════════════════════════════════════════════════════════════════════ */
-.gps { margin-top: var(--s8); }
+.gps { margin: var(--s8) auto 0; max-width: 880px; }   /* the mirror reads toward the centre; full width left team names far from their players */
 .gps-head {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
