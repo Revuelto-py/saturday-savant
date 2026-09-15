@@ -249,77 +249,87 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    {% if player.nfl_status or transfers_history or player_awards %}
-    {# Compact status badges — awards, transfer history, and NFL draft status
-       share the same bottom-right band so none pushes the hero content around #}
-    <div class="ph-hero-badges">
-        {% if player_awards %}
-        {# Wrapping cluster, not one chip per row — award sweeps (6-7 trophies
-           in a season) must not push the badge band above the hero. #}
-        <div class="award-badge-cluster">
-            {% for aw in player_awards %}
-            <div class="award-badge" title="{{ aw.award }} · {{ aw.season }}">
-                <svg class="ab-trophy" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
-                <span>{{ aw.award }}</span>
-                <span class="ab-year">{{ aw.season }}</span>
+        {% if honors or transfers_history or player.nfl_status %}
+        {# One band under the stats instead of a pile in the corner: awards
+           grouped by season with a panel explaining the selected award, then
+           the transfer path and the NFL outcome. #}
+        <div class="phc{{ ' phc--honors' if honors }}">
+            {% if honors %}
+            <section class="phc-group phc-awards" aria-labelledby="phc-aw-h">
+                <h2 class="phc-k" id="phc-aw-h">Awards <span class="phc-count">{{ honors.count }}</span></h2>
+                <div class="phc-years">
+                    {% for y in honors.years %}
+                    <div class="phc-year">
+                        <span class="phc-yr">{{ y.season }}</span>
+                        <span class="phc-chips">
+                        {% for a in y.awards %}
+                        {% set on = a.name == honors.featured.name and a.season == honors.featured.season %}
+                        <button type="button" class="phc-chip{{ ' is-major' if a.rank <= 3 }}" aria-pressed="{{ 'true' if on else 'false' }}" aria-controls="phc-detail"
+                                data-name="{{ a.name }}" data-season="{{ a.season }}" data-desc="{{ a.desc }}">
+                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
+                            {{ a.short }}
+                        </button>
+                        {% endfor %}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p class="phc-detail" id="phc-detail" aria-live="polite">
+                    <b class="phc-d-name">{{ honors.featured.name }} &middot; {{ honors.featured.season }}</b>
+                    <span class="phc-d-desc">{{ honors.featured.desc }}</span>
+                </p>
+            </section>
+            {% endif %}
+
+            {% if transfers_history or player.nfl_status in ('drafted', 'udfa', 'graduated') %}
+            <div class="phc-side">
+                {% if transfers_history %}
+                <section class="phc-group phc-path" aria-labelledby="phc-path-h">
+                    <h2 class="phc-k" id="phc-path-h">{{ 'Transfer' if transfers_history|length == 1 else 'Transfers' }}</h2>
+                    <ol class="phc-steps" role="list">
+                        {% for t in transfers_history %}
+                        {% if loop.first %}
+                        {% set ol = transfer_team_logos.get(t.origin) %}
+                        <li class="phc-step">
+                            {% if ol %}<img src="{{ ol }}" alt="" width="22" height="22" loading="lazy">{% endif %}
+                            <span class="phc-team">{{ team_abbrevs.get(t.origin, t.origin) }}</span>
+                        </li>
+                        {% endif %}
+                        {% set dl = transfer_team_logos.get(t.destination) %}
+                        <li class="phc-step">
+                            <span class="phc-arrow" aria-hidden="true"></span>
+                            {% if dl %}<img src="{{ dl }}" alt="" width="22" height="22" loading="lazy">{% endif %}
+                            <span class="phc-team"><span class="sr-only">to </span>{{ team_abbrevs.get(t.destination, t.destination) }}</span>
+                            <span class="phc-when">{{ t.year }}{% if t.stars > 0 %} · {{ t.stars }}-star{% endif %}</span>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                </section>
+                {% endif %}
+
+                {% if player.nfl_status in ('drafted', 'udfa') %}
+                <section class="phc-group phc-nfl" aria-labelledby="phc-nfl-h">
+                    <h2 class="phc-k" id="phc-nfl-h">NFL</h2>
+                    <div class="phc-nfl-row">
+                        {% if player.nfl_team_logo %}<img src="{{ player.nfl_team_logo }}" alt="" width="30" height="30" loading="lazy">{% endif %}
+                        <span>
+                            <b>{% if player.nfl_status == 'drafted' %}Round {{ player.draft_round }}, Pick {{ player.draft_pick }}{% else %}Undrafted free agent{% endif %}</b>
+                            <span class="phc-when">{{ player.nfl_team }}{% if player.nfl_status == 'drafted' and player.draft_year %} · {{ player.draft_year }} NFL Draft{% endif %}</span>
+                        </span>
+                    </div>
+                </section>
+                {% elif player.nfl_status == 'graduated' %}
+                <section class="phc-group phc-nfl" aria-label="Status">
+                    <h2 class="phc-k">Status</h2>
+                    <div class="phc-nfl-row"><b>Graduated</b></div>
+                </section>
+                {% endif %}
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        {% for t in transfers_history %}
-        <div class="transfer-badge" title="{{ t.origin }} → {{ t.destination }} · {{ t.year }}">
-            <span class="tb-label">Transfer</span>
-            {% set origin_logo = transfer_team_logos.get(t.origin) %}
-            {% if origin_logo %}<img src="{{ origin_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" alt="{{ t.origin }}">{% endif %}
-            <span>{{ team_abbrevs.get(t.origin, t.origin) }}</span>
-            <span style="color: var(--text-secondary)">&#x2192;</span>
-            {% set dest_logo = transfer_team_logos.get(t.destination) %}
-            {% if dest_logo %}<img src="{{ dest_logo }}" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" alt="{{ t.destination }}">{% endif %}
-            <span>{{ team_abbrevs.get(t.destination, t.destination) }}</span>
-            <span style="color: var(--text-secondary)">&middot;</span>
-            <span>{{ t.year }}</span>
-            {% if t.stars > 0 %}<span style="color:var(--gold)">{{ '★' * t.stars }}</span>{% endif %}
-        </div>
-        {% endfor %}
-
-        {% if player.nfl_status %}
-        <div class="nfl-status-badge d-flex align-items-center gap-2">
-            {% if player.nfl_status == 'drafted' %}
-                {% if player.nfl_team_logo %}
-                <img src="{{ player.nfl_team_logo }}" alt="{{ player.nfl_team }} logo" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
-                {% endif %}
-                <div>
-                    <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
-                        Round {{ player.draft_round }}, Pick {{ player.draft_pick }} · {{ player.nfl_team }}
-                    </div>
-                    <div style="font-size: var(--text-xs);color: var(--text-secondary)">
-                        {{ player.draft_year }} NFL Draft
-                    </div>
-                </div>
-
-            {% elif player.nfl_status == 'udfa' %}
-                {% if player.nfl_team_logo %}
-                <img src="{{ player.nfl_team_logo }}" alt="{{ player.nfl_team }} logo" style="width:24px;height:24px;object-fit:contain;flex-shrink:0">
-                {% endif %}
-                <div>
-                    <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">
-                        UDFA · {{ player.nfl_team }}
-                    </div>
-                    <div style="font-size: var(--text-xs);color: var(--text-secondary)">
-                        Undrafted Free Agent
-                    </div>
-                </div>
-
-            {% elif player.nfl_status == 'graduated' %}
-                <div style="font-size: var(--text-xs);color: var(--text-primary);font-weight:600">Graduated</div>
-
             {% endif %}
         </div>
         {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <!-- MAIN CONTENT -->
@@ -887,4 +897,37 @@
 </div><!-- /page-wrapper -->
 </div><!-- /content bg -->
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Awards band: selecting a trophy explains it in the detail line. Hover
+   previews on fine pointers; click, tap or keyboard focus selects. */
+(function () {
+    var band = document.querySelector('.phc-awards');
+    if (!band) return;
+    var chips = [].slice.call(band.querySelectorAll('.phc-chip'));
+    var nameEl = band.querySelector('.phc-d-name');
+    var descEl = band.querySelector('.phc-d-desc');
+    var selected = band.querySelector('.phc-chip[aria-pressed="true"]') || chips[0];
+    function show(chip) {
+        nameEl.textContent = chip.dataset.name + ' \u00b7 ' + chip.dataset.season;
+        descEl.textContent = chip.dataset.desc;
+    }
+    function select(chip) {
+        selected = chip;
+        chips.forEach(function (c) { c.setAttribute('aria-pressed', c === chip ? 'true' : 'false'); });
+        show(chip);
+    }
+    var canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    chips.forEach(function (chip) {
+        chip.addEventListener('click', function () { select(chip); });
+        chip.addEventListener('focus', function () { select(chip); });
+        if (canHover) {
+            chip.addEventListener('mouseenter', function () { show(chip); });
+            chip.addEventListener('mouseleave', function () { show(selected); });
+        }
+    });
+})();
+</script>
 {% endblock %}

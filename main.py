@@ -7476,6 +7476,53 @@ def get_game_passing_profile(game_id):
 class _SkipGameLog(Exception):
     """Control-flow: game log already loaded from the Postgres store."""
 
+# ── Award glossary ──────────────────────────────────────────────────────────
+# For the player hero's Awards band: a short chip label, a prestige order (so a
+# Heisman leads a season's sweep), and one sentence on what the award honours.
+AWARD_INFO = {
+    'Heisman Trophy':          ('Heisman', 1, "College football's most famous individual honor, given each year to the sport's most outstanding player and voted on by media members and past winners."),
+    'Maxwell Award':           ('Maxwell', 2, "National player of the year, presented by the Maxwell Football Club."),
+    'Walter Camp Award':       ('Walter Camp', 3, "National player of the year, chosen by FBS head coaches and sports information directors."),
+    "Davey O'Brien Award":     ("Davey O'Brien", 4, "Given to the nation's best quarterback."),
+    'Unitas Golden Arm Award': ('Golden Arm', 5, "Given to the top upperclass quarterback, weighing character and leadership alongside play on the field."),
+    'Doak Walker Award':       ('Doak Walker', 6, "Given to the nation's best running back."),
+    'Biletnikoff Award':       ('Biletnikoff', 7, "Given to the nation's most outstanding pass catcher, whatever his position."),
+    'Mackey Award':            ('Mackey', 8, "Given to the nation's best tight end."),
+    'Outland Trophy':          ('Outland', 9, "Given to the nation's best interior lineman, on offense or defense."),
+    'Rimington Trophy':        ('Rimington', 10, "Given to the nation's best center."),
+    'Lombardi Award':          ('Lombardi', 11, "Given to the nation's top lineman or linebacker."),
+    'Bednarik Award':          ('Bednarik', 12, "National defensive player of the year, presented by the Maxwell Football Club."),
+    'Nagurski Trophy':         ('Nagurski', 13, "National defensive player of the year, chosen by the Football Writers Association of America."),
+    'Butkus Award':            ('Butkus', 14, "Given to the nation's best linebacker."),
+    'Thorpe Award':            ('Thorpe', 15, "Given to the nation's best defensive back."),
+    'Hendricks Award':         ('Hendricks', 16, "Given to the nation's best defensive end."),
+    'Lott IMPACT Trophy':      ('Lott IMPACT', 17, "Honors a defensive standout for Integrity, Maturity, Performance, Academics, Community and Tenacity, as much for character as for play."),
+    'Paul Hornung Award':      ('Hornung', 18, "Given to the most versatile player in major college football, one who contributes at more than one position or on special teams."),
+    'Lou Groza Award':         ('Lou Groza', 19, "Given to the nation's best placekicker."),
+    'Ray Guy Award':           ('Ray Guy', 20, "Given to the nation's best punter."),
+    'Campbell Trophy':         ('Campbell', 21, "Known as the academic Heisman: honors the top scholar-athlete, weighing academics and community leadership alongside play."),
+}
+
+
+def player_honors(awards):
+    """Group a player's awards by season (newest first, most prestigious first
+    within a season) and pick the one the hero explains by default."""
+    if not awards:
+        return None
+    by_year = {}
+    flat = []
+    for a in awards:
+        short, rank, desc = AWARD_INFO.get(a['award'], (a['award'], 99, ''))
+        item = {'name': a['award'], 'short': short, 'rank': rank,
+                'desc': desc, 'season': a['season']}
+        by_year.setdefault(a['season'], []).append(item)
+        flat.append(item)
+    years = [{'season': y, 'awards': sorted(v, key=lambda x: (x['rank'], x['name']))}
+             for y, v in sorted(by_year.items(), reverse=True)]
+    featured = min(flat, key=lambda x: (x['rank'], -x['season']))
+    return {'count': len(flat), 'years': years, 'featured': featured}
+
+
 @app.route('/player/<int:player_id>')
 def player_detail(player_id):
     # Which season a bare /player/<id> opens on — this is what search results,
@@ -7680,6 +7727,7 @@ def _player_detail_cached(player_id, season):
             ORDER BY season, award
         ''', (player_id,))
         player_awards = [{'award': a, 'season': s} for a, s in cursor.fetchall()]
+        honors = player_honors(player_awards)
 
         # Every team this player has recorded player_stats under — may differ
         # from players.team (their current/latest team) if they transferred.
@@ -8182,6 +8230,7 @@ def _player_detail_cached(player_id, season):
         draft_status=draft_status,
         transfers_history=transfers_history,
         player_awards=player_awards,
+        honors=honors,
         previous_stat_teams=previous_stat_teams,
         transfer_team_logos=transfer_team_logos,
         team_abbrevs=team_abbrevs,
