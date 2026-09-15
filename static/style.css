@@ -9224,126 +9224,149 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PLAYER HERO — career band
-   Awards, transfers and the NFL outcome used to stack in the hero's corner and
-   crowd it for decorated players. They now sit in one band under the stats:
-   awards grouped by season with a line explaining the selected award, then
-   the transfer path and draft result in a narrower side column.
+   PLAYER HERO — career card (corner)
+   Replaces the stack of separate award / transfer / draft pills with one
+   glass card in the same bottom-right spot. Awards group by season with short
+   names; each reveals what it honours on hover, tap or keyboard focus.
    ═══════════════════════════════════════════════════════════════════════════ */
-.phc {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s4) var(--s8);
-    padding-block: var(--s4) var(--s5);
-    border-top: 1px solid rgba(255,255,255,0.12);
+.phb {
+    width: min(400px, 100%);
+    background: rgba(8, 9, 11, 0.62);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--r-lg);
+    box-shadow: 0 16px 40px -18px rgba(0,0,0,0.8);
+    overflow: visible;
 }
-.phc--honors { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); }
-.phc--honors:not(:has(.phc-side)) { grid-template-columns: minmax(0, 1fr); }
-.phc-side { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
-.phc:not(.phc--honors) .phc-side { flex-direction: row; flex-wrap: wrap; gap: var(--s4) var(--s8); }
-.phc-group { min-width: 0; }
-.phc-k {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 8px;
+.phb-sec { padding: 10px 14px; }
+.phb-sec + .phb-sec { border-top: 1px solid rgba(255,255,255,0.09); }
+.phb-k {
+    flex-shrink: 0;
     font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-weight: 700;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: rgba(255,255,255,0.78);
+    color: rgba(255,255,255,0.7);
 }
-.phc-count {
-    padding: 0 7px;
-    border-radius: var(--r-pill);
-    background: rgba(255,255,255,0.12);
-    font-size: 0.6875rem;
-    letter-spacing: 0;
-    color: #fff;
-}
+.phb-sub { margin-left: 6px; font-size: 0.75rem; font-weight: 500; color: rgba(255,255,255,0.7); white-space: nowrap; }
 
-.phc-years { display: flex; flex-direction: column; gap: 6px; }
-.phc-year { display: flex; align-items: flex-start; gap: 10px; }
-.phc-yr {
+/* Awards */
+.phb-awards { display: flex; flex-direction: column; gap: 6px; }
+.phb-year { display: flex; align-items: flex-start; gap: 10px; }
+.phb-yr {
     flex-shrink: 0;
-    width: 3.2em;
-    padding-top: 6px;
+    width: 2.6em;
+    padding-top: 4px;
     font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-weight: 700;
-    font-size: var(--text-sm);
-    color: rgba(255,255,255,0.78);
+    font-size: 0.8125rem;
+    color: rgba(255,255,255,0.72);
     font-variant-numeric: tabular-nums;
 }
-.phc-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.phc-chip {
+.phb-chips { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.phb-award {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    min-height: 32px;
-    padding: 0 11px;
+    gap: 5px;
+    min-height: 26px;
+    padding: 0 9px;
     border-radius: var(--r-pill);
-    border: 1px solid rgba(240,198,106,0.38);
-    background: rgba(0,0,0,0.38);
-    color: #f5d68f;
+    border: 1px solid rgba(240,198,106,0.32);
+    background: rgba(240,198,106,0.07);
+    color: #f3d38a;
     font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-weight: 700;
-    font-size: var(--text-sm);
+    font-size: 0.8125rem;
     white-space: nowrap;
-    cursor: pointer;
-    transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, transform 120ms ease-out;
+    cursor: help;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out;
 }
-.phc-chip svg { width: 13px; height: 13px; flex-shrink: 0; }
-.phc-chip.is-major { border-color: rgba(240,198,106,0.62); }
-.phc-chip:hover { background: rgba(240,198,106,0.14); border-color: rgba(240,198,106,0.8); color: #ffe7b0; }
-.phc-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.phc-chip:active { transform: scale(0.97); }
-.phc-chip[aria-pressed="true"] { background: #f0c66a; border-color: #f0c66a; color: #1f1500; }
-.phc-detail {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 2px 10px;
-    margin: 10px 0 0;
-    padding: 10px 14px;
-    max-width: 78ch;
+.phb-award.is-major { background: rgba(240,198,106,0.16); border-color: rgba(240,198,106,0.6); color: #ffe2a3; }
+.phb-award:hover { background: rgba(240,198,106,0.22); border-color: rgba(240,198,106,0.85); }
+.phb-award:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.phb-award:active { background: rgba(240,198,106,0.3); }
+
+/* The explanation: a popover above the chip, right-aligned to stay on screen. */
+.phb-tip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    width: 260px;
+    padding: 10px 12px;
     border-radius: var(--r-md);
-    background: rgba(0,0,0,0.42);
-    border: 1px solid rgba(255,255,255,0.1);
-    font-size: var(--text-sm);
+    background: #111317;
+    border: 1px solid rgba(240,198,106,0.4);
+    box-shadow: 0 14px 30px -10px rgba(0,0,0,0.85);
+    font-family: var(--font-body);
+    font-stretch: 100%;
+    font-weight: 400;
+    font-size: 0.8125rem;
     line-height: 1.5;
-    color: rgba(255,255,255,0.86);
-    min-height: calc(3em + 22px);   /* two lines reserved: switching awards never resizes the hero */
-    align-content: flex-start;
+    color: rgba(255,255,255,0.88);
+    white-space: normal;
+    text-align: left;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    transition: opacity 150ms ease-out, transform 150ms ease-out, visibility 0s linear 150ms;
+    pointer-events: none;
 }
-.phc-d-name {
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 750;
-    color: #f5d68f;
-    white-space: nowrap;
+.phb-tip b { display: block; margin-bottom: 3px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 750; color: #f3d38a; }
+.phb-award:hover .phb-tip,
+.phb-award:focus-visible .phb-tip,
+.phb-award:focus .phb-tip {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity 150ms ease-out, transform 150ms ease-out, visibility 0s;
 }
 
-.phc-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.phc-step { display: inline-flex; align-items: center; gap: 6px; color: #fff; }
-.phc-step img { width: 22px; height: 22px; object-fit: contain; }
-.phc-team { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700; font-size: var(--text-base); }
-.phc-arrow { width: 16px; height: 1px; margin-right: 2px; background: rgba(255,255,255,0.55); position: relative; }
-.phc-arrow::after { content: ''; position: absolute; right: -1px; top: -3px; width: 7px; height: 7px; border-top: 1px solid rgba(255,255,255,0.55); border-right: 1px solid rgba(255,255,255,0.55); transform: rotate(45deg); }
-.phc-when { font-size: var(--text-xs); color: rgba(255,255,255,0.72); white-space: nowrap; }
-.phc-nfl-row { display: flex; align-items: center; gap: 10px; color: #fff; }
-.phc-nfl-row img { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
-.phc-nfl-row b { display: block; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 750; font-size: var(--text-base); }
-.phc-nfl-row .phc-when { display: block; }
+/* Transfers */
+.phb-transfers { display: flex; align-items: center; gap: 12px; }
+.phb-path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.phb-team { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700; font-size: 0.9375rem; color: #fff; }
+.phb-team img { width: 18px; height: 18px; object-fit: contain; }
+.phb-arrow { position: relative; width: 14px; height: 1px; background: rgba(255,255,255,0.5); }
+.phb-arrow::after { content: ''; position: absolute; right: -1px; top: -3px; width: 6px; height: 6px; border-top: 1px solid rgba(255,255,255,0.5); border-right: 1px solid rgba(255,255,255,0.5); transform: rotate(45deg); }
 
-@media (max-width: 991.98px) {
-    .phc--honors { grid-template-columns: minmax(0, 1fr); }
-    .phc--honors .phc-side { flex-direction: row; flex-wrap: wrap; gap: var(--s4) var(--s8); }
+/* NFL */
+.phb-nfl { display: flex; align-items: center; gap: 10px; color: #fff; }
+.phb-nfl img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+.phb-nfl b { font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700; font-size: 0.875rem; }
+.phb-nfl .phb-sub { display: block; margin: 1px 0 0; }
+
+/* Phones: the card falls into the flow under the stats (the band already does). */
+@media (max-width: 767.98px) {
+    .phb { width: 100%; }
+    .phb-award { min-height: 32px; }
+    .phb-tip { right: auto; left: 0; width: min(260px, 78vw); }
+}
+@media (pointer: coarse) { .phb-award { min-height: 36px; } }
+@media (prefers-reduced-motion: reduce) { .phb-award, .phb-tip { transition: none; } }
+
+/* The card owns the hero's right edge on wide screens. Only the stat-card row
+   makes room for it (the name and bio never reach that far), and the cards
+   tighten a little so a quarterback's five still fit on one line. Below
+   1360px there isn't room for both side by side: the card joins the flow
+   under the stats, as it already does on phones. */
+.phb { width: 320px; }
+@media (min-width: 1360px) {
+    .player-hero.has-phb .ph-statcards { padding-right: 336px; }
+    .player-hero.has-phb .ph-statcards .stat-card { padding: 10px 14px !important; min-width: 76px !important; }
+}
+@media (max-width: 1359.98px) {
+    .player-hero.has-phb .ph-hero-badges {
+        position: static;
+        padding: 0 var(--s6) var(--s5);
+        align-items: flex-start;
+    }
+    .phb { width: min(560px, 100%); }
 }
 @media (max-width: 767.98px) {
-    .phc { padding-block: var(--s3) var(--s4); gap: var(--s3); }
-    .phc-chip { min-height: 36px; font-size: 0.8125rem; padding: 0 10px; }
-    .phc-yr { padding-top: 8px; }
-    .phc-detail { font-size: 0.8125rem; }
+    .player-hero.has-phb .ph-hero-badges { padding: 0 14px 14px; }
+    .phb { width: 100%; }
 }
-@media (pointer: coarse) { .phc-chip { min-height: 44px; } }
-@media (prefers-reduced-motion: reduce) { .phc-chip { transition: none; } }
