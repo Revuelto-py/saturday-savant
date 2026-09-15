@@ -1572,6 +1572,51 @@ def _starter_line(slot, s):
     return ''
 
 
+def _starter_cmp(slot, s):
+    """Head-to-head stat lines for a starter's position, in a fixed order so two
+    players at the same slot line up label for label. Each entry is
+    {'k': label, 'v': number or None, 'd': display, 'lower': lower is better}."""
+    s = s or {}
+    n = lambda k: float(s.get(k, 0) or 0)
+    pos = slot.rstrip('123')
+
+    def whole(k, label, lower=False):
+        v = n(k)
+        return {'k': label, 'v': v, 'd': f"{int(round(v)):,}", 'lower': lower}
+
+    def frac(k, label):
+        v = n(k)
+        return {'k': label, 'v': v, 'd': f"{v:g}", 'lower': False}
+
+    def ratio(num, den, label, scale=1.0, suffix=''):
+        d = n(den)
+        if not d:
+            return {'k': label, 'v': None, 'd': '—', 'lower': False}
+        v = n(num) / d * scale
+        return {'k': label, 'v': v, 'd': f"{v:.1f}{suffix}", 'lower': False}
+
+    if pos == 'QB':
+        return [whole('passing.YDS', 'Pass yards'), whole('passing.TD', 'Pass TD'),
+                whole('passing.INT', 'Interceptions', lower=True),
+                ratio('passing.COMPLETIONS', 'passing.ATT', 'Completion %', 100.0, '%')]
+    if pos == 'RB':
+        return [whole('rushing.CAR', 'Carries'), whole('rushing.YDS', 'Rush yards'),
+                ratio('rushing.YDS', 'rushing.CAR', 'Yards / carry'), whole('rushing.TD', 'Rush TD')]
+    if pos in ('WR', 'TE'):
+        return [whole('receiving.REC', 'Receptions'), whole('receiving.YDS', 'Receiving yards'),
+                ratio('receiving.YDS', 'receiving.REC', 'Yards / catch'), whole('receiving.TD', 'Receiving TD')]
+    if pos in ('DE', 'DT'):
+        return [whole('defensive.TOT', 'Tackles'), frac('defensive.TFL', 'Tackles for loss'),
+                frac('defensive.SACKS', 'Sacks'), whole('defensive.QB HUR', 'QB hurries')]
+    if pos == 'LB':
+        return [whole('defensive.TOT', 'Tackles'), frac('defensive.TFL', 'Tackles for loss'),
+                frac('defensive.SACKS', 'Sacks'), whole('defensive.PD', 'Passes defended')]
+    if pos in ('CB', 'S'):
+        return [whole('defensive.TOT', 'Tackles'), whole('defensive.PD', 'Passes defended'),
+                whole('interceptions.INT', 'Interceptions'), frac('defensive.TFL', 'Tackles for loss')]
+    return []
+
+
 def project_starters(cursor, team_name, roster):
     """Projected starting lineup plus what it was based on.
 
@@ -1614,6 +1659,7 @@ def project_starters(cursor, team_name, roster):
         years[str(p[4])] = label
     for slot, pl in lineup.items():
         pl['line'] = _starter_line(slot, stats.get(str(pl['idx'])))
+        pl['cmp'] = _starter_cmp(slot, stats.get(str(pl['idx'])))
         pl['year'] = years.get(str(pl['idx']), '')
     return lineup, {'season': prod_season, 'games': games}
 

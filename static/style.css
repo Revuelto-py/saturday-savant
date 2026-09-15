@@ -9105,117 +9105,85 @@ a.tt-name:active { opacity: 0.8; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GAME PREVIEW — projected starters, head to head
-   Under the team percentiles on an upcoming game. Each row is one position:
-   the away starter on the left (reading toward the centre), the position in
-   the middle, the home starter on the right. Same order as the Starters tab's
-   list: offense QB → line, defense front → secondary.
+   Built on the percentile rows' own grid (.gpv-h2h's --gpv-val / --gpv-label):
+   starters sit on the outer edges where each team's values sit, the position
+   in the centre label column, and each stat line below is a .gpv-row with the
+   two values at the edges, share bars meeting at the label, like the
+   percentile tracks above. Offensive linemen are left out (no line stats).
    ═══════════════════════════════════════════════════════════════════════════ */
-.gps { margin: var(--s8) auto 0; max-width: 880px; }   /* the mirror reads toward the centre; full width left team names far from their players */
-.gps-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: center;
-    gap: var(--s3);
-    padding-bottom: var(--s3);
-    margin-bottom: var(--s2);
-    border-bottom: 1px solid var(--border-strong);
-}
-.gps-title {
-    margin: 0;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 750;
-    font-size: var(--text-lg);
-    letter-spacing: -0.01em;
-    color: var(--text-primary);
-    text-align: center;
-}
-.gps-team { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.gps-team-h { justify-content: flex-end; }
-.gps-team img { flex-shrink: 0; object-fit: contain; }
-.gps-team b {
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 750;
-    font-size: var(--text-base);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
-.gps-unit + .gps-unit { margin-top: var(--s5); }
+.gps { margin-top: var(--s8); --gpv-side: minmax(0, 1fr); --gpv-val: 64px; --gpv-label: 158px; }
+/* The column sizes live on .gpv-h2h, which this block sits outside of, so it
+   carries its own copy at the same breakpoints to share the exact grid. */
+@media (max-width: 1099.98px) { .gps { --gpv-val: 56px; --gpv-label: 128px; } }
+@media (max-width: 719.98px) { .gps { --gpv-val: 104px; } }
+.gps-title { margin-bottom: 0; }
+.gps-unit + .gps-unit { margin-top: var(--s6); }
 .gps-unit-k {
-    margin: var(--s3) 0 var(--s2);
-    text-align: center;
+    margin: var(--s4) 0 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-strong);
     font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 600;
-    font-size: 0.6875rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
+    font-weight: 700;
+    font-size: var(--text-base);
+    color: var(--text-primary);
 }
-.gps-rows { list-style: none; margin: 0; padding: 0; }
-.gps-row {
+.gps-row { padding: 12px 0 6px; border-bottom: 1px solid var(--border-strong); }
+.gps-row .gpv-row { padding: 4px 0; border-bottom: none; }
+
+/* Player band: away starter spans the value + bar columns on the left edge,
+   the position sits in the label column, home starter mirrors on the right. */
+.gps-band {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+    grid-template-columns: var(--gpv-val) minmax(0, 1fr) var(--gpv-label) minmax(0, 1fr) var(--gpv-val);
     align-items: center;
     gap: var(--s3);
-    padding: 4px 0;
+    margin-bottom: 4px;
 }
-.gps-row + .gps-row { box-shadow: inset 0 1px 0 var(--border); }
-
+.gps-p-a { grid-column: 1 / 3; justify-self: start; }
+.gps-pos { grid-column: 3; justify-self: center; }
+.gps-p-h { grid-column: 4 / 6; justify-self: end; flex-direction: row-reverse; text-align: right; }
 .gps-p {
     display: flex;
     align-items: center;
     gap: 10px;
     min-width: 0;
-    min-height: 52px;
-    padding: 6px 10px;
+    max-width: 100%;
+    min-height: 48px;
+    padding: 4px 8px 4px 4px;
     border-radius: var(--r-md);
     color: var(--text-primary);
     text-decoration: none;
     transition: background-color 150ms ease-out;
 }
-/* Away reads toward the centre: photo on the outside, text against the position. */
-.gps-p-a { flex-direction: row-reverse; text-align: right; }
+.gps-p-h { padding: 4px 4px 4px 8px; }
 a.gps-p:hover { background: rgba(255,255,255,0.05); }
 a.gps-p:hover .gps-name { color: var(--accent); }
-a.gps-p:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+a.gps-p:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 a.gps-p:active { background: rgba(255,255,255,0.09); }
 .gps-p.is-open .gps-name { color: var(--text-secondary); font-weight: 600; }
-
 .gps-photo {
     flex-shrink: 0;
-    width: 36px; height: 36px;
+    width: 40px; height: 40px;
     border-radius: 50%;
     overflow: hidden;
     background: var(--bg-subtle);
     box-shadow: 0 0 0 1px var(--border-strong);
 }
 .gps-photo img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
-.gps-init {
-    width: 100%; height: 100%;
-    display: grid; place-items: center;
-    font-family: var(--font-display); font-weight: 800;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
+.gps-init { width: 100%; height: 100%; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 0.8rem; color: var(--text-secondary); }
 .gps-who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .gps-name {
     font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 700;
-    font-size: var(--text-base);
-    line-height: 1.2;
+    font-weight: 750;
+    font-size: var(--text-md);
+    line-height: 1.15;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     transition: color 150ms ease-out;
 }
-.gps-num { font-weight: 600; font-size: 0.75rem; color: var(--text-secondary); }
-.gps-line {
-    font-size: var(--text-xs);
-    color: var(--text-secondary);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    font-variant-numeric: proportional-nums;
-}
+.gps-sub { font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
 .gps-pos {
-    justify-self: center;
-    min-width: 40px;
-    padding: 2px 6px;
+    min-width: 42px;
+    padding: 2px 8px;
     border-radius: var(--r-pill);
     text-align: center;
     font-family: var(--font-display); font-stretch: var(--display-stretch);
@@ -9226,17 +9194,30 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
 .gps-pos-o { background: #0c2a44; color: #9ad4ff; border: 1px solid rgba(28,156,240,0.55); }
 .gps-pos-d { background: #22252c; color: #e7e9ea; border: 1px solid rgba(255,255,255,0.28); }
 
-/* Phones: keep the mirror, drop the stat line and photo size so both names fit. */
-@media (max-width: 599.98px) {
-    .gps-row { grid-template-columns: minmax(0, 1fr) 38px minmax(0, 1fr); gap: 4px; }
-    .gps-p { gap: 6px; padding: 6px 4px; min-height: 48px; }
-    .gps-photo { width: 28px; height: 28px; }
+/* Share bars: each side's value against the larger of the two, growing out
+   from the centre label like the percentile tracks. */
+.gps-bar { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.05); overflow: hidden; }
+.gps-fill { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.22); }
+.gps-bar-a .gps-fill { right: 0; border-radius: 3px 0 0 3px; }
+.gps-bar-h .gps-fill { left: 0; border-radius: 0 3px 3px 0; }
+.gps-fill.is-edge { background: var(--accent); }
+.gps-foot { margin-top: var(--s4); }
+
+/* Below 720 the percentile rows stack with the label on top; the starters
+   band keeps both players side by side and the stat lines follow the same
+   stacked pattern the rows above use. */
+@media (max-width: 719.98px) {
+    .gps-band { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; }
+    .gps-p-a { grid-column: 1; }
+    .gps-pos { grid-column: 2; }
+    .gps-p-h { grid-column: 3; }
+    .gps-p { gap: 6px; padding: 4px; }
+    .gps-photo { width: 32px; height: 32px; }
     .gps-name { font-size: var(--text-sm); }
-    .gps-num { display: none; }
-    .gps-line { font-size: 0.6875rem; }
-    .gps-pos { min-width: 34px; padding: 2px 4px; font-size: 0.6875rem; }
-    .gps-title { font-size: var(--text-base); }
-    .gps-team b { font-size: var(--text-sm); }
+    .gps-row .gpv-row { padding: 6px 0; }
+    .gps-bar-a { grid-area: ta; }
+    .gps-bar-h { grid-area: th; }
+    .gps-bar-a .gps-fill { right: auto; left: 0; border-radius: 0 3px 3px 0; }
 }
 @media (prefers-reduced-motion: reduce) {
     .gps-p, .gps-name { transition: none; }

@@ -520,56 +520,74 @@
             <span class="gpx-key"><i class="p4"></i>great.</span>
         </p>
 
-        {# ── Projected starters, position against position ── #}
+        {# ── Projected starters, position against position ──
+           Same five-column grid as the percentile rows above: each starter sits
+           on the outer edge where that team's values sit, the position in the
+           centre label column, and the stat lines beneath use the same edges,
+           bars and centre label, so the two sections read as one comparison.
+           Offensive linemen are left out: no individual line stats exist. #}
         {% if starters and starters.away and starters.home %}
-        {% macro gps_side(p, side, pos) %}
+        {% macro gps_player(p, side) %}
             {% if p %}
-            <a class="gps-p gps-p-{{ side }}" href="{{ player_url(p.idx, game_season) }}"
-               aria-label="{{ p.first }} {{ p.name }}, {{ away_team if side == 'a' else home_team }} {{ pos }}{{ ', ' ~ (p.line or p.year) if (p.line or p.year) else '' }}">
+            <a class="gps-p gps-p-{{ side }}" href="{{ player_url(p.idx, game_season) }}">
                 <span class="gps-photo">
-                    {% if p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" decoding="async" width="36" height="36">
+                    {% if p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" decoding="async" width="40" height="40">
                     {% else %}<span class="gps-init" aria-hidden="true">{{ (p.first[0] if p.first else '') ~ (p.name[0] if p.name else '') }}</span>{% endif %}
                 </span>
-                <span class="gps-who" aria-hidden="true">
-                    <span class="gps-name">{{ p.name }}{% if p.jersey %} <span class="gps-num">#{{ p.jersey }}</span>{% endif %}</span>
-                    <span class="gps-line">{{ p.line or p.year or '' }}</span>
+                <span class="gps-who">
+                    <span class="gps-name">{{ p.first }} {{ p.name }}</span>
+                    <span class="gps-sub">{% if p.jersey %}#{{ p.jersey }}{% endif %}{% if p.jersey and p.year %} · {% endif %}{{ p.year or '' }}</span>
                 </span>
             </a>
             {% else %}
-            <span class="gps-p gps-p-{{ side }} is-open"><span class="gps-who"><span class="gps-name">Open</span></span></span>
+            <span class="gps-p gps-p-{{ side }} is-open"><span class="gps-who"><span class="gps-name">No starter projected</span></span></span>
             {% endif %}
         {% endmacro %}
 
-        <div class="gps" id="starters" aria-labelledby="gps-h">
-            <header class="gps-head">
-                <span class="gps-team">
-                    {% if game[10] %}<img src="{{ game[10] }}" alt="" width="24" height="24" loading="lazy">{% endif %}
-                    <b>{{ away_team }}</b>
-                </span>
-                <h3 class="gps-title" id="gps-h">Projected starters</h3>
-                <span class="gps-team gps-team-h">
-                    <b>{{ home_team }}</b>
-                    {% if game[9] %}<img src="{{ game[9] }}" alt="" width="24" height="24" loading="lazy">{% endif %}
-                </span>
-            </header>
+        <div class="gps" aria-labelledby="gps-h">
+            <h3 class="gpv-group-k gps-title" id="gps-h">Projected starters</h3>
 
             {% for unit, slots in [
-                ('Offense', ['QB','RB','WR1','WR2','WR3','TE','LT','LG','C','RG','RT']),
+                ('Offense', ['QB','RB','WR1','WR2','WR3','TE']),
                 ('Defense', ['DE1','DT1','DT2','DE2','LB1','LB2','LB3','CB1','CB2','S1','S2']) ] %}
-            <section class="gps-unit" aria-label="{{ unit }}">
+            <section class="gps-unit" aria-label="{{ unit }} starters">
                 <h4 class="gps-unit-k">{{ unit }}</h4>
-                <ul class="gps-rows" role="list">
-                    {% for slot in slots %}
-                    {% set pos = slot | replace('1','') | replace('2','') | replace('3','') %}
-                    <li class="gps-row">
-                        {{ gps_side(starters.away.get(slot), 'a', pos) }}
+                {% for slot in slots %}
+                {% set pos = slot | replace('1','') | replace('2','') | replace('3','') %}
+                {% set pa = starters.away.get(slot) %}
+                {% set ph = starters.home.get(slot) %}
+                {% set lines = (pa.cmp if pa and pa.cmp else (ph.cmp if ph and ph.cmp else [])) %}
+                <div class="gps-row">
+                    <div class="gps-band">
+                        {{ gps_player(pa, 'a') }}
                         <span class="gps-pos gps-pos-{{ 'o' if unit == 'Offense' else 'd' }}">{{ pos }}</span>
-                        {{ gps_side(starters.home.get(slot), 'h', pos) }}
-                    </li>
+                        {{ gps_player(ph, 'h') }}
+                    </div>
+                    {% for line in lines %}
+                    {% set ca = pa.cmp[loop.index0] if (pa and pa.cmp) else none %}
+                    {% set ch = ph.cmp[loop.index0] if (ph and ph.cmp) else none %}
+                    {% set av = ca.v if ca else none %}
+                    {% set hv = ch.v if ch else none %}
+                    {% set both = av is not none and hv is not none %}
+                    {% set top = ([av or 0, hv or 0] | max) %}
+                    {% set edge = '' %}
+                    {% if both and av != hv %}
+                        {% if line.lower %}{% set edge = 'a' if av < hv else 'h' %}
+                        {% else %}{% set edge = 'a' if av > hv else 'h' %}{% endif %}
+                    {% endif %}
+                    <div class="gpv-row gps-stat">
+                        <span class="gpv-v gpv-v-a{{ ' is-edge' if edge == 'a' }}" data-abbr="{{ (team_abbr or {}).get('away', '') }}">{{ ca.d if ca else '—' }}</span>
+                        <span class="gps-bar gps-bar-a" aria-hidden="true"><span class="gps-fill{{ ' is-edge' if edge == 'a' }}" style="width: {{ ((av or 0) / top * 100) | round(1) if top else 0 }}%"></span></span>
+                        <span class="gpv-k">{{ line.k }}</span>
+                        <span class="gps-bar gps-bar-h" aria-hidden="true"><span class="gps-fill{{ ' is-edge' if edge == 'h' }}" style="width: {{ ((hv or 0) / top * 100) | round(1) if top else 0 }}%"></span></span>
+                        <span class="gpv-v gpv-v-h{{ ' is-edge' if edge == 'h' }}" data-abbr="{{ (team_abbr or {}).get('home', '') }}">{{ ch.d if ch else '—' }}</span>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
+                {% endfor %}
             </section>
             {% endfor %}
+            <p class="gpx-foot gps-foot">Projected starters and their {{ game_season }} stats. Offensive linemen are left out because the data has no individual line stats. The bolder number is the better one; for interceptions thrown, lower is better.</p>
         </div>
         {% endif %}
     </section>
