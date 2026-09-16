@@ -840,8 +840,11 @@
 <div class="tab-pane fade" id="player-stats" aria-labelledby="tab-player-stats" tabindex="0">
 <div class="pt-4">
 
+{# Half-sacks and half-TFL are real values: |int alone turned 4.5 into 4 and
+   made this table disagree with the player page and the leaderboards. Whole
+   numbers still render whole, so counting stats are unchanged. #}
 {% macro stat_box(val) %}
-    {% if val is not none and val != '' %}<span style="display:inline-block;border: 1px solid var(--border-strong);border-radius: var(--r-sm);padding:1px 7px;font-size: var(--text-sm);color: var(--text-primary);font-weight:600;min-width:36px;text-align:center">{{ val|int }}</span>
+    {% if val is not none and val != '' %}{% set n = val|float %}<span style="display:inline-block;border: 1px solid var(--border-strong);border-radius: var(--r-sm);padding:1px 7px;font-size: var(--text-sm);color: var(--text-primary);font-weight:600;min-width:36px;text-align:center">{{ n|int if n == n|int else '%.1f'|format(n) }}</span>
     {% else %}<span style="color: var(--text-dim)">—</span>{% endif %}
 {% endmacro %}
 

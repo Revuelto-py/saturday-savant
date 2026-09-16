@@ -2405,8 +2405,11 @@ def leaders_query_all(cursor, season=CURRENT_SEASON):
                 GROUP BY ps.category, ps.stat_type, ps.player_name, ps.team
             ) x WHERE rn <= 5
         )
+        -- Keep the real value: a CAST to INTEGER turned every half-sack into
+        -- a whole one (Postgres rounds 4.5 to 4), so the home page disagreed
+        -- with the leaderboards and the player page about the same number.
         SELECT r.category, r.stat_type, r.player_name, r.team,
-               CAST(r.val AS INTEGER), p.headshot, t.logo_dark, p.id
+               r.val, p.headshot, t.logo_dark, p.id
         FROM ranked r
         INNER JOIN teams t ON r.team = t.name
         LEFT JOIN players p ON p.id::text = r.pid
@@ -2414,7 +2417,11 @@ def leaders_query_all(cursor, season=CURRENT_SEASON):
     ''', (season,))
     out = {}
     for cat, st, name, team, val, headshot, logo, pid in cursor.fetchall():
-        out.setdefault((cat, st), []).append((name, team, val, headshot, logo, pid))
+        # Whole numbers stay whole (1258, not 1258.0); halves keep their half
+        # (4.5 sacks), which is how sacks and TFL are actually recorded.
+        v = float(val or 0)
+        shown = int(v) if v == int(v) else round(v, 1)
+        out.setdefault((cat, st), []).append((name, team, shown, headshot, logo, pid))
     return out
 
 @cache.memoize(timeout=21600)
