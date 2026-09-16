@@ -4,33 +4,26 @@
 
 {% block content %}
 
-{# ── HERO ──────────────────────────────────────────────────────────────────
-   League-wide, so no team colours here — the accent bloom and the same shaped
-   scrim the game hero uses, which is what makes those pages read as one family.
-   The data window is stated once, at the top, at full size: every record below
-   is 2016+, and the page used to call that "all-time". #}
-<div class="rv-hero">
-    <div class="rv-hero-wash" aria-hidden="true"></div>
-    <div class="page-wrapper rv-hero-inner">
-        <h1 class="rv-hero-title">Rivalries</h1>
-        <p class="rv-hero-sub">
-            {{ rivalries|length }} named rivalries, each with the series record and the last time
-            they played.
-        </p>
-        <p class="rv-hero-note">
-            <span class="rv-window">{{ window_start }}–{{ window_end }}</span>
-            Records count every meeting Saturday Savant holds play data for, which starts in
-            {{ window_start }}. Most of these series are far older — a trophy first handed over in
-            1902 has a century of results that are <strong>not</strong> in these numbers.
-        </p>
-    </div>
-</div>
+{# ── HEAD + CONTROLS ───────────────────────────────────────────────────────
+   No hero band: the grid is the page, and a full-height band pushed the first
+   row of cards under the fold. The h1 and the data window stay in one compact
+   line — every record below starts in {{ window_start }}, and without that the
+   numbers read as all-time.
 
-{# ── CONTROLS ──────────────────────────────────────────────────────────────
    130 cards is past the point where scanning works, so the page opens with a
    way to narrow them. Filtering is client-side: the whole set is already in the
    DOM and cached for a day, so a round trip per keystroke would buy nothing. #}
 <div class="page-wrapper rv-wrapper">
+    <header class="rv-head">
+        <h1 class="rv-title">Rivalries</h1>
+        <p class="rv-meta">
+            <span class="rv-window">{{ window_start }}–{{ window_end }}</span>
+            {{ rivalries|length }} named rivalries, each with the series record and the last time
+            they played. Records count every meeting Saturday Savant holds play data for, which
+            starts in {{ window_start }} — most of these series are far older.
+        </p>
+    </header>
+
     <div class="rv-controls" role="search">
         <div class="rv-search">
             <svg class="rv-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
