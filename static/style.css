@@ -9318,3 +9318,51 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
     .pane-spinner { animation: none; border-top-color: rgba(255,255,255,0.18); }
     .pane-lazy-link { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PLAYER PAGE — season stats + percentiles row
+   These two cards used to stretch to the taller of the pair and centre their
+   content, which turned the difference between them into padding INSIDE the
+   card: measured at 1440, 46px on a punter, 102px on a back with two tables,
+   142px on a defensive lineman, 174px on a receiver with one. How many stat
+   categories a player has is not knowable in advance — a back can pick up
+   receiving rows mid-season — so the layout must not depend on it.
+
+   The columns are independent now and content sits at the top, so a card is
+   exactly as tall as what it holds. The left column also carries Usage Rate
+   beneath the stats, which gives a one-table skill player real content beside
+   the percentile rail rather than air. A player who later adds a category
+   simply makes that column taller; nothing needs to change.
+
+   Geometry matches what it replaced: 2:1 at the large breakpoint (the old
+   col-lg-8 / col-lg-4), 24px gutters and bottom margin (the old g-4 / mb-4).
+   ═══════════════════════════════════════════════════════════════════════════ */
+.ps-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+@media (min-width: 992px) {
+    .ps-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+/* A column, not a card: it stacks the stats card and the usage card. */
+.ps-col {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    min-width: 0;
+}
+.ps-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+}
+/* Each category block carries a bottom margin to separate it from the next;
+   the last one has nothing to separate from, and it read as 24px of extra
+   floor under the final table. !important because the margin comes from
+   Bootstrap's .mb-4 utility, and those are declared !important — without it
+   this rule loses despite being the more specific selector. */
+.ps-card > *:last-child { margin-bottom: 0 !important; }
