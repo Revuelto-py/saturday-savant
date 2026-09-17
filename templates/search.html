@@ -10,8 +10,9 @@
         <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
             {% if query %}“{{ query }}”
                 <span style="color: var(--text-dim);font-weight:400;font-size:1.4rem">
-                    · {{ player_results|length }} player{{ '' if player_results|length == 1 else 's' }},
-                    {{ team_results|length }} team{{ '' if team_results|length == 1 else 's' }}</span>
+                    · {{ team_results|length }} team{{ '' if team_results|length == 1 else 's' }},
+                    {{ player_results|length }} player{{ '' if player_results|length == 1 else 's' }}{% if rivalry_results %},
+                    {{ rivalry_results|length }} rivalr{{ 'y' if rivalry_results|length == 1 else 'ies' }}{% endif %}</span>
             {% else %}Players &amp; Teams{% endif %}
         </h1>
     </div>
@@ -30,7 +31,7 @@
         <div class="sp-empty-sub">Ten seasons of FBS football — search by first name, last name, or school.</div>
     </div>
 
-    {% elif not team_results and not player_results %}
+    {% elif not team_results and not player_results and not rivalry_results %}
     <div class="sp-empty">
         <div class="sp-empty-title">No results for “{{ query }}”</div>
         <div class="sp-empty-sub">Try a different spelling or a partial name.</div>
@@ -47,12 +48,54 @@
         </div>
         <div class="sp-team-grid">
             {% for t in team_results %}
-            {% set tc = ('#' + t[3].lstrip('#')) if t[3] else 'var(--accent)' %}
-            <a href="/team/{{ t[0] | team_slug }}" class="sp-team-card" style="--tc: {{ tc }}">
-                {% if t[2] %}<img src="{{ t[2] }}" alt="{{ t[0] }} logo" loading="lazy">{% else %}
-                <div class="sp-team-fallback">{{ t[0][0] }}</div>{% endif %}
-                <div class="sp-team-name">{{ t[0] }}</div>
-                <div class="sp-team-conf">{{ t[1] }}</div>
+            {% set tc = ('#' + t.color.lstrip('#')) if t.color else 'var(--accent)' %}
+            <a href="/team/{{ t.name | team_slug }}" class="sp-team-card" style="--tc: {{ tc }}">
+                {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" loading="lazy">{% else %}
+                <div class="sp-team-fallback">{{ t.name[0] }}</div>{% endif %}
+                <div class="sp-team-name">{{ t.name }}</div>
+                <div class="sp-team-conf">{{ t.conference }}</div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if game_results %}
+    <div style="margin:32px 0 36px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <h2 class="section-label" style="margin:0">Games</h2>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+        </div>
+        <div class="sp-line-list">
+            {% for g in game_results %}
+            <a href="/game/{{ g.id }}" class="sp-line">
+                <span class="sp-line-kind">{{ g.kind }}</span>
+                <span class="sp-line-main">{{ g.away }} at {{ g.home }}</span>
+                <span class="sp-line-meta">
+                    {% if g.hp is not none %}{{ g.away_pts if g.away_pts is defined else g.ap }}–{{ g.hp }}{% else %}Week {{ g.week }}{% endif %}
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if rivalry_results %}
+    <div style="margin:32px 0 36px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <h2 class="section-label" style="margin:0">Rivalries</h2>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ rivalry_results|length }} found</span>
+        </div>
+        <div class="sp-line-list">
+            {% for r in rivalry_results %}
+            <a href="/rivalry/{{ r.team_a | team_slug }}/{{ r.team_b | team_slug }}" class="sp-line">
+                <span class="sp-line-logos">
+                    {% if r.logo_a %}<img src="{{ r.logo_a }}" alt="" loading="lazy">{% endif %}
+                    {% if r.logo_b %}<img src="{{ r.logo_b }}" alt="" loading="lazy">{% endif %}
+                </span>
+                <span class="sp-line-main">{{ r.name }}</span>
+                <span class="sp-line-meta">{{ r.team_a }} &middot; {{ r.team_b }}</span>
             </a>
             {% endfor %}
         </div>
@@ -68,25 +111,25 @@
         </div>
         <div class="dark-card" style="overflow:hidden">
             {% for p in player_results %}
-            <a href="/player/{{ p[0] }}" class="sp-player-row">
-                {% if p[6] %}
-                    <img src="{{ p[6] }}" alt="{{ p[1] }} {{ p[2] }} headshot" class="sp-headshot" loading="lazy">
+            <a href="/player/{{ p.id }}" class="sp-player-row">
+                {% if p.headshot %}
+                    <img src="{{ p.headshot }}" alt="{{ p.first }} {{ p.last }} headshot" class="sp-headshot" loading="lazy">
                 {% else %}
-                    <div class="sp-headshot sp-headshot-fallback">{{ p[1][0] if p[1] else '' }}{{ p[2][0] if p[2] else '' }}</div>
+                    <div class="sp-headshot sp-headshot-fallback">{{ p.first[0] if p.first else '' }}{{ p.last[0] if p.last else '' }}</div>
                 {% endif %}
                 <div style="flex:1;min-width:0">
-                    <div class="sp-player-name">{{ p[1] }} {{ p[2] }}
-                        {% if not p[9] %}<span class="sp-departed">Former</span>{% endif %}
+                    <div class="sp-player-name">{{ p.first }} {{ p.last }}
+                        {% if not p.active %}<span class="sp-departed">Former</span>{% endif %}
                     </div>
                     <div class="sp-player-meta">
-                        {% if p[8] %}<img src="{{ p[8] }}" alt="{{ p[3] }} logo" loading="lazy">{% endif %}
-                        <span>{{ p[3] }}</span>
+                        {% if p.logo %}<img src="{{ p.logo }}" alt="{{ p.team }} logo" loading="lazy">{% endif %}
+                        <span>{{ p.team }}</span>
                         <span class="sp-dot">·</span>
-                        <span>{{ p[7] }}</span>
+                        <span>{{ p.conference }}</span>
                     </div>
                 </div>
-                {% if p[5] %}<span class="sp-jersey">#{{ p[5] }}</span>{% endif %}
-                <span class="sp-pos">{{ p[4] or '—' }}</span>
+                {% if p.jersey %}<span class="sp-jersey">#{{ p.jersey }}</span>{% endif %}
+                <span class="sp-pos">{{ p.pos or '—' }}</span>
             </a>
             {% endfor %}
         </div>

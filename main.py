@@ -258,6 +258,24 @@ def _rate_limit():
             for k in [k for k, d in _rl_hits.items() if not d or d[-1] < cutoff]:
                 _rl_hits.pop(k, None)
 
+# ── Error pages ─────────────────────────────────────────────────────────────
+# Until now an unhandled exception returned Flask's stock white error page, and
+# the failures this site actually sees are transient — a database round trip
+# that timed out mid-request. The reader gets the site's own page, saying what
+# happened and that a reload usually clears it. Routes that know a thing is
+# missing still render 404.html themselves with a specific message.
+@app.errorhandler(404)
+def handle_404(e):
+    return render_template('404.html'), 404
+
+
+@app.errorhandler(500)
+@app.errorhandler(psycopg2.Error)
+def handle_500(e):
+    app.logger.exception('Unhandled error serving %s', request.path)
+    return render_template('500.html'), 500
+
+
 @app.route('/healthz')
 def healthz():
     """Liveness probe that never touches the DB or renders a template — so it
@@ -3242,44 +3260,187 @@ def games_hub():
         conferences=conferences, team_names=team_names,
         sel_conf=sel_conf, sel_team=sel_team)
 
+# ── Search ──────────────────────────────────────────────────────────────────
+# Fan shorthand no column holds: the database stores "Alabama", people type
+# "bama". Only unambiguous shorthands belong here — "osu" is deliberately absent
+# because three programs answer to it, and the abbreviation column already
+# resolves those.
+_SEARCH_ALIASES = {
+    'bama': 'Alabama', 'roll tide': 'Alabama', 'uga': 'Georgia',
+    'tamu': 'Texas A&M', 'a&m': 'Texas A&M', 'pitt': 'Pittsburgh',
+    'unc': 'North Carolina', 'mizzou': 'Missouri', 'cal': 'California',
+    'vt': 'Virginia Tech', 'wvu': 'West Virginia', 'psu': 'Penn State',
+    'fsu': 'Florida State', 'jmu': 'James Madison', 'nova': 'Villanova',
+    'the u': 'Miami', 'ND': 'Notre Dame',
+}
+
+# Word-level fixes so "ohio st" reaches "Ohio State".
+_SEARCH_WORD_FIXES = {'st': 'state', 'st.': 'state', 'univ': 'university', 'univ.': 'university'}
+
+
+def _search_terms(q):
+    """(as typed, normalised) — both are searched, so normalising never loses a
+    literal match."""
+    raw = ' '.join(q.split())
+    low = raw.lower()
+    if low in _SEARCH_ALIASES:
+        return raw, _SEARCH_ALIASES[low]
+    norm = ' '.join(_SEARCH_WORD_FIXES.get(w, w) for w in low.split())
+    return raw, (norm if norm != low else raw)
+
+
+def _search_params(q, n):
+    """ILIKE patterns for both forms of the query, for the ranking CASEs below."""
+    return {
+        'q': q, 'n': n,
+        'qpre': f'{q}%', 'npre': f'{n}%',
+        'qword': f'% {q}%', 'nword': f'% {n}%',
+        'qsub': f'%{q}%', 'nsub': f'%{n}%',
+    }
+
+
+def _search_teams(cursor, q, n, limit=10):
+    """Teams, best match first: exact name/abbreviation/slug, then prefix, then
+    a match at a word start, then anywhere."""
+    p = _search_params(q, n)
+    p['fcs'] = list(FCS_CONFS)
+    p['limit'] = limit
+    cursor.execute('''
+        SELECT name, conference, logo_dark, color,
+               CASE WHEN LOWER(name) IN (LOWER(%(q)s), LOWER(%(n)s))
+                      OR LOWER(abbreviation) = LOWER(%(q)s)
+                      OR LOWER(slug) = LOWER(%(q)s)              THEN 0
+                    WHEN name ILIKE %(qpre)s OR name ILIKE %(npre)s
+                      OR abbreviation ILIKE %(qpre)s             THEN 1
+                    WHEN name ILIKE %(qword)s OR name ILIKE %(nword)s THEN 2
+                    ELSE 3 END AS rank
+        FROM teams
+        WHERE (name ILIKE %(qsub)s OR name ILIKE %(nsub)s
+               OR abbreviation ILIKE %(qsub)s OR slug ILIKE %(qsub)s)
+          AND conference IS NOT NULL AND conference <> ALL(%(fcs)s)
+        ORDER BY rank, name
+        LIMIT %(limit)s
+    ''', p)
+    return [{'name': r[0], 'conference': r[1], 'logo': r[2], 'color': r[3], 'rank': r[4]}
+            for r in cursor.fetchall()]
+
+
+def _search_players(cursor, q, n, limit=50):
+    """Players, best match first.
+
+    The old query matched any substring, so searching "lsu" returned two
+    receivers named Alsup — the letters are in the name — ranked alongside the
+    school itself. Substring hits now sort last, and for a query of four
+    characters or fewer they are dropped entirely: at that length a substring
+    match is a coincidence, not an intent."""
+    p = _search_params(q, n)
+    p['limit'] = limit
+    cursor.execute('''
+        SELECT p.id, p.first_name, p.last_name, p.team, p.position,
+               p.jersey, p.headshot, t.conference, t.logo_dark,
+               p.active_2026, p.year,
+               CASE WHEN LOWER(p.first_name || ' ' || p.last_name) IN (LOWER(%(q)s), LOWER(%(n)s)) THEN 0
+                    WHEN p.last_name ILIKE %(qpre)s                       THEN 1
+                    WHEN (p.first_name || ' ' || p.last_name) ILIKE %(qpre)s THEN 2
+                    WHEN p.first_name ILIKE %(qpre)s                      THEN 3
+                    WHEN (p.first_name || ' ' || p.last_name) ILIKE %(qword)s THEN 4
+                    ELSE 5 END AS rank
+        FROM players p
+        INNER JOIN teams t ON p.team = t.name
+        WHERE (p.first_name || ' ' || p.last_name) ILIKE %(qsub)s
+           OR p.last_name ILIKE %(qsub)s
+           OR p.first_name ILIKE %(qsub)s
+        ORDER BY rank,
+                 -- Among equal name matches, the player a fan is likely asking
+                 -- about: a trophy winner, then a drafted player, then someone
+                 -- currently on a roster. Searching "Mendoza" should not bury
+                 -- the Heisman winner under five alphabetical namesakes.
+                 (SELECT COUNT(*) FROM awards a WHERE a.player_id = p.id) DESC,
+                 (p.nfl_status = 'drafted') DESC,
+                 COALESCE(p.active_2026, 0) DESC,
+                 p.last_name, p.first_name
+        LIMIT %(limit)s
+    ''', p)
+    rows = [{'id': r[0], 'first': r[1], 'last': r[2], 'team': r[3], 'pos': r[4],
+             'jersey': r[5], 'headshot': r[6], 'conference': r[7], 'logo': r[8],
+             'active': r[9], 'year': r[10], 'rank': r[11]} for r in cursor.fetchall()]
+    if len(q) <= 4:
+        rows = [r for r in rows if r['rank'] < 5]
+    return rows
+
+
+def _search_rivalries(cursor, q, n, teams, limit=6):
+    """Named rivalries matching the query, or belonging to a matched team —
+    searching "Iron Bowl" should find it, and so should searching "Auburn"."""
+    p = _search_params(q, n)
+    p['limit'] = limit
+    p['names'] = [t['name'] for t in teams[:3]] or ['']
+    cursor.execute('''
+        SELECT r.rivalry_name, r.team1, r.team2, t1.logo_dark, t2.logo_dark
+        FROM rivalries r
+        LEFT JOIN teams t1 ON t1.name = r.team1
+        LEFT JOIN teams t2 ON t2.name = r.team2
+        WHERE r.rivalry_name <> '' AND r.team1 < r.team2
+          AND (r.rivalry_name ILIKE %(qsub)s
+               OR r.rivalry_name ILIKE %(nsub)s
+               OR r.team1 = ANY(%(names)s) OR r.team2 = ANY(%(names)s))
+        ORDER BY (r.rivalry_name ILIKE %(qpre)s) DESC, r.rivalry_name
+        LIMIT %(limit)s
+    ''', p)
+    return [{'name': r[0], 'team_a': r[1], 'team_b': r[2], 'logo_a': r[3], 'logo_b': r[4]}
+            for r in cursor.fetchall()]
+
+
+def _search_games(cursor, team, season):
+    """The next game and the last result for a matched team — the two questions
+    a fan searching a school most often arrives with."""
+    if not team:
+        return []
+    out = []
+    cursor.execute('''
+        SELECT id, home_team, away_team, home_points, away_points, start_date, week, season
+        FROM games
+        WHERE completed = 1 AND (home_team = %s OR away_team = %s) AND season = %s
+        ORDER BY start_date DESC NULLS LAST LIMIT 1
+    ''', (team, team, season))
+    row = cursor.fetchone()
+    if row:
+        out.append({'kind': 'Last game', 'id': row[0], 'home': row[1], 'away': row[2],
+                    'hp': row[3], 'ap': row[4], 'date': row[5], 'week': row[6], 'season': row[7]})
+    cursor.execute('''
+        SELECT id, home_team, away_team, start_date, week, season
+        FROM games
+        WHERE completed = 0 AND (home_team = %s OR away_team = %s) AND season = %s
+        ORDER BY start_date ASC NULLS LAST LIMIT 1
+    ''', (team, team, season))
+    row = cursor.fetchone()
+    if row:
+        out.insert(0, {'kind': 'Next game', 'id': row[0], 'home': row[1], 'away': row[2],
+                       'hp': None, 'ap': None, 'date': row[3], 'week': row[4], 'season': row[5]})
+    return out
+
+
 @app.route('/search')
 def search():
     q = request.args.get('q', '').strip()
-    player_results = []
-    team_results = []
+    team_results, player_results, rivalry_results, game_results = [], [], [], []
     if q:
+        raw, norm = _search_terms(q)
         conn = get_db()
         try:
             cursor = conn.cursor()
-            cursor.execute('''
-                SELECT p.id, p.first_name, p.last_name, p.team, p.position,
-                       p.jersey, p.headshot, t.conference, t.logo_dark,
-                       p.active_2026, p.year
-                FROM players p
-                INNER JOIN teams t ON p.team = t.name
-                WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
-                   OR p.last_name ILIKE %s
-                   OR p.first_name ILIKE %s
-                ORDER BY
-                    -- exact/prefix name matches first, then current players
-                    ((p.first_name || ' ' || p.last_name) ILIKE %s) DESC,
-                    (p.last_name ILIKE %s) DESC,
-                    COALESCE(p.active_2026, 0) DESC,
-                    p.last_name, p.first_name
-                LIMIT 50
-            ''', (f'%{q}%', f'%{q}%', f'%{q}%', f'{q}%', f'{q}%'))
-            player_results = cursor.fetchall()
-            cursor.execute('''
-                SELECT name, conference, logo_dark, color
-                FROM teams
-                WHERE (name ILIKE %s OR abbreviation ILIKE %s)
-                  AND conference IS NOT NULL AND conference <> ALL(%s)
-                ORDER BY name LIMIT 10
-            ''', (f'%{q}%', f'%{q}%', list(FCS_CONFS)))
-            team_results = cursor.fetchall()
+            team_results = _search_teams(cursor, raw, norm)
+            player_results = _search_players(cursor, raw, norm)
+            rivalry_results = _search_rivalries(cursor, raw, norm, team_results)
+            # Games only when one school clearly answers the query.
+            top = team_results[0] if team_results and team_results[0]['rank'] <= 1 else None
+            game_results = _search_games(cursor, top['name'] if top else None, CURRENT_SEASON)
         finally:
             release_db(conn)
-    return render_template('search.html', player_results=player_results, team_results=team_results, query=q)
+    return render_template('search.html', player_results=player_results,
+                           team_results=team_results, rivalry_results=rivalry_results,
+                           game_results=game_results, query=q)
+
 
 @app.route('/leaderboards')
 @app.route('/leaderboards/<category>')
@@ -5624,39 +5785,29 @@ def api_players():
                 ORDER BY p.last_name, p.first_name
                 LIMIT 6
             ''', (f'%{q}%', f'{q}%', *pos_cols))
-            player_rows = cursor.fetchall()
-            team_rows = []  # a position filter means the user is picking a player
+            player_dicts = [{'id': r[0], 'first': r[1], 'last': r[2], 'team': r[3],
+                             'pos': r[4], 'jersey': r[5], 'headshot': r[6], 'logo': r[7]}
+                            for r in cursor.fetchall()]
+            team_dicts = []  # a position filter means the user is picking a player
         else:
-            cursor.execute('''
-                SELECT p.id, p.first_name, p.last_name, p.team, p.position,
-                       p.jersey, p.headshot, t.logo_dark, 'player' as result_type
-                FROM players p
-                INNER JOIN teams t ON p.team = t.name
-                WHERE (p.first_name || ' ' || p.last_name) ILIKE %s
-                   OR p.last_name ILIKE %s
-                ORDER BY p.last_name, p.first_name
-                LIMIT 6
-            ''', (f'%{q}%', f'{q}%'))
-            player_rows = cursor.fetchall()
-            cursor.execute('''
-                SELECT name, conference, logo_dark, color, 'team' as result_type
-                FROM teams
-                WHERE (name ILIKE %s OR abbreviation ILIKE %s)
-                  AND conference IS NOT NULL AND conference <> ALL(%s)
-                ORDER BY name
-                LIMIT 4
-            ''', (f'%{q}%', f'%{q}%', list(FCS_CONFS)))
-            team_rows = cursor.fetchall()
+            # The same ranking the /search page uses, so the dropdown and the
+            # results page agree about what "lsu" means: the school first, never
+            # a receiver whose surname merely contains those three letters.
+            raw, norm = _search_terms(q)
+            player_dicts = _search_players(cursor, raw, norm, limit=6)
+            team_dicts = _search_teams(cursor, raw, norm, limit=4)
     finally:
         release_db(conn)
     results = []
-    for r in team_rows:
-        results.append({'type': 'team', 'name': r[0], 'conference': r[1],
-                        'logo': r[2], 'color': r[3], 'url': f'/team/{slugify_team(r[0])}'})
-    for r in player_rows:
-        results.append({'type': 'player', 'id': r[0], 'first': r[1], 'last': r[2],
-                        'team': r[3], 'pos': r[4], 'jersey': r[5],
-                        'headshot': r[6], 'logo': r[7], 'url': f'/player/{r[0]}'})
+    for t in team_dicts:
+        results.append({'type': 'team', 'name': t['name'], 'conference': t['conference'],
+                        'logo': t['logo'], 'color': t['color'],
+                        'url': f"/team/{slugify_team(t['name'])}"})
+    for pl in player_dicts:
+        results.append({'type': 'player', 'id': pl['id'], 'first': pl['first'], 'last': pl['last'],
+                        'team': pl['team'], 'pos': pl['pos'], 'jersey': pl['jersey'],
+                        'headshot': pl['headshot'], 'logo': pl['logo'],
+                        'url': f"/player/{pl['id']}"})
     return jsonify(results)
 
 @app.route('/rankings')
@@ -7484,6 +7635,11 @@ class _SkipGameLog(Exception):
     """Control-flow: game log already loaded from the Postgres store."""
 
 @app.route('/player/<int:player_id>')
+# The heaviest uncached page on the site: measured 3.2s cold and 3.8s on an
+# identical repeat, because only its helpers were memoized, never the render.
+# Same 6-hour page cache the team page uses; the season rides in the query
+# string, so each season caches separately.
+@cache.cached(timeout=21600, query_string=True)
 def player_detail(player_id):
     # Which season a bare /player/<id> opens on — this is what search results,
     # the dropdown and every unqualified link land on.

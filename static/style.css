@@ -9207,3 +9207,69 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
 @media (prefers-reduced-motion: reduce) {
     .gps-p, .gps-name { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SEARCH — game and rivalry rows
+   The results page answers more than "which player": searching a school now
+   returns its next game, its last result and its rivalries. Those are list
+   rows, not cards, so they read as one column beside the team grid above.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.sp-line-list {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+}
+.sp-line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s3);
+    min-height: 56px;
+    padding: 10px var(--s4);
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: background-color 150ms ease-out;
+}
+.sp-line + .sp-line { border-top: 1px solid var(--border); }
+.sp-line:hover { background: rgba(255,255,255,0.04); }
+.sp-line:hover .sp-line-main { color: var(--accent); }
+.sp-line:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sp-line:active { background: rgba(255,255,255,0.07); }
+.sp-line-kind {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    background: rgba(28,156,240,0.12);
+    border: 1px solid rgba(28,156,240,0.3);
+    color: #9ad4ff;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: var(--text-xs);
+    white-space: nowrap;
+}
+.sp-line-logos { display: inline-flex; align-items: center; gap: 4px; }
+.sp-line-logos img { width: 22px; height: 22px; object-fit: contain; }
+.sp-line-main {
+    min-width: 0;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: var(--text-base);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transition: color 150ms ease-out;
+}
+.sp-line-meta {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+    font-variant-numeric: proportional-nums;   /* a score, not a column */
+    white-space: nowrap;
+}
+/* Phones: the score or team pair drops under the name rather than squeezing
+   it — the row is a link, so it must never scroll the page sideways. */
+@media (max-width: 599.98px) {
+    .sp-line { grid-template-columns: auto minmax(0, 1fr); row-gap: 2px; padding: 10px var(--s3); }
+    .sp-line-meta { grid-column: 2; justify-self: start; }
+    .sp-line-main { white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) { .sp-line, .sp-line-main { transition: none; } }
