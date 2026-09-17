@@ -31,7 +31,15 @@
 
     <div class="standings-grid">
     {% for group in standings_by_conf %}
-    <section class="standings-conf">
+    {# Row span, so the grid can pack blocks instead of aligning every block in a
+       row to the tallest of them. Measured across all 11 conferences: a card is
+       87px of chrome plus 43px per team, exactly. GAP is the visual separation,
+       carried inside the span because the grid's own row-gap would apply to
+       every 1px track. SLACK absorbs a row that renders a pixel or two taller
+       than the formula — overestimating costs a hairline, underestimating would
+       overlap the block below. #}
+    {% set _span = 87 + 43 * (group.teams | length) + 28 + 8 %}
+    <section class="standings-conf" style="grid-row: span {{ _span }}">
         <!-- Conference header -->
         <div style="display:flex;align-items:center;gap: var(--s3);margin-bottom: var(--s3)">
             {% if group.logo %}<img src="{{ group.logo }}" class="conf-logo-img conf-logo-img-sm" alt="{{ group.conf }} logo" loading="lazy" width="30" height="30">{% endif %}
@@ -84,15 +92,43 @@
 </div>
 
 <style>
-    /* Two-up on wide screens so 11 conferences don't scroll forever; single
-       column on mobile. Matches the site's card layering + accent-tinted hover. */
+    /* A grid whose rows are 1px tall.
+
+       The default grid aligned every block in a row to the tallest of them, and
+       these blocks are conferences of 4 to 18 teams. Measured at 1440 that
+       stranded 86px under two blocks in the first row, 387px under the Pac-12
+       in the second and 172px in the third.
+
+       With 1px row tracks and a span per block (set on each section from its
+       team count), a block occupies exactly its own height and the next one
+       starts directly beneath it — packed, with the reading order left to right
+       preserved. `dense` is deliberately NOT used: it would pull a later
+       conference up into an earlier hole and scramble an order that is
+       deliberate (STANDINGS_CONF_ORDER: SEC, Big Ten, Big 12, ...).
+
+       No JavaScript: this is server-rendered and the layout has to hold
+       without it. */
     .standings-grid {
         display: grid;
         /* min() so the track collapses below 400px instead of forcing the
            page wider than the phone it is on */
         grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr));
-        gap: var(--s6) var(--s5);
+        column-gap: var(--s5);
+        row-gap: var(--s6);
         align-items: start;
+    }
+    /* The spans only exist to pack MULTIPLE columns. The formula behind them
+       (87px + 43px a team) was measured at desktop width, and on a phone a row
+       is taller — long team names wrap once PF/PA are hidden — so the span came
+       out short and every block overlapped the one beneath it by 119 to 319px.
+       Below two columns there is one block per row and nothing to pack, so the
+       spans are switched off and the blocks stack in normal flow, which cannot
+       overlap however tall a row renders. */
+    @media (min-width: 840px) {
+        .standings-grid { grid-auto-rows: 1px; row-gap: 0; }
+    }
+    @media (max-width: 839.98px) {
+        .standings-conf { grid-row: auto !important; }
     }
     /* Tight, single-line cells so PF/PA never clip; long team names ellipsis
        inside the flexible TEAM column rather than pushing the numbers off. */
