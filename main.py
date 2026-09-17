@@ -1182,9 +1182,11 @@ PERCENTILE_METRICS = {
         ('Deep Attempt Rate',   'air',     'deep_pct',     True),
     ],
     'RB': [
+        # Rush EPA / Play, Total EPA, Rush Yards and Rush TDs were all here and
+        # all removed: the first two restate EPA / Play, and the last two are
+        # volume, which the leaderboard already ranks. What is left says how he
+        # ran rather than how much.
         ('EPA / Play',        'ppa',       'avg_ppa_all',  True),
-        ('Rush EPA / Play',   'ppa',       'avg_ppa_rush', True),
-        ('Total EPA',         'ppa',       'total_ppa',    True),
         ('Yards / Carry',     'rushing',   'YPC',          True),
         ('Usage Rate',        'usage',     'overall',      True),
         # How he ran, not just how far. These come from rushing_player_season
@@ -1197,8 +1199,7 @@ PERCENTILE_METRICS = {
         ('Open-Field Yards',  'rush',      'open_yds',     True),
         ('Explosiveness',     'rush',      'expl',         True),
         ('Stuffed Rate',      'rush',      'stuff',        False),
-        ('Rush Yards',        'rushing',   'YDS',          True),
-        ('Rush TDs',          'rushing',   'TD',           True),
+        # Kept: the only reading of a back's work in the passing game.
         ('Receiving Yards',   'receiving', 'YDS',          True),
     ],
     'WR': [
@@ -5755,9 +5756,6 @@ def team(team_ref):
                 team_awards=team_awards, head_coach=head_coach,
                 recruiting=recruiting, havoc=havoc, conf_logo=conf_logo,
                 team_slug=team_ref,
-                # Enriched rushing, both sides: what this team ran for and what
-                # it allowed, split by direction. {} before 2025.
-                rush_splits=get_team_rushing_splits(team_name, season),
                 tab=request.args.get('tab', ''))
 
         # One tab's markup, no layout — what the page fetches when a reader
@@ -7578,30 +7576,6 @@ def get_season_passer_metrics(season):
 # UI prints it next to the numbers rather than implying a full season.
 MIN_RUSH_ATTEMPTS = 20
 
-# Direction order as a runner sees it, left to right.
-_RUSH_DIRS = (('left', 'Left'), ('middle', 'Middle'), ('right', 'Right'))
-
-
-def _rush_dirs(blob, total_carries):
-    """The three directions as display rows: share of carries, and what each
-    direction returned. `unknown` is never a row — it is reported as coverage."""
-    out = []
-    for key, label in _RUSH_DIRS:
-        d = (blob or {}).get(key) or {}
-        carries = int(d.get('carries') or 0)
-        out.append({
-            'key': key, 'label': label, 'carries': carries,
-            'share': round(carries / total_carries * 100) if total_carries else 0,
-            'ypc': d.get('yardsPerCarry'), 'yards': int(d.get('yards') or 0),
-            'sr': round((d.get('successRate') or 0) * 100),
-            'ppa': d.get('ppa'),
-            'stuff': round((d.get('stuffRate') or 0) * 100),
-            'explosive': d.get('explosiveness'),
-            'line': d.get('lineYards'),
-        })
-    return out
-
-
 @cache.memoize(timeout=21600)
 def get_season_rusher_metrics(season):
     """Every rusher's enriched metrics for a season, keyed by player id — the
@@ -7639,97 +7613,6 @@ def get_season_rusher_metrics(season):
         return out
     except Exception:
         conn.rollback()   # table absent on a fresh DB — the columns just stay empty
-        return {}
-    finally:
-        release_db(conn)
-
-
-@cache.memoize(timeout=21600)
-def get_rusher_advanced(player_id, season):
-    """One rusher's enriched season: the overall block, the three directions,
-    and how much of his running the data actually saw."""
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT attempts, yards, ypc, success_rate, ppa, total_ppa,
-                   line_yards, second_level_yards, open_field_yards,
-                   stuff_rate, power_success, explosiveness,
-                   direction_available, directions, team
-              FROM rushing_player_season
-             WHERE player_id = %s AND season = %s
-             ORDER BY attempts DESC LIMIT 1
-        """, (int(player_id), season))
-        row = cur.fetchone()
-        if not row or not (row[0] or 0):
-            return None
-        (att, yards, ypc, sr, ppa, tppa, line, second, openf,
-         stuff, power, expl, dir_avail, blob, team) = row
-
-        # The carry total the rest of the site shows, so the block can say what
-        # share of his running is enriched instead of implying all of it.
-        cur.execute("""
-            SELECT MAX(CAST(stat AS REAL)) FROM player_stats
-             WHERE player_id = %s AND season = %s AND category = 'rushing' AND stat_type = 'CAR'
-        """, (str(player_id), season))
-        carries = cur.fetchone()
-        carries = int(carries[0]) if carries and carries[0] else None
-
-        dirs = _rush_dirs(blob, sum(int(((blob or {}).get(k) or {}).get('carries') or 0)
-                                    for k, _ in _RUSH_DIRS))
-        return {
-            'attempts': int(att), 'carries': carries, 'team': team,
-            'yards': int(yards or 0), 'ypc': ypc,
-            'sr': round(sr * 100, 1) if sr is not None else None,
-            'ppa': ppa, 'total_ppa': tppa,
-            'line': line, 'second': second, 'open': openf,
-            'stuff': round(stuff * 100, 1) if stuff is not None else None,
-            'power': round(power * 100, 1) if power is not None else None,
-            'expl': expl,
-            'dir_available': int(dir_avail or 0),
-            'directions': dirs,
-            'qualified': int(att) >= MIN_RUSH_ATTEMPTS,
-        }
-    except Exception:
-        conn.rollback()
-        return None
-    finally:
-        release_db(conn)
-
-
-@cache.memoize(timeout=21600)
-def get_team_rushing_splits(team, season):
-    """A team's enriched rushing, both sides: what it ran for, and what it
-    allowed. Returns {'offense': {...}, 'defense': {...}} or {}."""
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT side, attempts, yards, ypc, success_rate, ppa,
-                   line_yards, second_level_yards, open_field_yards,
-                   stuff_rate, power_success, explosiveness, directions
-              FROM rushing_team_season
-             WHERE team = %s AND season = %s
-        """, (team, season))
-        out = {}
-        for (side, att, yards, ypc, sr, ppa, line, second, openf,
-             stuff, power, expl, blob) in cur.fetchall():
-            if not (att or 0):
-                continue
-            carried = sum(int(((blob or {}).get(k) or {}).get('carries') or 0)
-                          for k, _ in _RUSH_DIRS)
-            out[side] = {
-                'attempts': int(att), 'yards': int(yards or 0), 'ypc': ypc,
-                'sr': round(sr * 100, 1) if sr is not None else None,
-                'ppa': ppa, 'line': line, 'second': second, 'open': openf,
-                'stuff': round(stuff * 100, 1) if stuff is not None else None,
-                'power': round(power * 100, 1) if power is not None else None,
-                'expl': expl,
-                'directions': _rush_dirs(blob, carried),
-            }
-        return out
-    except Exception:
-        conn.rollback()
         return {}
     finally:
         release_db(conn)
@@ -8570,9 +8453,6 @@ def _player_detail_cached(player_id, season):
         # thrown to gets the target view; a player can legitimately have both
         # (a QB with a receiving attempt), so the template picks by position.
         target_profile=get_target_profile(player_id, season),
-        # Enriched rushing: where he ran and what the blocking gave him. None
-        # for anyone the feed has no measured carries for (it starts in 2025).
-        rush_advanced=get_rusher_advanced(player_id, season),
         usage=usage,
         is_active_2026=is_active_2026,
         draft_status=draft_status,
@@ -9190,18 +9070,32 @@ def _build_compare_group_rows(cursor, group_name, slots):
         sp = full_pools('rushing', peer)
         rush_stat, rush_min = _qual_threshold('RB', 'rushing')
         sp_q = qual_pools(sp, sp, rush_stat, rush_min)
+        # Enriched rushing, the same bars the player page shows. Keyed on the
+        # TEXT player id, which is the shape _cmp_row reads. A back under the
+        # measured-carry floor has None for each and drops out of the bar
+        # rather than ranking on a handful of runs.
+        rush_adv = {yr: get_season_rusher_metrics(yr) for yr in seasons}
+        rush_adv_q = {yr: {pid: d for pid, d in rush_adv[yr].items()
+                           if (d.get('rush_att') or 0) >= MIN_RUSH_ATTEMPTS}
+                      for yr in seasons}
         add('Rushing',
-            _cmp_row('Rush Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True),
-            _cmp_row('Yds/Carry',  slots, sp, sp_q, 'YPC', games_by_slot),
-            _cmp_row('Rush TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True))
+            _cmp_row('Yds/Carry',      slots, sp, sp_q, 'YPC', games_by_slot),
+            _cmp_row('Success Rate',   slots, rush_adv, rush_adv_q, 'sr', games_by_slot, suffix='%'),
+            _cmp_row('Line Yards',     slots, rush_adv, rush_adv_q, 'line_yds', games_by_slot),
+            _cmp_row('Second-Level',   slots, rush_adv, rush_adv_q, 'sec_yds', games_by_slot),
+            _cmp_row('Open-Field',     slots, rush_adv, rush_adv_q, 'open_yds', games_by_slot),
+            _cmp_row('Explosiveness',  slots, rush_adv, rush_adv_q, 'expl', games_by_slot, decimals=2),
+            _cmp_row('Stuffed Rate',   slots, rush_adv, rush_adv_q, 'stuff', games_by_slot,
+                     suffix='%', higher_better=False))
 
         pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold('RB', 'ppa')
         pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
+        # EPA / Play rather than EPA / Rush, matching the player page: one EPA
+        # reading, not two. The team success-rate proxy is gone — it stood in
+        # for a player-level number that now exists above.
         add('Efficiency',
-            _cmp_row('EPA / Rush', slots, pp, pp_q, 'avg_ppa_rush', games_by_slot, decimals=3),
-            _cmp_team_proxy_row(cursor, 'Rush Success Rate (Team)', slots,
-                                'off_rushing_success_rate', pct=True))
+            _cmp_row('EPA / Play', slots, pp, pp_q, 'avg_ppa_all', games_by_slot, decimals=3))
 
         add('Usage',
             _cmp_usage_row(cursor, 'Rush Usage', slots, 'rush', pct=True))

@@ -436,62 +436,6 @@
             </div>
             {% endif %}
 
-            {# Where he ran, from the enriched rushing feed. The coverage line is
-               part of the block: these rates are measured over the carries the
-               source actually enriched, which is not always his whole season. #}
-            {% if rush_advanced %}
-            {% set top_share = rush_advanced.directions | map(attribute='share') | max %}
-            <div class="rsp">
-                <div class="rsp-head">
-                    <h3 class="rsp-k">Where he runs</h3>
-                    <span class="rsp-cov">
-                        {{ rush_advanced.attempts }}{% if rush_advanced.carries %} of {{ rush_advanced.carries }}{% endif %} carries measured
-                    </span>
-                </div>
-
-                <div class="rsp-lanes">
-                    {% for d in rush_advanced.directions %}
-                    <div class="rsp-lane">
-                        <span class="rsp-lane-k">{{ d.label }}</span>
-                        <span class="rsp-ypc">{{ '%.1f'|format(d.ypc) if d.ypc is not none else '—' }}<span class="rsp-ypc-u">yds / carry</span></span>
-                        <span class="rsp-share">
-                            <span class="rsp-track" aria-hidden="true"><span class="rsp-fill{{ '' if d.share == top_share and d.share else ' is-quiet' }}" style="width: {{ d.share }}%"></span></span>
-                            <span class="rsp-share-n">{{ d.share }}% of carries</span>
-                        </span>
-                        <span class="rsp-sub">{{ d.carries }} carr{{ 'y' if d.carries == 1 else 'ies' }} · {{ d.sr }}% on schedule</span>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <div class="rsp-metrics">
-                    {% for k, v, unit in [
-                        ('Success rate', rush_advanced.sr, '%'),
-                        ('Line yards', rush_advanced.line, ''),
-                        ('Second level', rush_advanced.second, ''),
-                        ('Open field', rush_advanced.open, ''),
-                        ('Stuffed', rush_advanced.stuff, '%'),
-                        ('Power success', rush_advanced.power, '%'),
-                        ('Explosiveness', rush_advanced.expl, '') ] %}
-                    <div class="rsp-m">
-                        <span class="rsp-m-k">{{ k }}</span>
-                        <span class="rsp-m-v">{% if v is not none %}{{ '%.1f'|format(v) if unit != '%' else v }}{{ unit }}{% else %}—{% endif %}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <p class="rsp-note">
-                    Line yards are the part of a run credited to the blocking in front of him;
-                    second-level and open-field yards are what he adds past it. Success rate is
-                    the share of carries that kept the offense on schedule, and stuffed is the
-                    share stopped at or behind the line.
-                    {% if not rush_advanced.qualified %}
-                    <strong>Only {{ rush_advanced.attempts }} of his carries are measured so far</strong>, so
-                    read these as a direction of travel rather than a settled rate.
-                    {% endif %}
-                </p>
-            </div>
-            {% endif %}
-
             {# Receiving — WR, TE, RB only #}
             {% if (is_receiver or is_rb) and stats.get('receiving') %}
             <div class="mb-4">
