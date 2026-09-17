@@ -1187,6 +1187,16 @@ PERCENTILE_METRICS = {
         ('Total EPA',         'ppa',       'total_ppa',    True),
         ('Yards / Carry',     'rushing',   'YPC',          True),
         ('Usage Rate',        'usage',     'overall',      True),
+        # How he ran, not just how far. These come from rushing_player_season
+        # and are None until 20 of his carries are actually enriched, so a back
+        # the source has barely measured shows his other bars and none of these.
+        # Stuff rate is the one bar where lower is better.
+        ('Success Rate',      'rush',      'sr',           True),
+        ('Line Yards',        'rush',      'line_yds',     True),
+        ('Second-Level Yards','rush',      'sec_yds',      True),
+        ('Open-Field Yards',  'rush',      'open_yds',     True),
+        ('Explosiveness',     'rush',      'expl',         True),
+        ('Stuffed Rate',      'rush',      'stuff',        False),
         ('Rush Yards',        'rushing',   'YDS',          True),
         ('Rush TDs',          'rushing',   'TD',           True),
         ('Receiving Yards',   'receiving', 'YDS',          True),
@@ -1306,6 +1316,12 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
             raw = get_season_passer_metrics(season)
             sources['air'] = ({str(pid): d for pid, d in raw.items()
                                if str(pid) in qualified}, False)
+        elif src == 'rush':
+            # Same INTEGER-vs-TEXT player_id trap as 'air' above: without str()
+            # every lookup misses and the rushing bars silently vanish.
+            raw = get_season_rusher_metrics(season)
+            sources['rush'] = ({str(pid): d for pid, d in raw.items()
+                                if str(pid) in qualified}, False)
         elif src == 'ints':
             raw = _fetch_stats_pool(cursor, 'interceptions', gp, season)
             sources['ints'] = ({pid: {'INT': (raw.get(pid, {}).get('INT') or 0)}
@@ -2139,7 +2155,17 @@ PLAYER_COLUMNS = {
             ('epa_rush',  'EPA/R', 'EPA Per Rush', True, 'epa'),
             ('total_epa', 'PPA',   'Total Predicted Points Added', True, 'float1'),
             ('usage',     'USG%',  'Rush Usage Rate — share of team rush plays', True, 'pct1'),
-            ('exp_pct',   'EXP%',  'Explosive Run Rate (≥10 yds) — not available in current dataset', False, 'na'),
+            # From the enriched rushing feed. Every one of these is blank until
+            # 20 of a back's carries are measured, and the count they are
+            # measured over is the RC column beside them — not his carry total.
+            ('rush_att',  'RC',    'Rushes with enriched data behind them — the sample every column to the right is measured over, which can differ from his carry total', True, 'int'),
+            ('sr',        'SR%',   'Success Rate — share of his runs that kept the offense on schedule', True, 'pct1'),
+            ('line_yds',  'LINE',  'Line Yards per carry — the part of a run credited to the blocking in front of him', True, 'float1'),
+            ('sec_yds',   '2ND',   'Second-Level Yards per carry — yards gained 5 to 10 past the line, where the back beats the linebackers', True, 'float1'),
+            ('open_yds',  'OPEN',  'Open-Field Yards per carry — everything past 10 yards, which is the back running away from the defense', True, 'float1'),
+            ('stuff',     'STF%',  'Stuffed Rate — share of carries stopped at or behind the line. Lower is better, so the heat is inverted', True, 'pct1'),
+            ('power',     'POW%',  'Power Success — short-yardage conversions on third or fourth and 2 or less', True, 'pct1'),
+            ('expl',      'EXPL',  'Explosiveness — average EPA of his successful runs, so a back who breaks long ones rates above one who grinds', True, 'float1'),
         ],
     },
     'receiving': {
@@ -3608,6 +3634,11 @@ def leaderboards(category='passing'):
             usage_select = ', pu.rush as usage_rush' if view == 'advanced' else ''
             usage_group  = ', pu.rush' if view == 'advanced' else ''
 
+            # Enriched rushing for the whole season in one read, the same way the
+            # passing board pulls air yards. Keyed on the TEXT player id, so the
+            # lookup below stringifies p.id — the passing map keys on INTEGER.
+            _rusher = get_season_rusher_metrics(season) if view == 'advanced' else {}
+
             cursor.execute(f'''
                 SELECT
                     p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
@@ -3651,7 +3682,13 @@ def leaderboards(category='passing'):
                         if usage_val <= 1.0: usage_val *= 100
                         usage_val = round(usage_val, 1)
                     row['usage'] = usage_val
-                    row['exp_pct'] = None
+                    # A back the feed has not measured, and one under the
+                    # 20-carry floor, both blank out rather than showing a rate
+                    # drawn from a handful of runs.
+                    row.update(_rusher.get(str(r[0])) or {})
+                    for _k in ('rush_att', 'sr', 'line_yds', 'sec_yds',
+                               'open_yds', 'stuff', 'power', 'expl'):
+                        row.setdefault(_k, None)
                 players.append(row)
 
         elif category == 'receiving':
@@ -5718,6 +5755,9 @@ def team(team_ref):
                 team_awards=team_awards, head_coach=head_coach,
                 recruiting=recruiting, havoc=havoc, conf_logo=conf_logo,
                 team_slug=team_ref,
+                # Enriched rushing, both sides: what this team ran for and what
+                # it allowed, split by direction. {} before 2025.
+                rush_splits=get_team_rushing_splits(team_name, season),
                 tab=request.args.get('tab', ''))
 
         # One tab's markup, no layout — what the page fetches when a reader
@@ -7528,6 +7568,173 @@ def get_season_passer_metrics(season):
         release_db(conn)
 
 
+# ── Enriched rushing (pipeline/fetch_rushing.py) ────────────────────────────
+# Success rate, line / second-level / open-field yards, stuff rate, power
+# success and explosiveness, split left / middle / right.
+#
+# `attempts` on these rows counts ENRICHED attempts, not carries: it is the
+# denominator for every rate beside it, it can differ from a player's carry
+# total, and coverage varies by game. So everything below gates on it, and the
+# UI prints it next to the numbers rather than implying a full season.
+MIN_RUSH_ATTEMPTS = 20
+
+# Direction order as a runner sees it, left to right.
+_RUSH_DIRS = (('left', 'Left'), ('middle', 'Middle'), ('right', 'Right'))
+
+
+def _rush_dirs(blob, total_carries):
+    """The three directions as display rows: share of carries, and what each
+    direction returned. `unknown` is never a row — it is reported as coverage."""
+    out = []
+    for key, label in _RUSH_DIRS:
+        d = (blob or {}).get(key) or {}
+        carries = int(d.get('carries') or 0)
+        out.append({
+            'key': key, 'label': label, 'carries': carries,
+            'share': round(carries / total_carries * 100) if total_carries else 0,
+            'ypc': d.get('yardsPerCarry'), 'yards': int(d.get('yards') or 0),
+            'sr': round((d.get('successRate') or 0) * 100),
+            'ppa': d.get('ppa'),
+            'stuff': round((d.get('stuffRate') or 0) * 100),
+            'explosive': d.get('explosiveness'),
+            'line': d.get('lineYards'),
+        })
+    return out
+
+
+@cache.memoize(timeout=21600)
+def get_season_rusher_metrics(season):
+    """Every rusher's enriched metrics for a season, keyed by player id — the
+    leaderboard needs hundreds of these and a per-player query would be hundreds
+    of round trips.
+
+    Values are None below MIN_RUSH_ATTEMPTS enriched attempts: a stuff rate off
+    six carries is noise wearing a season label.
+    """
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT player_id, attempts, ypc, success_rate, ppa,
+                   line_yards, second_level_yards, open_field_yards,
+                   stuff_rate, power_success, explosiveness
+              FROM rushing_player_season
+             WHERE season = %s
+        """, (season,))
+        out = {}
+        for (pid, att, ypc, sr, ppa, line, second, openf, stuff, power, expl) in cur.fetchall():
+            ok = (att or 0) >= MIN_RUSH_ATTEMPTS
+            out[str(pid)] = {
+                'rush_att': int(att or 0),
+                'rush_ypc': round(ypc, 1) if (ok and ypc is not None) else None,
+                'sr': round(sr * 100, 1) if (ok and sr is not None) else None,
+                'rush_ppa': round(ppa, 3) if (ok and ppa is not None) else None,
+                'line_yds': round(line, 1) if (ok and line is not None) else None,
+                'sec_yds': round(second, 1) if (ok and second is not None) else None,
+                'open_yds': round(openf, 1) if (ok and openf is not None) else None,
+                'stuff': round(stuff * 100, 1) if (ok and stuff is not None) else None,
+                'power': round(power * 100, 1) if (ok and power is not None) else None,
+                'expl': round(expl, 2) if (ok and expl is not None) else None,
+            }
+        return out
+    except Exception:
+        conn.rollback()   # table absent on a fresh DB — the columns just stay empty
+        return {}
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_rusher_advanced(player_id, season):
+    """One rusher's enriched season: the overall block, the three directions,
+    and how much of his running the data actually saw."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT attempts, yards, ypc, success_rate, ppa, total_ppa,
+                   line_yards, second_level_yards, open_field_yards,
+                   stuff_rate, power_success, explosiveness,
+                   direction_available, directions, team
+              FROM rushing_player_season
+             WHERE player_id = %s AND season = %s
+             ORDER BY attempts DESC LIMIT 1
+        """, (int(player_id), season))
+        row = cur.fetchone()
+        if not row or not (row[0] or 0):
+            return None
+        (att, yards, ypc, sr, ppa, tppa, line, second, openf,
+         stuff, power, expl, dir_avail, blob, team) = row
+
+        # The carry total the rest of the site shows, so the block can say what
+        # share of his running is enriched instead of implying all of it.
+        cur.execute("""
+            SELECT MAX(CAST(stat AS REAL)) FROM player_stats
+             WHERE player_id = %s AND season = %s AND category = 'rushing' AND stat_type = 'CAR'
+        """, (str(player_id), season))
+        carries = cur.fetchone()
+        carries = int(carries[0]) if carries and carries[0] else None
+
+        dirs = _rush_dirs(blob, sum(int(((blob or {}).get(k) or {}).get('carries') or 0)
+                                    for k, _ in _RUSH_DIRS))
+        return {
+            'attempts': int(att), 'carries': carries, 'team': team,
+            'yards': int(yards or 0), 'ypc': ypc,
+            'sr': round(sr * 100, 1) if sr is not None else None,
+            'ppa': ppa, 'total_ppa': tppa,
+            'line': line, 'second': second, 'open': openf,
+            'stuff': round(stuff * 100, 1) if stuff is not None else None,
+            'power': round(power * 100, 1) if power is not None else None,
+            'expl': expl,
+            'dir_available': int(dir_avail or 0),
+            'directions': dirs,
+            'qualified': int(att) >= MIN_RUSH_ATTEMPTS,
+        }
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+
+@cache.memoize(timeout=21600)
+def get_team_rushing_splits(team, season):
+    """A team's enriched rushing, both sides: what it ran for, and what it
+    allowed. Returns {'offense': {...}, 'defense': {...}} or {}."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT side, attempts, yards, ypc, success_rate, ppa,
+                   line_yards, second_level_yards, open_field_yards,
+                   stuff_rate, power_success, explosiveness, directions
+              FROM rushing_team_season
+             WHERE team = %s AND season = %s
+        """, (team, season))
+        out = {}
+        for (side, att, yards, ypc, sr, ppa, line, second, openf,
+             stuff, power, expl, blob) in cur.fetchall():
+            if not (att or 0):
+                continue
+            carried = sum(int(((blob or {}).get(k) or {}).get('carries') or 0)
+                          for k, _ in _RUSH_DIRS)
+            out[side] = {
+                'attempts': int(att), 'yards': int(yards or 0), 'ypc': ypc,
+                'sr': round(sr * 100, 1) if sr is not None else None,
+                'ppa': ppa, 'line': line, 'second': second, 'open': openf,
+                'stuff': round(stuff * 100, 1) if stuff is not None else None,
+                'power': round(power * 100, 1) if power is not None else None,
+                'expl': expl,
+                'directions': _rush_dirs(blob, carried),
+            }
+        return out
+    except Exception:
+        conn.rollback()
+        return {}
+    finally:
+        release_db(conn)
+
+
 @cache.memoize(timeout=21600)
 def get_season_receiving_metrics(season):
     """Every receiver's target metrics for a season, keyed by player id.
@@ -8363,6 +8570,9 @@ def _player_detail_cached(player_id, season):
         # thrown to gets the target view; a player can legitimately have both
         # (a QB with a receiving attempt), so the template picks by position.
         target_profile=get_target_profile(player_id, season),
+        # Enriched rushing: where he ran and what the blocking gave him. None
+        # for anyone the feed has no measured carries for (it starts in 2025).
+        rush_advanced=get_rusher_advanced(player_id, season),
         usage=usage,
         is_active_2026=is_active_2026,
         draft_status=draft_status,

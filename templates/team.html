@@ -156,19 +156,19 @@
         {% endif %}
         <div class="tabs-bar" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <ul class="nav nav-tabs" id="teamTabs" style="margin-top:28px;flex:1;min-width:0">
-            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" id="tab-overview" aria-controls="overview" data-bs-target="#overview">Overview</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-team-stats" aria-controls="team-stats" data-bs-target="#team-stats">Team Stats</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-player-stats" aria-controls="player-stats" data-bs-target="#player-stats">Player Stats</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-trends" aria-controls="trends" data-bs-target="#trends">Trends</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-roster" aria-controls="roster" data-bs-target="#roster">Roster</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if not tab or tab == 'overview' }}" data-bs-toggle="tab" id="tab-overview" aria-controls="overview" data-bs-target="#overview">Overview</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'team-stats' }}" data-bs-toggle="tab" id="tab-team-stats" aria-controls="team-stats" data-bs-target="#team-stats">Team Stats</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'player-stats' }}" data-bs-toggle="tab" id="tab-player-stats" aria-controls="player-stats" data-bs-target="#player-stats">Player Stats</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'trends' }}" data-bs-toggle="tab" id="tab-trends" aria-controls="trends" data-bs-target="#trends">Trends</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'roster' }}" data-bs-toggle="tab" id="tab-roster" aria-controls="roster" data-bs-target="#roster">Roster</button></li>
             {# Starters is a sibling tab that opens the projected depth chart in
                place, under the hero (an in-page tab pane, not a page nav). Shown
                only on the upcoming-season view, where the projection exists. #}
             {% if is_upcoming_season and lineup %}
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-starters" aria-controls="starters" data-bs-target="#starters">Starters</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'starters' }}" data-bs-toggle="tab" id="tab-starters" aria-controls="starters" data-bs-target="#starters">Starters</button></li>
             {% endif %}
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-transfers" aria-controls="transfers" data-bs-target="#transfers">Transfers</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" id="tab-nfl-talent" aria-controls="nfl-talent" data-bs-target="#nfl-talent">NFL Talent</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'transfers' }}" data-bs-toggle="tab" id="tab-transfers" aria-controls="transfers" data-bs-target="#transfers">Transfers</button></li>
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'nfl-talent' }}" data-bs-toggle="tab" id="tab-nfl-talent" aria-controls="nfl-talent" data-bs-target="#nfl-talent">NFL Talent</button></li>
         </ul>
         {% if available_seasons and available_seasons|length > 1 %}
         <select class="lb-select season-select" style="min-width:110px;margin-bottom:6px" aria-label="Season"
@@ -186,7 +186,7 @@
 <div class="tab-content">
 
 <!-- ===== OVERVIEW ===== -->
-<div class="tab-pane fade show active" id="overview" aria-labelledby="tab-overview" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if not tab or tab == 'overview' }}" id="overview" aria-labelledby="tab-overview" tabindex="0">
 
     <!-- Schedule + Standings -->
     <div class="row g-4 mt-1">
@@ -350,7 +350,7 @@
 
 
 <!-- ===== TEAM STATS ===== -->
-<div class="tab-pane fade" id="team-stats" aria-labelledby="tab-team-stats" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'team-stats' }}" id="team-stats" aria-labelledby="tab-team-stats" tabindex="0">
 {# Deferred: the body lives in _team_pane_team_stats.html and arrives when this
    tab is first opened. ?tab=team-stats renders it inline instead, which is
    also what the no-JS link below asks for. #}
@@ -363,7 +363,7 @@
 
 
 <!-- ===== PLAYER STATS ===== -->
-<div class="tab-pane fade" id="player-stats" aria-labelledby="tab-player-stats" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'player-stats' }}" id="player-stats" aria-labelledby="tab-player-stats" tabindex="0">
 {# Deferred: the body lives in _team_pane_player_stats.html and arrives when this
    tab is first opened. ?tab=player-stats renders it inline instead, which is
    also what the no-JS link below asks for. #}
@@ -375,7 +375,7 @@
 <!-- ===== END PLAYER STATS ===== -->
 
 <!-- ===== TRENDS ===== -->
-<div class="tab-pane fade" id="trends" aria-labelledby="tab-trends" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'trends' }}" id="trends" aria-labelledby="tab-trends" tabindex="0">
 <div class="pt-4">
 
     <div style="margin-bottom:24px">
@@ -415,7 +415,7 @@
 </div>
 
 <!-- ===== ROSTER ===== -->
-<div class="tab-pane fade" id="roster" aria-labelledby="tab-roster" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'roster' }}" id="roster" aria-labelledby="tab-roster" tabindex="0">
 {# Deferred: the body lives in _team_pane_roster.html and arrives when this
    tab is first opened. ?tab=roster renders it inline instead, which is
    also what the no-JS link below asks for. #}
@@ -428,7 +428,7 @@
 
 <!-- ===== STARTERS (projected depth chart, in-page) ===== -->
 {% if is_upcoming_season and lineup %}
-<div class="tab-pane fade" id="starters" aria-labelledby="tab-starters" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'starters' }}" id="starters" aria-labelledby="tab-starters" tabindex="0">
 {# Deferred: the body lives in _team_pane_starters.html and arrives when this
    tab is first opened. ?tab=starters renders it inline instead, which is
    also what the no-JS link below asks for. #}
@@ -441,7 +441,7 @@
 <!-- ===== END STARTERS ===== -->
 
 <!-- ===== TRANSFERS ===== -->
-<div class="tab-pane fade" id="transfers" aria-labelledby="tab-transfers" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'transfers' }}" id="transfers" aria-labelledby="tab-transfers" tabindex="0">
 {# Deferred: the body lives in _team_pane_transfers.html and arrives when this
    tab is first opened. ?tab=transfers renders it inline instead, which is
    also what the no-JS link below asks for. #}
@@ -453,7 +453,7 @@
 <!-- ===== END TRANSFERS ===== -->
 
 <!-- ===== NFL TALENT ===== -->
-<div class="tab-pane fade" id="nfl-talent" aria-labelledby="tab-nfl-talent" tabindex="0">
+<div class="tab-pane fade{{ ' show active' if tab == 'nfl-talent' }}" id="nfl-talent" aria-labelledby="tab-nfl-talent" tabindex="0">
 {# Deferred: the body lives in _team_pane_nfl_talent.html and arrives when this
    tab is first opened. ?tab=nfl-talent renders it inline instead, which is
    also what the no-JS link below asks for. #}

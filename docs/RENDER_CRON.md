@@ -22,12 +22,13 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 10. `pipeline/refresh_headshots.py --active-only` — player headshots *(non-fatal)*
 11. `pipeline/fetch_game_summaries.py` — game summaries / drives
 12. `pipeline/fetch_passing.py` — play-level passing: air yards / location / YAC *(non-fatal)*
-13. `pipeline/compute_savant_ratings.py` — Savant ratings → `savant_ratings`
-14. `pipeline/backfill_pools.py` — percentile peer pools → `pool_store`
-15. `pipeline/precompute.py` — team-page + returning-production precompute → `pool_store`
-16. `pipeline/fetch_betting_lines.py` — Vegas lines, active season
-17. `pipeline/predict_games.py` — Savant Forecast: score last week, predict upcoming
-18. `pipeline/apply_week_zero.py` — again, for the tables written since *(non-fatal)*
+13. `pipeline/fetch_rushing.py` — enriched rushing: directional splits, line / second-level / open-field yards, stuff rate, power success, explosiveness *(non-fatal)*
+14. `pipeline/compute_savant_ratings.py` — Savant ratings → `savant_ratings`
+15. `pipeline/backfill_pools.py` — percentile peer pools → `pool_store`
+16. `pipeline/precompute.py` — team-page + returning-production precompute → `pool_store`
+17. `pipeline/fetch_betting_lines.py` — Vegas lines, active season
+18. `pipeline/predict_games.py` — Savant Forecast: score last week, predict upcoming
+19. `pipeline/apply_week_zero.py` — again, for the tables written since *(non-fatal)*
 
 **Week 0 runs twice, and that is deliberate.** College football opens with a
 handful of games the Saturday before the real opening weekend. **No upstream
