@@ -1,0 +1,84 @@
+{# Inner markup of the team page's roster tab.
+   Extracted so the tab can be fetched on demand: the full team page was
+   773KB because every tab shipped whether or not it was opened. Rendered
+   standalone by /team/<x>?pane=roster, and included by team.html when
+   ?tab=roster asks for it server-side (the no-JS path). #}
+<div class="pt-4">
+
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
+    <h2 class="section-label" style="margin:0;font-size: var(--text-base)">{{ roster_season }} Roster</h2>
+    {% if is_upcoming_season %}
+    <span class="badge-pos" style="letter-spacing:0.04em">Current</span>
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Active roster, including offseason transfers</span>
+    {% else %}
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Roster as of the {{ roster_season }} season</span>
+    {% endif %}
+</div>
+
+{# Projected starters have their own top-level "Starters" tab (a link to the
+   standalone depth-chart page); the Roster tab is purely the roster table. #}
+{% set off_positions = ['QB','RB','HB','FB','WR','TE','OL','OT','OG','LT','LG','C','RG','RT'] %}
+{% set def_positions = ['DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB','CB','S','SS','FS','SAF','DB'] %}
+{% set spc_positions = ['K','P','LS','ATH','APB'] %}
+
+{% macro roster_section(title, positions) %}
+{% set section_players = roster | selectattr(2, 'in', positions) | list %}
+{% if section_players %}
+<div class="mb-5">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h2>
+        <div style="flex:1;height:1px;background: var(--border)"></div>
+        <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ section_players|length }} players</span>
+    </div>
+    <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+            <thead>
+                <tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+                    <th style="text-align:left">Player</th>
+                    <th style="text-align:center">Pos</th>
+                    <th style="text-align:center">Ht</th>
+                    <th style="text-align:center">Wt</th>
+                    <th style="text-align:center">Yr</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in section_players %}
+                {% set feet = (player[6] // 12) if player[6] else none %}
+                {% set inches = (player[6] % 12) if player[6] else none %}
+                {% set year_map = {'1':'Fr','2':'So','3':'Jr','4':'Sr','5':'Gr'} %}
+                <tr class="player-row" style="border-bottom: 1px solid var(--border)">
+                    <td style="padding:10px 16px">
+                        <div style="display:flex;align-items:center;gap:12px">
+                            {% if player[5] %}<img src="{{ player[5] }}" alt="{{ player[0] }} {{ player[1] }} headshot" style="width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:top;border: 1px solid var(--border-strong);flex-shrink:0">
+                            {% else %}<div style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary);flex-shrink:0">{{ player[0][0] if player[0] else '' }}{{ player[1][0] if player[1] else '' }}</div>{% endif %}
+                            <div>
+                                {% if player[4] %}
+                                <a class="row-link" href="{{ player_url(player[4], season) }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);text-decoration:none"
+                                   onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ player[0] }} {{ player[1] }}</a>
+                                {% else %}
+                                <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base)">{{ player[0] }} {{ player[1] }}</span>
+                                {% endif %}
+                                {% if player[3] %}<span style="color: var(--text-dim);font-size: var(--text-sm);margin-left:8px">#{{ player[3] }}</span>{% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:10px 12px;text-align:center">
+                        <span class="badge-pos">{{ player[2] or '—' }}</span>
+                    </td>
+                    <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-base)">{% if feet is not none %}{{ feet }}'{{ inches }}"{% else %}—{% endif %}</td>
+                    <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-base)">{% if player[7] %}{{ player[7] }} lbs{% else %}—{% endif %}</td>
+                    <td style="padding:10px 12px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm);font-weight:600">{% if player[9] and player[8] in year_map %}<span title="Redshirt" style="color: var(--gold)">RS </span>{% endif %}{{ year_map.get(player[8], player[8] or '—') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{{ roster_section('Offense', off_positions) }}
+{{ roster_section('Defense', def_positions) }}
+{{ roster_section('Special Teams', spc_positions) }}
+
+</div>

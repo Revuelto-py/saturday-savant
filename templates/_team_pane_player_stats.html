@@ -1,0 +1,246 @@
+{# Inner markup of the team page's player stats tab.
+   Extracted so the tab can be fetched on demand: the full team page was
+   773KB because every tab shipped whether or not it was opened. Rendered
+   standalone by /team/<x>?pane=player-stats, and included by team.html when
+   ?tab=player-stats asks for it server-side (the no-JS path). #}
+<div class="pt-4">
+
+{# Half-sacks and half-TFL are real values: |int alone turned 4.5 into 4 and
+   made this table disagree with the player page and the leaderboards. Whole
+   numbers still render whole, so counting stats are unchanged. #}
+{% macro stat_box(val) %}
+    {% if val is not none and val != '' %}{% set n = val|float %}<span style="display:inline-block;border: 1px solid var(--border-strong);border-radius: var(--r-sm);padding:1px 7px;font-size: var(--text-sm);color: var(--text-primary);font-weight:600;min-width:36px;text-align:center">{{ n|int if n == n|int else '%.1f'|format(n) }}</span>
+    {% else %}<span style="color: var(--text-dim)">—</span>{% endif %}
+{% endmacro %}
+
+{% macro player_cell(p) %}
+<td style="padding:10px 14px">
+    <div style="display:flex;align-items:center;gap:10px">
+        {% if p.headshot %}<img src="{{ p.headshot }}" alt="{{ p.name }} headshot" style="width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:top;border: 1px solid var(--border-strong);flex-shrink:0">
+        {% else %}<div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.06);border: 1px solid var(--border-strong);display:flex;align-items:center;justify-content:center;font-size: var(--text-xs);font-weight:700;color: var(--text-secondary);flex-shrink:0">{{ p.name[0] if p.name else '?' }}</div>{% endif %}
+        {% if p.player_id %}
+        <a class="row-link" href="{{ player_url(p.player_id, season) }}" style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);white-space:nowrap;text-decoration:none"
+           onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-primary)'">{{ p.name }}</a>
+        {% else %}
+        <span style="color: var(--text-primary);font-weight:700;font-size: var(--text-base);white-space:nowrap">{{ p.name }}</span>
+        {% endif %}
+    </div>
+</td>
+{% endmacro %}
+
+{% macro stat_table_header(title, color) %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+    <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">{{ title }}</h2>
+    <div style="flex:1;height:1px;background: var(--border)"></div>
+</div>
+{% endmacro %}
+
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:20px">
+    <h2 class="section-label" style="margin:0;font-size: var(--text-base)">{{ season }} Season Stats</h2>
+    {# "Final" means the season is over, not that a game has been played —
+       has_games fires in week 1 of thirteen. #}
+    {% if has_games and season < current_season %}<span class="badge-pos" style="letter-spacing:0.04em">Final</span>
+    {% elif has_games %}<span class="badge-pos" style="letter-spacing:0.04em;opacity:0.75">Through week {{ svr_week or '—' }}</span>{% endif %}
+    <span style="color: var(--text-dim);font-size: var(--text-xs)">Individual production from the {{ season }} season</span>
+</div>
+
+{% if not has_games %}
+<div class="pending-panel">Player stats for {{ season }} will appear here once games are played. See the <b>Roster</b> tab for the current roster and projected starters.</div>
+{% endif %}
+
+{% if passing_stats %}
+<div class="mb-5">
+    {{ stat_table_header('Passing Leaders','#34d399') }}
+    <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+    <table class="data-table" style="width:100%">
+        <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+            <th style="width:36px">Rk</th>
+            <th style="text-align:left">Player</th>
+            <th style="text-align:center">Cmp</th>
+            <th style="text-align:center">Att</th>
+            <th style="color:#34d399;text-align:center">Yds ↓</th>
+            <th style="text-align:center">TD</th>
+            <th style="text-align:center">INT</th>
+            <th style="text-align:center">Pct</th>
+            <th style="text-align:center">Y/A</th>
+        </tr></thead>
+        <tbody>
+            {% for p in passing_stats %}
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border)">
+                <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
+                {{ player_cell(p) }}
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('COMPLETIONS')) }}</td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('ATT')) }}</td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(52,211,153,0.04)"><span style="color:#34d399;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('PCT')|float) if p.get('PCT') else '—' }}%</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPA')|float) if p.get('YPA') else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+{% endif %}
+
+{% if rushing_stats %}
+<div class="mb-5">
+    {{ stat_table_header('Rushing Leaders','#7cc4ff') }}
+    <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+    <table class="data-table" style="width:100%">
+        <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+            <th style="width:36px">Rk</th>
+            <th style="text-align:left">Player</th>
+            <th style="text-align:center">Att</th>
+            <th style="color:#7cc4ff;text-align:center">Yds ↓</th>
+            <th style="text-align:center">Avg</th>
+            <th style="text-align:center">TD</th>
+            <th style="text-align:center">Long</th>
+        </tr></thead>
+        <tbody>
+            {% for p in rushing_stats %}
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border)">
+                <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
+                {{ player_cell(p) }}
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('CAR')) }}</td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#7cc4ff;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') is not none else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPC')|float) if p.get('YPC') else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+{% endif %}
+
+{% if receiving_stats %}
+<div class="mb-5">
+    {{ stat_table_header('Receiving Leaders','#f7b928') }}
+    <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+    <table class="data-table" style="width:100%">
+        <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+            <th style="width:36px">Rk</th>
+            <th style="text-align:left">Player</th>
+            <th style="text-align:center">Rec</th>
+            <th style="color:#f7b928;text-align:center">Yds ↓</th>
+            <th style="text-align:center">Avg</th>
+            <th style="text-align:center">TD</th>
+            <th style="text-align:center">Long</th>
+        </tr></thead>
+        <tbody>
+            {% for p in receiving_stats %}
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border)">
+                <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
+                {{ player_cell(p) }}
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('REC')) }}</td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(251,191,36,0.04)"><span style="color:#f7b928;font-weight:800;font-size: var(--text-base)">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPR')|float) if p.get('YPR') else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TD')) }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+{% endif %}
+
+{% if defensive_stats %}
+<div class="mb-5">
+    {{ stat_table_header('Defensive Leaders','#c0a9ff') }}
+    <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+    <table class="data-table" style="width:100%">
+        <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+            <th style="width:36px">Rk</th>
+            <th style="text-align:left">Player</th>
+            <th style="text-align:center">Solo</th>
+            <th style="text-align:center">Ast</th>
+            <th style="color:#c0a9ff;text-align:center">Tot ↓</th>
+            <th style="text-align:center">TFL</th>
+            <th style="text-align:center" data-tt="Sacks">Sacks</th>
+            <th style="text-align:center" data-tt="Interceptions">Int</th>
+            <th style="text-align:center" data-tt="Passes defended (pass breakups)">PD</th>
+            <th style="text-align:center" data-tt="Defensive touchdowns">TD</th>
+        </tr></thead>
+        <tbody>
+            {% for p in defensive_stats %}
+            <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border)">
+                <td style="padding:10px 14px;color: var(--text-dim);font-size: var(--text-sm);font-weight:700;text-align:center">{{ '%02d'|format(loop.index) }}</td>
+                {{ player_cell(p) }}
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('SOLO')|int if p.get('SOLO') is not none else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('AST')|int if p.get('AST') is not none else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;background:rgba(167,139,250,0.04)"><span style="color:#c0a9ff;font-weight:800;font-size: var(--text-base)">{{ p.get('TOT')|int if p.get('TOT') is not none else '—' }}</span></td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('TFL')) }}</td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('SACKS')) }}</td>
+                <td style="padding:10px 10px;text-align:center">{{ stat_box(p.get('INT')) }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('PD')|int if p.get('PD') is not none else '—' }}</td>
+                <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('TD')|int if p.get('TD') is not none else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div></div>
+</div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+    {% if kicking_stats %}
+    <div class="col-lg-6">
+        {{ stat_table_header('Kicking','#34d399') }}
+        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+            <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+                <th style="text-align:left">Player</th>
+                <th style="color:#34d399;text-align:center">FGM</th>
+                <th style="text-align:center">FGA</th>
+                <th style="text-align:center">Pct</th>
+                <th style="text-align:center">Long</th>
+            </tr></thead>
+            <tbody>
+                {% for p in kicking_stats %}
+                <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border)">
+                    {{ player_cell(p) }}
+                    <td style="padding:10px 10px;text-align:center;background:rgba(52,211,153,0.04)"><span style="color:#34d399;font-weight:800">{{ p.get('FGM')|int if p.get('FGM') else '—' }}</span></td>
+                    <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('FGA')|int if p.get('FGA') else '—' }}</td>
+                    <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('PCT')|float) if p.get('PCT') else '—' }}%</td>
+                    <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div></div>
+    </div>
+    {% endif %}
+    {% if punting_stats %}
+    <div class="col-lg-6">
+        {{ stat_table_header('Punting','#7cc4ff') }}
+        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
+        <table class="data-table" style="width:100%">
+            <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
+                <th style="text-align:left">Player</th>
+                <th style="text-align:center">No</th>
+                <th style="color:#7cc4ff;text-align:center">Yds</th>
+                <th style="text-align:center">Avg</th>
+                <th style="text-align:center">Long</th>
+            </tr></thead>
+            <tbody>
+                {% for p in punting_stats %}
+                <tr class="player-row{% if loop.index > 10 %} leader-extra{% endif %}"{% if loop.index > 10 %} hidden{% endif %} style="border-bottom: 1px solid var(--border)">
+                    {{ player_cell(p) }}
+                    <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('NO')|int if p.get('NO') else '—' }}</td>
+                    <td style="padding:10px 10px;text-align:center;background:rgba(96,165,250,0.04)"><span style="color:#7cc4ff;font-weight:800">{{ p.get('YDS')|int if p.get('YDS') else '—' }}</span></td>
+                    <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ "%.1f"|format(p.get('YPP')|float) if p.get('YPP') else '—' }}</td>
+                    <td style="padding:10px 10px;text-align:center;color: var(--text-secondary);font-size: var(--text-sm)">{{ p.get('LONG')|int if p.get('LONG') else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div></div>
+    </div>
+    {% endif %}
+</div>
+
+</div>

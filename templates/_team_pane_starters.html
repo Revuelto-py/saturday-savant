@@ -1,0 +1,8 @@
+{# Inner markup of the team page's starters tab.
+   Extracted so the tab can be fetched on demand: the full team page was
+   773KB because every tab shipped whether or not it was opened. Rendered
+   standalone by /team/<x>?pane=starters, and included by team.html when
+   ?tab=starters asks for it server-side (the no-JS path). #}
+<div class="pt-4">
+    {% with season = roster_season %}{% include "_depth_chart.html" %}{% endwith %}
+</div>

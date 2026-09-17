@@ -63,51 +63,48 @@
 
     {# ── The board ──────────────────────────────────────────────────────── #}
     {% for rd in rounds %}
-    <section class="dr-round">
+    <section class="dr-round" id="round-{{ rd.round }}">
         <div class="dr-round-head">
             <h2 class="dr-round-label">Round {{ rd.round }}</h2>
             <span class="dr-round-line" aria-hidden="true"></span>
             <span class="dr-round-n">{{ rd.picks|length }} picks</span>
         </div>
 
-        <ol class="dr-picks" start="{{ rd.picks[0].overall if rd.picks else 1 }}">
-            {% for p in rd.picks %}
-            <li class="dr-pick" style="--pc: {{ p.college_color }}">
-                <a class="dr-pick-link" href="/player/{{ p.id }}">
-                    <span class="dr-num">
-                        <span class="dr-num-overall">{{ p.overall }}</span>
-                        <span class="dr-num-rp">{{ p.round }}.{{ '%02d' % p.pick }}</span>
-                    </span>
-
-                    {% if p.headshot %}
-                    <img class="dr-shot" src="{{ p.headshot }}" alt="" aria-hidden="true" loading="lazy" width="46" height="46">
-                    {% else %}
-                    <span class="dr-shot dr-shot-blank" aria-hidden="true">{{ p.name[0] }}</span>
-                    {% endif %}
-
-                    <span class="dr-who">
-                        <span class="dr-name">{{ p.name }}</span>
-                        <span class="dr-pos">{{ p.pos or '—' }}</span>
-                    </span>
-
-                    <span class="dr-move">
-                        <span class="dr-side dr-from">
-                            {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
-                            <span class="dr-side-name">{{ p.college or '—' }}</span>
-                        </span>
-                        <span class="dr-arrow" aria-hidden="true">→</span>
-                        <span class="dr-side dr-to">
-                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
-                            <span class="dr-side-name">{{ p.nfl or '—' }}</span>
-                        </span>
-                    </span>
-                </a>
-            </li>
-            {% endfor %}
-        </ol>
+        {% if loop.first or open_round == rd.round %}{% include "_draft_round.html" %}
+        {% else %}<div class="pane-lazy" data-round="{{ rd.round }}">
+            <a class="pane-lazy-link" href="?open={{ rd.round }}#round-{{ rd.round }}">Show round {{ rd.round }} &middot; {{ rd.picks|length }} picks</a>
+        </div>{% endif %}
     </section>
     {% endfor %}
     {% endif %}
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Rounds after the first arrive when the reader asks for one. Without JS the
+   placeholder is a link to the same round rendered server-side. */
+(function () {
+    document.querySelectorAll('.pane-lazy[data-round]').forEach(function (box) {
+        var link = box.querySelector('.pane-lazy-link');
+        if (!link) return;
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            var round = box.dataset.round;
+            box.innerHTML = '<span class="pane-spinner" aria-hidden="true"></span>' +
+                            '<span class="pane-lazy-note">Loading round ' + round + '\u2026</span>';
+            var params = new URLSearchParams(location.search);
+            params.set('round', round);
+            fetch(location.pathname + '?' + params.toString())
+                .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+                .then(function (html) { box.outerHTML = html; })
+                .catch(function () {
+                    box.innerHTML = '<a class="pane-lazy-link" href="?open=' + round +
+                        '#round-' + round + '">Show round ' + round + '</a>';
+                });
+        });
+    });
+})();
+</script>
 {% endblock %}

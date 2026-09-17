@@ -9273,3 +9273,48 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
     .sp-line-main { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) { .sp-line, .sp-line-main { transition: none; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TEAM PAGE — deferred tabs
+   A tab that has not been opened holds a link, not a spinner: with JavaScript
+   the fetch replaces it before anyone reads it, and without JavaScript the
+   link loads the same tab server-side (?tab=<id>). Never a dead "Loading…".
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pane-lazy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 220px;
+    padding: var(--s6) var(--s4);
+}
+.pane-lazy-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--s5);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-secondary);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-weight: 700;
+    font-size: var(--text-sm);
+    text-decoration: none;
+    transition: color 150ms ease-out, border-color 150ms ease-out, background-color 150ms ease-out;
+}
+.pane-lazy-link:hover { color: var(--text-primary); border-color: var(--accent); background: rgba(28,156,240,0.08); }
+.pane-lazy-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pane-lazy-note { color: var(--text-dim); font-size: var(--text-sm); }
+.pane-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.18);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: pane-spin 700ms linear infinite;
+}
+@keyframes pane-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .pane-spinner { animation: none; border-top-color: rgba(255,255,255,0.18); }
+    .pane-lazy-link { transition: none; }
+}

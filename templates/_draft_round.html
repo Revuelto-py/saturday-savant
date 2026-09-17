@@ -1,0 +1,39 @@
+{# One round of the draft board. Extracted so rounds after the first are
+   fetched when asked for: the page rendered all seven at once, 457KB and
+   793 images for a reader who usually wants round 1. Rendered standalone by
+   /draft/<year>?round=<n>, and inline when ?open=<n> asks for it. #}
+<ol class="dr-picks" start="{{ rd.picks[0].overall if rd.picks else 1 }}">
+            {% for p in rd.picks %}
+            <li class="dr-pick" style="--pc: {{ p.college_color }}">
+                <a class="dr-pick-link" href="/player/{{ p.id }}">
+                    <span class="dr-num">
+                        <span class="dr-num-overall">{{ p.overall }}</span>
+                        <span class="dr-num-rp">{{ p.round }}.{{ '%02d' % p.pick }}</span>
+                    </span>
+
+                    {% if p.headshot %}
+                    <img class="dr-shot" src="{{ p.headshot }}" alt="" aria-hidden="true" loading="lazy" width="46" height="46">
+                    {% else %}
+                    <span class="dr-shot dr-shot-blank" aria-hidden="true">{{ p.name[0] }}</span>
+                    {% endif %}
+
+                    <span class="dr-who">
+                        <span class="dr-name">{{ p.name }}</span>
+                        <span class="dr-pos">{{ p.pos or '—' }}</span>
+                    </span>
+
+                    <span class="dr-move">
+                        <span class="dr-side dr-from">
+                            {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
+                            <span class="dr-side-name">{{ p.college or '—' }}</span>
+                        </span>
+                        <span class="dr-arrow" aria-hidden="true">→</span>
+                        <span class="dr-side dr-to">
+                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
+                            <span class="dr-side-name">{{ p.nfl or '—' }}</span>
+                        </span>
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>

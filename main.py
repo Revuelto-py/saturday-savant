@@ -5140,6 +5140,21 @@ def _hero_rank_maps(season):
         release_db(conn)
 
 
+# Tabs of the team page that are fetched on demand rather than shipped with
+# it. The full page was 773KB because every tab rendered whether or not it was
+# opened; these six were ~658KB of that. `?pane=<id>` returns one tab's markup
+# with no layout around it, and `?tab=<id>` renders it inline for readers
+# without JavaScript.
+TEAM_PANES = {
+    'team-stats':   '_team_pane_team_stats.html',
+    'player-stats': '_team_pane_player_stats.html',
+    'roster':       '_team_pane_roster.html',
+    'starters':     '_team_pane_starters.html',
+    'transfers':    '_team_pane_transfers.html',
+    'nfl-talent':   '_team_pane_nfl_talent.html',
+}
+
+
 @app.route('/team/<path:team_ref>')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string
 def team(team_ref):
@@ -5674,7 +5689,7 @@ def team(team_ref):
         # is empty for the current season because the table stops at 2025.
         situational = _team_situational(team_name, season)
 
-        return render_template('team.html',
+        ctx = dict(
                 team=team_info, record=record, projected_record=projected_record,
                 season_stats=season_stats,
                 returning=returning, nfl_talent=nfl_talent, transfers=transfers,
@@ -5702,7 +5717,15 @@ def team(team_ref):
                 ap_rankings=ap_rankings, team_rank=team_rank,
                 team_awards=team_awards, head_coach=head_coach,
                 recruiting=recruiting, havoc=havoc, conf_logo=conf_logo,
-                team_slug=team_ref)
+                team_slug=team_ref,
+                tab=request.args.get('tab', ''))
+
+        # One tab's markup, no layout — what the page fetches when a reader
+        # first opens that tab.
+        pane = request.args.get('pane', '')
+        if pane in TEAM_PANES:
+            return render_template(TEAM_PANES[pane], **ctx)
+        return render_template('team.html', **ctx)
     finally:
         release_db(conn)
 
@@ -8378,7 +8401,8 @@ def draft(year=None):
         years = [r[0] for r in cursor.fetchall()]
         if not years:
             return render_template('draft.html', years=[], year=None, rounds=[],
-                                   schools=[], total=0, school_count=0)
+                                   schools=[], total=0, school_count=0,
+                                   open_round=None)
         year = year if year in years else years[0]
 
         cursor.execute("""
@@ -8437,9 +8461,22 @@ def draft(year=None):
     finally:
         release_db(conn)
 
+    # ?round=<n> returns one round's markup for the page to fetch; ?open=<n>
+    # renders that round inline instead, which is where the placeholder's link
+    # goes when there is no JavaScript.
+    def _rnum(r):
+        return r['round'] if isinstance(r, dict) else r.round
+
+    want = request.args.get('round', type=int)
+    if want is not None:
+        rd = next((r for r in rounds if _rnum(r) == want), None)
+        if rd is not None:
+            return render_template('_draft_round.html', rd=rd)
+
     return render_template('draft.html', years=years, year=year, rounds=rounds,
                            schools=schools[:12], total=total,
-                           school_count=len(by_school))
+                           school_count=len(by_school),
+                           open_round=request.args.get('open', type=int))
 
 
 @app.route('/transfers')
