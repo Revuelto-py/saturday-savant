@@ -146,6 +146,17 @@
                 padding: 9px 12px; border-radius: var(--r-sm, 6px); text-decoration: none;
                 white-space: nowrap; transition: color var(--t-fast), background var(--t-fast);
             }
+            .nav-more-group { display: flex; flex-direction: column; }
+            .nav-more-group + .nav-more-group {
+                margin-top: 4px; padding-top: 5px;
+                border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+            }
+            .nav-more-h {
+                padding: 6px 12px 3px;
+                font-family: var(--font-display); font-stretch: var(--display-stretch);
+                font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.12em;
+                text-transform: uppercase; color: var(--text-dim, #949a9f);
+            }
             .nav-more-panel a:hover { color: var(--text-primary, #f0f4f8); background: rgba(255,255,255,0.07); }
             .nav-more-panel a.active {
                 color: var(--text-primary, #f0f4f8);
@@ -281,7 +292,13 @@
             .nav-links a:last-child { border-bottom: none; }
             /* Flatten the "More" group into the vertical hamburger list — the
                trigger disappears and its panel links join the flat stack. */
-            .nav-more, .nav-more-panel { display: contents; }
+            .nav-more, .nav-more-panel, .nav-more-group { display: contents; }
+            .nav-more-h {
+                padding: 12px 4px 4px;
+                font-family: var(--font-display); font-stretch: var(--display-stretch);
+                font-weight: 700; font-size: 0.6875rem; letter-spacing: 0.12em;
+                text-transform: uppercase; color: var(--text-dim, #949a9f);
+            }
             .nav-more-trigger { display: none; }
             .search-dropdown { max-height: 60vh; }
             /* 16px inputs stop iOS Safari from auto-zooming on focus */
@@ -479,11 +496,12 @@
             </a>
 
             {% set path = request.path %}
-            {% set more_active = path.startswith('/standings') or path.startswith('/rankings') or path.startswith('/bracket') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') %}
+            {% set more_active = path.startswith('/standings') or path.startswith('/bracket') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') %}
             <div class="nav-links" id="navLinks">
                 <a href="/games" {% if path.startswith('/games') or path.startswith('/game/') %}class="active" aria-current="page"{% endif %}>Games</a>
                 <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active" aria-current="page"{% endif %}>Teams</a>
                 <a href="/leaderboards/passing" {% if path.startswith('/leaderboards') %}class="active" aria-current="page"{% endif %}>Leaderboards</a>
+                <a href="/rankings" {% if path.startswith('/rankings') %}class="active" aria-current="page"{% endif %}>Rankings</a>
                 <a href="/compare" {% if path.startswith('/compare') %}class="active" aria-current="page"{% endif %}>Compare</a>
 
                 <div class="nav-more" id="navMore">
@@ -494,14 +512,22 @@
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
-                    <div class="nav-more-panel" id="navMorePanel" role="menu" aria-label="More pages">
-                        <a href="/standings" role="menuitem" {% if path.startswith('/standings') %}class="active"{% endif %}>Standings</a>
-                        <a href="/rankings" role="menuitem" {% if path.startswith('/rankings') %}class="active"{% endif %}>Rankings</a>
-                        <a href="/bracket" role="menuitem" {% if path.startswith('/bracket') %}class="active"{% endif %}>Bracket</a>
-                        <a href="/transfers" role="menuitem" {% if path.startswith('/transfers') %}class="active"{% endif %}>Transfers</a>
-                        <a href="/draft" role="menuitem" {% if path.startswith('/draft') %}class="active"{% endif %}>NFL Draft</a>
-                        <a href="/rivalries" role="menuitem" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
-                        <a href="/explorer" role="menuitem" {% if path.startswith('/explorer') %}class="active"{% endif %}>Explorer</a>
+                    <div class="nav-more-panel" id="navMorePanel" aria-label="More pages">
+                        <div class="nav-more-group" role="group" aria-labelledby="navMoreSeason">
+                            <span class="nav-more-h" id="navMoreSeason">Season</span>
+                            <a href="/standings" {% if path.startswith('/standings') %}class="active"{% endif %}>Standings</a>
+                            <a href="/bracket" {% if path.startswith('/bracket') %}class="active"{% endif %}>Playoff bracket</a>
+                            <a href="/rivalries" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
+                        </div>
+                        <div class="nav-more-group" role="group" aria-labelledby="navMoreMoves">
+                            <span class="nav-more-h" id="navMoreMoves">Player movement</span>
+                            <a href="/transfers" {% if path.startswith('/transfers') %}class="active"{% endif %}>Transfer portal</a>
+                            <a href="/draft" {% if path.startswith('/draft') %}class="active"{% endif %}>NFL draft</a>
+                        </div>
+                        <div class="nav-more-group" role="group" aria-labelledby="navMoreTools">
+                            <span class="nav-more-h" id="navMoreTools">Tools</span>
+                            <a href="/explorer" {% if path.startswith('/explorer') %}class="active"{% endif %}>Stat explorer</a>
+                        </div>
                     </div>
                 </div>
             </div>
