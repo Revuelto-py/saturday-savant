@@ -14,6 +14,20 @@
         <div style="color: var(--text-dim);font-size: var(--text-sm);margin-top:6px">
             Ordered by <span style="color: var(--text-secondary);font-weight:600">conference record</span> — games between same-conference opponents. Overall record shown for context.
         </div>
+
+        {# The gold row and its trophy said "champion" only in a tooltip and a
+           CSS comment. A reader scanning 2024 sees Georgia gold at #2 above a
+           Texas team with a better record and nothing explaining why, so the
+           key is stated in place — and only for seasons that actually crowned
+           one, which the current season has not yet. #}
+        {% set ns = namespace(champ=false) %}
+        {% for g in standings_by_conf %}{% for t in g.teams %}{% if t.is_champion %}{% set ns.champ = true %}{% endif %}{% endfor %}{% endfor %}
+        {% if ns.champ %}
+        <p style="display:flex;align-items:center;gap:7px;color: var(--text-dim);font-size: var(--text-xs);margin:10px 0 0">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="#f0c66a" aria-hidden="true" style="flex-shrink:0"><path d="M2 7l5 4 5-7 5 7 5-4-2.2 11H4.2L2 7z"/><path d="M4.2 19.5h15.6V21H4.2z"/></svg>
+            <span>Gold marks the <span style="color: var(--text-secondary);font-weight:600">conference champion</span> — the title-game winner, which is not always the team that finished top of the table.</span>
+        </p>
+        {% endif %}
     </div>
 
     <!-- Season toggle -->
@@ -45,19 +59,24 @@
             {% if group.logo %}<img src="{{ group.logo }}" class="conf-logo-img conf-logo-img-sm" alt="{{ group.conf }} logo" loading="lazy" width="30" height="30">{% endif %}
             <h2 style="margin:0;font-family: var(--font-display); font-stretch: var(--display-stretch);font-weight:600;font-size: var(--text-lg);letter-spacing:0.02em;color: var(--text-primary)">{{ group.conf }}</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ group.teams|length }}</span>
+            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ group.teams|length }}<span class="sr-only"> teams</span></span>
         </div>
 
         <div class="dark-card" style="overflow-x:auto">
             <table class="data-table" style="width:100%;min-width:300px">
+                <caption class="sr-only">{{ group.conf }} standings, {{ season }}, ordered by conference record</caption>
                 <thead>
                     <tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
-                        <th style="text-align:center;width:26px">#</th>
-                        <th style="text-align:left">TEAM</th>
-                        <th style="text-align:center" title="Conference record — determines standings">CONF</th>
-                        <th style="text-align:center" title="Overall record">OVR</th>
-                        <th class="st-pts" style="text-align:center" title="Points for">PF</th>
-                        <th class="st-pts" style="text-align:center" title="Points against">PA</th>
+                        <th scope="col" style="text-align:center;width:26px"><span class="sr-only">Position in conference</span><span aria-hidden="true">#</span></th>
+                        <th scope="col" style="text-align:left">Team</th>
+                        <th scope="col" class="stat-header" data-tooltip="Conference record — games against same-conference opponents. This is what the table is ordered by." style="text-align:center">
+                            <abbr title="Conference record">CONF</abbr></th>
+                        <th scope="col" class="stat-header" data-tooltip="Overall record, all games." style="text-align:center">
+                            <abbr title="Overall record">OVR</abbr></th>
+                        <th scope="col" class="stat-header st-pts" data-tooltip="Points scored, all games." style="text-align:center">
+                            <abbr title="Points for">PF</abbr></th>
+                        <th scope="col" class="stat-header st-pts" data-tooltip="Points allowed, all games." style="text-align:center">
+                            <abbr title="Points against">PA</abbr></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -134,11 +153,25 @@
        inside the flexible TEAM column rather than pushing the numbers off. */
     .standings-conf .data-table td { padding: 8px 6px; white-space: nowrap; }
     .standings-conf .data-table td:nth-child(2) { max-width: 0; width: 99%; }
-    .standings-row { cursor: pointer; border-top: 1px solid var(--border); transition: background 0.12s ease; }
-    .standings-row:hover { background: rgba(28,156,240,0.09); }
+    /* No cursor:pointer here. The row carried one, plus an accent hover wash,
+       while only the team name is a link and no handler ever listened on the
+       row — so roughly 85% of its width invited a click that did nothing. The
+       hover tint stays, as a reading aid for tracking one team across six
+       columns, at a weight that reads as highlight rather than affordance. */
+    .standings-row { border-top: 1px solid var(--border); transition: background 0.12s ease; }
+    .standings-row:hover { background: rgba(255,255,255,0.04); }
+    /* The link keeps its own hover, which is the part that is clickable. The
+       champion's stays gold; blue would drop the one thing marking the row. */
+    .standings-row .row-link:hover { color: var(--accent); }
+    .standings-champ .row-link:hover { color: #f0c66a; filter: brightness(1.15); }
+    .standings-row .row-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
     /* Conference champion (title-game winner) — gold, not necessarily the
        record leader. */
-    .standings-champ { background: linear-gradient(90deg, rgba(212,175,55,0.15), rgba(212,175,55,0.02)); box-shadow: inset 3px 0 0 #e8b04b; }
-    .standings-champ:hover { background: linear-gradient(90deg, rgba(212,175,55,0.22), rgba(212,175,55,0.05)); }
+    /* Trophy gold, matching the award chips and the rivalry note rather than the
+       slightly different gold this page had invented for the same idea. The
+       champion is also marked by a trophy glyph and bold weight, so the colour
+       is never the only carrier. */
+    .standings-champ { background: linear-gradient(90deg, rgba(240,198,106,0.15), rgba(240,198,106,0.02)); box-shadow: inset 3px 0 0 #f0c66a; }
+    .standings-champ:hover { background: linear-gradient(90deg, rgba(240,198,106,0.22), rgba(240,198,106,0.05)); }
 </style>
 {% endblock %}
