@@ -6251,8 +6251,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    viewport is small enough for the clamp to have bottomed out. */
 @media (max-width: 600px) {
     /* body-scoped so this outranks the component rules that set these smaller
-       still (.pc-card .pc-foot at 0.66rem, for one) without reaching for
-       !important. */
+       still, without reaching for !important. */
     body .gc-fc-recap,
     body .gc-note,
     body .gc-note-rivalry,
@@ -6354,21 +6353,54 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
    releases .ph-heat to max-width:100%, which on the player page is right — the
    chart is the page. Here it meant a 743px-wide field and a 2750px card at
    900px, worse than the desktop layout this change set out to shrink. */
-.tp-passing .ph-heat { max-width: 340px; margin-inline: auto; }
+.tp-passing .ph-heat { max-width: 248px; margin-inline: auto; }
+/* Blur is an absolute radius, so it has to come down with the field. At 20px on
+   a 294px field the three direction bands bled into each other and the surface
+   read as a smear instead of a shape. */
+.tp-passing .ph-heat-blur { filter: blur(11px); }
+/* Square, not 4:5. The axes are 50 yards of depth against three direction
+   bands, and a field seen from behind the passer is about as wide as it is
+   deep; the shorter field is also what takes ~150px off each half. */
+.tp-passing .ph-heat-field { aspect-ratio: 1 / 1; }
+/* The figures are a supporting read here, not the subject, so they sit at a
+   smaller scale than the player page's. The gloss under each label stays: an
+   abbreviation like ADOT assumes a reader this site does not assume. It is the
+   one thing dropped on phones, where it costs a line per card. */
+.tp-passing .pc-stat { padding: 10px 12px; }
+.tp-passing .pc-stat-val { font-size: var(--text-lg); }
+.tp-passing .pc-stat-note { font-size: 0.7rem; line-height: 1.3; }
+@media (max-width: 600px) { .tp-passing .pc-stat-note { display: none; } }
 @media (min-width: 1100px) {
     .tp-passing .pc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    /* Field over figures inside each half: at ~560px a column cannot hold a
-       readable field beside a 2x2 of stat cards. */
-    .tp-passing .pc-body { grid-template-columns: minmax(0, 1fr); gap: var(--s4); }
-    .tp-passing .pc-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    /* Figures BESIDE the field, not under it. Stacked, each half ran the full
+       field height plus a 4-up strip and the card came out 797px tall; a 248px
+       field against a 2x2 block fits the ~590px half and halves that. */
+    .tp-passing .pc-body { grid-template-columns: minmax(0, 248px) minmax(0, 1fr); gap: var(--s4); }
+    .tp-passing .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
+/* One key for the pair, stated once under both charts. */
+.pc-legend {
+    margin: var(--s4) 0 0;
+    padding-top: var(--s3);
+    border-top: 1px solid var(--border);
+    font-size: var(--text-xs);
+    color: var(--text-dim);
 }
 /* Lower bound matters as much as the upper one. Below 900px the shared rule
    stacks .pc-body, but `.tp-passing .pc-body` outranks it on specificity, so
    without the min-width this kept a 300px field column next to the figures on a
    390px phone and pushed the page sideways. */
 @media (min-width: 901px) and (max-width: 1099.98px) {
-    /* One per row, but still smaller than the player page's. */
-    .tp-passing .pc-body { grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+    /* One chart per row, field beside its figures. */
+    .tp-passing .pc-body { grid-template-columns: minmax(0, 248px) minmax(0, 1fr); }
+    .tp-passing .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
+/* Phones: only the field needs a ceiling, and the figures go 2x2 rather than
+   one per row — four stacked cards were most of the 1604px this card measured
+   at 390px wide. */
+@media (max-width: 900px) {
+    .tp-passing .ph-heat { max-width: 260px; }
+    .tp-passing .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 }
 
 /* Field left, figures right — the heatmap has a fixed readable width, so
@@ -6870,111 +6902,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .dr-school-rail { grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); }
 }
 
-/* ── Passing chart placement (player page) ────────────────────────────────
-   Below the game log, at supporting-detail scale. It sat above the career and
-   game logs at a 470px field with a 2x2 figure block — the right weight on the
-   team and game pages, where the chart IS the section, and too much on a player
-   page, where it pushed the logs most visitors come for below the fold.
-
-   Every size below is scoped to .pc-card, which only the player page uses, so
-   the team and game charts keep the headline scale set further up. */
-.pc-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 22px 24px;
-    margin-bottom: 16px;
-}
-/* A player with both a passing and a target chart shows them side by side
-   rather than stacked — at this scale two fit a row.
-
-   520px, not the field's own width: below that each chart's figures column is
-   squeezed to a few characters and "avg depth of target" wraps one word per
-   line. Dropping to one chart per row first — each then capped at 700 — keeps
-   both charts at the desktop layout and costs about half the height that
-   letting them narrow until their insides stack would. */
-.pc-pair {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
-    gap: 28px;
-}
-/* The cap keeps the block off the card's own padding edge; it is not there to
-   shrink the chart. At 700px it did: on a 1174px card that left ~240px of empty
-   card on EACH side, which read as an unfinished block rather than as padding.
-
-   width:100% is load-bearing, not belt-and-braces: the block is a size container
-   (see below), so its contents contribute nothing to its intrinsic width, and a
-   grid item with auto inline margins stops stretching and shrink-wraps — which
-   for a size container means collapsing to 0. The explicit width is what the cap
-   has to clamp. */
-.pc-card .pc-block { width: 100%; max-width: 700px; margin-inline: auto; }
-/* Only a chart with no sibling gets the card's full width. A passer who is also
-   a target renders two of these; when they are wide enough they sit side by side
-   and when they are not the pair collapses to one per row — and in THAT case
-   each block is as wide as a lone chart while still being one of two, so the cap
-   is what keeps the stacked pair from doubling the section's height. */
-.pc-card .pc-block:only-child { max-width: 1100px; }
-.pc-card .pc-body { grid-template-columns: minmax(0, 310px) minmax(0, 1fr); gap: var(--s4); }
-/* One figure per row, not the 2x2 the wider charts use: four stacked rows come
-   out the same height as the field beside them, so the block ends square
-   instead of leaving a dead corner under the figures. */
-.pc-card .pc-summary { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-.pc-card .pc-stat { padding: 10px 12px; }
-.pc-card .pc-stat-val { font-size: var(--text-lg); }
-.pc-card .pc-stat-note { font-size: 0.75rem; line-height: 1.3; }
-/* Blur is an absolute radius, so on a field a little over half the width it has
-   to come down with it or the surface smears into one colour. */
-.pc-card .ph-heat-blur { filter: blur(12px); }
-
-/* Whether the field and the figures sit side by side is a question about THIS
-   block's width, not the window's: on a player page the same viewport holds one
-   chart at 700px or two at 520 apiece. A viewport breakpoint answers it for one
-   of those and gets the other wrong — stacking at 900 made a lone tablet chart
-   845px tall (against 462 one pixel wider) and taller than the same chart on a
-   desktop, while a threshold set for the lone chart squeezed a pair's figures
-   to a 50px column. The container query asks the only question that matters. */
-.pc-card .pc-block { container-type: inline-size; }
-
-/* Given the whole card to itself, the chart is sized to use it: a bigger field
-   AND bigger figures, rather than a small block marooned in the middle.
-
-   The field goes square here. Its 4:5 is a display choice, not a measurement —
-   the axes are 50 yards of depth against three direction bands, and a field seen
-   from behind the passer is about as wide as it is deep, so 1:1 is if anything
-   the more honest shape. It also spends the extra width on BOTH axes at once:
-   138px per direction band (was 88) and 16.5px per depth bin (was 13).
-
-   780px is chosen against the pair, not the single: two charts side by side are
-   (card - 28) / 2 apiece, which tops out at ~573 on this site's widest card, and
-   a collapsed pair is capped at 700 above. Both stay under the threshold, so the
-   compact layout survives for every two-chart case without the rule having to
-   know which case it is in. */
-@container (min-width: 780px) {
-    .pc-card .pc-block:only-child .pc-body { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); }
-    .pc-card .pc-block:only-child .ph-heat-field { aspect-ratio: 1 / 1; }
-    /* Blur is an absolute radius: the 12px below is scaled for a 264px field and
-       leaves visible seams between the direction bands on a 414px one. This is
-       the base chart's own value, which is what this field is now sized like. */
-    .pc-card .pc-block:only-child .ph-heat-blur { filter: blur(20px); }
-    /* The figures grow with it, so the column fills the field's height instead
-       of stopping two-thirds of the way down and leaving a dead corner. */
-    .pc-card .pc-block:only-child .pc-summary { gap: 14px; }
-    .pc-card .pc-block:only-child .pc-stat { padding: 16px 20px; }
-    .pc-card .pc-block:only-child .pc-stat-val { font-size: var(--text-xl); }
-    .pc-card .pc-block:only-child .pc-stat-note { font-size: 0.75rem; }
-}
-
-@container (max-width: 519.98px) {
-    .pc-card .pc-body { grid-template-columns: minmax(0, 1fr); }
-    /* Stacked, the field is the only thing needing a ceiling — it is 4:5, so one
-       running the full width of a 700px card comes out ~875px tall. The cap goes
-       on the FIELD, not the block: capping the block leaves the figures and the
-       caption standing in dead card either side of a narrowed column. */
-    .pc-card .ph-heat { max-width: 380px; margin-inline: auto; }
-    /* Two, not auto-fit: against a narrow block auto-fit fitted three and left
-       the fourth figure orphaned on a row of its own. */
-    .pc-card .pc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 
 /* ── Rivalries ─────────────────────────────────────────────────────────────
    Two pages: the index of every named rivalry, and one series in full.

@@ -7484,24 +7484,6 @@ def _passing_heatmap(cursor, where, params, season):
 
 
 @cache.memoize(timeout=21600)
-def get_target_profile(player_id, season):
-    """The receiving side. CFBD carries the TARGET on every attempt, so the same
-    grid describes how a receiver is used — depth, direction, and how much of his
-    production he creates after the catch."""
-    conn = get_db()
-    try:
-        cur = conn.cursor()
-        prof = _passing_profile(cur, 'season = %s AND target_id = %s',
-                                (season, player_id), min_attempts=10)
-        if prof:
-            prof['heat'] = _passing_heatmap(cur, 'season = %s AND target_id = %s',
-                                            (season, player_id), season)
-        return prof
-    finally:
-        release_db(conn)
-
-
-@cache.memoize(timeout=21600)
 def get_team_passing_profile(team, season):
     """Offense and defense. The defensive half is the one the site could not
     answer at all before — the advanced metrics are offense-only, with no
@@ -8449,10 +8431,6 @@ def _player_detail_cached(player_id, season):
         player_percentiles=player_percentiles,
         percentile_rows=percentile_rows,
         national_ranks=national_ranks,
-        # Air-yards profile. A quarterback gets the passer view, anyone who is
-        # thrown to gets the target view; a player can legitimately have both
-        # (a QB with a receiving attempt), so the template picks by position.
-        target_profile=get_target_profile(player_id, season),
         usage=usage,
         is_active_2026=is_active_2026,
         draft_status=draft_status,

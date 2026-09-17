@@ -97,15 +97,17 @@
 {% endmacro %}
 
 
-{% macro pass_foot(p, subject) %}
+{% macro pass_foot(p, subject, legend=true) %}
 {# Kept out of pass_heat so the body grid holds exactly two children — the field
    and the figures. With the caption inside, it took the second column and
    pushed the figures onto a row of their own. #}
 {% if p.heat %}
 <div class="pc-foot">
-    Where {{ subject }} versus the FBS average, by air yards and direction ·
+    Where {{ subject }} versus the FBS average, by air yards and direction
+    {%- if legend %} ·
     <span class="ph-key ph-key-hot"></span> more often ·
-    <span class="ph-key ph-key-cold"></span> less often ·
+    <span class="ph-key ph-key-cold"></span> less often
+    {%- endif %} ·
     <strong>{{ p.heat.total }}</strong> located attempts
     {%- if p.coverage_pct < 90 %} <span class="pc-warn">({{ p.coverage_pct }}% of attempts measured)</span>{% endif %}
 </div>
@@ -113,7 +115,9 @@
 {% endmacro %}
 
 
-{% macro passing_chart(p, title, subtitle='', subject='this passer went') %}
+{# `legend` off lets a caller showing two of these state the colour key once
+   for the pair instead of repeating it under each chart. #}
+{% macro passing_chart(p, title, subtitle='', subject='this passer went', legend=true) %}
 {% if p %}
 <div class="pc-block">
     <div class="pc-head">
@@ -126,7 +130,7 @@
         {{ pass_heat(p) }}
         {{ pass_summary(p) }}
     </div>
-    {{ pass_foot(p, subject) }}
+    {{ pass_foot(p, subject, legend) }}
 </div>
 {% endif %}
 {% endmacro %}

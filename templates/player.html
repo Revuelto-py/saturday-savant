@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% import "_passing_chart.html" as pc %}
 {% block title %}{{ player.first_name }} {{ player.last_name }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ player.first_name }} {{ player.last_name }} · {{ player.team }}{% if player.position %} {{ player.position }}{% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ player.first_name }} {{ player.last_name }} — {{ player.team }}{% if player.position %} · {{ player.position }}{% endif %}{% if player.jersey %} · #{{ player.jersey }}{% endif %}. {{ season }} stats, advanced metrics, and game log on Saturday Savant.{% endblock %}
@@ -831,30 +830,6 @@
         </div>
     </div>
     {% endif %}
-
-    <!-- Passing / target chart — where this player throws it, or where he is
-         thrown to. A quarterback gets the passer view, anyone targeted gets the
-         receiving view, and a player with both shows them side by side.
-
-         Placed AFTER the game log: it is supporting detail about tendency, not
-         a headline number, and it was pushing the career and game logs — the
-         things most visitors come for — below the fold. -->
-    {% if target_profile %}
-{# Target chart only. The PASSING chart is gone: where a quarterback throws is
-   now three percentile bars in the section above — average depth of target, air
-   yards share and deep attempt rate — ranked against the FBS field, which says
-   more than a heatmap of one player's season with nothing to compare it to.
-   A receiver's target chart stays: it describes how he is USED, which has no
-   equivalent in his stat line. #}
-<div class="pc-card">
-    <div class="pc-pair">
-        {{ pc.passing_chart(target_profile,
-                            season ~ ' Target Chart',
-                            target_profile.attempts ~ ' targets · ' ~ target_profile.completions ~ ' receptions',
-                            'this receiver was targeted') }}
-    </div>
-</div>
-{% endif %}
 
     <!-- ROW 3: Player Info (full width, horizontal) -->
     <div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:20px 28px">

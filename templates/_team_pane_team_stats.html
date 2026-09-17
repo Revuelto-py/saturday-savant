@@ -451,9 +451,16 @@
             </p>
         </div>
         <div class="pc-grid">
-            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw') }}
-            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense') }}
+            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw', legend=false) }}
+            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense', legend=false) }}
         </div>
+        {# One key for the pair. Each chart keeps its own sentence and its own
+           located-attempt count, which differ by side; only the colour key was
+           the same thing printed twice. #}
+        <p class="pc-legend">
+            <span class="ph-key ph-key-hot"></span> thrown here more often than the FBS average ·
+            <span class="ph-key ph-key-cold"></span> less often
+        </p>
     </div>
     {% endif %}
 
