@@ -3271,16 +3271,19 @@ tr.player-row:hover {
 .bk-title {
     font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-weight: 800;
-    font-size: var(--text-2xl);
+    font-size: var(--text-3xl);
     line-height: 0.95;
     letter-spacing: -0.02em;
     text-wrap: balance;
     color: var(--text-primary);
     margin: 0;
 }
+/* The season line reads as the title's lead, so it sits at the lead step
+   (text-md) rather than the caption step it was set at. */
 .bk-meta {
     margin: var(--s3) 0 0;
-    font-size: var(--text-sm);
+    font-size: var(--text-md);
+    line-height: 1.5;
     color: var(--text-secondary);
     letter-spacing: 0;
 }
@@ -3311,11 +3314,14 @@ tr.player-row:hover {
 .bk-proj {
     max-width: 68ch;
     margin: var(--s4) auto 0;
-    text-align: left;
+    text-align: center;
 }
+/* flex, not inline-flex: an inline-level box ignores `margin: 0 auto`, which
+   is what left-aligned the chip under a centred header. */
 .bk-projected {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--s2);
     margin: 0 auto;
     padding: 5px 12px;
@@ -3334,7 +3340,10 @@ tr.player-row:hover {
     transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
 }
 .bk-projected::-webkit-details-marker { display: none; }
-.bk-proj > summary { margin-inline: auto; }
+/* The chip is a 26px target on padding alone; touch needs the full 44. */
+@media (hover: none) {
+    .bk-projected { min-height: 44px; padding: 0 16px; }
+}
 .bk-projected:hover {
     background: rgba(167,139,250,0.18);
     border-color: rgba(167,139,250,0.9);
@@ -3352,6 +3361,7 @@ tr.player-row:hover {
 /* A 1px edge and a tinted wash carry the estimate, not a 3px coloured rail. */
 .bk-proj-note {
     margin-top: var(--s3);
+    text-align: left;
     padding: var(--s4) var(--s5);
     background: linear-gradient(var(--bk-proj-wash), var(--bk-proj-wash)), var(--bg-card);
     border: 1px solid rgba(167,139,250,0.28);
@@ -3811,6 +3821,9 @@ a.bk-team-link:active { background: rgba(255,255,255,0.08); }
     .bk-board-wrap { display: none; }
     .bk-mobile { display: block; }
     .bk-header { padding: var(--s4) 0 var(--s5); }
+    /* text-3xl bottoms out at 51px, which puts the title on three lines and
+       eats the first screen; the step below fits it on two. */
+    .bk-title { font-size: var(--text-2xl); }
 
     .bracket-page { --bk-row-h: 56px; }
     .bk-m-round { margin-bottom: var(--s8); }
