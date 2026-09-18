@@ -10579,7 +10579,7 @@ def robots():
 def favicon_ico():
     # Serve the multi-resolution .ico at the canonical root path crawlers probe
     # (Google, bots, older browsers), even though the <head> also links the
-    # higher-res favicon-*.png. Same white-mark-on-navy brand icon, cached hard.
+    # higher-res favicon-*.png. Same transparent brand mark, cached hard.
     return send_from_directory(
         os.path.join(app.root_path, 'static'), 'favicon.ico',
         mimetype='image/x-icon', max_age=60 * 60 * 24 * 30)
