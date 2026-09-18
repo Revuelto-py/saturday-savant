@@ -9581,8 +9581,10 @@ def _cfp_bowl_label(notes):
     for bowl, site in _CFP_BOWL_SITES.items():
         if bowl.split()[0].lower() in low:
             return f'{bowl} · {site}'
-    if 'national championship' in low:
-        return 'Miami Gardens, FL'
+    # The title game moves every year and its site is not stored, so it gets no
+    # venue line. This used to return 'Miami Gardens, FL' for every season's
+    # championship — which printed a wrong city under the 2018 final (Santa
+    # Clara) and the 2024 one (Atlanta). A blank line beats a confident error.
     return None
 
 
@@ -9903,7 +9905,7 @@ def bracket_page():
         }
 
     def matchup(slot, top_name, top_seed, bottom_name, bottom_seed, game,
-                top_bye=False):
+                top_bye=False, feed=None):
         winner = _cfp_game_winner(game)
         score = None
         if winner and game:
@@ -9918,7 +9920,12 @@ def bracket_page():
             'game_id': game['id'] if game else None,
             'completed': bool(game and game['completed']),
             'live': _cfp_game_is_live(game),
-            'bowl': _cfp_bowl_label(game['notes']) if game else None,
+            'venue': _cfp_bowl_label(game['notes']) if game else None,
+            # What an undecided bottom slot is waiting for, where the bracket
+            # knows it: a quarterfinal's opponent comes from one named
+            # first-round pairing, so the card can say "Winner of 8/9" instead
+            # of printing a ninth identical TBD.
+            'feed': feed,
         }
 
     if four_team:
@@ -9964,8 +9971,10 @@ def bracket_page():
         adv = r1_by_slot[feed_slot]['winner']
         game = _cfp_find_game(qf_games, bye_team, adv) or \
             _cfp_find_game(qf_games, bye_team)
+        feed_hi, feed_lo = _CFP_FEED_BY_BYE[bye_seed]
         quarterfinals.append(matchup(slot, bye_team, bye_seed, adv,
-                                     seeds.get(adv), game, top_bye=True))
+                                     seeds.get(adv), game, top_bye=True,
+                                     feed=f'Winner of {feed_hi}/{feed_lo}'))
     qf_by_slot = {m['slot']: m for m in quarterfinals}
 
     # Semifinals — winners of the paired quarterfinals

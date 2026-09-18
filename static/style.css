@@ -3242,132 +3242,125 @@ tr.player-row:hover {
 .bracket-page {
     --bk-gold: var(--gold);
     --bk-card: var(--bg-card);
-    --bk-r1-w: 220px;
-    --bk-qf-w: 200px;
-    --bk-sf-w: 190px;
-    --bk-nc-w: 210px;
-    --bk-row-h: 52px;
+    --bk-r1-w: 224px;
+    --bk-qf-w: 208px;
+    --bk-sf-w: 196px;
+    --bk-nc-w: 216px;
+    --bk-row-h: 56px;
+    /* One dashed-purple estimate colour, named once. The team hero uses the
+       same hue for a projected record, so "this has not happened yet" reads
+       identically on both pages. */
+    --bk-proj-line: rgba(167,139,250,0.55);
+    --bk-proj-wash: rgba(167,139,250,0.08);
+    --bk-proj-text: #cfc3ff;
 }
 /* The bracket needs more air than the sitewide 1300px column */
 .page-wrapper.bracket-page { max-width: 1560px; }
 
-/* Header */
+/* ── Header ──────────────────────────────────────────────────────────────
+   A page title, not a poster: the display role in this design system is
+   sentence case at -0.02em, and tracked uppercase belongs to the labels
+   underneath it (The Heading Not Label Rule). The 44px watermark that used to
+   float in the top-left corner is gone — it sat outside the centred column,
+   overlapped the wrapped title on a phone, and carried no information. */
 .bk-header {
     position: relative;
     text-align: center;
-    padding: 24px 0 34px;
-}
-.bk-watermark {
-    position: absolute;
-    left: 0;
-    top: 18px;
-    width: 44px;
-    height: 44px;
-    opacity: 0.35;
+    padding: var(--s6) 0 var(--s8);
 }
 .bk-title {
     font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 700;
-    font-size: var(--text-3xl);
-    line-height: 1;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-weight: 800;
+    font-size: var(--text-2xl);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
     color: var(--text-primary);
     margin: 0;
 }
-.bk-subtitle {
-    margin-top: 8px;
-    font-size: var(--text-xs);
-    font-weight: 700;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--text-dim);
+.bk-meta {
+    margin: var(--s3) 0 0;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    letter-spacing: 0;
 }
+.bk-controls {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--s4);
+}
+.bk-season {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+}
+.bk-season-label {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+.bk-season-select { min-width: 104px; }
 
-/* Board */
-/* Projected-bracket marker and note. The chip borrows the dashed purple the
-   team hero uses for a projected record, so "this is an estimate" reads the
-   same way everywhere on the site — and it carries the word as well as the
-   colour, because a bracket that has not happened must not depend on a hue to
-   say so. */
+/* ── Projected-bracket disclosure ────────────────────────────────────────
+   A real disclosure rather than a hover popover: it opens on click or Enter,
+   stays open, and lays out in flow. The old version floated over the board and
+   opened on hover, which meant it could not be read on a phone at all. */
+.bk-proj {
+    max-width: 68ch;
+    margin: var(--s4) auto 0;
+    text-align: left;
+}
 .bk-projected {
-    display: inline-block;
-    margin-left: var(--s2);
-    padding: 3px 10px;
-    border: 1px dashed rgba(167,139,250,0.6);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+    margin: 0 auto;
+    padding: 5px 12px;
+    width: fit-content;
+    border: 1px dashed var(--bk-proj-line);
     border-radius: var(--r-pill);
-    background: rgba(167,139,250,0.10);
-    color: #cfc3ff;
-    font-family: var(--font-body);
+    background: var(--bk-proj-wash);
+    color: var(--bk-proj-text);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-size: var(--text-xs);
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    vertical-align: middle;
-    cursor: help;
-    transition: background var(--t-fast), border-color var(--t-fast);
+    cursor: pointer;
+    list-style: none;
+    transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
 }
-.bk-projected:hover,
-.bk-projected:focus {
-    background: rgba(167,139,250,0.20);
+.bk-projected::-webkit-details-marker { display: none; }
+.bk-proj > summary { margin-inline: auto; }
+.bk-projected:hover {
+    background: rgba(167,139,250,0.18);
     border-color: rgba(167,139,250,0.9);
-    outline: none;
+    /* a documented token for the hover step rather than a second purple */
+    color: var(--text-primary);
 }
 .bk-projected:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
 }
-/* No hover to give: the chip is small, so on touch it grows to a real target
-   rather than asking for a precise tap on 22px of text. */
-@media (hover: none) {
-    .bk-projected {
-        display: inline-flex;
-        align-items: center;
-        min-height: 44px;       /* 42px on padding alone — the floor is 44 */
-        padding: 0 16px;
-    }
-}
-/* The explainer, now hung off the chip instead of stacked above the board.
+.bk-projected:active { background: rgba(167,139,250,0.24); }
+.bk-proj-chev { flex-shrink: 0; transition: transform var(--t-fast); }
+.bk-proj[open] .bk-proj-chev { transform: rotate(90deg); }
 
-   Two triggers, because hover alone reaches nobody on a phone: the chip opens
-   it on hover for a pointer and on focus for a keyboard or a tap — it is a
-   <button>, so tapping focuses it rather than navigating. It stays open while
-   the pointer is inside it, since reading a panel usually means moving onto it.
-
-   Anchored to the header rather than the chip: the header is the full content
-   width and centred, so the panel can be centred and clamped to the viewport
-   without a small inline chip near the middle dragging it off-screen. */
+/* A 1px edge and a tinted wash carry the estimate, not a 3px coloured rail. */
 .bk-proj-note {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 60;
-    width: max-content;
-    max-width: min(56ch, calc(100vw - 2 * var(--s4)));
-    margin: 0;
-    padding: 16px 20px;
-    text-align: left;
-    background: var(--bg-card);
-    border: 1px solid var(--border-strong);
-    border-left: 3px solid rgba(167,139,250,0.7);
+    margin-top: var(--s3);
+    padding: var(--s4) var(--s5);
+    background: linear-gradient(var(--bk-proj-wash), var(--bk-proj-wash)), var(--bg-card);
+    border: 1px solid rgba(167,139,250,0.28);
     border-radius: var(--r-md);
-    box-shadow: var(--shadow-hover);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity var(--t-fast);
-}
-.bk-header:has(.bk-projected:hover) .bk-proj-note,
-.bk-header:has(.bk-projected:focus) .bk-proj-note {
-    opacity: 1;
-}
-.bk-proj-note:hover { opacity: 1; pointer-events: auto; }
-
-@media (prefers-reduced-motion: reduce) {
-    .bk-projected, .bk-proj-note { transition: none; }
+    box-shadow: var(--shadow-card);
 }
 .bk-proj-lede, .bk-proj-caveat {
     margin: 0;
+    max-width: 52ch;
     color: var(--text-secondary);
     font-size: var(--text-sm);
     line-height: 1.65;
@@ -3375,12 +3368,21 @@ tr.player-row:hover {
 /* --text-secondary, not --text-dim: dim measures 4.02:1 on this panel,
    under the 4.5:1 floor. A caveat nobody can read is not a caveat. */
 .bk-proj-caveat { margin-top: var(--s3); color: var(--text-secondary); }
+.bk-proj-head {
+    margin: var(--s4) 0 var(--s2);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
 .bk-proj-bids {
     list-style: none;
-    margin: var(--s3) 0 0;
+    margin: 0;
     padding: 0;
     display: grid;
-    gap: var(--s1);
+    gap: var(--s2);
 }
 /* Grid, not flex-wrap: on a phone the longer reasons wrap, and under flex the
    second line started back at the left margin, under the seed chip. A fixed
@@ -3406,26 +3408,37 @@ tr.player-row:hover {
     font-variant-numeric: tabular-nums;
     text-align: center;
 }
-.bk-proj-team { color: var(--text-primary); font-weight: 700; text-decoration: none; }
+.bk-proj-team {
+    color: var(--text-primary);
+    font-weight: 700;
+    text-decoration: none;
+    transition: color var(--t-fast);
+}
 .bk-proj-team:hover { color: var(--accent); }
+.bk-proj-team:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
 .bk-proj-basis { color: var(--text-secondary); }
 
+@media (prefers-reduced-motion: reduce) {
+    .bk-projected, .bk-proj-chev { transition: none; }
+}
+
+/* ── Board ───────────────────────────────────────────────────────────── */
 .bk-board-wrap { overflow-x: auto; overflow-y: hidden; }
 .bk-board {
     position: relative;
     display: grid;
-    /* fluid columns in the spec's 220/200/190/210 proportions so the
-       board always fills the viewport exactly — no clipped right side;
-       minmax(0,…) lets tracks shrink below content min-width (names
-       ellipsize, wide column headers spill into the gaps) */
-    grid-template-columns:
-        minmax(0, 23fr) minmax(0, 20.5fr) minmax(0, 18.5fr) minmax(0, 19fr)
-        minmax(0, 18.5fr) minmax(0, 20.5fr) minmax(0, 23fr);
+    /* Seven equal tracks. The old 23/20.5/18.5/19 weighting gave the widest
+       columns to the first round — which needs width least — and starved the
+       semifinals, whose track computed to ~163px and left the team name about
+       60px. That is what was breaking "Ohio State" across two lines. Equal
+       tracks hand every round the same room; the max-widths below still cap
+       the cards on a very wide screen. */
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     column-gap: clamp(12px, 1.6vw, 26px);
-    height: 660px;
+    height: 620px;
     min-width: 1150px;
 }
-/* subtle gold glow behind the championship centerpiece */
+/* a breath of light behind the championship centrepiece */
 .bk-board::before {
     content: '';
     position: absolute;
@@ -3441,12 +3454,20 @@ tr.player-row:hover {
     pointer-events: none;
     z-index: 0;
 }
+/* Every connector is a neutral hairline. Blue is spent on one thing only: the
+   route the champion actually took through the board, drawn in once on load by
+   the page script. A board that turned every finished game blue was saying
+   "this game has been played", which the scores already say. */
 .bk-line {
     fill: none;
-    stroke: rgba(255,255,255,0.12);
+    stroke: rgba(255,255,255,0.16);
     stroke-width: 1.5;
 }
-.bk-line-done { stroke: rgba(28, 156, 240,0.7); }
+.bk-line-champ {
+    stroke: var(--accent);
+    stroke-width: 2;
+    opacity: 0.9;
+}
 
 .bk-col {
     position: relative;
@@ -3454,80 +3475,89 @@ tr.player-row:hover {
     display: flex;
     flex-direction: column;
 }
+/* Two-line box with balanced wrapping: "Championship" and "Semifinals" sat on
+   one nowrap line each and overlapped their neighbours at every desktop width.
+   A fixed height keeps all seven heads on one baseline even when one wraps. */
 .bk-col-head {
-    height: 34px;
+    min-height: 38px;
+    margin: 0 0 var(--s2);
+    padding: 0 4px;
     text-align: center;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-dim);
     font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: var(--text-base);
-    white-space: nowrap;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    white-space: normal;
+    text-wrap: balance;
+    overflow-wrap: break-word;
 }
-.bk-col-head-gold { color: var(--accent); }
+.bk-col-head-final { color: var(--accent); }
 .bk-col-body {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: space-around;
+    align-items: center;
 }
 .bk-col-center .bk-col-body { justify-content: center; }
+.bk-col-body > * { width: 100%; }
 
 /* Matchup cards — fill their fluid column, capped at the spec widths */
 .bk-slot-r1 { width: 100%; max-width: var(--bk-r1-w); }
 .bk-slot-qf { width: 100%; max-width: var(--bk-qf-w); }
 .bk-slot-sf { width: 100%; max-width: var(--bk-sf-w); }
 .bk-slot-nc { width: 100%; max-width: var(--bk-nc-w); }
-.bk-col-body { align-items: center; }
-.bk-col-body > * { width: 100%; }
 
-.bk-card-label {
-    font-size: var(--text-xs);
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin-bottom: 6px;
-    padding-left: 2px;
-}
 .bk-match {
     position: relative;
     background: var(--bk-card);
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     overflow: hidden;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    box-shadow: var(--shadow-card);
+    transition: border-color var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
 }
+/* No lift on hover: the connector lines are drawn to these cards' measured
+   edges, and a transform would slide the card off the line it is joined to. */
 .bk-match-link { cursor: pointer; }
-.bk-match-link:hover { border-color: var(--text-dim); }
+.bk-match-link:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-hover);
+}
 .bk-match-link:focus-visible {
-    outline: 2px solid rgba(28, 156, 240,0.7);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
-.bk-match-gold {
-    border: 1px solid rgba(28, 156, 240,0.4);
-    box-shadow: 0 0 20px rgba(28, 156, 240,0.12);
+.bk-match-final {
+    border-color: var(--border-gold);
 }
-.bk-match-gold.bk-match-link:hover { border-color: rgba(28, 156, 240,0.7); }
-.bk-bowl {
-    margin-top: 6px;
+.bk-match-final.bk-match-link:hover { border-color: rgba(28,156,240,0.65); }
+
+/* One venue line under every card, in one place: the bowl and city for the
+   rounds that have one, "On campus" for the first round. It replaced a label
+   that sat above the first-round cards reading "FIRST ROUND · ON CAMPUS" under
+   a column already headed First Round, and wrapped to two ragged lines. */
+.bk-venue {
+    margin-top: var(--s2);
     text-align: center;
     font-size: var(--text-xs);
-    font-style: italic;
-    color: var(--text-dim);
+    line-height: 1.35;
+    color: var(--text-secondary);
+    text-wrap: balance;
 }
 
-/* Team rows */
+/* ── Team rows ───────────────────────────────────────────────────────── */
 .bk-team {
-    height: var(--bk-row-h);
+    min-height: var(--bk-row-h);
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 10px;
+    gap: 6px;
+    padding: 6px 8px;
     text-decoration: none;
-    border-left: 2px solid transparent;
-    transition: background 0.15s;
+    transition: background var(--t-fast);
 }
 .bk-team:first-of-type { border-bottom: 1px solid var(--border); }
 /* the seed/logo/name cluster links to the team page; the rest of the row
@@ -3538,52 +3568,66 @@ tr.player-row:hover {
     align-self: stretch;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     text-decoration: none;
     /* hover zone reaches the card's left edge */
-    margin-left: -10px;
-    padding-left: 10px;
-    transition: background 0.15s;
+    margin-left: -8px;
+    padding-left: 8px;
+    transition: background var(--t-fast);
 }
-a.bk-team-link:hover { background: rgba(255,255,255,0.04); }
+a.bk-team-link:hover { background: rgba(255,255,255,0.05); }
 a.bk-team-link:focus-visible {
-    outline: 2px solid rgba(28, 156, 240,0.7);
+    outline: 2px solid var(--accent);
     outline-offset: -2px;
     border-radius: var(--r-sm);
 }
-a.bk-team-link:active { background: rgba(255,255,255,0.07); }
-.bk-won {
-    background: rgba(255,255,255,0.03);
-    border-left-color: var(--tc, var(--bk-gold));
-}
-.bk-lost { opacity: 0.6; }
+a.bk-team-link:active { background: rgba(255,255,255,0.08); }
+/* Winner and loser are carried by weight and brightness, not by a coloured rail
+   and an opacity fade: the 2px team-colour border put an arbitrary red or
+   orange bar on the board's left edge, and opacity:0.6 dropped the losing row
+   under the 4.5:1 floor. */
+.bk-won { background: rgba(255,255,255,0.045); }
+.bk-won .bk-name { font-weight: 750; }
+.bk-lost .bk-name,
+.bk-lost .bk-sub { color: var(--text-secondary); }
 
 .bk-seed {
     flex-shrink: 0;
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--r-sm);
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
     font-weight: 700;
     color: var(--text-secondary);
     background: rgba(255,255,255,0.06);
     font-variant-numeric: tabular-nums;
 }
-.bk-seed-bye { background: rgba(28, 156, 240,0.18); color: var(--gold); }
-.bk-seed-mid { background: rgba(28,156,240,0.18); color: #9ad4ff; }
+/* Seeds 1-4 are the byes — the one thing the number changes about the bracket,
+   and so the only tier that earns the accent. The old board tinted 1-8 in two
+   nearly identical blues, which made the distinction unreadable and spent the
+   signal colour on nothing. */
+.bk-seed-bye { background: rgba(28,156,240,0.18); color: var(--accent); }
+.bk-seed-plain { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+/* An open slot keeps the seed column's width so its name lines up with the
+   decided rows above it, but draws nothing: a dashed box beside a dashed logo
+   circle stacked four deep in the semifinal cards read as clutter. */
+.bk-seed-open {
+    background: transparent;
+    border: 0;
+}
 
 .bk-logo {
     flex-shrink: 0;
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     object-fit: contain;
 }
 .bk-logo-empty {
     border-radius: 50%;
-    background: rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.04);
     border: 1px dashed var(--border-strong);
 }
 .bk-id {
@@ -3592,93 +3636,153 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 1px;
+    gap: 2px;
 }
+/* Names wrap to a second line instead of ellipsing. On a 200px card the old
+   nowrap rule printed "Notre Da…", "Ohio St…" and "Tex…" — a bracket whose
+   whole job is naming teams. */
 .bk-name {
-    /* condensed face so full names fit the narrow bracket columns */
     font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: var(--text-md);
-    font-weight: 600;
+    font-size: var(--text-base);
+    font-weight: 650;
     color: var(--text-primary);
-    line-height: 1.1;
-    white-space: nowrap;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: break-word;
 }
-.bk-name-tbd { color: var(--text-dim); }
-.bk-conf {
+.bk-name-tbd { color: var(--text-dim); font-weight: 600; }
+.bk-sub {
     font-size: var(--text-xs);
     color: var(--text-dim);
-    line-height: 1;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .bk-pts {
     flex-shrink: 0;
-    font-size: var(--text-base);
-    font-weight: 400;
-    color: var(--text-dim);
-    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 1.1em;
+    text-align: right;
 }
-.bk-pts-won { font-weight: 700; color: var(--text-primary); }
-.bk-bye {
-    flex-shrink: 0;
-    font-size: var(--text-xs);
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    color: var(--bk-gold);
-    border: 1px solid rgba(28, 156, 240,0.4);
-    border-radius: var(--r-sm);
-    padding: 1px 5px;
-}
+.bk-pts-won { font-weight: 800; color: var(--text-primary); }
 .bk-live {
     position: absolute;
     top: -8px;
     right: 8px;
     z-index: 2;
-    background: #dc2626;
-    color: var(--text-primary);
+    background: var(--red);
+    color: #fff;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-size: var(--text-xs);
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: 0.1em;
+    text-transform: uppercase;
     padding: 2px 7px;
     border-radius: var(--r-sm);
     animation: bk-pulse 1.5s infinite;
 }
 @keyframes bk-pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    50% { opacity: 0.45; }
 }
 
-/* Championship centerpiece */
+/* ── Championship centrepiece ────────────────────────────────────────── */
 .bk-trophy {
     text-align: center;
-    margin-bottom: 12px;
-    filter: drop-shadow(0 0 12px rgba(28, 156, 240,0.4));
+    margin-bottom: var(--s3);
+    color: var(--text-dim);
+    transition: color var(--t-base);
 }
-.bk-champion {
-    margin-top: 20px;
+.bk-trophy svg { stroke: currentColor; }
+.bk-trophy-cup { fill: rgba(255,255,255,0.04); }
+/* Undecided, the trophy is a neutral mark; once a champion exists it takes the
+   accent. The old version carried a permanent blue drop-shadow halo, which is
+   decoration rather than depth. */
+.bk-trophy-won { color: var(--accent); }
+.bk-trophy-won .bk-trophy-cup { fill: rgba(28,156,240,0.14); }
+
+/* The champion, set as a name and a title rather than one uppercase sentence:
+   "OHIO STATE — 2024 CFP CHAMPIONS" broke across three lines in a 216px
+   column. */
+.bk-champ {
+    margin-top: var(--s5);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    text-decoration: none;
-    color: var(--bk-gold);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: 1.05rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    gap: var(--s1);
     text-align: center;
 }
-.bk-champion img { width: 40px; height: 40px; object-fit: contain; }
-.bk-champion:hover { color: var(--gold); }
-.bk-champion:focus-visible {
-    outline: 2px solid rgba(28, 156, 240,0.7);
-    outline-offset: 3px;
+.bk-champ-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+    text-decoration: none;
+    border-radius: var(--r-sm);
+    padding: 2px 4px;
+    transition: color var(--t-fast);
+}
+.bk-champ-logo { width: 34px; height: 34px; object-fit: contain; flex-shrink: 0; }
+.bk-champ-name {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-lg);
+    font-weight: 750;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+    text-wrap: balance;
+}
+.bk-champ-link:hover .bk-champ-name { color: var(--accent); }
+.bk-champ-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.bk-champ-label {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+/* ── Unsupported season ──────────────────────────────────────────────── */
+.bk-empty {
+    max-width: 560px;
+    margin: var(--s8) auto;
+    padding: var(--s8) var(--s6);
+    text-align: center;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+}
+.bk-empty-head {
+    margin: 0 0 var(--s2);
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-lg);
+    font-weight: 750;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+.bk-empty-body {
+    margin: 0 0 var(--s5);
+    color: var(--text-secondary);
+    font-size: var(--text-base);
+    line-height: 1.7;
+}
+.bk-empty-link {
+    color: var(--accent);
+    font-weight: 700;
+    text-decoration: none;
     border-radius: var(--r-sm);
 }
+.bk-empty-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.bk-empty-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 /* Mobile stacked layout */
 .bk-mobile { display: none; }
@@ -3686,53 +3790,49 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 /* Tablet: compress card widths, keep horizontal layout */
 @media (max-width: 1199.98px) {
     .bracket-page {
-        --bk-r1-w: 178px;
-        --bk-qf-w: 164px;
-        --bk-sf-w: 158px;
-        --bk-nc-w: 172px;
-        --bk-row-h: 48px;
+        --bk-r1-w: 186px;
+        --bk-qf-w: 174px;
+        --bk-sf-w: 166px;
+        --bk-nc-w: 180px;
+        --bk-row-h: 52px;
     }
     /* keep the horizontal layout and scroll sideways rather than
        crushing columns below readability */
-    .bk-board { min-width: 1200px; column-gap: 14px; }
-    .bk-col-head { font-size: var(--text-sm); }
-    .bk-name { font-size: var(--text-base); }
-    .bk-pts { font-size: var(--text-sm); }
-    .bk-seed { width: 22px; height: 22px; font-size: var(--text-xs); }
-    .bk-logo { width: 24px; height: 24px; }
-    .bk-title { font-size: 2.4rem; }
-    .bk-champion { font-size: var(--text-md); }
-    .bk-champion img { width: 32px; height: 32px; }
+    .bk-board { min-width: 1220px; column-gap: 14px; }
+    .bk-col-head { font-size: var(--text-xs); }
+    .bk-name { font-size: var(--text-sm); }
+    .bk-pts { font-size: var(--text-base); }
+    .bk-seed { width: 20px; height: 20px; }
+    .bk-logo { width: 22px; height: 22px; }
+    .bk-champ-logo { width: 30px; height: 30px; }
 }
 
 @media (max-width: 767.98px) {
     .bk-board-wrap { display: none; }
     .bk-mobile { display: block; }
-    .bk-title { font-size: 2rem; }
-    .bk-header { padding: 12px 0 20px; }
-    .bk-watermark { width: 34px; height: 34px; top: 10px; }
+    .bk-header { padding: var(--s4) 0 var(--s5); }
 
-    .bracket-page { --bk-row-h: 54px; }
-    .bk-m-round { margin-bottom: 32px; }
+    .bracket-page { --bk-row-h: 56px; }
+    .bk-m-round { margin-bottom: var(--s8); }
+    /* A section head is a heading here, not a tracked label. */
     .bk-m-head {
         font-family: var(--font-display); font-stretch: var(--display-stretch);
-        font-size: 1.05rem;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--text-secondary);
+        font-size: var(--text-lg);
+        font-weight: 750;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
         border-bottom: 1px solid var(--border);
-        padding-bottom: 8px;
-        margin-bottom: 14px;
+        padding-bottom: var(--s2);
+        margin: 0 0 var(--s4);
     }
-    .bk-m-head-gold { color: rgba(28, 156, 240,0.85); border-bottom-color: rgba(28, 156, 240,0.25); }
-    .bk-slot-m { width: 100%; max-width: 360px; margin: 0 auto 14px; }
-    .bk-mobile .bk-champion { margin-bottom: 8px; }
+    .bk-m-head-final { color: var(--accent); border-bottom-color: var(--border-gold); }
+    .bk-slot-m { width: 100%; max-width: 380px; margin: 0 auto var(--s4); }
+    .bk-mobile .bk-champ { margin-bottom: var(--s2); }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .bk-live { animation: none; }
-    .bk-match, .bk-team { transition: none; }
+    .bk-match, .bk-team, .bk-team-link, .bk-trophy, .bk-champ-link { transition: none; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -3912,7 +4012,9 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 .gc-score { font-size: var(--text-lg); font-weight: 700; }
 
 /* ── Scores: winner gold, loser faded ── */
-.gc-team.winner .gc-score, .bk-pts-won { color: var(--gold) !important; }
+/* The bracket opts out of the blue winner score: on that board blue is spent on
+   the champion's path alone, and a winning score there is carried by weight. */
+.gc-team.winner .gc-score { color: var(--gold) !important; }
 .hero-score-winner { color: var(--gold); font-weight: 800; }
 .hero-score-loser { color: var(--text-secondary); font-weight: 600; }
 
@@ -3925,7 +4027,6 @@ a.bk-team-link:active { background: rgba(255,255,255,0.07); }
 /* ── Bracket page: fold hardcoded values into tokens ── */
 .bracket-page { --bk-gold: var(--gold); --bk-card: var(--bg-card); }
 .bk-seed, .bk-pts { font-family: var(--font-display); font-stretch: var(--display-stretch); }
-.bk-name { font-weight: 600; }
 
 /* ══════════════════════════════════════════════════════════════════════
    POLISH — accessibility + finishing details
@@ -4520,9 +4621,11 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 .bk-board-four .bk-slot-sf { max-width: 300px; margin: 0 auto; }
 .bk-board-four .bk-slot-nc { max-width: 320px; }
 /* one card per column — center vertically in a compact board instead of the
-   12-team layout's full-height space-around distribution */
-.bk-board-four .bk-col-body { justify-content: center; min-height: 340px; }
-.bk-board-four { height: auto; min-height: 420px; }
+   12-team layout's full-height space-around distribution. The old 340/420
+   minimums left about 200px of nothing between the round heads and the only
+   row of cards on the page. */
+.bk-board-four .bk-col-body { justify-content: center; min-height: 200px; }
+.bk-board-four { height: auto; min-height: 260px; }
 
 
 /* Game-hero status pills (FINAL / SCHEDULED) — frosted like the rivalry badge
