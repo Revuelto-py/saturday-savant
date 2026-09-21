@@ -7083,6 +7083,31 @@ def game_detail(game_id):
         print(f"ESPN fetch error: {e}")
         import traceback; traceback.print_exc()
 
+    # A leader line split into the figure the row ranks by and the rest of it.
+    # Two producers reach here: ESPN's own displayValue ("24/29, 382 YDS, 4 TD")
+    # and the box-score fallback above, which dot-joins its columns in a fixed
+    # order ("24/29 · 382 · 4"). Both end up as one ranked figure plus support,
+    # so the panel can lead with the yards it sorted on instead of printing the
+    # whole line under a label that names only part of it.
+    def _split_leader_stat(api_key, raw):
+        raw = (raw or '').strip()
+        if not raw:
+            return '', '', ''
+        first_unit = {'rushingYards': 'car', 'receivingYards': 'rec'}.get(api_key, '')
+        if ',' in raw:
+            yards, detail = '', []
+            for tok in (t.strip() for t in raw.split(',') if t.strip()):
+                if 'YDS' in tok.upper() or 'YARDS' in tok.upper():
+                    yards = re.sub(r'(?i)\s*(YDS|YARDS)', '', tok).strip()
+                else:
+                    detail.append(tok)
+            return (yards, 'yds', ' · '.join(detail)) if yards else (raw, '', '')
+        parts = [t.strip() for t in raw.split('·') if t.strip()]
+        if len(parts) == 3:
+            lead = f'{parts[0]} {first_unit}'.strip()
+            return parts[1], 'yds', f'{lead} · {parts[2]} TD'
+        return raw, '', ''
+
     structured_leaders = {}
     leader_cats = [
         ('passingYards',   'Passing'),
@@ -7102,6 +7127,23 @@ def game_detail(game_id):
                     home_leader = p
                 else:
                     away_leader = p
+            for ldr in (home_leader, away_leader):
+                if ldr:
+                    fig, unit, detail = _split_leader_stat(api_key, ldr.get('stat'))
+                    ldr['figure'], ldr['unit'], ldr['detail'] = fig, unit, detail
+
+            # Which of the two actually led the category. Marked so the panel
+            # can carry it in weight and brightness rather than leaving the
+            # reader to compare two numbers across the width of the card.
+            def _fig_num(ldr):
+                try:
+                    return float((ldr or {}).get('figure') or '')
+                except (TypeError, ValueError):
+                    return None
+            hv, av = _fig_num(home_leader), _fig_num(away_leader)
+            if hv is not None and av is not None and hv != av:
+                (home_leader if hv > av else away_leader)['leads'] = True
+
             structured_leaders[api_key] = {
                 'label': display_name,
                 'home':  home_leader,

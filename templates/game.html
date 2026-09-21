@@ -686,77 +686,58 @@
 
 {# ── GAME LEADERS ──────────────────────────────────────────────────────────── #}
 {% if structured_leaders %}
-<div style="background:var(--bg-card);border: 1px solid var(--border);border-radius: var(--r-lg);padding:20px;margin-bottom:16px">
+{# One row per category. Each row names the thing it ranks by and leads with
+   that figure; the rest of the stat line sits underneath as support. It used
+   to label every row "Passing Yards" and then print "11/17 · 117 · 1", so the
+   label named one number and the row showed three. #}
+{% macro gl_side(p, side) %}
+<div class="gl-side gl-side-{{ side }}{{ ' gl-side-lead' if p and p.leads }}">
+  {% if p %}
+    {% if p.headshot %}
+    <img class="gl-face" src="{{ p.headshot }}" alt="" loading="lazy" width="44" height="44">
+    {% else %}
+    <span class="gl-face gl-face-empty" aria-hidden="true">{{ p.name[0] if p.name else '?' }}</span>
+    {% endif %}
+    <div class="gl-id">
+      <p class="gl-figure">
+        <span class="gl-num">{{ p.figure or p.stat }}</span>{% if p.unit %}<span class="gl-unit">{{ p.unit }}</span>{% endif %}
+      </p>
+      {% if p.player_id %}
+      <a class="gl-name" href="{{ player_url(p.player_id, game_season) }}">{{ p.name }}</a>
+      {% else %}
+      <span class="gl-name">{{ p.name }}</span>
+      {% endif %}
+      {% if p.detail %}<p class="gl-detail">{{ p.detail }}</p>{% endif %}
+    </div>
+  {% else %}
+    <span class="gl-none">No leader</span>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<div class="gl-card">
     <div class="section-header">Game Leaders</div>
 
-    <!-- Team header -->
-    <div class="d-flex justify-content-between align-items-center w-100" style="padding-bottom:12px;border-bottom: 1px solid var(--border);margin-bottom:4px">
-        <div class="d-flex align-items-center gap-2">
-            {% if game[10] %}<img src="{{ game[10] }}" alt="{{ away_team }} logo" style="width:40px;height:40px;object-fit:contain">{% endif %}
-            <span class="t-label" style="font-size: var(--text-base)">{{ away_team }}</span>
+    <div class="gl-teams">
+        <div class="gl-team">
+            {% if game[10] %}<img class="gl-team-logo" src="{{ game[10] }}" alt="">{% endif %}
+            <span class="gl-team-name">{{ away_team }}</span>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <span class="t-label" style="font-size: var(--text-base)">{{ home_team }}</span>
-            {% if game[9] %}<img src="{{ game[9] }}" alt="{{ home_team }} logo" style="width:40px;height:40px;object-fit:contain">{% endif %}
+        <div class="gl-team gl-team-right">
+            <span class="gl-team-name">{{ home_team }}</span>
+            {% if game[9] %}<img class="gl-team-logo" src="{{ game[9] }}" alt="">{% endif %}
         </div>
     </div>
 
-    {% for cat_key, label in [('passingYards','Passing Yards'),('rushingYards','Rushing Yards'),('receivingYards','Receiving Yards'),('sacks','Sacks'),('tackles','Tackles')] %}
+    {# Only these three are ever populated upstream; the loop used to also ask
+       for 'sacks' and 'tackles', which no code path fills. #}
+    {% for cat_key in ['passingYards', 'rushingYards', 'receivingYards'] %}
     {% set cat = structured_leaders.get(cat_key) %}
     {% if cat and (cat.away or cat.home) %}
-    <div class="row align-items-center" style="padding:16px 0;border-bottom: 1px solid var(--border)">
-
-        <!-- Away leader (left, left-aligned) -->
-        <div class="col-5 d-flex align-items-center gap-3 text-start">
-            {% if cat.away %}
-            {% if cat.away.headshot %}
-            <img src="{{ cat.away.headshot }}" alt="{{ cat.away.name }} headshot" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border: 2px solid var(--border-strong);flex-shrink:0">
-            {% else %}
-            <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color: var(--text-secondary);font-size: var(--text-sm)">{{ cat.away.name[0] if cat.away.name else '?' }}</div>
-            {% endif %}
-            <div>
-                <div class="t-value" style="font-size: var(--text-lg);line-height:1">{{ cat.away.stat }}</div>
-                {% if cat.away.player_id %}
-                <a href="{{ player_url(cat.away.player_id, game_season) }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.away.name }}</a>
-                {% else %}
-                <div class="t-label" style="font-size: var(--text-sm);margin-top:3px">{{ cat.away.name }}</div>
-                {% endif %}
-                {% if cat.away.position %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:1px">{{ cat.away.position }}</div>{% endif %}
-                {% if cat.away.stat_detail %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:2px">{{ cat.away.stat_detail }}</div>{% endif %}
-            </div>
-            {% else %}
-            <div class="t-meta" style="font-size: var(--text-sm)">—</div>
-            {% endif %}
-        </div>
-
-        <!-- Center label -->
-        <div class="col-2 text-center d-flex align-items-center justify-content-center">
-            <div class="t-support" style="font-size: var(--text-xs);line-height:1.4">{{ label }}</div>
-        </div>
-
-        <!-- Home leader (right, mirrored) -->
-        <div class="col-5 d-flex align-items-center flex-row-reverse gap-3 text-end">
-            {% if cat.home %}
-            {% if cat.home.headshot %}
-            <img src="{{ cat.home.headshot }}" alt="{{ cat.home.name }} headshot" style="width:48px;height:48px;border-radius:50%;object-fit:cover;object-position:top;border: 2px solid var(--border-strong);flex-shrink:0">
-            {% else %}
-            <div style="width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.08);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;color: var(--text-secondary);font-size: var(--text-sm)">{{ cat.home.name[0] if cat.home.name else '?' }}</div>
-            {% endif %}
-            <div>
-                <div class="t-value" style="font-size: var(--text-lg);line-height:1">{{ cat.home.stat }}</div>
-                {% if cat.home.player_id %}
-                <a href="{{ player_url(cat.home.player_id, game_season) }}" class="t-label" style="font-size: var(--text-sm);margin-top:3px;display:block;text-decoration:none">{{ cat.home.name }}</a>
-                {% else %}
-                <div class="t-label" style="font-size: var(--text-sm);margin-top:3px">{{ cat.home.name }}</div>
-                {% endif %}
-                {% if cat.home.position %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:1px">{{ cat.home.position }}</div>{% endif %}
-                {% if cat.home.stat_detail %}<div class="t-meta" style="font-size: var(--text-xs);margin-top:2px">{{ cat.home.stat_detail }}</div>{% endif %}
-            </div>
-            {% else %}
-            <div class="t-meta" style="font-size: var(--text-sm)">—</div>
-            {% endif %}
-        </div>
-
+    <div class="gl-row">
+        {{ gl_side(cat.away, 'away') }}
+        <p class="gl-cat">{{ cat.label }}</p>
+        {{ gl_side(cat.home, 'home') }}
     </div>
     {% endif %}
     {% endfor %}
