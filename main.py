@@ -1237,6 +1237,7 @@ _RANK_SPECS = {
            ('pct_rank','passing','PCT',True), ('ypa_rank','passing','YPA',True),
            ('int_rank','passing','INT',False), ('epa_rank','ppa','avg_ppa_all',True)],
     'RB': [('rush_yds_rank','rushing','YDS',True), ('rush_td_rank','rushing','TD',True),
+           ('carries_rank','rushing','CAR',True),
            ('ypc_rank','rushing','YPC',True), ('rec_yds_rank','receiving','YDS',True),
            ('epa_rank','ppa','avg_ppa_all',True)],
     'WR': [('rec_yds_rank','receiving','YDS',True), ('rec_td_rank','receiving','TD',True),

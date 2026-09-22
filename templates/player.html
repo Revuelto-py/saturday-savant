@@ -129,6 +129,11 @@
                 <!-- Hero stat cards -->
                 <div class="ph-statcards" style="display:flex;flex-wrap:wrap;gap:10px;padding-bottom:20px">
                     {% set pos = player.position | upper if player.position else '' %}
+                    {# Yards per reception is stored under stat_type YPR. AVG is the
+                       punting key, so asking receiving for AVG always came back empty
+                       and every receiving average on this page rendered as a dash. #}
+                    {% set rec_stats = stats.get('receiving', {}) %}
+                    {% set rec_ypr = rec_stats.get('YPR') if rec_stats.get('YPR') is not none else rec_stats.get('AVG') %}
                     {% if pos == 'QB' %}
                         {% set cards = [
                             ('PASS YDS', stats.get('passing', {}).get('YDS')),
@@ -147,7 +152,7 @@
                         {% set cards = [
                             ('REC',     stats.get('receiving', {}).get('REC')),
                             ('REC YDS', stats.get('receiving', {}).get('YDS')),
-                            ('YPR',     stats.get('receiving', {}).get('AVG')),
+                            ('YPR',     rec_ypr),
                             ('REC TD',  stats.get('receiving', {}).get('TD')),
                         ] %}
                     {% elif pos in ('DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB') %}
@@ -190,6 +195,7 @@
                     {% elif label in ('YPA', 'Y/A') %}{% set rank_key = 'ypa_rank' %}
                     {% elif label == 'RUSH YDS' %}{% set rank_key = 'rush_yds_rank' %}
                     {% elif label == 'RUSH TD' %}{% set rank_key = 'rush_td_rank' %}
+                    {% elif label == 'CARRIES' %}{% set rank_key = 'carries_rank' %}
                     {% elif label == 'YPC' %}{% set rank_key = 'ypc_rank' %}
                     {% elif label == 'REC YDS' %}{% set rank_key = 'rec_yds_rank' %}
                     {% elif label == 'REC TD' %}{% set rank_key = 'rec_td_rank' %}
@@ -424,7 +430,12 @@
                     </tr></thead>
                     <tbody><tr>
                         {% set p = stats.get('rushing', {}) %}
-                        <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('CAR') if p.get('CAR') is not none else '—' }}</td>
+                        {# Carries come back as a REAL, so a whole number arrived as
+                           "54.0" next to a column of clean integers. #}
+                        <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">
+                            {%- set car = p.get('CAR') -%}
+                            {%- if car is none %}—{% elif (car | string).endswith('.0') %}{{ (car | string)[:-2] }}{% else %}{{ car }}{% endif -%}
+                        </td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(96,165,250,0.05)"><span style="color:#7cc4ff;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('YPC') if p.get('YPC') is not none else '—' }}</td>
                         <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
@@ -453,7 +464,9 @@
                         {% set p = stats.get('receiving', {}) %}
                         <td style="padding:12px 14px;color: var(--text-primary);font-size: var(--text-base);text-align:center">{{ p.get('REC') or '—' }}</td>
                         <td style="padding:12px 10px;text-align:center;background:rgba(52,211,153,0.05)"><span style="color:#34d399;font-weight:800;font-size: var(--text-md)">{{ p.get('YDS') or '—' }}</span></td>
-                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('AVG') if p.get('AVG') is not none else '—' }}</td>
+                        {# YPR, not AVG — see the note by the hero cards. #}
+                        {% set ypr = p.get('YPR') if p.get('YPR') is not none else p.get('AVG') %}
+                        <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ ypr if ypr is not none else '—' }}</td>
                         <td style="padding:12px 10px;text-align:center">{% if p.get('TD') %}<span style="display:inline-block;border:1px solid rgba(28, 156, 240,0.5);border-radius: var(--r-sm);padding:2px 9px;color:var(--gold);font-weight:800;font-size: var(--text-base);min-width:30px;text-align:center">{{ p.get('TD') }}</span>{% elif p.get('TD') is not none %}0{% else %}—{% endif %}</td>
                         <td style="padding:12px 10px;color: var(--text-secondary);font-size: var(--text-base);text-align:center">{{ p.get('LONG') if p.get('LONG') is not none else '—' }}</td>
                     </tr></tbody>
