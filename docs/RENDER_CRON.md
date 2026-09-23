@@ -175,6 +175,21 @@ It never DELETEs or INSERTs, so unlike `pipeline/fetch_data.py` it cannot wipe a
 `/game/<id>` already falls back to a live ESPN summary fetch (and stores it)
 when a completed game has no stored summary.
 
+**A transient CFBD outage skips the run instead of failing it.** The CFBD reads
+go through `pipeline/cfbd_retry.py`: a 5xx, a 429 or a connection error is
+retried four times (15s, 30s, 60s, honouring any `Retry-After`, ~105-180s of
+sleeping at most — well inside the ten minutes before the next run). If every
+attempt fails the job logs the reason and exits **0**, because this is an
+UPDATE-only job whose worst case is a no-op and the next run is minutes away.
+
+That is what fixed the nightly red cron: Cloudflare returns a 5xx while CFBD's
+origin restarts, and with 144 runs a day the 05:00 UTC one landed on that window
+every night — so the 1 AM job failed daily while the other 143 passed.
+
+A permanent failure is still a failure: a 401 (bad `CFBD_API_KEY`), a 403 or a
+404 is raised on the first response with no retries, and the short-response
+guard below still exits 1.
+
 1. Render Dashboard → **New +** → **Cron Job** (a second one; the weekly job stays).
 2. Same repo/branch/runtime/build command as the weekly job.
 3. **Command:** `python3 pipeline/fetch_scores.py`

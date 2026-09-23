@@ -56,6 +56,7 @@ import psycopg2
 import requests
 from dotenv import load_dotenv
 
+from cfbd_retry import UpstreamUnavailable, call_with_retry
 from season_util import current_cfb_season
 
 # No override: an exported DATABASE_URL wins, matching run_weekly.sh's chain.
@@ -216,12 +217,28 @@ def main():
 
     with cfbd.ApiClient(cfbd.Configuration(access_token=key)) as api:
         games_api = cfbd.GamesApi(api)
-        games = games_api.get_games(SEASON, week=WEEK) if WEEK \
-            else games_api.get_games(SEASON)
+        # CFBD's origin restarts behind Cloudflare, which answers 5xx while it
+        # does. Unretried, that single response ended the run — and because this
+        # job runs every ten minutes it landed on the same 05:00 UTC window
+        # every night, so the 1 AM run failed daily while the other 143 passed.
+        try:
+            if WEEK:
+                games = call_with_retry('games', games_api.get_games,
+                                        SEASON, week=WEEK)
+            else:
+                games = call_with_retry('games', games_api.get_games, SEASON)
+        except UpstreamUnavailable as exc:
+            # Not a failure worth waking anyone for: this is an UPDATE-only job
+            # whose worst case is a no-op, and the next run is ten minutes out.
+            # A bad key or a 404 still raises above — only a spent transient
+            # lands here.
+            print(f'{exc} — skipping this run, next one in ~10 minutes',
+                  flush=True)
+            return 0
         # Live board for games under way. Non-fatal: if it fails we still apply
         # the finals below, which is the behaviour this script had before.
         try:
-            board = games_api.get_scoreboard()
+            board = call_with_retry('scoreboard', games_api.get_scoreboard)
         except Exception as exc:
             print(f'scoreboard unavailable ({exc}) — finals only', flush=True)
             board = []
