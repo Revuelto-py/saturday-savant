@@ -129,6 +129,11 @@
                 <!-- Hero stat cards -->
                 <div class="ph-statcards" style="display:flex;flex-wrap:wrap;gap:10px;padding-bottom:20px">
                     {% set pos = player.position | upper if player.position else '' %}
+                    {# Field-goal percentage is stored as a fraction (0.833).
+                       Shown as a percentage, and only scaled when it actually
+                       is one — some rows already arrive as 100.0. #}
+                    {# PCT arrives already formatted as "83.3%" from the route. #}
+                    {% set fg_pct = stats.get('kicking', {}).get('PCT') %}
                     {# Yards per reception is stored under stat_type YPR. AVG is the
                        punting key, so asking receiving for AVG always came back empty
                        and every receiving average on this page rendered as a dash. #}
@@ -169,17 +174,26 @@
                             ('PD',      stats.get('defensive', {}).get('PD')),
                             ('SACKS',   stats.get('defensive', {}).get('SACKS')),
                         ] %}
-                    {% elif pos == 'K' %}
+                    {% elif pos in ('PK', 'K') %}
+                        {# Games played comes from the game log, because
+                           player_stats holds season totals and no game count. #}
                         {% set cards = [
+                            ('GP',   games_played),
                             ('FGM',  stats.get('kicking', {}).get('FGM')),
                             ('FGA',  stats.get('kicking', {}).get('FGA')),
+                            ('FG %', fg_pct),
+                            ('XPM',  stats.get('kicking', {}).get('XPM')),
                             ('LONG', stats.get('kicking', {}).get('LONG')),
                         ] %}
                     {% elif pos == 'P' %}
+                        {# YPP, not AVG: the punting rows are stored under YPP
+                           and asking for AVG came back empty every time. #}
                         {% set cards = [
+                            ('GP',    games_played),
                             ('PUNTS', stats.get('punting', {}).get('NO')),
                             ('YDS',   stats.get('punting', {}).get('YDS')),
-                            ('AVG',   stats.get('punting', {}).get('AVG')),
+                            ('YDS/P', stats.get('punting', {}).get('YPP')),
+                            ('IN 20', stats.get('punting', {}).get('In 20')),
                             ('LONG',  stats.get('punting', {}).get('LONG')),
                         ] %}
                     {% else %}
@@ -188,7 +202,15 @@
 
                     {% for label, val in cards %}
                     {% if val is not none %}
-                    {% if label == 'PASS YDS' %}{% set rank_key = 'pass_yds_rank' %}
+                    {% if label == 'FGM' %}{% set rank_key = 'fgm_rank' %}
+                    {% elif label == 'FGA' %}{% set rank_key = 'fga_rank' %}
+                    {% elif label == 'FG %' %}{% set rank_key = 'fgpct_rank' %}
+                    {% elif label == 'XPM' %}{% set rank_key = 'xpm_rank' %}
+                    {% elif label == 'PUNTS' %}{% set rank_key = 'punts_rank' %}
+                    {% elif label == 'YDS/P' %}{% set rank_key = 'ypp_rank' %}
+                    {% elif label == 'IN 20' %}{% set rank_key = 'in20_rank' %}
+                    {% elif label == 'LONG' %}{% set rank_key = 'klong_rank' if pos in ('PK','K') else 'plong_rank' %}
+                    {% elif label == 'PASS YDS' %}{% set rank_key = 'pass_yds_rank' %}
                     {% elif label == 'PASS TD' %}{% set rank_key = 'pass_td_rank' %}
                     {% elif label == 'INT' %}{% set rank_key = 'int_rank' %}
                     {% elif label == 'CMP %' %}{% set rank_key = 'pct_rank' %}
@@ -338,7 +360,7 @@
 {% set is_def_dl   = pos in ('DE','DT','NT','DL','EDGE','LB','ILB','OLB','MLB') %}
 {% set is_def_db   = pos in ('CB','S','SS','FS','SAF','DB') %}
 {% set is_defense  = is_def_dl or is_def_db %}
-{% set is_kicker   = pos == 'K' %}
+{% set is_kicker   = pos in ('PK', 'K') %}
 {% set is_punter   = pos == 'P' %}
 
     <!-- ROW 1: Season Stats (left) + Percentile Rankings (right)
@@ -751,10 +773,12 @@
     {% set cols = [('TOT','totalTackles'),('SOLO','soloTackles'),('AST','assistTackles'),('SACK','sacks'),('TFL','tacklesForLoss'),('PD','passesDefended'),('INT','interceptions'),('FF','forcedFumbles')] %}
     {% elif pos in ('CB','S','SS','FS','SAF','DB') %}
     {% set cols = [('TOT','totalTackles'),('SOLO','soloTackles'),('INT','interceptions'),('PD','passesDefended'),('TFL','tacklesForLoss'),('SACK','sacks'),('FF','forcedFumbles'),('TD','interceptionTouchdowns')] %}
-    {% elif pos == 'K' %}
+    {% elif pos in ('PK', 'K') %}
     {% set cols = [('FGM','fieldGoalsMade'),('FGA','fieldGoalAttempts'),('PCT','fieldGoalPct'),('LONG','longFieldGoal'),('XPM','extraPointsMade'),('XPA','extraPointAttempts'),('PTS','totalKickingPoints')] %}
     {% elif pos == 'P' %}
-    {% set cols = [('NO','punts'),('YDS','puntYards'),('AVG','grossAvgPuntYards'),('NET','netAvgPuntYards'),('LONG','longPunt'),('IN20','puntsInsideTwenty'),('TB','touchbacks')] %}
+    {# netAvgPuntYards is not in the stored log, so NET is dropped rather than
+       printed as a column of dashes. #}
+    {% set cols = [('NO','punts'),('YDS','puntYards'),('AVG','grossAvgPuntYards'),('LONG','longPunt'),('IN20','puntsInsideTwenty'),('TB','touchbacks')] %}
     {% else %}
     {% set cols = [] %}
     {% endif %}

@@ -962,6 +962,15 @@ QUALIFICATIONS = {
         'defensive': {'TOT': 15},
         'ppa':       {'TOT': 15},
     },
+    # Specialists qualify on their own attempt counts. A kicker who has taken
+    # ten field goals over a season is a starter; below that is a fill-in whose
+    # percentage would swing on a single kick.
+    'K': {
+        'kicking': {'FGA': 10},
+    },
+    'P': {
+        'punting': {'NO': 20},   # ~1.7 punts a game
+    },
 }
 
 # Full-season qualification minimums for the player leaderboards, with the
@@ -973,6 +982,8 @@ LEADERBOARD_QUALIFIERS = {
     'rushing':   ('CAR',  50, 'carries'),
     'receiving': ('REC',  20, 'receptions'),
     'defense':   ('TOT',  15, 'tackles'),
+    'kicking':   ('FGA',  10, 'field goal attempts'),
+    'punting':   ('NO',   20, 'punts'),
 }
 
 # Map positions to their group for qualification lookup
@@ -984,6 +995,7 @@ POS_GROUP_MAP = {
     'DE': 'DL', 'DT': 'DL', 'NT': 'DL', 'DL': 'DL', 'EDGE': 'DL',
     'LB': 'LB', 'ILB': 'LB', 'OLB': 'LB', 'MLB': 'LB',
     'CB': 'DB', 'S': 'DB', 'SS': 'DB', 'FS': 'DB', 'SAF': 'DB', 'DB': 'DB',
+    'PK': 'K', 'K': 'K', 'P': 'P',
 }
 
 # Which stats category holds the qualifying counting stat for 'ppa' lookups
@@ -991,6 +1003,7 @@ POS_GROUP_MAP = {
 QUAL_SOURCE_CATEGORY = {
     'QB': 'passing', 'RB': 'rushing', 'WR': 'receiving', 'TE': 'receiving',
     'DL': 'defensive', 'LB': 'defensive', 'DB': 'defensive',
+    'K': 'kicking', 'P': 'punting',
 }
 
 FULL_SEASON_GAMES = 12          # team games the minimums above assume
@@ -1228,6 +1241,27 @@ PERCENTILE_METRICS = {
         ('Tackles',           'defensive', 'TOT',          True),
         ('Solo Tackles',      'defensive', 'SOLO',         True),
     ],
+    # Specialists. Both groups are counting stats plus one rate, which is the
+    # same data limit the defensive groups have: there is no EPA for a kick in
+    # this database, so accuracy and volume are what can honestly be ranked.
+    'K': [
+        ('Field Goal %',      'kicking',   'PCT',          True),
+        ('Field Goals Made',  'kicking',   'FGM',          True),
+        ('Attempts',          'kicking',   'FGA',          True),
+        ('Longest',           'kicking',   'LONG',         True),
+        ('Extra Points',      'kicking',   'XPM',          True),
+        ('Kicking Points',    'kicking',   'PTS',          True),
+    ],
+    'P': [
+        ('Yards / Punt',      'punting',   'YPP',          True),
+        ('Punts',             'punting',   'NO',           True),
+        ('Punt Yards',        'punting',   'YDS',          True),
+        ('Inside 20',         'punting',   'In 20',        True),
+        ('Longest',           'punting',   'LONG',         True),
+        # A touchback gives the ball back at the 25 — the one punting number a
+        # punter wants low.
+        ('Touchbacks',        'punting',   'TB',           False),
+    ],
     'DB': [
         ('Interceptions',     'ints',      'INT',          True),
         ('Passes Defended',   'defensive', 'PD',           True),
@@ -1254,6 +1288,12 @@ _RANK_SPECS = {
            ('epa_rank','ppa','avg_ppa_all',True)],
     'DL': [('tackles_rank','defensive','TOT',True), ('sacks_rank','defensive','SACKS',True)],
     'DB': [('tackles_rank','defensive','TOT',True), ('sacks_rank','defensive','SACKS',True)],
+    'K':  [('fgm_rank','kicking','FGM',True), ('fga_rank','kicking','FGA',True),
+           ('fgpct_rank','kicking','PCT',True), ('xpm_rank','kicking','XPM',True),
+           ('kpts_rank','kicking','PTS',True), ('klong_rank','kicking','LONG',True)],
+    'P':  [('punts_rank','punting','NO',True), ('ypp_rank','punting','YPP',True),
+           ('pyds_rank','punting','YDS',True), ('in20_rank','punting','In 20',True),
+           ('plong_rank','punting','LONG',True)],
 }
 _RANK_SPECS['TE'] = _RANK_SPECS['WR']
 _RANK_SPECS['LB'] = _RANK_SPECS['DL']
@@ -1266,12 +1306,16 @@ _GROUP_POSITIONS = {
     'DL': ['DE','DT','NT','DL','EDGE'],
     'LB': ['LB','ILB','OLB','MLB'],
     'DB': ['CB','S','SS','FS','SAF','DB'],
+    'K':  ['PK','K'],
+    'P':  ['P'],
 }
 # Qualification group -> which metric set it uses (TE→WR, LB→DL share sets).
-METRIC_GROUP = {'QB':'QB','RB':'RB','WR':'WR','TE':'TE','DL':'DL','LB':'LB','DB':'DB'}
+METRIC_GROUP = {'QB':'QB','RB':'RB','WR':'WR','TE':'TE','DL':'DL','LB':'LB','DB':'DB',
+                'K':'K','P':'P'}
 # The counting-stat category that gates qualification for each group.
 _PRIMARY_CATEGORY = {'QB':'passing','RB':'rushing','WR':'receiving','TE':'receiving',
-                     'DL':'defensive','LB':'defensive','DB':'defensive'}
+                     'DL':'defensive','LB':'defensive','DB':'defensive',
+                     'K':'kicking','P':'punting'}
 
 
 def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
@@ -1310,7 +1354,8 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
     # (pool, fill): fill=True zero-fills a missing stat to 0 before ranking.
     sources = {}
     for src in needed:
-        if src in ('passing', 'rushing', 'receiving', 'defensive'):
+        if src in ('passing', 'rushing', 'receiving', 'defensive',
+                   'kicking', 'punting'):
             raw = primary_raw if src == primary_cat else _fetch_stats_pool(cursor, src, gp, season)
             sources[src] = ({pid: raw.get(pid, {}) for pid in qualified}, True)
         elif src == 'ppa':
@@ -2125,6 +2170,36 @@ def _games_played_map(season):
 
 
 PLAYER_COLUMNS = {
+    # Special teams. Both boards are counting stats plus one rate, because that
+    # is all this data supports: there is no EPA for a kick here, so there is no
+    # advanced view to offer and both categories ship 'standard' only.
+    'kicking': {
+        'standard': [
+            ('gp',   'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
+            ('fgm',  'FGM',  'Field Goals Made', True, 'int'),
+            ('fga',  'FGA',  'Field Goals Attempted', True, 'int'),
+            ('fgpct','FG%',  'Field Goal Percentage', True, 'pct1'),
+            ('lng',  'LONG', 'Longest Field Goal', True, 'int'),
+            ('xpm',  'XPM',  'Extra Points Made', True, 'int'),
+            ('xpa',  'XPA',  'Extra Points Attempted', True, 'int'),
+            ('pts',  'PTS',  'Kicking Points — three a field goal, one an extra point', True, 'int'),
+        ],
+        'advanced': [],
+    },
+    'punting': {
+        'standard': [
+            ('gp',   'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
+            ('punts','PUNTS','Punts', True, 'int'),
+            ('yds',  'YDS',  'Punt Yards', True, 'int'),
+            ('ypp',  'YDS/P','Yards per Punt', True, 'dec'),
+            ('in20', 'IN 20','Punts Downed Inside the 20', True, 'int'),
+            ('lng',  'LONG', 'Longest Punt', True, 'int'),
+            ('tb',   'TB',   'Touchbacks — the ball comes out to the 25, so fewer is better', False, 'int'),
+        ],
+        # Declared and empty: the route asks every category for its advanced
+        # view, and there is no advanced kicking or punting data to show.
+        'advanced': [],
+    },
     'passing': {
         'standard': [
             ('gp',  'GP',   'Games Played — games this player recorded a stat in', True, 'int'),
@@ -2247,6 +2322,12 @@ POSITION_GROUPS = {
     'DL': ('DE', 'DT', 'NT', 'DL', 'EDGE'),
     'LB': ('LB',),
     'DB': ('CB', 'S', 'DB'),
+    # CFBD labels a placekicker PK, not K. Every position list on this site
+    # spelled it 'K', so a kicker matched nothing anywhere: no hero cards, no
+    # season table, no percentile pool — while his kicking rows sat in
+    # player_stats the whole time.
+    'K':  ('PK', 'K'),
+    'P':  ('P',),
 }
 
 TEAM_COLUMNS = {
@@ -2362,6 +2443,10 @@ PLAYER_PREFERRED_SORT = {
     ('rushing', 'standard'): 'yds', ('rushing', 'advanced'): 'total_epa',
     ('receiving', 'standard'): 'yds', ('receiving', 'advanced'): 'total_epa',
     ('defense', 'standard'): 'tot', ('defense', 'advanced'): 'tkl_pct',
+    # Field goals made and punt yards, not games played — GP is the first
+    # sortable column on both boards and would otherwise be the default.
+    ('kicking', 'standard'): 'fgm',
+    ('punting', 'standard'): 'yds',
 }
 
 def _default_sort_col(columns, category, view):
@@ -3500,6 +3585,10 @@ def leaderboards(category='passing'):
         sort_dir    = sort_dir if sort_dir in ('asc', 'desc') else 'desc'
         view        = request.args.get('view', 'standard')
         view        = view if view in ('standard', 'advanced') else 'standard'
+        # A category with no advanced columns cannot serve that view; asking for
+        # it by hand would otherwise render a table with no columns at all.
+        if not PLAYER_COLUMNS[category].get('advanced'):
+            view = 'standard'
         qualified   = request.args.get('qualified', '1') != '0'
         page_raw    = request.args.get('page', '1')
         # How each stat cell reads, and whether it is tinted. Both live in the
@@ -3819,6 +3908,75 @@ def leaderboards(category='passing'):
                     row['prsh']     = None
                 players.append(row)
 
+        elif category == 'kicking':
+            min_fga = qual_bar(LEADERBOARD_QUALIFIERS['kicking'][1])
+            cursor.execute(f'''
+                SELECT
+                    p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
+                    t.logo_dark, t.conference, t.color,
+                    MAX(CASE WHEN ps.stat_type='FGM'  THEN CAST(ps.stat AS REAL) END) as fgm,
+                    MAX(CASE WHEN ps.stat_type='FGA'  THEN CAST(ps.stat AS REAL) END) as fga,
+                    MAX(CASE WHEN ps.stat_type='PCT'  THEN CAST(ps.stat AS REAL) END) as pct,
+                    MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as lng,
+                    MAX(CASE WHEN ps.stat_type='XPM'  THEN CAST(ps.stat AS REAL) END) as xpm,
+                    MAX(CASE WHEN ps.stat_type='XPA'  THEN CAST(ps.stat AS REAL) END) as xpa,
+                    MAX(CASE WHEN ps.stat_type='PTS'  THEN CAST(ps.stat AS REAL) END) as pts
+                FROM players p
+                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'kicking' AND ps.season = {season}
+                JOIN teams t ON ps.team = t.name{team_games_join}
+                WHERE p.position IN ('PK','K')
+                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
+                  {conf_sql} {team_sql} {pos_sql}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color
+                HAVING MAX(CASE WHEN ps.stat_type='FGA' THEN CAST(ps.stat AS REAL) END) >= {min_fga}
+            ''', params)
+            for r in cursor.fetchall():
+                # PCT is stored as a fraction in some seasons and as a percentage
+                # in others; both end up as a percentage here.
+                pct = float(r[12] or 0)
+                if pct <= 1.0:
+                    pct *= 100
+                players.append({
+                    'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
+                    'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
+                    'logo': r[7], 'conf': r[8], 'color': r[9],
+                    'fgm': int(r[10] or 0), 'fga': int(r[11] or 0),
+                    'fgpct': round(pct, 1), 'lng': int(r[13] or 0),
+                    'xpm': int(r[14] or 0), 'xpa': int(r[15] or 0),
+                    'pts': int(r[16] or 0), 'gp': None,
+                })
+
+        elif category == 'punting':
+            min_punts = qual_bar(LEADERBOARD_QUALIFIERS['punting'][1])
+            cursor.execute(f'''
+                SELECT
+                    p.id, p.first_name, p.last_name, ps.team, p.position, p.jersey, p.headshot,
+                    t.logo_dark, t.conference, t.color,
+                    MAX(CASE WHEN ps.stat_type='NO'    THEN CAST(ps.stat AS REAL) END) as punts,
+                    MAX(CASE WHEN ps.stat_type='YDS'   THEN CAST(ps.stat AS REAL) END) as yds,
+                    MAX(CASE WHEN ps.stat_type='YPP'   THEN CAST(ps.stat AS REAL) END) as ypp,
+                    MAX(CASE WHEN ps.stat_type='In 20' THEN CAST(ps.stat AS REAL) END) as in20,
+                    MAX(CASE WHEN ps.stat_type='LONG'  THEN CAST(ps.stat AS REAL) END) as lng,
+                    MAX(CASE WHEN ps.stat_type='TB'    THEN CAST(ps.stat AS REAL) END) as tb
+                FROM players p
+                JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'punting' AND ps.season = {season}
+                JOIN teams t ON ps.team = t.name{team_games_join}
+                WHERE p.position = 'P'
+                  AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
+                  {conf_sql} {team_sql} {pos_sql}
+                GROUP BY p.id, ps.team, t.logo_dark, t.conference, t.color
+                HAVING MAX(CASE WHEN ps.stat_type='NO' THEN CAST(ps.stat AS REAL) END) >= {min_punts}
+            ''', params)
+            for r in cursor.fetchall():
+                players.append({
+                    'id': r[0], 'name': f"{r[1]} {r[2]}", 'first': r[1], 'last': r[2],
+                    'team': r[3], 'pos': r[4], 'jersey': r[5], 'headshot': r[6],
+                    'logo': r[7], 'conf': r[8], 'color': r[9],
+                    'punts': int(r[10] or 0), 'yds': int(r[11] or 0),
+                    'ypp': round(float(r[12] or 0), 1), 'in20': int(r[13] or 0),
+                    'lng': int(r[14] or 0), 'tb': int(r[15] or 0), 'gp': None,
+                })
+
         # Games played, and the per-game rates it unlocks. Both were columns the
         # page had been rendering as "not available" since it was built, because
         # player_stats holds season totals and nothing else.
@@ -3826,6 +3984,10 @@ def leaderboards(category='passing'):
         for row in players:
             g = _gp.get(row['id'])
             row['gp'] = g
+            # The special-teams boards carry no per-game rate: yards a game says
+            # nothing about a kicker, and a punter's average is already per punt.
+            if category in ('kicking', 'punting'):
+                continue
             if g:
                 if category == 'defense':
                     row['tpg'] = round(row['tot'] / g, 1)
@@ -8153,10 +8315,20 @@ def _player_detail_cached(player_id, season):
                 k['PCT'] = f"{pct_f * 100:.1f}%" if pct_f <= 1.0 else f"{pct_f:.1f}%"
             k['FGM'] = _i(k.get('FGM')); k['FGA'] = _i(k.get('FGA'))
             k['LONG'] = _i(k.get('LONG'))
+            # Extra points and kicking points were left as raw floats, so a
+            # hero card read "15.0" where every other figure on the row is a
+            # whole number.
+            k['XPM'] = _i(k.get('XPM')); k['XPA'] = _i(k.get('XPA'))
+            k['PTS'] = _i(k.get('PTS'))
         if 'punting' in stats:
             pt = stats['punting']
             pt['NO'] = _i(pt.get('NO')); pt['YDS'] = _i(pt.get('YDS'))
-            pt['LONG'] = _i(pt.get('LONG')); pt['AVG'] = _f(pt.get('AVG'))
+            pt['LONG'] = _i(pt.get('LONG'))
+            # Yards per punt is stored as YPP. AVG does not exist in these rows,
+            # so the old line set it to None and every punting average on the
+            # site read as a dash.
+            pt['YPP'] = _f(pt.get('YPP'))
+            pt['In 20'] = _i(pt.get('In 20')); pt['TB'] = _i(pt.get('TB'))
 
         cursor.execute('''
             SELECT avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa
@@ -8560,8 +8732,12 @@ def _player_detail_cached(player_id, season):
     else:
         previous_stat_teams = []
 
+    # Games played, from the same stored-log measure the leaderboards use, so
+    # the hero and the boards can never disagree about it.
+    games_played = _games_played_map(season).get(str(player_id))
+
     return render_template('player.html',
-        player=player, stats=stats, ppa=ppa,
+        player=player, stats=stats, ppa=ppa, games_played=games_played,
         season=season, is_current_season=(season == CURRENT_SEASON),
         available_seasons=player_seasons,
         career_log=career_log, career_cols=career_cols,
@@ -9019,6 +9195,8 @@ COMPARE_PEER_POSITIONS = {
     'DL': ['DE', 'DT', 'NT', 'DL', 'EDGE'],
     'LB': ['LB', 'ILB', 'OLB', 'MLB'],
     'DB': ['CB', 'S', 'SS', 'FS', 'SAF', 'DB'],
+    'K':  ['PK', 'K'],
+    'P':  ['P'],
 }
 COMPARE_WIDE_DEF_POSITIONS = ['DE', 'DT', 'NT', 'DL', 'EDGE', 'LB', 'ILB', 'OLB', 'MLB']
 
@@ -11322,6 +11500,7 @@ def _warm_cache():
         _t.sleep(3)   # let the worker finish booting
         paths = ['/', '/games', '/leaderboards/passing', '/leaderboards/rushing',
                  '/leaderboards/receiving', '/leaderboards/defense',
+                 '/leaderboards/kicking', '/leaderboards/punting',
                  '/leaderboards/teams', '/rankings', '/teams', '/savant-rating', '/bracket']
         try:
             with app.test_client() as c:

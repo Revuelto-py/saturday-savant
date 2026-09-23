@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% set _cat_label = {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) %}
+{% set _cat_label = {'passing':'Passing','rushing':'Rushing','receiving':'Receiving','defense':'Defense','kicking':'Kicking','punting':'Punting','offense':'Offense','sp':'SP+','savant':'Savant Rating'}.get(category, category|title) %}
 {% block title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} Leaderboards · {{ _cat_label }} · Saturday Savant{% endblock %}
 {% block og_title %}{% if mode == 'team' %}Team{% else %}Player{% endif %} {{ _cat_label }} Leaders · Saturday Savant{% endblock %}
 {% block og_description %}{{ season }} FBS {% if mode == 'team' %}team{% else %}player{% endif %} {{ _cat_label }} leaders, ranked on Saturday Savant.{% endblock %}
@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <div class="page-wrapper" style="padding-top:32px">
 
-{% set PLAYER_CATS = [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense')] %}
+{% set PLAYER_CATS = [('passing','Passing'),('rushing','Rushing'),('receiving','Receiving'),('defense','Defense'),('kicking','Kicking'),('punting','Punting')] %}
 {% set TEAM_CATS = [('savant','Savant Rating'),('offense','Offense'),('defense','Defense'),('sp','SP+'),('discipline','Turnovers'),('betting','Vs Spread')] %}
 
 {% macro player_path(cat) %}/leaderboards/{{ cat }}{% endmacro %}
