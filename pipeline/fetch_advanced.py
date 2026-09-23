@@ -8,6 +8,7 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -32,7 +33,9 @@ with cfbd.ApiClient(configuration) as api_client:
     # ── 1. TEAM ADVANCED STATS ────────────────────────────────────────────────
     print("Fetching team advanced stats...")
     try:
-        adv = stats_api.get_advanced_season_stats(year=SEASON, exclude_garbage_time=True)
+        adv = call_with_retry('advanced season stats',
+                              stats_api.get_advanced_season_stats,
+                              year=SEASON, exclude_garbage_time=True)
         # The DELETE is atomic with the INSERTs after it, so no reader sees a
         # half-empty table — but a SHORT fetch would still replace the field
         # with whatever came back. This is what lets the section run between
@@ -104,7 +107,8 @@ with cfbd.ApiClient(configuration) as api_client:
     # ── 2. PLAYER USAGE STATS ─────────────────────────────────────────────────
     print("\nFetching player usage stats...")
     try:
-        usage = players_api.get_player_usage(year=SEASON)
+        usage = call_with_retry('player usage', players_api.get_player_usage,
+                                year=SEASON)
         saved = 0
         for u in usage:
             pid = getattr(u, 'id', None)
@@ -152,7 +156,12 @@ with cfbd.ApiClient(configuration) as api_client:
     try:
         for yr in [2022, 2023, 2024, 2025, 2026]:
             try:
-                teams_rec = recruiting_api.get_team_recruiting_rankings(year=yr)
+                # Fewer attempts inside a per-year loop: the waits would
+                # otherwise stack once per iteration on a bad CFBD day.
+                teams_rec = call_with_retry(
+                    f'recruiting {yr}',
+                    recruiting_api.get_team_recruiting_rankings,
+                    year=yr, attempts=3)
                 cursor.execute('DELETE FROM team_recruiting WHERE year=%s', (yr,))
                 for r in teams_rec:
                     cursor.execute('''
@@ -171,7 +180,8 @@ with cfbd.ApiClient(configuration) as api_client:
     try:
         for yr in [2021, 2022, 2023, 2024, 2025]:
             try:
-                sp = ratings_api.get_sp(year=yr)
+                sp = call_with_retry(f'sp+ {yr}', ratings_api.get_sp,
+                                     year=yr, attempts=3)
                 cursor.execute('DELETE FROM sp_historical WHERE year=%s', (yr,))
                 for s in sp:
                     off  = getattr(s, 'offense', None)

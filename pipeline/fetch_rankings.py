@@ -37,6 +37,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 import espn_rankings
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -159,7 +160,11 @@ id_map = espn_id_map(cursor)
 with cfbd.ApiClient(configuration) as api_client:
     rankings_api = cfbd.RankingsApi(api_client)
     for season in SEASONS:
-        rankings = rankings_api.get_rankings(year=season)
+        # Fewer attempts: this loop can span many seasons when called with a
+        # range, and this script also rides the ten-minute scores cron.
+        rankings = call_with_retry(f'rankings {season}',
+                                   rankings_api.get_rankings,
+                                   year=season, attempts=3)
         polls = ap_polls(rankings)
 
         # CFBD can lag the poll's release by days. Fill only the weeks it has

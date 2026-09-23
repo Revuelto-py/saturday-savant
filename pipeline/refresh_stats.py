@@ -73,6 +73,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -183,7 +184,9 @@ with cfbd.ApiClient(configuration) as api_client:
     stats_api = cfbd.StatsApi(api_client)
     # 'both' = regular + postseason combined, matching pipeline/fetch_data.py,
     # so bowl and CFP production counts toward the season total.
-    stats = stats_api.get_player_season_stats(year=SEASON, season_type='both')
+    stats = call_with_retry('player season stats',
+                            stats_api.get_player_season_stats,
+                            year=SEASON, season_type='both')
 
 # Collapse the payload on the storage key first. CFBD has not been observed to
 # repeat a key, but an UPSERT that hits the same row twice in one statement is

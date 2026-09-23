@@ -8,6 +8,7 @@ import psycopg2
 import cfbd
 import os
 from dotenv import load_dotenv
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -30,16 +31,24 @@ cursor.execute('DELETE FROM player_ppa WHERE season = %s', (SEASON,))
 
 with cfbd.ApiClient(configuration) as api_client:
     games_api = cfbd.GamesApi(api_client)
-    result = games_api.get_games(SEASON)
+    # Every read retries a transient CFBD 5xx rather than aborting the weekly
+    # chain (run_weekly.sh runs under `set -e`). All three happen before the
+    # first DELETE below, so a fetch that does fail still leaves last week's
+    # tables intact.
+    result = call_with_retry('games', games_api.get_games, SEASON)
 
     stats_api = cfbd.StatsApi(api_client)
     # 'both' = regular + postseason combined, so bowl/CFP production counts
     # toward season totals (e.g. a sack in the CFP shows in the season sack
     # total). CFBD returns one combined row per player/stat for 'both'.
-    stats = stats_api.get_player_season_stats(year=SEASON, season_type='both')
+    stats = call_with_retry('player season stats',
+                            stats_api.get_player_season_stats,
+                            year=SEASON, season_type='both')
 
     metrics_api = cfbd.MetricsApi(api_client)
-    ppa_data = metrics_api.get_predicted_points_added_by_player_season(year=SEASON)
+    ppa_data = call_with_retry(
+        'player ppa', metrics_api.get_predicted_points_added_by_player_season,
+        year=SEASON)
 
 # Save games
 for game in result:

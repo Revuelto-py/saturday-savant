@@ -11,6 +11,7 @@ import time
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 # Every CFBD call below uses SEASON, so this script follows the season on its
@@ -47,7 +48,8 @@ with cfbd.ApiClient(configuration) as api_client:
     teams_api = cfbd.TeamsApi(api_client)
 
     print(f"Probing {SEASON} roster availability...")
-    probe = teams_api.get_roster(team='Alabama', year=SEASON)
+    probe = call_with_retry('roster probe', teams_api.get_roster,
+                            team='Alabama', year=SEASON)
     print(f"  Alabama {SEASON} roster: {len(probe)} players")
 
     # ── Fetch every roster BEFORE touching the database ─────────────────────
@@ -58,20 +60,22 @@ with cfbd.ApiClient(configuration) as api_client:
     # ends with last week's roster intact instead of a corrupted one.
     roster_ok, roster_failed, all_players = 0, [], []
     if len(probe) > 0:
-        fbs_teams = teams_api.get_fbs_teams(year=SEASON)
+        fbs_teams = call_with_retry('fbs teams', teams_api.get_fbs_teams,
+                                    year=SEASON)
         print(f"Fetching {SEASON} rosters for {len(fbs_teams)} teams...")
         for i, t in enumerate(fbs_teams):
-            roster = None
-            for attempt in range(4):          # CFBD 502s under load; back off
-                try:
-                    roster = teams_api.get_roster(team=t.school, year=SEASON)
-                    break
-                except Exception as e:
-                    if attempt == 3:
-                        print(f"  giving up on {t.school}: {str(e)[:70]}")
-                    else:
-                        time.sleep(2 ** attempt)
-            if roster is None:
+            # Short waits on purpose: this runs once per FBS team, so the
+            # 15/30/60s the one-shot reads use would turn a bad CFBD day into
+            # an hour of sleeping. Same 1/2/4s backoff this loop always had —
+            # what changed is that a 401 or a 404 now stops on the first
+            # response instead of being slept on four times for every team.
+            try:
+                roster = call_with_retry(
+                    f'roster {t.school}', teams_api.get_roster,
+                    team=t.school, year=SEASON,
+                    attempts=4, base_delay=1, max_delay=8)
+            except Exception as e:
+                print(f"  giving up on {t.school}: {str(e)[:70]}")
                 roster_failed.append(t.school)
                 continue
             roster_ok += 1
@@ -163,7 +167,9 @@ with cfbd.ApiClient(configuration) as api_client:
         draft_api = cfbd.DraftApi(api_client)
         for yr in (SEASON - 1, SEASON):
             try:
-                picks = draft_api.get_draft_picks(year=yr)
+                picks = call_with_retry(f'draft picks {yr}',
+                                        draft_api.get_draft_picks,
+                                        year=yr, attempts=3)
                 marked = 0
                 for pick in picks:
                     name = getattr(pick, 'name', '') or ''

@@ -8,6 +8,7 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -20,7 +21,7 @@ cursor = conn.cursor()
 
 with cfbd.ApiClient(configuration) as api_client:
     ratings_api = cfbd.RatingsApi(api_client)
-    sp = ratings_api.get_sp(year=SEASON)
+    sp = call_with_retry('sp+', ratings_api.get_sp, year=SEASON)
 
 # Multi-season table — only refresh the active season so prior years (loaded by
 # backfill/backfill_history.py) survive.

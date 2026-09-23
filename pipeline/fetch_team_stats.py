@@ -8,6 +8,7 @@ import cfbd
 import psycopg2
 import os
 from dotenv import load_dotenv
+from cfbd_retry import call_with_retry
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -20,7 +21,9 @@ cursor = conn.cursor()
 
 with cfbd.ApiClient(configuration) as api_client:
     stats_api = cfbd.StatsApi(api_client)
-    advanced = stats_api.get_advanced_season_stats(year=SEASON, exclude_garbage_time=True)
+    advanced = call_with_retry('advanced team stats',
+                               stats_api.get_advanced_season_stats,
+                               year=SEASON, exclude_garbage_time=True)
 
 # The DELETE below is atomic with the INSERTs that follow, so a reader never
 # sees a half-empty table — but a SHORT fetch would still replace 136 teams

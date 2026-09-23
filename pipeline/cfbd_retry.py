@@ -25,6 +25,12 @@ scores job runs again.
         games = call_with_retry('games', games_api.get_games, SEASON)
     except UpstreamUnavailable as exc:
         print(exc)          # next run picks it up
+
+That is a sibling import, and it resolves because every one of these scripts is
+run as a file — `python3 pipeline/fetch_data.py`, the form run_weekly.sh and
+both cron jobs use — which puts this directory on sys.path. Running one as
+`python3 -m pipeline.fetch_data` instead would not find it; pipeline/ is a
+directory of scripts, not a package, and nothing invokes it that way.
 """
 import random
 import time

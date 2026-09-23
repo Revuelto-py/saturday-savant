@@ -62,6 +62,17 @@ players at ingest and headshots are fetched per active player, so both read the
 roster written by step 7. Run them the other way round and a newcomer waits a
 week for his rating and his photo.
 
+**Every CFBD read in the chain retries first.** The fetch steps call through
+`pipeline/cfbd_retry.py`, so a transient 5xx — CFBD's origin restarting behind
+Cloudflare, which is what made the scores cron fail nightly — no longer aborts
+the run at step 1 and leaves the week stale. A 401, 403 or 404 still fails
+immediately, because no amount of retrying fixes a bad key or a missing route.
+
+Budgets differ by shape: one-shot reads get four attempts (15s/30s/60s), calls
+inside a per-year loop get three, and the per-team roster loop keeps its short
+1s/2s/4s backoff — 130+ iterations, so the long waits would otherwise stack
+into an hour.
+
 Several steps are deliberately **non-fatal** (`|| echo`), so a third-party hiccup
 can't abort the chain and leave the week half-refreshed:
 
