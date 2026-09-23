@@ -686,61 +686,62 @@
 
 {# ── GAME LEADERS ──────────────────────────────────────────────────────────── #}
 {% if structured_leaders %}
-{# One row per category. Each row names the thing it ranks by and leads with
-   that figure; the rest of the stat line sits underneath as support. It used
-   to label every row "Passing Yards" and then print "11/17 · 117 · 1", so the
-   label named one number and the row showed three. #}
-{% macro gl_side(p, side) %}
-<div class="gl-side gl-side-{{ side }}{{ ' gl-side-lead' if p and p.leads }}">
+{# Laid out to the supplied reference: headshot and figure on one line, the
+   player under it, his line under that, and the category centred between the
+   two sides. Five rows — the two defensive ones are derived from the box
+   score in main.py, because ESPN's leaders array never carries defence. #}
+{% macro gl_side(p, side, rgb) %}
+<div class="gl-side gl-side-{{ side }}">
   {% if p %}
+  <div class="gl-top">
     {% if p.headshot %}
-    <img class="gl-face" src="{{ p.headshot }}" alt="" loading="lazy" width="52" height="52">
+    <img class="gl-face" src="{{ p.headshot }}" alt="" loading="lazy" width="44" height="44" style="--tint:{{ rgb }}">
     {% else %}
-    <span class="gl-face gl-face-empty" aria-hidden="true">{{ p.name[0] if p.name else '?' }}</span>
+    <span class="gl-face gl-face-empty" style="--tint:{{ rgb }}" aria-hidden="true">{{ p.name[0] if p.name else '?' }}</span>
     {% endif %}
-    <div class="gl-id">
-      <p class="gl-figure">
-        <span class="gl-num">{{ p.figure or p.stat }}</span>{% if p.unit %}<span class="gl-unit">{{ p.unit }}</span>{% endif %}
-      </p>
-      {% if p.player_id %}
-      <a class="gl-name" href="{{ player_url(p.player_id, game_season) }}">{{ p.name }}</a>
-      {% else %}
-      <span class="gl-name">{{ p.name }}</span>
-      {% endif %}
-      {% if p.detail %}<p class="gl-detail">{{ p.detail }}</p>{% endif %}
-    </div>
+    <span class="gl-num">{{ p.figure or p.stat }}</span>
+  </div>
+  {% if p.player_id %}
+  <a class="gl-name" href="{{ player_url(p.player_id, game_season) }}" title="{{ p.name }}">{{ p.short_name or p.name }}{% if p.position %} <span class="gl-pos">{{ p.position }}</span>{% endif %}</a>
   {% else %}
-    <span class="gl-none">No leader</span>
+  <span class="gl-name" title="{{ p.name }}">{{ p.short_name or p.name }}{% if p.position %} <span class="gl-pos">{{ p.position }}</span>{% endif %}</span>
+  {% endif %}
+  {% if p.detail %}<span class="gl-detail">{{ p.detail }}</span>{% endif %}
+  {% else %}
+  <span class="gl-none">—</span>
   {% endif %}
 </div>
 {% endmacro %}
 
 <div class="gl-card">
-    <div class="section-header">Game Leaders</div>
+    <div class="gl-head">Game Leaders</div>
 
     <div class="gl-teams">
         <div class="gl-team">
             {% if game[10] %}<img class="gl-team-logo" src="{{ game[10] }}" alt="">{% endif %}
-            <span class="gl-team-name">{{ away_team }}</span>
+            <span class="gl-team-name">{{ (team_abbr or {}).get('away') or away_team }}</span>
         </div>
         <div class="gl-team gl-team-right">
-            <span class="gl-team-name">{{ home_team }}</span>
+            <span class="gl-team-name">{{ (team_abbr or {}).get('home') or home_team }}</span>
             {% if game[9] %}<img class="gl-team-logo" src="{{ game[9] }}" alt="">{% endif %}
         </div>
     </div>
 
-    {# Only these three are ever populated upstream; the loop used to also ask
-       for 'sacks' and 'tackles', which no code path fills. #}
-    {% for cat_key in ['passingYards', 'rushingYards', 'receivingYards'] %}
+    {% for cat_key in ['passingYards', 'rushingYards', 'receivingYards', 'sacks', 'tackles'] %}
     {% set cat = structured_leaders.get(cat_key) %}
     {% if cat and (cat.away or cat.home) %}
     <div class="gl-row">
-        {{ gl_side(cat.away, 'away') }}
+        {{ gl_side(cat.away, 'away', away_rgb) }}
         <p class="gl-cat">{{ cat.label }}</p>
-        {{ gl_side(cat.home, 'home') }}
+        {{ gl_side(cat.home, 'home', home_rgb) }}
     </div>
     {% endif %}
     {% endfor %}
+
+    <button type="button" class="gl-box"
+            onclick="switchTab('boxscore'); document.getElementById('tab-btn-boxscore').scrollIntoView({behavior:'smooth', block:'start'});">
+        Full Box Score
+    </button>
 </div>
 {% endif %}
 

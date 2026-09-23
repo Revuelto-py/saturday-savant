@@ -6290,6 +6290,7 @@ def game_detail(game_id):
 
         records = {}
         name_to_player_id = {}
+        name_to_position = {}
         summary_row = None
         if not is_scheduled:
             def _record(team):
@@ -6312,11 +6313,18 @@ def game_detail(game_id):
 
             records = {'home': _record(home_team), 'away': _record(away_team)}
 
+            # Position rides along on the same query: ESPN's box-score athletes
+            # carry only a name, jersey and headshot, so the leaders panel has
+            # no other source for the "QB" / "LB" tag beside each name.
             cursor.execute('''
-                SELECT (first_name || ' ' || last_name), id
+                SELECT (first_name || ' ' || last_name), id, position
                 FROM players WHERE team IN (%s, %s)
             ''', (home_team, away_team))
-            name_to_player_id = {row[0].lower(): row[1] for row in cursor.fetchall()}
+            for _pn, _pid, _ppos in cursor.fetchall():
+                _pk = _pn.lower()
+                name_to_player_id[_pk] = _pid
+                if _ppos:
+                    name_to_position[_pk] = _ppos
 
             # Stored ESPN summary (pipeline/fetch_game_summaries.py) — completed games are
             # immutable, so pages render from Postgres with no ESPN call
@@ -7080,6 +7088,61 @@ def game_detail(game_id):
                             if best_entry:
                                 leaders.setdefault(api_key, []).append(best_entry)
 
+            # Defensive leaders — sacks and tackles. Always derived from the box
+            # score rather than ESPN's leaders array, which for college games
+            # carries only $ref placeholders and never covers defence anyway.
+            # Same side resolution and mirror-first headshot rule as above.
+            best_def = {}
+            for pb in boxscore_players:
+                t_obj  = pb.get('team') or {}
+                t_name = t_obj.get('displayName', '')
+                side   = (team_side_by_id.get(str(t_obj.get('id', '')))
+                          or team_side_map.get(t_name, 'home'))
+                for cat in (pb.get('statistics') or []):
+                    if 'defensive' not in (cat.get('name') or '').lower():
+                        continue
+                    ul = [l.upper() for l in cat.get('labels', [])]
+
+                    def _col(stats, name, _ul=ul):
+                        try:
+                            return float(stats[_ul.index(name)])
+                        except (ValueError, IndexError, TypeError):
+                            return 0.0
+
+                    for ae in (cat.get('athletes') or []):
+                        stats = ae.get('stats', [])
+                        ad    = ae.get('athlete', {})
+                        hs    = ad.get('headshot')
+                        solo  = _col(stats, 'SOLO')
+                        # Half-sacks are real: 1.5 must not print as 1.
+                        for key, value, detail in (
+                            ('sacks',   _col(stats, 'SACKS'), ''),
+                            ('tackles', _col(stats, 'TOT'),
+                             f'{int(solo)} SOLO' if solo > 0 else ''),
+                        ):
+                            if value <= 0:
+                                continue
+                            prev = best_def.get((key, side))
+                            if prev and prev['_v'] >= value:
+                                continue
+                            best_def[(key, side)] = {
+                                '_v':       value,
+                                'name':     ad.get('displayName', ''),
+                                'headshot': (mirror_by_aid.get(str(ad.get('id') or ''))
+                                             or (hs.get('href', '') if isinstance(hs, dict) else (hs or ''))),
+                                'team':     t_name,
+                                'is_home':  side == 'home',
+                                'position': (ad.get('position') or {}).get('abbreviation', ''),
+                                'stat':     '',
+                                'figure':   (str(int(value)) if float(value).is_integer()
+                                             else f'{value:g}'),
+                                'unit':     '',
+                                'detail':   detail,
+                            }
+            for (key, _side), entry in best_def.items():
+                entry.pop('_v', None)
+                leaders.setdefault(key, []).append(entry)
+
     except Exception as e:
         print(f"ESPN fetch error: {e}")
         import traceback; traceback.print_exc()
@@ -7094,26 +7157,38 @@ def game_detail(game_id):
         raw = (raw or '').strip()
         if not raw:
             return '', '', ''
-        first_unit = {'rushingYards': 'car', 'receivingYards': 'rec'}.get(api_key, '')
+        first_unit = {'rushingYards': 'CAR', 'receivingYards': 'REC'}.get(api_key, '')
+
+        def _zero_td(tok):
+            return bool(re.match(r'(?i)^0\s*TD$', tok.strip()))
+
         if ',' in raw:
-            yards, detail = '', []
+            yards, rest = '', []
             for tok in (t.strip() for t in raw.split(',') if t.strip()):
                 if 'YDS' in tok.upper() or 'YARDS' in tok.upper():
                     yards = re.sub(r'(?i)\s*(YDS|YARDS)', '', tok).strip()
-                else:
-                    detail.append(tok)
-            return (yards, 'yds', ' · '.join(detail)) if yards else (raw, '', '')
+                elif not _zero_td(tok):
+                    rest.append(tok)
+            return (yards, '', ', '.join(rest)) if yards else (raw, '', '')
         parts = [t.strip() for t in raw.split('·') if t.strip()]
         if len(parts) == 3:
-            lead = f'{parts[0]} {first_unit}'.strip()
-            return parts[1], 'yds', f'{lead} · {parts[2]} TD'
+            # attempts/carries/catches, yards, touchdowns — in that fixed order.
+            bits = [f'{parts[0]} {first_unit}'.strip()]
+            try:
+                if int(float(parts[2])) > 0:
+                    bits.append(f'{int(float(parts[2]))} TD')
+            except (TypeError, ValueError):
+                pass
+            return parts[1], '', ', '.join(b for b in bits if b)
         return raw, '', ''
 
     structured_leaders = {}
     leader_cats = [
-        ('passingYards',   'Passing'),
-        ('rushingYards',   'Rushing'),
-        ('receivingYards', 'Receiving'),
+        ('passingYards',   'Passing Yards'),
+        ('rushingYards',   'Rushing Yards'),
+        ('receivingYards', 'Receiving Yards'),
+        ('sacks',          'Sacks'),
+        ('tackles',        'Tackles'),
     ]
     for api_key, display_name in leader_cats:
         if api_key in leaders:
@@ -7129,7 +7204,9 @@ def game_detail(game_id):
                 else:
                     away_leader = p
             for ldr in (home_leader, away_leader):
-                if ldr:
+                # The defensive entries arrive already split; only the two
+                # offensive producers need their line taken apart.
+                if ldr and not ldr.get('figure'):
                     fig, unit, detail = _split_leader_stat(api_key, ldr.get('stat'))
                     ldr['figure'], ldr['unit'], ldr['detail'] = fig, unit, detail
 
@@ -7159,6 +7236,14 @@ def game_detail(game_id):
                 _ln = (ldr.get('name') or '').lower()
                 ldr['player_id'] = (game_player_ids.get(_ln)
                                     or name_to_player_id.get(_ln))
+                if not ldr.get('position'):
+                    ldr['position'] = name_to_position.get(_ln, '')
+                # "Jared Goff" -> "J. Goff". Everything after the first token is
+                # kept, so "Amon-Ra St. Brown" becomes "A. St. Brown" instead of
+                # losing half its surname.
+                _np = (ldr.get('name') or '').split()
+                ldr['short_name'] = (f"{_np[0][0]}. " + ' '.join(_np[1:])
+                                     if len(_np) > 1 else (ldr.get('name') or ''))
 
     # Top plays by win probability added — derived from the same WP series
     # that feeds the chart. Each sample carries the post-play win %, so the
@@ -7256,6 +7341,9 @@ def game_detail(game_id):
         drives=drives,
         box_score=box_score,
         structured_leaders=structured_leaders,
+        # Only the upcoming-game branch passed these, so a played game fell back
+        # to full team names where the layout wants WIS / ALA.
+        team_abbr=_team_abbrs(away_team, home_team),
         win_prob=win_prob,
         top_wpa=top_wpa,
         records=records,
