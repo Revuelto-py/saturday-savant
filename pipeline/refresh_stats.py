@@ -370,8 +370,8 @@ if changed or ppa_changed or team_changed or FORCE:
     _os.environ.setdefault('POOL_BACKFILL', '1')
     import main  # noqa: E402  — reuse the exact pool + percentile code paths
 
-    stale = [f"stats:{cat}:{','.join(pos)}:{SEASON}" for cat, pos in STAT_POOLS]
-    stale += [f"ppa:{','.join(pos)}:{SEASON}" for pos in PPA_POOLS]
+    stale = [main.pool_key('stats', pos, SEASON, cat) for cat, pos in STAT_POOLS]
+    stale += [main.pool_key('ppa', pos, SEASON) for pos in PPA_POOLS]
     stale += [f'teampct:{SEASON}']
     main._pool_store_delete(stale)
 

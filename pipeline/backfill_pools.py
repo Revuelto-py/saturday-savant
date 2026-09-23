@@ -63,12 +63,11 @@ def run():
         # Force a fresh rebuild: drop the stored pools first, else the compute
         # functions read the (stale) value straight back out of pool_store and
         # never recompute against the freshly-fetched player_stats/player_ppa.
-        stale = [f"stats:{cat}:{','.join(pos)}:{season}" for cat, pos in STAT_POOLS]
-        stale += [f"ppa:{','.join(pos)}:{season}" for pos in PPA_POOLS]
+        stale = [main.pool_key('stats', pos, season, cat) for cat, pos in STAT_POOLS]
+        stale += [main.pool_key('ppa', pos, season) for pos in PPA_POOLS]
         main._pool_store_delete(stale)
         n = 0
         for category, positions in STAT_POOLS:
-            key = f"stats:{category}:{','.join(positions)}:{season}"
             pool = main._stats_pool_cached.uncached(category, positions, season) \
                 if hasattr(main._stats_pool_cached, 'uncached') \
                 else main._stats_pool_cached(category, positions, season)

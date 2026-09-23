@@ -819,9 +819,45 @@ def _pool_store_delete(keys):
     finally:
         release_db(conn)
 
+def _fbs_pool_join(season, team_col, alias='tf'):
+    """JOIN clause that keeps a peer pool to FBS teams.
+
+    Every pool below feeds a rank or percentile the site labels "vs qualified
+    FBS <group>s" — but the pools themselves used to be every player at the
+    position in `player_stats`, FCS and D-II included. In week 5 of 2026 that
+    put Tarleton State (UAC) and Gardner-Webb (Big South-OVC) ahead of the
+    national passing-yards leader, so his own player page called him 3rd. The
+    leaderboards never had the bug because they filter exactly like this, so
+    the two pages disagreed about the same number. Same filter, same answer.
+
+    Interpolates trusted constants only (FCS_CONFS and the promoted-team list).
+    """
+    fcs_in = "','".join(FCS_CONFS)
+    return (f"JOIN teams {alias} ON {alias}.name = {team_col} "
+            f"AND {alias}.conference NOT IN ('{fcs_in}') "
+            f"{_promoted_fbs_exclusion(season, team_col)}")
+
+
+def pool_key(kind, positions, season, category=None):
+    """The pool_store key for one peer pool.
+
+    Public because the pipeline scripts delete these keys before a rebuild, and
+    they used to spell them out themselves — so the `fbs:` marker added here
+    would have left their invalidation matching nothing, and every pool would
+    have kept serving its pre-filter payload until the row aged out. One
+    speller, one spelling.
+
+    The marker is what makes the filter change safe: a pool stored before it
+    existed can never be read back as if it were FBS-only. It just misses and
+    recomputes.
+    """
+    cat = f'{category}:' if category else ''
+    return f"{kind}:fbs:{cat}{','.join(positions)}:{season}"
+
+
 @cache.memoize(timeout=21600)
 def _stats_pool_cached(category, positions_key, season):
-    key = f"stats:{category}:{','.join(positions_key)}:{season}"
+    key = pool_key('stats', positions_key, season, category)
     stored = _pool_store_get(key)
     if stored is not None:
         return stored
@@ -833,6 +869,7 @@ def _stats_pool_cached(category, positions_key, season):
             SELECT ps.player_id, ps.stat_type, CAST(ps.stat AS REAL)
             FROM player_stats ps
             JOIN players pl ON ps.player_id = pl.id::text
+            {_fbs_pool_join(season, 'ps.team')}
             WHERE ps.category=%s AND ps.season=%s AND pl.position IN ({ph}) AND ps.stat IS NOT NULL
         ''', [category, season] + list(positions_key))
         pool = {}
@@ -849,7 +886,7 @@ def _fetch_ppa_pool(cursor, positions, season=CURRENT_SEASON):
 
 @cache.memoize(timeout=21600)
 def _ppa_pool_cached(positions_key, season):
-    key = f"ppa:{','.join(positions_key)}:{season}"
+    key = pool_key('ppa', positions_key, season)
     stored = _pool_store_get(key)
     if stored is not None:
         return stored
@@ -861,6 +898,7 @@ def _ppa_pool_cached(positions_key, season):
             SELECT pp.player_id, pp.avg_ppa_all, pp.avg_ppa_pass, pp.avg_ppa_rush, pp.total_ppa
             FROM player_ppa pp
             JOIN players pl ON pp.player_id = pl.id::text
+            {_fbs_pool_join(season, 'pp.team')}
             WHERE pp.season=%s AND pl.position IN ({ph})
         ''', [season] + list(positions_key))
         pool = {}
@@ -880,7 +918,7 @@ def _fetch_usage_pool(cursor, positions, season=CURRENT_SEASON):
 
 @cache.memoize(timeout=21600)
 def _usage_pool_cached(positions_key, season):
-    key = f"usage:{','.join(positions_key)}:{season}"
+    key = pool_key('usage', positions_key, season)
     stored = _pool_store_get(key)
     if stored is not None:
         return stored
@@ -892,6 +930,7 @@ def _usage_pool_cached(positions_key, season):
             SELECT pl.id::text, CAST(pu.overall AS REAL)
             FROM player_usage pu
             JOIN players pl ON pu.player_id::text = pl.id::text
+            {_fbs_pool_join(season, 'pu.team')}
             WHERE pu.season=%s AND pl.position IN ({ph}) AND pu.overall IS NOT NULL
         ''', [season] + list(positions_key))
         pool = {pid: {'overall': ov} for pid, ov in cursor.fetchall()}
