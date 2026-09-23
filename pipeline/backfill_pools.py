@@ -39,6 +39,16 @@ STAT_POOLS = [
     ('rushing',   QB),
     ('receiving', WRT),
     ('receiving', WIDE_SKILL),
+    # A back's receiving line and a defensive back's interceptions are both
+    # ranked on the player page, but neither pool was listed here. A pool that
+    # is missing from this list is still CREATED on the first page that asks
+    # for it — and then never refreshed, because the delete-and-rebuild below
+    # only knows about the keys named here. stats:receiving:RB,HB,FB:2026 was
+    # written on 2026-08-28, before week 1, and still held 7 players in late
+    # September against 450 in the table; every back's receiving percentile was
+    # being drawn against that. Zero-fill hid it as a flat ~50th.
+    ('receiving',     RB),
+    ('interceptions', DB),
     ('defensive', DL),
     ('defensive', LB),
     ('defensive', DB),

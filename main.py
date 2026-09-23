@@ -9165,12 +9165,23 @@ def _build_compare_group_rows(cursor, group_name, slots):
         sp = full_pools('passing', peer)
         pass_stat, pass_min = _qual_threshold('QB', 'passing')
         sp_q = qual_pools(sp, sp, pass_stat, pass_min)
+        # Where he throws it — the three air-yard bars the player page carries.
+        # These come back keyed by an INTEGER passer id (passing_plays.passer_id)
+        # while _cmp_row looks up str(pid), so without the cast every lookup
+        # misses and all three render as dashes. Values arrive already in
+        # percent, so they take a suffix rather than a scale.
+        air = {yr: {str(pid): d for pid, d in get_season_passer_metrics(yr).items()}
+               for yr in seasons}
+        air_q = qual_pools(air, sp, pass_stat, pass_min)
         add('Passing',
             _cmp_row('Comp %',     slots, sp, sp_q, 'PCT', games_by_slot, suffix='%', scale=100),
             _cmp_row('Pass Yds/G', slots, sp, sp_q, 'YDS', games_by_slot, per_game=True),
             _cmp_row('Pass TD/G',  slots, sp, sp_q, 'TD',  games_by_slot, per_game=True),
             _cmp_row('INT/G',      slots, sp, sp_q, 'INT', games_by_slot, per_game=True, higher_better=False),
-            _cmp_row('Yds/Att',    slots, sp, sp_q, 'YPA', games_by_slot))
+            _cmp_row('Yds/Att',    slots, sp, sp_q, 'YPA', games_by_slot),
+            _cmp_row('Avg Depth of Target', slots, air, air_q, 'adot', games_by_slot),
+            _cmp_row('Air Yards Share',     slots, air, air_q, 'air_share', games_by_slot, suffix='%'),
+            _cmp_row('Deep Attempt Rate',   slots, air, air_q, 'deep_pct', games_by_slot, suffix='%'))
 
         rush_sp = full_pools('rushing', ['QB'])
         rush_stat, rush_min = _qual_threshold('QB', 'rushing')
@@ -9181,8 +9192,12 @@ def _build_compare_group_rows(cursor, group_name, slots):
         pp = ppa_pools(peer)
         ppa_stat, ppa_min = _qual_threshold('QB', 'ppa')
         pp_q = qual_pools(pp, sp_q, ppa_stat, ppa_min)
+        # All four EPA readings the player page ranks, not just the passing one.
         add('Efficiency',
-            _cmp_row('EPA / Pass Play', slots, pp, pp_q, 'avg_ppa_pass', games_by_slot, decimals=3))
+            _cmp_row('EPA / Play',      slots, pp, pp_q, 'avg_ppa_all',  games_by_slot, decimals=3),
+            _cmp_row('EPA / Pass Play', slots, pp, pp_q, 'avg_ppa_pass', games_by_slot, decimals=3),
+            _cmp_row('EPA / Rush Play', slots, pp, pp_q, 'avg_ppa_rush', games_by_slot, decimals=3),
+            _cmp_row('Total EPA',       slots, pp, pp_q, 'total_ppa',    games_by_slot, decimals=1))
 
     elif group_name == 'RB':
         sp = full_pools('rushing', peer)
@@ -9215,7 +9230,16 @@ def _build_compare_group_rows(cursor, group_name, slots):
         add('Efficiency',
             _cmp_row('EPA / Play', slots, pp, pp_q, 'avg_ppa_all', games_by_slot, decimals=3))
 
+        # The one reading of a back's work in the passing game, which is why the
+        # player page keeps it. Gated on the rushing qualification like every
+        # other RB bar, so the pool is the same set of backs throughout.
+        rec_sp = full_pools('receiving', peer)
+        rec_q = qual_pools(rec_sp, sp, rush_stat, rush_min)
+        add('Receiving',
+            _cmp_row('Rec Yds', slots, rec_sp, rec_q, 'YDS', games_by_slot, decimals=0))
+
         add('Usage',
+            _cmp_usage_row(cursor, 'Usage Rate', slots, 'overall', pct=True),
             _cmp_usage_row(cursor, 'Rush Usage', slots, 'rush', pct=True))
 
     elif group_name in ('WR', 'TE'):
@@ -9263,14 +9287,52 @@ def _build_compare_group_rows(cursor, group_name, slots):
         _cmp_finish_row(row)
     return rows
 
+# The team page ranks a team on every one of these; this page used to show
+# seven of them. Same metrics, same direction, so a percentile means the same
+# thing whichever page you read it on. Defence is "lower is better" throughout
+# except stuff rate, which is the one defensive number a team wants high.
 COMPARE_TEAM_STAT_DEFS = [
-    ('Offense', 'Off. EPA / Play',    'off_ppa',                  True,  3, ''),
-    ('Offense', 'Off. Success Rate',  'off_success_rate',         True,  1, '%'),
-    ('Offense', 'Off. Explosiveness', 'off_explosiveness',        True,  2, ''),
-    ('Offense', 'Rush Success Rate',  'off_rushing_success_rate', True,  1, '%'),
-    ('Offense', 'Pass Success Rate',  'off_passing_success_rate', True,  1, '%'),
-    ('Defense', 'Def. EPA / Play',    'def_ppa',                  False, 3, ''),
-    ('Defense', 'Def. Success Rate',  'def_success_rate',         False, 1, '%'),
+    ('Offense', 'Off. EPA / Play',      'off_ppa',                     True,  3, ''),
+    ('Offense', 'Rush EPA / Play',      'off_rushing_plays_ppa',       True,  3, ''),
+    ('Offense', 'Pass EPA / Play',      'off_passing_plays_ppa',       True,  3, ''),
+    ('Offense', 'Off. Success Rate',    'off_success_rate',            True,  1, '%'),
+    ('Offense', 'Rush Success Rate',    'off_rushing_success_rate',    True,  1, '%'),
+    ('Offense', 'Pass Success Rate',    'off_passing_success_rate',    True,  1, '%'),
+    ('Offense', 'Off. Explosiveness',   'off_explosiveness',           True,  2, ''),
+    ('Offense', 'Rush Explosiveness',   'off_rushing_explosiveness',   True,  2, ''),
+    ('Offense', 'Pass Explosiveness',   'off_passing_explosiveness',   True,  2, ''),
+    ('Offense', 'Power Success',        'off_power_success',           True,  1, '%'),
+    ('Offense', 'Stuffed Rate',         'off_stuff_rate',              False, 1, '%'),
+    ('Offense', 'Line Yards',           'off_line_yards',              True,  2, ''),
+    ('Offense', 'Second-Level Yards',   'off_second_level_yards',      True,  2, ''),
+    ('Offense', 'Open-Field Yards',     'off_open_field_yards',        True,  2, ''),
+    ('Defense', 'Def. EPA / Play',      'def_ppa',                     False, 3, ''),
+    ('Defense', 'Rush EPA Allowed',     'def_rushing_plays_ppa',       False, 3, ''),
+    ('Defense', 'Pass EPA Allowed',     'def_passing_plays_ppa',       False, 3, ''),
+    ('Defense', 'Def. Success Rate',    'def_success_rate',            False, 1, '%'),
+    ('Defense', 'Rush Success Allowed', 'def_rushing_success_rate',    False, 1, '%'),
+    ('Defense', 'Pass Success Allowed', 'def_passing_success_rate',    False, 1, '%'),
+    ('Defense', 'Def. Explosiveness',   'def_explosiveness',           False, 2, ''),
+    ('Defense', 'Rush Expl. Allowed',   'def_rushing_explosiveness',   False, 2, ''),
+    ('Defense', 'Pass Expl. Allowed',   'def_passing_explosiveness',   False, 2, ''),
+    ('Defense', 'Power Success Allowed','def_power_success',           False, 1, '%'),
+    ('Defense', 'Stuff Rate',           'def_stuff_rate',              True,  1, '%'),
+    ('Defense', 'Line Yards Allowed',   'def_line_yards',              False, 2, ''),
+    ('Defense', 'Second-Level Allowed', 'def_second_level_yards',      False, 2, ''),
+    ('Defense', 'Open-Field Allowed',   'def_open_field_yards',        False, 2, ''),
+]
+
+# Havoc and field position live in team_advanced, not team_stats, which is why
+# this page carried none of them. Field position is stored as YARDS TO GO
+# (100 - yard line), so for a team's own offence lower is better — fewer yards
+# to travel — and for the defence higher is better, meaning opponents start
+# further back. Same reading the team page gives them.
+COMPARE_TEAM_ADV_DEFS = [
+    ('Havoc & Field Position', 'Havoc Rate',        'def_havoc_total',        True,  1, '%'),
+    ('Havoc & Field Position', 'Havoc (Front 7)',   'def_havoc_front7',       True,  1, '%'),
+    ('Havoc & Field Position', 'Havoc (DBs)',       'def_havoc_db',           True,  1, '%'),
+    ('Havoc & Field Position', 'Off. Field Position','off_field_pos_avg_start', False, 1, ''),
+    ('Havoc & Field Position', 'Def. Field Position','def_field_pos_avg_start', True,  1, ''),
 ]
 
 
@@ -9295,12 +9357,16 @@ def _build_compare_team_rows(cursor, slots):
     """slots: ordered list of {'name','season'} — each column reads its own
     (team, season), so the same program in two years compares cleanly."""
     pairs = {(s['name'], s['season']) for s in slots}
-    ts_by_key, sp_by_key, svr_by_key = {}, {}, {}
+    ts_by_key, sp_by_key, svr_by_key, ta_by_key = {}, {}, {}, {}
     for team, yr in pairs:
         cursor.execute('SELECT * FROM team_stats WHERE season=%s AND team=%s', (yr, team))
         r = cursor.fetchone()
         if r:
             ts_by_key[(team, yr)] = dict(zip([d[0] for d in cursor.description], r))
+        cursor.execute('SELECT * FROM team_advanced WHERE season=%s AND team=%s', (yr, team))
+        r = cursor.fetchone()
+        if r:
+            ta_by_key[(team, yr)] = dict(zip([d[0] for d in cursor.description], r))
         cursor.execute('SELECT rating, ranking FROM sp_ratings WHERE season=%s AND team=%s', (yr, team))
         r = cursor.fetchone()
         if r:
@@ -9315,12 +9381,16 @@ def _build_compare_team_rows(cursor, slots):
     # Season-wide pools so a team number carries its standing in the field, the
     # way every player number on this page already does. Three small queries per
     # distinct season (~140 rows each), and the route is cached for six hours.
-    ts_pool, svr_pool, sp_pool = {}, {}, {}
+    ts_pool, svr_pool, sp_pool, ta_pool = {}, {}, {}, {}
     for yr in {s['season'] for s in slots}:
         cursor.execute('SELECT * FROM team_stats WHERE season=%s', (yr,))
         cols = [d[0] for d in cursor.description]
         fetched = cursor.fetchall()
         ts_pool[yr] = {c: [r[i] for r in fetched] for i, c in enumerate(cols)}
+        cursor.execute('SELECT * FROM team_advanced WHERE season=%s', (yr,))
+        cols = [d[0] for d in cursor.description]
+        fetched = cursor.fetchall()
+        ta_pool[yr] = {c: [r[i] for r in fetched] for i, c in enumerate(cols)}
         cursor.execute('SELECT net_rating, off_rating, def_rating FROM savant_ratings WHERE season=%s', (yr,))
         fetched = cursor.fetchall()
         svr_pool[yr] = {'net': [r[0] for r in fetched],
@@ -9360,17 +9430,21 @@ def _build_compare_team_rows(cursor, slots):
             sp_values.append({'raw': None, 'display': '—', 'percentile': None})
     rows.append({'section': 'Ratings', 'label': 'SP+ Rating', 'higher_better': True, 'values': sp_values})
 
-    for section, label, col, higher_better, decimals, suffix in COMPARE_TEAM_STAT_DEFS:
-        values = []
-        for s in slots:
-            v = ts_by_key.get(_key(s), {}).get(col)
-            if v is None:
-                values.append({'raw': None, 'display': '—', 'percentile': None})
-            else:
-                shown = v * 100 if suffix == '%' else v
-                values.append({'raw': v, 'display': f'{shown:.{decimals}f}{suffix}',
-                               'percentile': _pool_pct(ts_pool[s['season']][col], v, higher_better)})
-        rows.append({'section': section, 'label': label, 'higher_better': higher_better, 'values': values})
+    for defs, by_key, pool in ((COMPARE_TEAM_STAT_DEFS, ts_by_key, ts_pool),
+                               (COMPARE_TEAM_ADV_DEFS,  ta_by_key, ta_pool)):
+        for section, label, col, higher_better, decimals, suffix in defs:
+            values = []
+            for s in slots:
+                v = by_key.get(_key(s), {}).get(col)
+                season_pool = pool.get(s['season'], {}).get(col)
+                if v is None or season_pool is None:
+                    values.append({'raw': None, 'display': '—', 'percentile': None})
+                else:
+                    shown = v * 100 if suffix == '%' else v
+                    values.append({'raw': v, 'display': f'{shown:.{decimals}f}{suffix}',
+                                   'percentile': _pool_pct(season_pool, v, higher_better)})
+            rows.append({'section': section, 'label': label,
+                         'higher_better': higher_better, 'values': values})
 
     for row in rows:
         _cmp_finish_row(row)
