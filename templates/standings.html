@@ -146,6 +146,19 @@
     @media (min-width: 840px) {
         .standings-grid { grid-auto-rows: 1px; row-gap: 0; }
     }
+    /* The spans are pixel counts measured at a 16px root — but html font-size
+       scales from 16px to 19px between ~1500px and 2560px, which grows a row
+       from 43px to 44.6px and this header from 28px to 33px. An 18-team block
+       then needs ~906px against the 897 it reserved, and the next conference's
+       header landed under the card above it. Measured overlaps at 2560: four.
+       Growing the TRACK with the root scales every span by the same ratio the
+       content grows, so the reservation stays ahead at any width. */
+    @media (min-width: 1600px) {
+        .standings-grid { grid-auto-rows: 1.02px; }
+    }
+    @media (min-width: 2100px) {
+        .standings-grid { grid-auto-rows: 1.05px; }
+    }
     @media (max-width: 839.98px) {
         .standings-conf { grid-row: auto !important; }
     }
@@ -153,6 +166,11 @@
        inside the flexible TEAM column rather than pushing the numbers off. */
     .standings-conf .data-table td { padding: 8px 6px; white-space: nowrap; }
     .standings-conf .data-table td:nth-child(2) { max-width: 0; width: 99%; }
+    /* The link already asks for an ellipsis, but a flex item defaults to
+       min-width:auto and will not shrink below its own text — so a long name
+       ran past the cell and was cut mid-letter ("Mississippi Sta") instead of
+       ending in one. This is what lets the ellipsis actually happen. */
+    .standings-conf .row-link { min-width: 0; }
     /* No cursor:pointer here. The row carried one, plus an accent hover wash,
        while only the team name is a link and no handler ever listened on the
        row — so roughly 85% of its width invited a click that did nothing. The

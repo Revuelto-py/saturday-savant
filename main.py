@@ -697,14 +697,23 @@ def _compute_conference_standings(cursor, season):
             'wins': r['w'], 'losses': r['l'],
             'conf_wins': r['cw'], 'conf_losses': r['cl'],
             'pf': r['pf'], 'pa': r['pa'],
-            'conf_pct': r['cw'] / cg if cg else 0.0,
+            # No conference game yet is NEUTRAL, not bottom. Scoring it 0.0 put a
+            # team that had not played a league game level with one that had lost
+            # two, so an 0-2 side could sit above an 0-0 side on overall record
+            # alone. 0.5 sorts 1-0 above 0-0 above 0-1, which is what the table
+            # claims to show. A 1-1 team also lands on 0.5 and the conf_wins key
+            # below breaks that in its favour, as it should.
+            'conf_pct': r['cw'] / cg if cg else 0.5,
             'overall_pct': r['w'] / g if g else 0.0,
             'ap_rank': ap_ranks.get(t),
             'is_champion': champions.get(c) == t,
         })
     for c in confs:
         rows = confs[c]
-        rows.sort(key=lambda x: (-x['conf_pct'], -x['conf_wins']))
+        # Losses ascending is the third key: 0-1 and 0-2 both score 0.0 with zero
+        # wins, so without it their order fell to whatever the pre-sort happened
+        # to be and an 0-2 side could sit above an 0-1 side.
+        rows.sort(key=lambda x: (-x['conf_pct'], -x['conf_wins'], x['conf_losses']))
         # Break ties (same conference record) by head-to-head among the tied
         # teams — the standard first tiebreaker — then overall win pct, then
         # name. (Full multi-team conference procedures are more elaborate; this
