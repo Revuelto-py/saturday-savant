@@ -9641,3 +9641,82 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
    Bootstrap's .mb-4 utility, and those are declared !important — without it
    this rule loses despite being the more specific selector. */
 .ps-card > *:last-child { margin-bottom: 0 !important; }
+
+/* ── Percentile rail ──────────────────────────────────────────────────────
+   The rail reveals once, as one cascade: each bar grows from its own left
+   edge and its knob lands where the bar stops. Only transform and opacity
+   move — the width stays the data, so nothing here can reflow the row.
+
+   Same ease-out-expo the homepage draw-in uses, so the two reveals on this
+   site share a curve rather than each inventing one. 35ms a row is enough to
+   read as a sequence without the last bar of a fourteen-row set arriving late.
+
+   The knob carries the number, so it fades in over the tail of its own bar's
+   travel rather than after it: the figure is on screen inside ~400ms. */
+.percentile-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+}
+.pct-label {
+    min-width: 120px;
+    flex-shrink: 0;
+    text-align: right;
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+}
+.pct-track {
+    flex: 1;
+    position: relative;
+    height: 18px;
+    background: rgba(255,255,255,0.08);
+    border-radius: var(--r-sm);
+}
+.pct-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: var(--w);
+    background: var(--bc);
+    border-radius: var(--r-sm) 0 0 4px;
+    transform-origin: left center;
+    animation: pct-grow 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 35ms);
+}
+.pct-knob {
+    position: absolute;
+    top: 50%;
+    left: var(--w);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bc);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    color: #0b0f14;
+    font-size: var(--text-xs);
+    font-weight: 900;
+    z-index: 3;
+    transform: translate(-50%, -50%);
+    animation: pct-knob 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 35ms + 210ms);
+}
+@keyframes pct-grow {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+}
+@keyframes pct-knob {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.72); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+/* The rail still arrives, it just does not travel: dropping the animation
+   leaves every bar at its own resting state, which is the finished chart. */
+@media (prefers-reduced-motion: reduce) {
+    .pct-fill, .pct-knob { animation: none; }
+}

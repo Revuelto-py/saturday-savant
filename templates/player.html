@@ -614,7 +614,7 @@
 
             {% if percentile_rows %}
 
-            {% macro pct_bar(label, p, n=none) %}
+            {% macro pct_bar(label, p, n=none, i=0) %}
             {% if p is not none %}
                 {# The knob prints the percentile ON the band colour, so each band has to
                    carry legible ink. Three of these already took dark ink; the deepest
@@ -632,16 +632,16 @@
                smaller field than the counting stats beside them. Carried as a
                title AND an aria-label so it reaches a screen reader too. #}
             {% set n_txt = 'Ranked against ' ~ n ~ ' qualified FBS ' ~ player_percentiles.get('group','') ~ 's' if n else '' %}
-            <div class="percentile-row" title="{{ n_txt }}" aria-label="{{ label }}: {{ p }}th percentile. {{ n_txt }}"
-                 style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
-                <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:120px;text-align:right;flex-shrink:0">{{ label }}</div>
-                <div style="flex:1;height:18px;background:rgba(255,255,255,0.08);border-radius: var(--r-sm);position:relative;overflow:visible">
-                    <div style="position:absolute;left:0;top:0;height:100%;width:{{ p }}%;background:{{ bc }};border-radius: var(--r-sm) 0 0 4px"></div>
-                    <div style="position:absolute;top:50%;left:{{ p }}%;transform:translate(-50%,-50%);
-                                width:28px;height:28px;border-radius:50%;background:{{ bc }};
-                                border:2px solid white;display:flex;align-items:center;justify-content:center;
-                                font-size: var(--text-xs);font-weight:900;color:#0b0f14;
-                                box-shadow:0 2px 8px rgba(0,0,0,0.6);z-index:3">{{ p }}</div>
+            {# The bar's width and the knob's position are the data, so they stay
+               in inline custom properties; everything else moved to classes so
+               the reveal can be expressed in CSS. --i is the row's place in the
+               rail, which is all the stagger needs. #}
+            <div class="percentile-row" style="--i:{{ i }}" title="{{ n_txt }}"
+                 aria-label="{{ label }}: {{ p }}th percentile. {{ n_txt }}">
+                <div class="pct-label">{{ label }}</div>
+                <div class="pct-track">
+                    <div class="pct-fill" style="--w:{{ p }}%;--bc:{{ bc }}"></div>
+                    <div class="pct-knob" style="--w:{{ p }}%;--bc:{{ bc }}">{{ p }}</div>
                 </div>
             </div>
             {% endif %}
@@ -673,7 +673,7 @@
             </div>
 
             {% for row in percentile_rows %}
-            {{ pct_bar(row.label, row.pct, row.n) }}
+            {{ pct_bar(row.label, row.pct, row.n, loop.index0) }}
             {% endfor %}
 
             {% else %}
