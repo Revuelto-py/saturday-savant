@@ -223,6 +223,27 @@ guard below still exits 1.
    the cache clear entirely (so an off-hours no-op costs the site nothing), while
    one that does change something clears the whole page cache — a tighter loop
    would keep every page permanently cold.
+
+   **The schedule still runs always; the WORK is gated by the stored schedule.**
+   Render bills a cron by the second, and 144 runs a day is ~53,000 a year —
+   the overwhelming majority with nothing to do. Before touching either
+   upstream the run asks `has_live_window()`: is any game of this season not
+   completed and kicking off within the next 15 minutes, or started in the last
+   two days? If not, it skips the CFBD and ESPN fetches and the whole update
+   pass. That is the data-driven version of the warning above — it reads the
+   games table rather than guessing from the calendar, so it cannot get DST or a
+   Tuesday MACtion kickoff wrong. The rankings rider still runs on its hourly
+   slot regardless, because a poll lands on quiet afternoons with no game on.
+
+   **Trade-off:** a correction to a game already marked complete is no longer
+   picked up within ten minutes, because nothing about it is in the window. The
+   weekly chain's `fetch_data.py` re-fetches the season wholesale, so such a fix
+   lands there instead — within a week rather than within minutes.
+
+   The finals pass is also **one statement, not one per game**. CFBD answers
+   `/games` with every division (3,679 rows for 2026) while this table carries
+   888, so the old row-at-a-time loop spent about three quarters of its round
+   trips on ids that matched nothing at all.
 5. **Environment variables:** `DATABASE_URL`, `CFBD_API_KEY`, `ADMIN_KEY`
    (`ADMIN_KEY` is what lets the run clear the live page cache — without it the
    scores land in Postgres but the site keeps serving cached pages until the TTL

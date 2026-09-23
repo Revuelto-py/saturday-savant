@@ -54,6 +54,7 @@ import cfbd
 import espn_board
 import psycopg2
 import requests
+from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 from cfbd_retry import UpstreamUnavailable, call_with_retry
@@ -209,153 +210,205 @@ def refresh_rankings(now=None):
     return True
 
 
+def has_live_window(cur, season):
+    """Is any game live, imminent, or still waiting on its final?
+
+    This job runs every ten minutes all year — 144 times a day, ~53,000 a year —
+    and Render bills a cron by the second. Most of those runs have nothing to
+    do: the offseason has no games at all, and in season the slate leaves whole
+    days and nights empty. Each one still pulled CFBD's entire schedule (3,679
+    rows for 2026, because it spans every division) and issued an UPDATE per row
+    against a table that carries 888 of them.
+
+    So ask the schedule already in Postgres instead of the calendar. The docs
+    are right that a day-or-hour window is the wrong tool — kickoffs land on
+    every weekday and a fixed window gets DST wrong twice a year — but the games
+    table knows exactly when the next one starts, and it is one cheap query on
+    9,520 rows.
+
+    The window stays open for two days behind a kickoff, so a game CFBD
+    finalises hours late is still picked up, and opens 15 minutes ahead of one
+    so the first score is never missed.
+    """
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM games
+             WHERE season = %s
+               AND completed = 0
+               AND start_date IS NOT NULL AND start_date <> ''
+               AND start_date::timestamptz BETWEEN now() - interval '2 days'
+                                               AND now() + interval '15 minutes'
+        )
+    """, (season,))
+    return bool(cur.fetchone()[0])
+
+
 def main():
     key = os.getenv('CFBD_API_KEY')
     if not key:
         print('CFBD_API_KEY not set — cannot fetch scores', flush=True)
         return 1
 
-    with cfbd.ApiClient(cfbd.Configuration(access_token=key)) as api:
-        games_api = cfbd.GamesApi(api)
-        # CFBD's origin restarts behind Cloudflare, which answers 5xx while it
-        # does. Unretried, that single response ended the run — and because this
-        # job runs every ten minutes it landed on the same 05:00 UTC window
-        # every night, so the 1 AM run failed daily while the other 143 passed.
-        try:
-            if WEEK:
-                games = call_with_retry('games', games_api.get_games,
-                                        SEASON, week=WEEK)
-            else:
-                games = call_with_retry('games', games_api.get_games, SEASON)
-        except UpstreamUnavailable as exc:
-            # Not a failure worth waking anyone for: this is an UPDATE-only job
-            # whose worst case is a no-op, and the next run is ten minutes out.
-            # A bad key or a 404 still raises above — only a spent transient
-            # lands here.
-            print(f'{exc} — skipping this run, next one in ~10 minutes',
-                  flush=True)
-            return 0
-        # Live board for games under way. Non-fatal: if it fails we still apply
-        # the finals below, which is the behaviour this script had before.
-        try:
-            board = call_with_retry('scoreboard', games_api.get_scoreboard)
-        except Exception as exc:
-            print(f'scoreboard unavailable ({exc}) — finals only', flush=True)
-            board = []
+    changed = live = finals = espn_live = summaries = 0
+    games, board = [], []
 
-    if not WEEK and len(games) < MIN_GAMES:
-        print(f'CFBD returned only {len(games)} games for {SEASON} '
-              f'(expected >= {MIN_GAMES}) — not applying', flush=True)
-        return 1
-
-    summaries = 0
     conn = psycopg2.connect(os.getenv('DATABASE_URL'))
     try:
         cur = conn.cursor()
-        # Only rows whose score/completion actually moved: IS DISTINCT FROM
-        # treats NULL correctly, so an unplayed game stays untouched and the
-        # changed-count below is a real "what happened since last run".
-        changed = 0
-        for g in games:
-            # /games reports points=None for anything not yet final — including
-            # a game under way. Writing that back would null out the score the
-            # board pass below just wrote, so leave those rows alone entirely.
-            # Without this the two passes fight: a run whose scoreboard call
-            # fails, or an older build of this script, blanks a live score.
-            if g.home_points is None and g.away_points is None and not g.completed:
-                continue
-            cur.execute('''
-                UPDATE games
-                   SET home_points = %s, away_points = %s, completed = %s
-                 WHERE id = %s
-                   AND (home_points IS DISTINCT FROM %s
-                     OR away_points IS DISTINCT FROM %s
-                     OR completed    IS DISTINCT FROM %s)
-            ''', (g.home_points, g.away_points, 1 if g.completed else 0, g.id,
-                  g.home_points, g.away_points, 1 if g.completed else 0))
-            changed += cur.rowcount
 
-        # Live pass. The board carries BOTH the running score and the moment a
-        # game ends, and it learns of the ending well before /games does — which
-        # is why completion is taken from here rather than waiting for the
-        # finals pass. A game sitting at "in progress" for an hour after it
-        # finished is a worse failure than the theoretical risk of trusting the
-        # board's own completed flag. Rows are matched by id, so a board entry
-        # for a game we do not carry is a no-op.
-        live = 0
-        finals = 0
-        for g in board:
-            status = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
-            if status not in ('in_progress', 'completed'):
-                continue
-            hp = getattr(getattr(g, 'home_team', None), 'points', None)
-            ap = getattr(getattr(g, 'away_team', None), 'points', None)
-            if hp is None or ap is None:
-                continue
-            done = 1 if status == 'completed' else 0
-            cur.execute("""
-                UPDATE games
-                   SET home_points = %s, away_points = %s, completed = %s
-                 WHERE id = %s
-                   AND completed = 0
-                   AND (home_points IS DISTINCT FROM %s
-                     OR away_points IS DISTINCT FROM %s
-                     OR completed    IS DISTINCT FROM %s)
-            """, (hp, ap, done, g.id, hp, ap, done))
-            if cur.rowcount:
-                live += 1
-                finals += done
-        changed += live
+        # An explicit --week is a manual run; never gate that on the clock.
+        if WEEK is None and not has_live_window(cur, SEASON):
+            # Nothing playing, nothing about to, nothing awaiting a final: skip
+            # both upstreams and the whole update pass. The summary backfill
+            # still runs (it is one bounded query that finds nothing when there
+            # is nothing) and so does the hourly rankings rider below — a poll
+            # lands on quiet Sunday afternoons with no game on the board.
+            summaries = fill_missing_summaries(conn, SEASON)
+            extra = f', {summaries} summary(ies) stored' if summaries else ''
+            print(f'{SEASON}: nothing live, imminent or awaiting a final — '
+                  f'skipped the CFBD and ESPN fetches{extra}', flush=True)
+        else:
+            with cfbd.ApiClient(cfbd.Configuration(access_token=key)) as api:
+                games_api = cfbd.GamesApi(api)
+                # CFBD's origin restarts behind Cloudflare, which answers 5xx
+                # while it does. Unretried, that single response ended the run.
+                try:
+                    if WEEK:
+                        games = call_with_retry('games', games_api.get_games,
+                                                SEASON, week=WEEK)
+                    else:
+                        games = call_with_retry('games', games_api.get_games,
+                                                SEASON)
+                except UpstreamUnavailable as exc:
+                    # Not a failure worth waking anyone for: this is an
+                    # UPDATE-only job whose worst case is a no-op, and the next
+                    # run is ten minutes out. A bad key or a 404 still raises.
+                    print(f'{exc} — skipping this run, next one in ~10 minutes',
+                          flush=True)
+                    return 0
+                # Live board for games under way. Non-fatal: if it fails we
+                # still apply the finals below.
+                try:
+                    board = call_with_retry('scoreboard', games_api.get_scoreboard)
+                except Exception as exc:
+                    print(f'scoreboard unavailable ({exc}) — finals only',
+                          flush=True)
+                    board = []
 
-        # ESPN pass — CFBD's gaps only. A late kickoff keeps `scheduled` on
-        # CFBD's board for the whole delay (SMU at Florida State, 2026-09-07:
-        # two hours late, no score on CFBD, already in the first quarter on
-        # ESPN), and both passes above skip a game in that state, so it stayed
-        # at "Scheduled" with no score for its entire duration.
-        #
-        # Guarded the same way the board pass is: `completed = 0` in the WHERE,
-        # so this can never touch a game CFBD has already finalised, and it
-        # writes completion only when ESPN says the game is over.
-        espn_live = 0
-        board_states = {}
-        for g in board:
-            st = getattr(getattr(g, 'status', None), 'value', getattr(g, 'status', None))
-            board_states[str(g.id)] = st
-        for gid, g in (espn_board.fetch() or {}).items():
-            if g['state'] not in ('live', 'final'):
-                continue
-            if board_states.get(gid) in ('in_progress', 'completed'):
-                continue          # CFBD already has an opinion; it wins
-            if g['home'] is None or g['away'] is None:
-                continue
-            done = 1 if g['state'] == 'final' else 0
-            cur.execute("""
-                UPDATE games
-                   SET home_points = %s, away_points = %s, completed = %s
-                 WHERE id = %s
-                   AND completed = 0
-                   AND (home_points IS DISTINCT FROM %s
-                     OR away_points IS DISTINCT FROM %s
-                     OR completed    IS DISTINCT FROM %s)
-            """, (g['home'], g['away'], done, int(gid),
-                  g['home'], g['away'], done))
-            if cur.rowcount:
-                espn_live += 1
-        changed += espn_live
-        conn.commit()
+            if not WEEK and len(games) < MIN_GAMES:
+                print(f'CFBD returned only {len(games)} games for {SEASON} '
+                      f'(expected >= {MIN_GAMES}) — not applying', flush=True)
+                return 1
 
-        cur.execute('SELECT COUNT(*) FROM games WHERE season = %s AND completed = 1',
-                    (SEASON,))
-        done = cur.fetchone()[0]
-        # A finished game's page is only as good as its stored summary, so pull
-        # any that are missing while we are already here and already know the
-        # season. Non-fatal: scores are the job, this is the bonus.
-        summaries = fill_missing_summaries(conn, SEASON)
+            # Finals pass, as ONE statement. CFBD answers with every division —
+            # 3,679 rows against the 888 this table carries for 2026 — so the
+            # old row-at-a-time loop spent roughly three quarters of its round
+            # trips on ids that matched nothing.
+            rows = [
+                (g.id, g.home_points, g.away_points, 1 if g.completed else 0)
+                for g in games
+                # /games reports points=None for anything not yet final,
+                # including a game under way. Writing that back would null out
+                # the score the board pass below just wrote, so those rows are
+                # left alone entirely — without this the two passes fight.
+                if not (g.home_points is None and g.away_points is None
+                        and not g.completed)
+            ]
+            if rows:
+                # IS DISTINCT FROM treats NULL correctly, so an unplayed game
+                # stays untouched and the count below is a real "what moved".
+                updated = execute_values(cur, """
+                    UPDATE games AS g
+                       SET home_points = v.hp,
+                           away_points = v.ap,
+                           completed   = v.done
+                      FROM (VALUES %s) AS v(id, hp, ap, done)
+                     WHERE g.id = v.id
+                       AND (g.home_points IS DISTINCT FROM v.hp
+                         OR g.away_points IS DISTINCT FROM v.ap
+                         OR g.completed   IS DISTINCT FROM v.done)
+                  RETURNING 1
+                """, rows,
+                    template='(%s::bigint, %s::int, %s::int, %s::int)',
+                    page_size=1000, fetch=True)
+                changed = len(updated)
 
-        scope = f'week {WEEK}' if WEEK else 'all weeks'
-        print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
-              f'({live} live, {finals} just finished, {espn_live} via ESPN) '
-              f'({done} completed this season)', flush=True)
+            # Live pass. The board carries BOTH the running score and the moment
+            # a game ends, and it learns of the ending well before /games does —
+            # which is why completion is taken from here rather than waiting for
+            # the finals pass. Rows are matched by id, so a board entry for a
+            # game we do not carry is a no-op.
+            for g in board:
+                status = getattr(getattr(g, 'status', None), 'value',
+                                 getattr(g, 'status', None))
+                if status not in ('in_progress', 'completed'):
+                    continue
+                hp = getattr(getattr(g, 'home_team', None), 'points', None)
+                ap = getattr(getattr(g, 'away_team', None), 'points', None)
+                if hp is None or ap is None:
+                    continue
+                done_flag = 1 if status == 'completed' else 0
+                cur.execute("""
+                    UPDATE games
+                       SET home_points = %s, away_points = %s, completed = %s
+                     WHERE id = %s
+                       AND completed = 0
+                       AND (home_points IS DISTINCT FROM %s
+                         OR away_points IS DISTINCT FROM %s
+                         OR completed    IS DISTINCT FROM %s)
+                """, (hp, ap, done_flag, g.id, hp, ap, done_flag))
+                if cur.rowcount:
+                    live += 1
+                    finals += done_flag
+            changed += live
+
+            # ESPN pass — CFBD's gaps only. A late kickoff keeps `scheduled` on
+            # CFBD's board for the whole delay (SMU at Florida State,
+            # 2026-09-07: two hours late, no score on CFBD, already in the first
+            # quarter on ESPN), and both passes above skip a game in that state.
+            #
+            # Guarded the same way the board pass is: `completed = 0` in the
+            # WHERE, so this can never touch a game CFBD has already finalised.
+            board_states = {}
+            for g in board:
+                st = getattr(getattr(g, 'status', None), 'value',
+                             getattr(g, 'status', None))
+                board_states[str(g.id)] = st
+            for gid, g in (espn_board.fetch() or {}).items():
+                if g['state'] not in ('live', 'final'):
+                    continue
+                if board_states.get(gid) in ('in_progress', 'completed'):
+                    continue          # CFBD already has an opinion; it wins
+                if g['home'] is None or g['away'] is None:
+                    continue
+                done_flag = 1 if g['state'] == 'final' else 0
+                cur.execute("""
+                    UPDATE games
+                       SET home_points = %s, away_points = %s, completed = %s
+                     WHERE id = %s
+                       AND completed = 0
+                       AND (home_points IS DISTINCT FROM %s
+                         OR away_points IS DISTINCT FROM %s
+                         OR completed    IS DISTINCT FROM %s)
+                """, (g['home'], g['away'], done_flag, int(gid),
+                      g['home'], g['away'], done_flag))
+                if cur.rowcount:
+                    espn_live += 1
+            changed += espn_live
+            conn.commit()
+
+            cur.execute('SELECT COUNT(*) FROM games WHERE season = %s AND completed = 1',
+                        (SEASON,))
+            done = cur.fetchone()[0]
+            # A finished game's page is only as good as its stored summary, so
+            # pull any that are missing while we are already here and already
+            # know the season. Non-fatal: scores are the job, this is the bonus.
+            summaries = fill_missing_summaries(conn, SEASON)
+
+            scope = f'week {WEEK}' if WEEK else 'all weeks'
+            print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
+                  f'({live} live, {finals} just finished, {espn_live} via ESPN) '
+                  f'({done} completed this season)', flush=True)
     finally:
         conn.close()
 
