@@ -57,13 +57,13 @@
                         <div class="cmp-avatar avatar-placeholder">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
                         {% endif %}
                         <div class="cmp-slot-id">
-                            <div class="cmp-slot-name">{{ entity.first_name }} {{ entity.last_name }}</div>
+                            <a class="cmp-slot-name" href="{{ player_url(entity.id, entity.season) }}">{{ entity.first_name }} {{ entity.last_name }}</a>
                             <div class="cmp-slot-meta">{{ entity.position or '—' }} · {{ entity.team }}</div>
                         </div>
                     {% else %}
                         {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="cmp-slot-logo" alt="" loading="lazy">{% endif %}
                         <div class="cmp-slot-id">
-                            <div class="cmp-slot-name">{{ entity.name }}</div>
+                            <a class="cmp-slot-name" href="{{ team_url(entity.name, entity.season) }}">{{ entity.name }}</a>
                             <div class="cmp-slot-meta">{{ entity.conference or '' }}</div>
                         </div>
                     {% endif %}
@@ -191,7 +191,7 @@
                 <div class="cmp-hphoto cmp-hphoto-none">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
                 {% endif %}
             </div>
-            <div class="cmp-hname">{{ e.first_name }}<br>{{ e.last_name }}</div>
+            <a class="cmp-hname" href="{{ player_url(e.id, e.season) }}">{{ e.first_name }}<br>{{ e.last_name }}</a>
             <div class="cmp-hseason">{{ e.season }}</div>
             <div class="cmp-hmeta">
                 {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo-sm" alt="">{% endif %}
@@ -206,7 +206,7 @@
                 <div class="cmp-hphoto cmp-hphoto-none">{{ (e.name or '?')[0] }}</div>
                 {% endif %}
             </div>
-            <div class="cmp-hname">{{ e.name }}</div>
+            <a class="cmp-hname" href="{{ team_url(e.name, e.season) }}">{{ e.name }}</a>
             <div class="cmp-hseason">{{ e.season }}</div>
             <div class="cmp-hmeta"><span>{{ e.conference or '' }}</span></div>
             {% if e.ap_rank %}<div class="cmp-hap">AP #{{ e.ap_rank }}</div>{% endif %}

@@ -1646,6 +1646,37 @@ tr.postseason-row:hover {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+/* Both names are links to the page they name — the slot's and the one on the
+   comparison card. They keep their own weight and colour (a raw link blue
+   would fight the card, and the card is exported as an image), and say they
+   are clickable through hover, focus and the pointer. `display:block` because
+   an inline anchor cannot ellipsis its own overflow. */
+a.cmp-slot-name, a.cmp-hname {
+    display: block;
+    text-decoration: none;
+    transition: color var(--t-fast);
+}
+a.cmp-slot-name:hover, a.cmp-hname:hover { color: var(--accent); }
+a.cmp-slot-name:focus-visible, a.cmp-hname:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--r-sm);
+}
+/* The slot row is 64px tall, so the target is taken from the row's own height
+   rather than by growing the name. */
+@media (hover: none) {
+    a.cmp-slot-name { position: relative; }
+    a.cmp-slot-name::after {
+        content: "";
+        position: absolute;
+        left: 0; right: 0; top: 50%;
+        height: 44px;
+        transform: translateY(-50%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    a.cmp-slot-name, a.cmp-hname { transition: none; }
+}
 .cmp-slot-meta { margin-top: 1px; color: var(--text-secondary); font-size: var(--text-xs); }
 .cmp-slot-season {
     flex-shrink: 0;
