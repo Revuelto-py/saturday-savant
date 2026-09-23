@@ -9660,19 +9660,57 @@ def compare():
     # leading passers — turns the zero state into a working example the reader
     # then edits. Reuses the memoized home-page leaders, so it costs no query.
     suggested = None
+    suggest_board = 'passing'
     if not active_entities and mode == 'player':
+        # The stat that names each position group, and the board to send a
+        # reader to. This used to be hardcoded to passing yards and pos=QB, so
+        # every tab offered the same two quarterbacks and the link dragged you
+        # back to QB after you had asked for receivers.
+        cat, stat_type, suggest_board = {
+            'QB': ('passing',   'YDS',   'passing'),
+            'RB': ('rushing',   'YDS',   'rushing'),
+            'WR': ('receiving', 'YDS',   'receiving'),
+            'TE': ('receiving', 'YDS',   'receiving'),
+            'DL': ('defensive', 'SACKS', 'defense'),
+            'LB': ('defensive', 'TOT',   'defense'),
+            'DB': ('defensive', 'TOT',   'defense'),
+        }.get(group_name, ('passing', 'YDS', 'passing'))
+        conn = get_db()
         try:
-            for label, _href, rows_ in get_cached_season_leaders(season):
-                if label == 'Passing Yards' and len(rows_) >= 2:
-                    a, b = rows_[0], rows_[1]
-                    if a[5] and b[5]:
-                        suggested = {'a_name': a[0], 'a_team': a[1],
-                                     'b_name': b[0], 'b_team': b[1],
-                                     'url': f'/compare?type=player&pos=QB'
-                                            f'&p1={a[5]}&p2={b[5]}&y1={season}&y2={season}'}
-                    break
+            cur2 = conn.cursor()
+            # Filtered by POSITION, not by the stat alone: the rushing leader is
+            # regularly a quarterback, and offering him on the RB tab would open
+            # a board this tab cannot measure him on. Peer list is the page's
+            # own, and the FBS test is the one the leaderboards use.
+            cur2.execute(f'''
+                SELECT ps.player_name, ps.team, MAX(ps.player_id) AS pid,
+                       MAX(CAST(ps.stat AS REAL)) AS val
+                  FROM player_stats ps
+                  JOIN teams tf   ON tf.name = ps.team
+                  JOIN players p  ON p.id::text = ps.player_id
+                 WHERE ps.season = %s AND ps.category = %s AND ps.stat_type = %s
+                   AND p.position = ANY(%s)
+                   AND tf.conference NOT IN {FCS_CONFS}
+                   {_promoted_fbs_exclusion(season, 'ps.team')}
+                 GROUP BY ps.player_name, ps.team
+                 ORDER BY val DESC NULLS LAST
+                 LIMIT 2
+            ''', (season, cat, stat_type,
+                  COMPARE_PEER_POSITIONS.get(group_name, ['QB'])))
+            pair = cur2.fetchall()
+            if len(pair) == 2 and pair[0][2] and pair[1][2]:
+                (a_name, a_team, a_id, _), (b_name, b_team, b_id, _) = pair
+                suggested = {
+                    'a_name': a_name, 'a_team': a_team,
+                    'b_name': b_name, 'b_team': b_team,
+                    'url': '/compare?' + urlencode({
+                        'type': 'player', 'pos': group_name,
+                        'p1': a_id, 'p2': b_id, 'y1': season, 'y2': season}),
+                }
         except Exception:
             suggested = None
+        finally:
+            release_db(conn)
     elif not active_entities:
         # Same idea on the team tab: the two best-rated teams are a comparison
         # worth opening, and a filled board teaches the tool faster than copy.
@@ -9695,7 +9733,7 @@ def compare():
         mode=mode, players=players, teams=teams_out, active_entities=active_entities, rows=rows,
         season=season, available_seasons=get_available_seasons(),
         group_name=group_name, pos_filter=pos_filter, tab_urls=tab_urls,
-        suggested=suggested, view=view, pool_note=pool_note,
+        suggested=suggested, suggest_board=suggest_board, view=view, pool_note=pool_note,
     )
 
 

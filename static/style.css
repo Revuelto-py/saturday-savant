@@ -1789,49 +1789,81 @@ tr.postseason-row:hover {
 /* ── Zero / one-picked state ──────────────────────────────────────────── */
 /* Compare is one of five primary nav items, and the empty version of it used
    to be three blank boxes and nothing to read. It measures at a comfortable
-   prose width rather than filling the row of slots above it. */
+   prose width rather than filling the row of slots above it, and it wears the
+   same card the slots do — it sat on --bg-surface, a shade off the page
+   itself, so it read as an outline floating under the board rather than as a
+   panel belonging to it. */
 .cmp-zero {
-    max-width: 58ch;
+    max-width: 60ch;
     margin-inline: auto;
-    padding: var(--s8) var(--s5);
-    background: var(--bg-surface);
+    padding: var(--s8) var(--s6);
+    background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
     text-align: center;
 }
 .cmp-zero-lede {
-    margin: 0;
+    margin: 0 auto;
+    max-width: 46ch;
     color: var(--text-secondary);
-    font-size: var(--text-md);
-    line-height: 1.65;
+    font-size: var(--text-base);
+    line-height: 1.7;
     text-wrap: balance;
 }
+/* The suggestion is a quiet panel, not a blue slab: it used to be a filled
+   accent wash carrying 1.45rem of bold white, which outweighed the heading of
+   the page it sits on. The accent now lives in the hover and focus states,
+   where it marks the thing as clickable. */
 .cmp-zero-try {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    margin-top: var(--s5);
-    padding: var(--s3) var(--s6);
-    background: rgba(28,156,240,0.1);
-    border: 1px solid var(--border-gold);
+    gap: 3px;
+    width: 100%;
+    margin-top: var(--s6);
+    padding: var(--s4) var(--s5);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
     border-radius: var(--r-md);
     text-decoration: none;
     transition-property: var(--t-ui);
     transition-duration: 0.15s;
 }
-.cmp-zero-try:hover { background: rgba(28,156,240,0.18); border-color: var(--accent); }
+.cmp-zero-try:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-gold);
+}
+.cmp-zero-try:hover .cmp-zero-try-names { color: var(--accent); }
 .cmp-zero-try:active { transform: translateY(1px); }
 .cmp-zero-try:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+/* Names the tab you are on, so switching position visibly changes the offer. */
+.cmp-zero-try-label {
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
 .cmp-zero-try-names {
     color: var(--text-primary);
     font-family: var(--font-display); font-stretch: var(--display-stretch);
     font-weight: 700;
-    font-size: var(--text-lg);
-    line-height: 1.1;
+    font-size: var(--text-md);
+    line-height: 1.25;
+    text-wrap: balance;
+    transition: color var(--t-fast);
 }
+.cmp-zero-try-vs { color: var(--text-dim); font-weight: 600; }
 .cmp-zero-try-meta { color: var(--text-dim); font-size: var(--text-xs); }
-.cmp-zero-hint { margin: var(--s5) 0 0; color: var(--text-dim); font-size: var(--text-sm); }
+.cmp-zero-hint {
+    margin: var(--s5) auto 0;
+    max-width: 46ch;
+    color: var(--text-dim);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+}
 .cmp-zero-hint a { color: var(--accent); }
 
 /* ── View switch + export ─────────────────────────────────────────────── */

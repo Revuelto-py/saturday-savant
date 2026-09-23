@@ -119,13 +119,14 @@
         </p>
         {% if suggested %}
         <a class="cmp-zero-try" href="{{ suggested.url }}">
-            <span class="cmp-zero-try-names">Compare {{ suggested.a_name }} and {{ suggested.b_name }}</span>
+            <span class="cmp-zero-try-label">Try {{ group_name if mode == 'player' else 'these' }}</span>
+            <span class="cmp-zero-try-names">{{ suggested.a_name }} <span class="cmp-zero-try-vs">vs</span> {{ suggested.b_name }}</span>
             {% if suggested.a_team %}<span class="cmp-zero-try-meta">{{ suggested.a_team }} · {{ suggested.b_team }}</span>{% endif %}
         </a>
         {% endif %}
         <p class="cmp-zero-hint">
             Searching by last name is quickest. Not sure who to look at? The
-            <a href="/leaderboards/passing?season={{ season }}">leaderboards</a> are a good place to start.
+            <a href="/leaderboards/{{ suggest_board or 'passing' }}?season={{ season }}">leaderboards</a> are a good place to start.
         </p>
     </div>
     {% endif %}
