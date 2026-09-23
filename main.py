@@ -9232,7 +9232,14 @@ def _cmp_row(label, slots, full_pools, qual_pools, stat_key, games_by_slot,
             continue
         shown = (raw / games_by_slot[idx] if per_game else raw) * scale
         _, pct, _ = _rank_pct(pid, qual_pools.get(yr, {}), stat_key, higher_better)
-        values.append({'raw': raw, 'display': f'{shown:.{decimals}f}{suffix}', 'percentile': pct})
+        # The value carried forward is the one the column PRINTS, not the season
+        # total behind it. _cmp_finish_row marks the leader and sizes the bars
+        # from this, and on a per-game row the two disagree: a passer with 1,173
+        # yards over four games leads on the total while showing 293 a game
+        # against someone showing 374. The row said one thing and highlighted
+        # the other.
+        values.append({'raw': shown, 'display': f'{shown:.{decimals}f}{suffix}',
+                       'percentile': pct})
     return {'label': label, 'higher_better': higher_better, 'values': values}
 
 def _cmp_team_proxy_row(cursor, label, slots, column, pct=False):

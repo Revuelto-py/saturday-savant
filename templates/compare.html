@@ -170,7 +170,7 @@
             <span class="cmp-fill {{ band(v.percentile) if has_p else 'b2' }}"></span>
             {% if has_p %}
             <span class="cmp-knob {{ band(v.percentile) }}"
-                  aria-label="{{ ord(v.percentile) }} percentile">{{ v.percentile }}</span>
+                  aria-label="{{ ord(v.percentile) }} percentile{{ ', leads this metric' if v.lead }}">{{ v.percentile }}</span>
             {% endif %}
             {% endif %}
         </div>
