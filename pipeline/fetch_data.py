@@ -9,6 +9,7 @@ import cfbd
 import os
 from dotenv import load_dotenv
 from cfbd_retry import call_with_retry
+from divisions import fbs_team_names, keep_stat_row, tracked_player_ids
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -58,8 +59,17 @@ for game in result:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (game.id, game.season, game.week, str(game.season_type), game.home_team, game.home_points, game.away_team, game.away_points, 1 if game.completed else 0, str(game.start_date), game.notes, 1 if getattr(game, 'neutral_site', False) else 0))
 
+# CFBD returns every division in one payload. Store the FBS half (plus anyone
+# who already has a page here) — see divisions.py. Before this, half of the
+# season's player_stats rows were FCS and D-II players no page can reach.
+FBS_NAMES = fbs_team_names(cursor)
+TRACKED = tracked_player_ids(cursor)
+
 # Save player stats
+stats_saved = 0
 for s in stats:
+    if not keep_stat_row(s.team, s.player_id, FBS_NAMES, TRACKED):
+        continue
     cursor.execute('''
         INSERT INTO player_stats (player_id, player_name, team, conference, position, category, stat_type, stat, season)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -67,19 +77,24 @@ for s in stats:
            SET stat = EXCLUDED.stat, player_name = EXCLUDED.player_name,
                conference = EXCLUDED.conference, position = EXCLUDED.position
     ''', (s.player_id, s.player, s.team, s.conference, s.position, s.category, s.stat_type, s.stat, SEASON))
+    stats_saved += 1
 
 # Save PPA
+ppa_saved = 0
 for p in ppa_data:
+    if not keep_stat_row(p.team, p.id, FBS_NAMES, TRACKED):
+        continue
     cursor.execute('''
         INSERT INTO player_ppa (player_id, player_name, position, team, conference, avg_ppa_all, avg_ppa_pass, avg_ppa_rush, total_ppa, season)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (player_id, season) DO NOTHING
     ''', (p.id, p.name, p.position, p.team, p.conference,
           p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush, p.total_ppa.all, SEASON))
+    ppa_saved += 1
 
 print(f"Games saved: {len(result)}")
-print(f"Stats saved: {len(stats)}")
-print(f"PPA saved: {len(ppa_data)}")
+print(f"Stats saved: {stats_saved} FBS (of {len(stats)} read)")
+print(f"PPA saved: {ppa_saved} FBS (of {len(ppa_data)} read)")
 
 conn.commit()
 conn.close()

@@ -345,13 +345,13 @@ ensure_indexes()
 # ?season=YYYY. The data pipeline's *ingest* season is separate and date-driven
 # (season_util.current_cfb_season) — it rolls over before the new season has any
 # data, which is exactly why the display default can't just mirror it.
-# Non-FBS conferences. Defined up here rather than beside the other team
-# constants because _newest_stats_season() runs at import time, well before
-# them — left below, it raised NameError, was swallowed by the except, and the
-# season would have silently never advanced.
-FCS_CONFS = ('CAA','Big Sky','MVFC','SWAC','MEAC','Southland','Big South','OVC',
-             'Big South-OVC','Southern','UAC','Patriot','NEC','Pioneer','Ivy',
-             'FCS Independents','SIAC')
+# Non-FBS conferences. Imported (not spelled out here) so the ingest scripts
+# filter writes against the same list this file filters reads against — see
+# divisions.py. Bound up here rather than beside the other team constants
+# because _newest_stats_season() runs at import time, well before them — left
+# below, it raised NameError, was swallowed by the except, and the season would
+# have silently never advanced.
+from divisions import FCS_CONFS
 
 # A season only counts once it has a real week of FBS stats behind it. MAX(season)
 # alone is not enough: CFBD publishes lower-division box scores before the FBS

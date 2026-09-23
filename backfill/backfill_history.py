@@ -38,6 +38,8 @@ from psycopg2.extras import execute_values
 import os
 from dotenv import load_dotenv
 
+from divisions import fbs_team_names, keep_stat_row, tracked_player_ids
+
 load_dotenv(os.path.join(ROOT, '.env'), override=True)
 
 PROTECTED_SEASONS = (2025, 2026)  # owned by the current-season fetch scripts
@@ -105,23 +107,35 @@ def backfill_games(apis, y):
     print(f"  games: {len(fbs)} (of {len(all_games)})")
 
 
+# FBS only, matching the current-season scripts and the site's reads — the
+# payload carries every division. Re-running a year after the portal settles is
+# also how an FCS season gets recovered for someone who has since transferred
+# up: he is in `players` by then, so keep_stat_row keeps him.
+def _division_filter():
+    return fbs_team_names(cursor), tracked_player_ids(cursor)
+
+
 def backfill_player_stats(apis, y):
     # 'both' = regular + postseason combined so bowl/CFP production counts.
     stats = apis['stats'].get_player_season_stats(year=y, season_type='both')
+    fbs_names, tracked = _division_filter()
+    keep = [s for s in stats if keep_stat_row(s.team, s.player_id, fbs_names, tracked)]
     _refresh('player_stats', y)
     execute_values(cursor, '''
         INSERT INTO player_stats (player_id, player_name, team, conference, position,
                                   category, stat_type, stat, season)
         VALUES %s
     ''', [(s.player_id, s.player, s.team, s.conference, s.position,
-           s.category, s.stat_type, s.stat, y) for s in stats],
+           s.category, s.stat_type, s.stat, y) for s in keep],
         page_size=2000)
     conn.commit()
-    print(f"  player_stats: {len(stats)}")
+    print(f"  player_stats: {len(keep)} (of {len(stats)})")
 
 
 def backfill_player_ppa(apis, y):
     ppa = apis['metrics'].get_predicted_points_added_by_player_season(year=y)
+    fbs_names, tracked = _division_filter()
+    keep = [p for p in ppa if keep_stat_row(p.team, p.id, fbs_names, tracked)]
     _refresh('player_ppa', y)
     execute_values(cursor, '''
         INSERT INTO player_ppa (player_id, player_name, position, team, conference,
@@ -130,10 +144,10 @@ def backfill_player_ppa(apis, y):
         ON CONFLICT (player_id, season) DO NOTHING
     ''', [(p.id, p.name, p.position, p.team, p.conference,
            p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush,
-           p.total_ppa.all, y) for p in ppa],
+           p.total_ppa.all, y) for p in keep],
         page_size=1000)
     conn.commit()
-    print(f"  player_ppa: {len(ppa)}")
+    print(f"  player_ppa: {len(keep)} (of {len(ppa)})")
 
 
 def backfill_team_stats(apis, y):
@@ -221,12 +235,15 @@ def backfill_team_stats(apis, y):
 
 def backfill_usage(apis, y):
     usage = apis['players'].get_player_usage(year=y)
+    fbs_names, tracked = _division_filter()
     _refresh('player_usage', y)
     rows, seen = [], set()
     for u in usage:
         pid = getattr(u, 'id', None)
         ud = getattr(u, 'usage', None)
         if not ud or pid is None or pid in seen:
+            continue
+        if not keep_stat_row(u.team, pid, fbs_names, tracked):
             continue
         seen.add(pid)
         rows.append((

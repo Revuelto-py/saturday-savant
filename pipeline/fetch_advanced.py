@@ -9,6 +9,7 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 from cfbd_retry import call_with_retry
+from divisions import fbs_team_names, keep_stat_row, tracked_player_ids
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -109,11 +110,13 @@ with cfbd.ApiClient(configuration) as api_client:
     try:
         usage = call_with_retry('player usage', players_api.get_player_usage,
                                 year=SEASON)
+        # FBS only, like the stat tables it sits beside — see divisions.py.
+        fbs_names, tracked = fbs_team_names(cursor), tracked_player_ids(cursor)
         saved = 0
         for u in usage:
             pid = getattr(u, 'id', None)
             ud  = getattr(u, 'usage', None)
-            if not ud:
+            if not ud or not keep_stat_row(u.team, pid, fbs_names, tracked):
                 continue
             cursor.execute('''
                 INSERT INTO player_usage VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)

@@ -74,6 +74,8 @@ from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 from cfbd_retry import call_with_retry
+from divisions import (count_stored, fbs_team_names, keep_stat_row,
+                       tracked_player_ids)
 from season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
@@ -176,8 +178,7 @@ if seen == last_kickoff and attempts >= MAX_EMPTY_RETRIES and not FORCE:
 
 # ── Stage 1: season totals ───────────────────────────────────────────────
 # ── The read ──────────────────────────────────────────────────────────────
-cursor.execute('SELECT count(*) FROM player_stats WHERE season = %s', (SEASON,))
-stored = cursor.fetchone()[0]
+stored = count_stored(cursor, 'player_stats', SEASON)
 
 configuration = cfbd.Configuration(access_token=os.getenv('CFBD_API_KEY'))
 with cfbd.ApiClient(configuration) as api_client:
@@ -191,9 +192,22 @@ with cfbd.ApiClient(configuration) as api_client:
 # Collapse the payload on the storage key first. CFBD has not been observed to
 # repeat a key, but an UPSERT that hits the same row twice in one statement is
 # a hard error, so this makes a duplicate harmless instead of fatal.
+#
+# The division filter runs here too (divisions.py): CFBD sends every division
+# in one payload and these tables are FBS-only. `stored` above is counted
+# through the same filter, so the short-payload guard keeps comparing like with
+# like — counted raw, it would sit at up to twice the read and refuse every
+# write, which is a refresh that stops without failing.
+FBS_NAMES = fbs_team_names(cursor)
+TRACKED = tracked_player_ids(cursor)
+
 rows = {}
+read_all = 0
 for s in stats:
     if s.player_id is None:
+        continue
+    read_all += 1
+    if not keep_stat_row(s.team, s.player_id, FBS_NAMES, TRACKED):
         continue
     rows[(str(s.player_id), SEASON, s.team, s.category, s.stat_type)] = (
         s.player, s.conference, s.position, s.stat)
@@ -242,7 +256,7 @@ for i in range(0, len(payload), BATCH):
     ''', payload[i:i + BATCH], page_size=BATCH, fetch=True)
     changed += len(got)
 
-print(f'{SEASON}: player_stats — {len(rows)} read, {changed} written '
+print(f'{SEASON}: player_stats — {read_all} read, {len(rows)} FBS, {changed} written '
       f'(stored was {stored})')
 
 # ── Stage 2: per-player EPA ───────────────────────────────────────────────
@@ -254,21 +268,24 @@ ppa_changed = 0
 with cfbd.ApiClient(configuration) as api_client:
     ppa_data = cfbd.MetricsApi(api_client).get_predicted_points_added_by_player_season(year=SEASON)
 
-cursor.execute('SELECT count(*) FROM player_ppa WHERE season = %s', (SEASON,))
-ppa_stored = cursor.fetchone()[0]
+ppa_stored = count_stored(cursor, 'player_ppa', SEASON)
 
-if ppa_stored and len(ppa_data) < ppa_stored * MIN_PAYLOAD_RATIO:
-    print(f'{SEASON}: player_ppa payload is {len(ppa_data)} against {ppa_stored} '
+# Filtered before the guard, not after: `ppa_stored` counts an FBS-only table,
+# so comparing a full-division payload against it would measure two different
+# populations and never trip.
+ppa_rows = {}
+for p in ppa_data:
+    if p.id is None or not keep_stat_row(p.team, p.id, FBS_NAMES, TRACKED):
+        continue
+    ppa_rows[(str(p.id), SEASON)] = (
+        p.name, p.position, p.team, p.conference,
+        p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush,
+        p.total_ppa.all)
+
+if ppa_stored and len(ppa_rows) < ppa_stored * MIN_PAYLOAD_RATIO:
+    print(f'{SEASON}: player_ppa payload is {len(ppa_rows)} FBS against {ppa_stored} '
           f'stored — skipped, totals above still written')
 else:
-    ppa_rows = {}
-    for p in ppa_data:
-        if p.id is None:
-            continue
-        ppa_rows[(str(p.id), SEASON)] = (
-            p.name, p.position, p.team, p.conference,
-            p.average_ppa.all, p.average_ppa.var_pass, p.average_ppa.rush,
-            p.total_ppa.all)
     for i in range(0, len(ppa_rows), BATCH):
         chunk = list(ppa_rows.items())[i:i + BATCH]
         got = execute_values(cursor, '''
