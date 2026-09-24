@@ -4312,6 +4312,33 @@ def forecast_pair(away_hex, home_hex):
 app.jinja_env.globals['forecast_pair'] = forecast_pair
 
 
+# The card surface every game-page bar is drawn on. forecast_pair answers "can
+# these two colours be told apart"; this answers the other question a bar on a
+# dark card asks — can it be seen at all.
+BAR_SURFACE = (0x17, 0x18, 0x1c)
+BAR_MIN_RATIO = 3.0          # WCAG 2.2 for a non-text graphical object
+
+
+@lru_cache(maxsize=1024)
+def bar_hex(team_hex_value):
+    """A team colour lifted until it clears 3:1 against the card it sits on.
+
+    Michigan navy is #00274c: a 6px bar of it on #17181c measures 1.35:1, which
+    on a real screen is a bar you cannot see. Lightness is raised and hue and
+    saturation are held, the same way forecast_pair does it, so the colour still
+    reads as the team's — brighter navy, not blue-grey.
+    """
+    rgb = _to_rgb(team_hex(team_hex_value))
+    for step in range(0, 21):
+        cand = _lift(rgb, step * 0.05)
+        if _ratio(cand, BAR_SURFACE) >= BAR_MIN_RATIO:
+            return '#%02x%02x%02x' % cand
+    return '#ffffff'
+
+
+app.jinja_env.filters['bar_hex'] = bar_hex
+
+
 def _hex_to_rgba(hex_color, alpha):
     if not hex_color:
         return None
@@ -8207,23 +8234,39 @@ def get_game_advanced(game_id, home_team, away_team):
         a, h = vals['away'], vals['home']
         if higher is not None and a is not None and h is not None and a != h:
             best = ('away' if a > h else 'home') if higher else ('away' if a < h else 'home')
+        # Magnitude for the row's gauge, as a share of the larger of the pair,
+        # so the bar shows the SIZE of a gap and not only its direction. Scaled
+        # to the pair rather than to the metric's own range because these
+        # metrics have no common range — EPA/play lives in tenths, points per
+        # opportunity in single digits — and one absolute scale would flatten
+        # every EPA row to nothing. `neg` travels with it so the template can
+        # draw a negative hollow instead of colouring it.
+        frac = {'away': 0, 'home': 0}
+        if a is not None and h is not None:
+            mag = max(abs(a), abs(h))
+            if mag:
+                frac = {'away': round(abs(a) / mag * 100, 1),
+                        'home': round(abs(h) / mag * 100, 1)}
         return {'label': label, 'note': note, 'best': best,
-                'away': {'v': a, 'd': _adv_fmt(a, kind)},
-                'home': {'v': h, 'd': _adv_fmt(h, kind)}}
+                'away': {'v': a, 'd': _adv_fmt(a, kind),
+                         'frac': frac['away'], 'neg': (a or 0) < 0},
+                'home': {'v': h, 'd': _adv_fmt(h, kind),
+                         'frac': frac['home'], 'neg': (h or 0) < 0}}
 
+    # Each metric is printed once on the tab. The headline band carries EPA per
+    # play, success rate, explosiveness and points per opportunity; passing and
+    # rushing EPA belong to their own sections; havoc total heads the havoc
+    # section. Printing any of them here as well is the ink the tab was carrying
+    # for nothing.
     efficiency = [
-        row('EPA / play',        per(lambda t: (ppa.get(t, {}).get('overall') or {}).get('total')), 'epa'),
-        row('Passing EPA / play', per(lambda t: (ppa.get(t, {}).get('passing') or {}).get('total')), 'epa'),
-        row('Rushing EPA / play', per(lambda t: (ppa.get(t, {}).get('rushing') or {}).get('total')), 'epa'),
-        row('Success rate',      per(lambda t: (succ.get(t, {}).get('overall') or {}).get('total')), 'pct'),
         row('Standard downs',    per(lambda t: (succ.get(t, {}).get(_std_key(succ, t)) or {}).get('total')), 'pct'),
         row('Passing downs',     per(lambda t: (succ.get(t, {}).get(_pd_key(succ, t)) or {}).get('total')), 'pct'),
-        row('Explosiveness',     per(lambda t: (expl.get(t, {}).get('overall') or {}).get('total')), 'f2'),
         row('Average start',     per(lambda t: _adv_val(fpos.get(t, {}), 'averageStart', 'average_start')),
             'f1', higher=False, note='yards to goal'),
-        row('Havoc created',     per(lambda t: havoc.get(t, {}).get('total')), 'pct'),
-        row('Points / opportunity',
-            per(lambda t: _adv_val(opps.get(t, {}), 'pointsPerOpportunity', 'points_per_opportunity')), 'f2'),
+        row('Trips inside the 40',
+            per(lambda t: (opps.get(t) or {}).get('opportunities')), 'g'),
+        row('Points from them',
+            per(lambda t: (opps.get(t) or {}).get('points')), 'g'),
     ]
 
     rushing = [
@@ -8239,9 +8282,9 @@ def get_game_advanced(game_id, home_team, away_team):
     ]
 
     havoc_rows = [
-        row('Havoc — total',       per(lambda t: havoc.get(t, {}).get('total')), 'pct'),
-        row('Havoc — front seven', per(lambda t: _adv_val(havoc.get(t, {}), 'frontSeven', 'front_seven')), 'pct'),
-        row('Havoc — secondary',   per(lambda t: havoc.get(t, {}).get('db')), 'pct'),
+        row('Havoc created',  per(lambda t: havoc.get(t, {}).get('total')), 'pct'),
+        row('Front seven',    per(lambda t: _adv_val(havoc.get(t, {}), 'frontSeven', 'front_seven')), 'pct'),
+        row('Secondary',      per(lambda t: havoc.get(t, {}).get('db')), 'pct'),
     ]
 
     # ── Quarter splits, one table per team ───────────────────────────────
@@ -8330,23 +8373,23 @@ def get_game_advanced(game_id, home_team, away_team):
         'excitement': _adv_val(info, 'excitement'),
         'win_prob': {s: (round(v * 100) if v is not None else None) for s, v in wp.items()},
         'plays': per(lambda t: ppa.get(t, {}).get('plays')),
+        # The band, in the order the game is argued: what each snap was worth,
+        # how often it worked, how big it was when it did, what the trips
+        # produced. Snap count trails — it is context, not a finding, and it led
+        # the old strip for no better reason than that the source listed it
+        # first. The first row is the tab's single answering figure, and the
+        # only place the accent is spent.
         'overview': [
-            row('Plays',        per(lambda t: ppa.get(t, {}).get('plays')), 'g', higher=None),
             row('EPA / play',   per(lambda t: (ppa.get(t, {}).get('overall') or {}).get('total')), 'epa'),
             row('Success rate', per(lambda t: (succ.get(t, {}).get('overall') or {}).get('total')), 'pct'),
             row('Explosiveness', per(lambda t: (expl.get(t, {}).get('overall') or {}).get('total')), 'f2'),
             row('Points / opportunity',
                 per(lambda t: _adv_val(opps.get(t, {}), 'pointsPerOpportunity', 'points_per_opportunity')), 'f2'),
+            row('Plays',        per(lambda t: ppa.get(t, {}).get('plays')), 'g', higher=None),
         ],
         'efficiency': efficiency,
         'rushing': rushing,
         'havoc': havoc_rows,
-        'scoring': [
-            row('Trips inside the 40',
-                per(lambda t: (opps.get(t) or {}).get('opportunities')), 'g'),
-            row('Points from them',
-                per(lambda t: (opps.get(t) or {}).get('points')), 'g'),
-        ],
         'passing': passing,
         'splits': {s: {'team': sides[s], 'rows': split_table(sides[s])} for s in ('away', 'home')},
         'players': players,
