@@ -663,6 +663,12 @@
         style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
         Box Score
     </button>
+    {% if advanced %}
+    <button id="tab-btn-advanced" class="tab-btn" onclick="switchTab('advanced')"
+        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
+        Advanced
+    </button>
+    {% endif %}
     <button id="tab-btn-drives" class="tab-btn" onclick="switchTab('drives')"
         style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
         Drives
@@ -1302,6 +1308,206 @@ if (typeof Plotly !== 'undefined') {
 
 </div>{# /tab-content-boxscore #}
 
+{# ── ADVANCED BOX SCORE TAB ───────────────────────────────────────────────────
+   CFBD's advanced box, laid out the way the source lays it out: a headline
+   strip, the full team comparison, the quarter splits, then passing, rushing
+   and the players who moved the game.
+
+   Every figure is supplied, never derived here. A metric CFBD did not measure
+   for this game prints as a dash — zero is a measurement and prints as 0.
+
+   Column order is the page's order everywhere else: away on the left, home on
+   the right, so a reader who has learned the scoreboard does not have to learn
+   this table separately. #}
+{% if advanced %}
+{% macro abx_row(r) %}
+<div class="abx-row">
+    <span class="abx-val {{ 'is-best' if r.best == 'away' }}">{{ r.away.d }}</span>
+    <span class="abx-metric">{{ r.label }}{% if r.note %}<i class="abx-hint">{{ r.note }}</i>{% endif %}</span>
+    <span class="abx-val {{ 'is-best' if r.best == 'home' }}">{{ r.home.d }}</span>
+</div>
+{% endmacro %}
+
+{% macro abx_teamhead() %}
+<div class="abx-teamhead">
+    <span class="abx-team">
+        {% if game[10] %}<img src="{{ game[10] }}" alt="" width="26" height="26">{% endif %}{{ away_team }}
+    </span>
+    <span class="abx-team is-right">
+        {{ home_team }}{% if game[9] %}<img src="{{ game[9] }}" alt="" width="26" height="26">{% endif %}
+    </span>
+</div>
+{% endmacro %}
+
+{% macro abx_splits(side) %}
+{% set s = advanced.splits[side] %}
+<div class="abx-splitcard">
+    <h4 class="abx-splitname">
+        {% set lg = game[9] if side == 'home' else game[10] %}
+        {% if lg %}<img src="{{ lg }}" alt="" width="22" height="22">{% endif %}{{ s.team }}
+    </h4>
+    <div class="abx-scroll">
+        <table class="abx-table">
+            <thead>
+                <tr><th scope="col">Metric</th><th scope="col">Game</th>
+                    <th scope="col">Q1</th><th scope="col">Q2</th><th scope="col">Q3</th><th scope="col">Q4</th></tr>
+            </thead>
+            <tbody>
+                {% for row in s.rows %}
+                <tr>
+                    <th scope="row">{{ row.label }}</th>
+                    {% for c in row.cells %}<td class="{{ 'is-game' if c.k == 'game' }}">{{ c.d }}</td>{% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endmacro %}
+
+<div id="tab-content-advanced" style="display:none">
+
+    <p class="abx-intro">How the game was actually played: expected points added per snap,
+    how often each offence stayed on schedule, and where the yards came from. Away on the
+    left, home on the right — the brighter number is the better of the two. Rows that are a
+    description rather than a contest, like snap count and depth of target, mark neither.</p>
+
+    {# ── HEADLINE STRIP ─────────────────────────────────────────────────── #}
+    <div class="abx-strip">
+        {% for r in advanced.overview %}
+        <div class="abx-card">
+            <span class="abx-cardlabel">{{ r.label }}</span>
+            <div class="abx-cardvals">
+                <span class="abx-fig {{ 'is-best' if r.best == 'away' }}">{{ r.away.d }}</span>
+                <span class="abx-figsep" aria-hidden="true"></span>
+                <span class="abx-fig {{ 'is-best' if r.best == 'home' }}">{{ r.home.d }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if advanced.excitement is not none or advanced.win_prob.home is not none %}
+    <p class="abx-meta">
+        {%- if advanced.excitement is not none %}Excitement index <b>{{ '%.1f' % advanced.excitement }}</b>{% endif %}
+        {%- if advanced.win_prob.home is not none %} · Postgame win probability
+        <b>{{ home_team }} {{ advanced.win_prob.home }}%</b> ·
+        <b>{{ away_team }} {{ advanced.win_prob.away }}%</b>{% endif -%}
+    </p>
+    {% endif %}
+
+    {# ── TEAM EFFICIENCY ────────────────────────────────────────────────── #}
+    <section class="abx-sec">
+        <h3 class="abx-head">Team efficiency</h3>
+        <div class="abx-panel">
+            {{ abx_teamhead() }}
+            {% for r in advanced.efficiency %}{{ abx_row(r) }}{% endfor %}
+        </div>
+        <p class="abx-foot">EPA is the change in expected points per play. Success rate counts
+        plays that stayed on schedule for the down and distance. Havoc is credited to the
+        defence that created it.</p>
+    </section>
+
+    {# ── SCORING TRIPS AND HAVOC ────────────────────────────────────────── #}
+    <div class="abx-pair">
+        <section class="abx-sec">
+            <h3 class="abx-head">Scoring opportunities</h3>
+            <div class="abx-panel">
+                {{ abx_teamhead() }}
+                {% for r in advanced.scoring %}{{ abx_row(r) }}{% endfor %}
+            </div>
+        </section>
+        <section class="abx-sec">
+            <h3 class="abx-head">Havoc breakdown</h3>
+            <div class="abx-panel">
+                {{ abx_teamhead() }}
+                {% for r in advanced.havoc[1:] %}{{ abx_row(r) }}{% endfor %}
+            </div>
+        </section>
+    </div>
+
+    {# ── PASSING ────────────────────────────────────────────────────────── #}
+    <section class="abx-sec">
+        <h3 class="abx-head">Passing</h3>
+        <div class="abx-panel">
+            {{ abx_teamhead() }}
+            {% for r in advanced.passing %}{{ abx_row(r) }}{% endfor %}
+        </div>
+        {% if game_passing %}
+        <p class="abx-foot">Where each throw went by depth and direction is on the
+        <button type="button" class="abx-link" onclick="switchTab('passing'); document.getElementById('tab-btn-passing').scrollIntoView({behavior:'smooth', block:'start'});">Passing tab</button>.</p>
+        {% endif %}
+    </section>
+
+    {# ── RUSHING ────────────────────────────────────────────────────────── #}
+    <section class="abx-sec">
+        <h3 class="abx-head">Rushing</h3>
+        <div class="abx-panel">
+            {{ abx_teamhead() }}
+            {% for r in advanced.rushing %}{{ abx_row(r) }}{% endfor %}
+        </div>
+        <p class="abx-foot">Line yards credit the blocking; second-level and open-field yards
+        are the gains beyond it. A stuff is a carry stopped at or behind the line.</p>
+    </section>
+
+    {# ── QUARTER SPLITS ─────────────────────────────────────────────────── #}
+    <section class="abx-sec">
+        <h3 class="abx-head">Game and quarter splits</h3>
+        <div class="abx-splits">
+            {{ abx_splits('away') }}
+            {{ abx_splits('home') }}
+        </div>
+        <p class="abx-foot">Game values are the full-game figures, including overtime where it
+        was played; Q1–Q4 do not carry an overtime column.</p>
+    </section>
+
+    {# ── PLAYERS ────────────────────────────────────────────────────────── #}
+    {% if advanced.players %}
+    <section class="abx-sec">
+        <h3 class="abx-head">Players</h3>
+        <div class="abx-scroll">
+            <table class="abx-table abx-players">
+                <thead>
+                    <tr>
+                        <th scope="col">Player</th>
+                        <th scope="col">Usage</th>
+                        <th scope="col">EPA / play</th>
+                        <th scope="col">Total EPA</th>
+                        <th scope="col">Pass usage</th>
+                        <th scope="col">Rush usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in advanced.players %}
+                    <tr>
+                        <th scope="row">
+                            <span class="abx-pname">{{ p.name }}</span>
+                            <span class="abx-pteam">
+                                {% set plg = game[9] if p.is_home else game[10] %}
+                                {% if plg %}<img src="{{ plg }}" alt="" width="16" height="16">{% endif %}
+                                {{ p.team }}{% if p.pos %} · {{ p.pos }}{% endif %}
+                            </span>
+                        </th>
+                        <td>{{ p.usage_d }}</td>
+                        <td>{{ p.avg_d }}</td>
+                        <td class="is-game">{{ p.total_d }}</td>
+                        <td>{{ p.pass_d }}</td>
+                        <td>{{ p.rush_d }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="abx-foot">Usage is the share of his team's plays a player was involved in,
+        sorted by the expected points he added. Passing and rushing usage are his share of
+        that half of the offence.</p>
+    </section>
+    {% endif %}
+
+    <p class="abx-source">Advanced figures from CollegeFootballData. A dash means the metric
+    was not measured for this game; zero is a measured value.</p>
+</div>
+{% endif %}
+
 {# ── DRIVES TAB ────────────────────────────────────────────────────────────── #}
 {# ── PASSING TAB ──────────────────────────────────────────────────────────
    Both teams' charts side by side: how each attacked through the air, and how
@@ -1673,7 +1879,7 @@ if (typeof Plotly !== 'undefined') {
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
 function switchTab(name) {
-    ['overview', 'boxscore', 'drives', 'passing'].forEach(function(t) {
+    ['overview', 'boxscore', 'advanced', 'drives', 'passing'].forEach(function(t) {
         var el = document.getElementById('tab-content-' + t);
         if (el) el.style.display = t === name ? 'block' : 'none';
         var btn = document.getElementById('tab-btn-' + t);
