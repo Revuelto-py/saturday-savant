@@ -282,7 +282,30 @@
                 flex-direction: column; gap: 0;
                 padding: 2px 0 4px;
             }
-            .navbar.nav-open .nav-links { display: flex; animation: navdrop 0.18s ease-out; }
+            /* The open list scrolls inside itself.
+               The navbar is sticky at top:0, and an open menu stands 818px
+               tall — taller than the viewport on any phone shorter than an
+               iPhone 14 Pro Max. A sticky element does not scroll with the
+               page, so everything past the fold was simply unreachable:
+               Stat explorer on a Pixel, NFL draft too on an iPhone SE, and
+               Transfer portal as well at 360x640. Scrolling the page did not
+               help, because the header stayed pinned.
+
+               The cap is the space actually left below the search row, which
+               the toggle measures into --nav-list-max on open; the calc is the
+               floor for the first paint before that lands. */
+            .navbar.nav-open .nav-links {
+                display: flex;
+                animation: navdrop 0.18s ease-out;
+                max-height: var(--nav-list-max, calc(100vh - 124px));
+                max-height: var(--nav-list-max, calc(100svh - 124px));
+                overflow-y: auto;
+                /* Reaching the end of the list must not start scrolling the
+                   page behind it. */
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+                padding-bottom: max(4px, env(safe-area-inset-bottom));
+            }
             .nav-links a {
                 display: flex; align-items: center;
                 min-height: 44px; padding: 10px 10px;
@@ -746,13 +769,36 @@
     (function () {
         var nav = document.querySelector('.navbar');
         var btn = document.getElementById('navBurger');
+        var list = document.getElementById('navLinks');
         if (!nav || !btn) return;
-        function close() { nav.classList.remove('nav-open'); btn.setAttribute('aria-expanded', 'false'); }
+
+        // How much room the list actually has: from where it starts, down to
+        // the bottom of the viewport. Measured rather than assumed, because the
+        // rows above it are two on a phone and one on a tablet, and the root
+        // font size grows on large displays — a constant would be wrong on all
+        // three. Re-measured on resize and on orientation change, which is when
+        // a phone's usable height moves most.
+        function fitList() {
+            if (!list || !nav.classList.contains('nav-open')) return;
+            var top = list.getBoundingClientRect().top;
+            var room = window.innerHeight - top - 12;
+            nav.style.setProperty('--nav-list-max', Math.max(180, room) + 'px');
+        }
+        function close() {
+            nav.classList.remove('nav-open');
+            btn.setAttribute('aria-expanded', 'false');
+            nav.style.removeProperty('--nav-list-max');
+        }
         btn.addEventListener('click', function (e) {
             e.stopPropagation();
             var open = nav.classList.toggle('nav-open');
             btn.setAttribute('aria-expanded', open);
+            // A menu opens at its top, even if it was left scrolled last time.
+            if (open) { fitList(); if (list) list.scrollTop = 0; }
+            else { nav.style.removeProperty('--nav-list-max'); }
         });
+        window.addEventListener('resize', fitList);
+        window.addEventListener('orientationchange', function () { setTimeout(fitList, 150); });
         document.addEventListener('click', function (e) {
             if (nav.classList.contains('nav-open') && !nav.contains(e.target)) close();
         });
