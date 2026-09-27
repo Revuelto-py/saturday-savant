@@ -48,7 +48,7 @@
     <button class="xp-swap" id="xp-swap" title="Swap axes" aria-label="Swap axes">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
-        </svg>
+        </svg><span class="xp-swap-text">Swap axes</span>
     </button>
     <div class="lb-filter-group">
         <label class="lb-filter-label" for="xp-y">Y-Axis</label>
@@ -158,7 +158,7 @@
     <button class="xp-swap" id="xp-swap" title="Swap axes" aria-label="Swap axes">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
-        </svg>
+        </svg><span class="xp-swap-text">Swap axes</span>
     </button>
     <div class="lb-filter-group">
         <label class="lb-filter-label" for="xp-y">Y-Axis</label>
@@ -363,6 +363,17 @@ document.addEventListener('DOMContentLoaded', function () {
     var RANK_STAT = {{ (player_rank_stat or 'volume') | tojson }};
     var SCOPE = "{{ scope }}";
 
+    // Defined up here, not beside the layout helpers that use it: the scope
+    // blocks below call onBreakpoint() during their own evaluation, and a
+    // `var` further down the script is hoisted but still undefined when they
+    // do — which threw and left every chart undrawn.
+    //
+    // A phone gives the plot about a third of the width a laptop does, and the
+    // desktop margins spent 76px of it on axis furniture — a fifth of the
+    // drawing area, before a single logo was placed. Narrow margins and a
+    // smaller axis face buy that back.
+    var NARROW = window.matchMedia('(max-width: 767.98px)');
+
     var css = getComputedStyle(document.documentElement);
     var COL = {
         text:   (css.getPropertyValue('--text-secondary') || '#9aa0a6').trim(),
@@ -484,6 +495,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var x=selX.value; selX.value=selY.value; selY.value=x; buildTeam();
     });
     whenPlotly(function(){ buildTeam(); wireClicks('xp-plot', 3); });
+    // Margins and axis wording are chosen per breakpoint, and Plotly's
+    // responsive resize does not revisit them — turning a phone sideways would
+    // otherwise leave phone margins on a tablet-width chart, or the reverse.
+    onBreakpoint(buildTeam);
 
     // ===================== RUN vs PASS IDENTITY =====================
     // Same visual language as the landscape above — logos as markers, dotted
@@ -593,14 +608,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function baseSplitLayout(m, xr, yr, mx, my) {
         var side = spSide === 'off' ? 'Offense' : 'Defense';
+        var narrow = NARROW.matches;
+        var fs = narrow ? 11 : 12;
+        // "Offense — rushing EPA per play" is 34 characters under a 340px
+        // plot; the side is already named by the toggle above the chart, so
+        // the phone axis carries the half that changes.
+        var pre = narrow ? '' : side + ' — ';
         return {
             paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-            font:{family:'Mona Sans, sans-serif', color:COL.text, size:12},
-            margin:{l:58, r:18, t:12, b:52}, showlegend:false, dragmode:false,
-            xaxis:{ title:{text: side + ' — rushing ' + m.label, font:{size:12,color:COL.text}},
-                    range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true },
-            yaxis:{ title:{text: side + ' — passing ' + m.label, font:{size:12,color:COL.text}},
-                    range:yr, gridcolor:COL.border, zeroline:false, fixedrange:true },
+            font:{family:'Mona Sans, sans-serif', color:COL.text, size:fs},
+            margin: narrow ? {l:42, r:8, t:8, b:42} : {l:58, r:18, t:12, b:52},
+            showlegend:false, dragmode:false,
+            xaxis:{ title:{text: pre + 'rushing ' + m.label, font:{size:fs,color:COL.text}},
+                    range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true,
+                    nticks: narrow ? 5 : undefined },
+            yaxis:{ title:{text: pre + 'passing ' + m.label, font:{size:fs,color:COL.text}},
+                    range:yr, gridcolor:COL.border, zeroline:false, fixedrange:true,
+                    nticks: narrow ? 6 : undefined },
             shapes:[
                 {type:'line', x0:mx, x1:mx, y0:yr[0], y1:yr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5},
                 {type:'line', y0:my, y1:my, x0:xr[0], x1:xr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5}
@@ -615,6 +639,7 @@ document.addEventListener('DOMContentLoaded', function () {
             setTimeout(function(){ if (e.classList.contains('is-out')) e.hidden = true; }, 240); } }
 
     spSel.addEventListener('change', buildSplit);
+    onBreakpoint(buildSplit);
     spBtns.forEach(function(b){
         b.addEventListener('click', function(){
             spSide = b.dataset.side;
@@ -802,9 +827,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     whenPlotly(function(){ buildPlayer(); wireClicks('xp-plot', 3); wirePlayerHover(); });
+    onBreakpoint(buildPlayer);
 {% endif %}
 
     // ---------- shared helpers ----------
+    // Fires once when the viewport crosses the phone breakpoint, so a chart
+    // can be redrawn at the margins and wording that width calls for. Guarded
+    // for Safari 13, which only has the deprecated addListener.
+    function onBreakpoint(fn) {
+        if (NARROW.addEventListener) NARROW.addEventListener('change', fn);
+        else if (NARROW.addListener) NARROW.addListener(fn);
+    }
     function fillStatOptions(selects, statsObj) {
         selects.forEach(function (sel) {
             var groups = {};
@@ -819,15 +852,24 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
+    function axisTitle(st) {
+        if (!st.invert) return st.label;
+        return NARROW.matches ? st.label + ' ↓' : st.label + (st.label ? '  (reversed — better)' : '');
+    }
     function baseLayout(xk, yk, xr, yr, f, statsObj) {
+        var narrow = NARROW.matches;
+        var fs = narrow ? 11 : 12;
         return {
             paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
-            font:{family:'Mona Sans, sans-serif', color:COL.text, size:12},
-            margin:{l:58, r:18, t:12, b:52}, showlegend:false, dragmode:false,
-            xaxis:{ title:{text: statsObj[xk].label + (statsObj[xk].invert?'  (reversed — right is better)':''), font:{size:12,color:COL.text}},
-                    range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true },
-            yaxis:{ title:{text: statsObj[yk].label + (statsObj[yk].invert?'  (reversed — up is better)':''), font:{size:12,color:COL.text}},
-                    range:yr, gridcolor:COL.border, zeroline:false, fixedrange:true },
+            font:{family:'Mona Sans, sans-serif', color:COL.text, size:fs},
+            margin: narrow ? {l:42, r:8, t:8, b:42} : {l:58, r:18, t:12, b:52},
+            showlegend:false, dragmode:false,
+            xaxis:{ title:{text: axisTitle(statsObj[xk]), font:{size:fs,color:COL.text}},
+                    range:xr, gridcolor:COL.border, zeroline:false, fixedrange:true,
+                    nticks: narrow ? 5 : undefined },
+            yaxis:{ title:{text: axisTitle(statsObj[yk]), font:{size:fs,color:COL.text}},
+                    range:yr, gridcolor:COL.border, zeroline:false, fixedrange:true,
+                    nticks: narrow ? 6 : undefined },
             shapes:[
                 {type:'line', x0:f.mx, x1:f.mx, y0:yr[0], y1:yr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5},
                 {type:'line', y0:f.my, y1:f.my, x0:xr[0], x1:xr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5}

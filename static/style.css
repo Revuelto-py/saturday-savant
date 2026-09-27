@@ -2634,8 +2634,14 @@ body.cmp-exporting .cmp-val { font-variant-numeric: normal; }
     /* The skeleton is absolutely positioned, so without this the wrapper has
        no height of its own and the region collapses to nothing until Plotly
        sizes the figure — the skeleton was drawing into a 0px box and the page
-       jumped when the chart appeared. Matches .xp-plot's height. */
-    min-height: 640px;
+       jumped when the chart appeared.
+
+       Reads the same token .xp-plot does. It used to carry its own 640px with
+       a comment saying "matches .xp-plot's height", and then the phone
+       override cut .xp-plot to 440 and left this at 640 — every chart on a
+       phone sat above 200px of empty card. Two numbers that must agree are
+       now one. */
+    min-height: var(--xp-plot-h);
 }
 .xp-skel {
     position: absolute;
@@ -5321,6 +5327,13 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     cursor: pointer;
     transition: color 0.15s, background-color 0.15s;
 }
+/* Desktop keeps the icon square; the label only appears where the button is a
+   full-width row (see the phone block below). */
+.xp-swap-text {
+    display: none;
+    font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.04em;
+}
 .xp-swap:hover { color: var(--text-primary); background: rgba(255,255,255,0.1); }
 .xp-swap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .xp-swap:active { transform: translateY(1px); }
@@ -5331,7 +5344,10 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
     border-radius: var(--r-lg);
     padding: var(--s4) var(--s3) var(--s2);
 }
-.xp-plot { width: 100%; height: 640px; }
+/* The one chart height. .xp-plot-wrap reads the same token so the skeleton box
+   and the figure can never disagree again. */
+:root { --xp-plot-h: 640px; }
+.xp-plot { width: 100%; height: var(--xp-plot-h); }
 .xp-legend {
     display: flex; align-items: center; gap: var(--s4);
     padding: var(--s2) var(--s3) var(--s2);
@@ -5342,12 +5358,38 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .xp-key--avg { border-top: 1px dotted var(--text-dim); }
 .xp-legend-note { margin-left: auto; color: var(--text-dim); }
 @media (max-width: 767.98px) {
+    /* Taller than the old 440 and shaped for a phone: a scatter of 138 logos
+       needs vertical room more than a laptop does, because the width it has to
+       spread them across is a third of one. */
+    :root { --xp-plot-h: 68svh; }
     .xp-head { flex-direction: column; }
-    .xp-head .season-select { align-self: flex-end; }
-    .xp-controls .lb-filter-group { flex: 1 1 40%; }
+    /* Was pinned right on a line of its own, which read as a stray control
+       rather than the season filter for everything under it. */
+    .xp-head .season-select { align-self: stretch; width: 100%; }
+    /* One control per row. At 40% each, the two axis selects came out ~150px
+       wide and clipped their own options: "Offensive Rating" and "Defensive
+       Rating" both lost their tails behind the chevron. */
+    .xp-controls .lb-filter-group { flex: 1 1 100%; }
     .xp-controls .lb-select { min-width: 0; width: 100%; }
+    /* The swap control becomes a labelled row between the two selects it
+       swaps, at a real tap size. An icon-only 38px square between two
+       full-width selects reads as an orphan and misses the 44px floor. */
+    .xp-swap { width: 100%; height: 44px; gap: var(--s2); }
+    .xp-swap-text { display: inline; }
+    .xp-check {
+        flex: 1 1 100%;
+        align-self: flex-start;
+        min-height: 44px;
+        padding-bottom: 0;
+    }
     .xp-hint { display: none; }
-    .xp-plot { height: 440px; }
+    .xp-legend { flex-wrap: wrap; row-gap: var(--s1); }
+    .xp-legend-note { margin-left: 0; flex: 1 1 100%; }
+}
+/* Below the phone floor svh can get short enough to squeeze the chart into a
+   band; hold a floor so it stays a chart. */
+@media (max-width: 767.98px) and (max-height: 700px) {
+    :root { --xp-plot-h: 460px; }
 }
 
 /* ── Stat Explorer: player scope + bubble controls ──────────────────────── */
