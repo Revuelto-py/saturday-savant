@@ -5611,7 +5611,8 @@ def team(team_ref):
                     -- Savant Forecast win probability from this team's side; used
                     -- to flag not-yet-played games as projected W/L (the same
                     -- probabilities the projected record sums).
-                    CASE WHEN g.home_team=%s THEN gp.home_prob ELSE 1 - gp.home_prob END
+                    CASE WHEN g.home_team=%s THEN gp.home_prob ELSE 1 - gp.home_prob END,
+                    COALESCE(g.neutral_site, 0)
                 FROM games g
                 LEFT JOIN teams t1 ON g.home_team=t1.name
                 LEFT JOIN teams t2 ON g.away_team=t2.name
@@ -5629,7 +5630,7 @@ def team(team_ref):
                 # 6 - 8pm ET start" beside an opponent is scheduling scaffolding,
                 # not a title. Positions are preserved for the template.
                 out.append(r[:8] + (event_name(r[8]), r[9], r[10],
-                                    kd, kt, rivalry, win_prob))
+                                    kd, kt, rivalry, win_prob, bool(r[14])))
             return out
 
         # Each season view shows only its own schedule now (the upcoming season
@@ -5643,7 +5644,8 @@ def team(team_ref):
         # Résumé (vs Savant top-10/25/50) and, for the season in progress, how
         # hard the rest of the schedule is — both keyed on current Savant ranks.
         _paths = _savant_paths(season)
-        resume = _team_resume(schedule, _paths['ranks'])
+        resume = _team_resume(schedule, _paths['ranks'], _paths['net'])
+        played_path = _paths['played'].get(team_name)
         remaining_path = _paths['remaining'].get(team_name) if is_current else None
 
         # Every view shows the roster for the season being viewed — 2016-2025
@@ -5964,7 +5966,7 @@ def team(team_ref):
                 schedule=schedule, schedule_next=schedule_next,
                 roster=roster, lineup=lineup, starter_meta=starter_meta,
                 schedule_has_projections=schedule_has_projections,
-                resume=resume, remaining_path=remaining_path,
+                resume=resume, played_path=played_path, remaining_path=remaining_path,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
                 kicking_stats=kicking_stats, punting_stats=punting_stats,
@@ -6355,67 +6357,82 @@ def _savant_movers(season, n=5):
 
 @cache.memoize(timeout=21600)
 def _savant_paths(season):
-    """Savant ranks and remaining-schedule difficulty for every rated team in
-    `season`: {'ranks': {team: net_ranking}, 'remaining': {team: {...}}}.
-
-    Remaining difficulty = mean Net Savant Rating of the team's unplayed
-    opponents that HAVE a rating (FCS opponents are counted separately, not
-    guessed), ranked 1 = hardest among teams with a rated game left. It ignores
-    home/away — a deliberate simplification the page states."""
+    """Savant ranks/ratings plus schedule strength for every rated team in
+    `season`: {'ranks', 'net', 'played', 'remaining'}. `played` and `remaining`
+    map team -> {'avg', 'n', 'unrated', 'rank', 'of'}: the mean Net Savant
+    Rating of the opponents faced / still to face that HAVE a rating (FCS
+    opponents are counted separately, not guessed), ranked 1 = hardest. Both
+    ignore home/away — a deliberate simplification the page states."""
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute("""SELECT team, net_rating, net_ranking FROM savant_ratings
-                        WHERE season = %s AND net_rating IS NOT NULL""", (season,))
-        net, ranks = {}, {}
-        for t, v, rk in cur.fetchall():
-            net[t] = v; ranks[t] = rk
-        cur.execute("""SELECT home_team, away_team FROM games
-                        WHERE season = %s AND completed = 0""", (season,))
-        left = {}
-        for h, a in cur.fetchall():
+        # FBS only, per season (the standings' test). Seasons before the
+        # 2026-09 FCS-list fix still carry a few FCS rows in savant_ratings;
+        # ranks are re-derived here so those never count as opponents or
+        # inflate "of N". Falls back to every row when SP+ is missing.
+        cur.execute(f"""SELECT r.team, r.net_rating FROM savant_ratings r
+                         WHERE r.season = %s AND r.net_rating IS NOT NULL
+                           AND (r.team IN (SELECT t FROM {_FBS_SET} f WHERE f.s = %s)
+                                OR NOT EXISTS (SELECT 1 FROM sp_ratings WHERE season = %s))""",
+                    (season, season, season))
+        net = dict(cur.fetchall())
+        ranks = {t: i for i, t in enumerate(sorted(net, key=lambda t: -net[t]), 1)}
+        cur.execute("""SELECT home_team, away_team, completed FROM games
+                        WHERE season = %s""", (season,))
+        opps = {'played': {}, 'remaining': {}}
+        for h, a, done in cur.fetchall():
+            bucket = opps['played' if done else 'remaining']
             for team, opp in ((h, a), (a, h)):
                 if team in net:
-                    left.setdefault(team, []).append(opp)
+                    bucket.setdefault(team, []).append(opp)
     except Exception:
         conn.rollback()
-        return {'ranks': {}, 'remaining': {}}
+        return {'ranks': {}, 'net': {}, 'played': {}, 'remaining': {}}
     finally:
         release_db(conn)
-    remaining = {}
-    for team, opps in left.items():
-        rated = [net[o] for o in opps if o in net]
-        if rated:
-            remaining[team] = {'avg': sum(rated) / len(rated), 'n': len(rated),
-                               'unrated': len(opps) - len(rated)}
-    order = sorted(remaining, key=lambda t: -remaining[t]['avg'])
-    for i, t in enumerate(order, 1):
-        remaining[t]['rank'] = i
-        remaining[t]['of'] = len(order)
-    return {'ranks': ranks, 'remaining': remaining}
+    out = {'ranks': ranks, 'net': net}
+    for key, by_team in opps.items():
+        agg = {}
+        for team, opp_list in by_team.items():
+            rated = [net[o] for o in opp_list if o in net]
+            if rated:
+                agg[team] = {'avg': sum(rated) / len(rated), 'n': len(rated),
+                             'unrated': len(opp_list) - len(rated)}
+        for i, t in enumerate(sorted(agg, key=lambda t: -agg[t]['avg']), 1):
+            agg[t]['rank'] = i
+            agg[t]['of'] = len(agg)
+        out[key] = agg
+    return out
 
 
-def _team_resume(schedule, ranks):
-    """W-L against Savant top-10/25/50 opponents (cumulative tiers, by the
-    opponents' CURRENT rank) from _team_schedule rows, plus the best win.
-    None when nothing has been played against a rated opponent."""
-    tiers = {10: [0, 0], 25: [0, 0], 50: [0, 0]}
-    best = None
-    played = 0
+def _team_resume(schedule, ranks, net):
+    """A season's résumé from _team_schedule rows, keyed on opponents' CURRENT
+    Savant rank: W-L against the top 10/25/50 (cumulative tiers), the best wins
+    and worst losses, and every completed game ordered by opponent strength
+    (unrated FCS opponents last). None before any game is played."""
+    games = []
     for g in schedule:
-        if not g[10] or g[4] is None or g[5] is None or g[2] not in ranks:
+        if not g[10] or g[4] is None or g[5] is None:
             continue
-        played += 1
-        rk, won = ranks[g[2]], g[4] > g[5]
-        for cut, wl in tiers.items():
-            if rk <= cut:
-                wl[0 if won else 1] += 1
-        if won and (best is None or rk < best['rank']):
-            best = {'opp': g[2], 'rank': rk, 'pf': g[4], 'pa': g[5],
-                    'game_id': g[0], 'site': g[1]}
-    if not played:
+        games.append({'game_id': g[0], 'opp': g[2], 'logo': g[9], 'week': g[6],
+                      'post': 'POSTSEASON' in (g[7] or ''),
+                      'site': 'N' if g[15] else ('vs' if g[1] == 'home' else '@'),
+                      'pf': g[4], 'pa': g[5], 'won': g[4] > g[5],
+                      'rank': ranks.get(g[2]), 'net': net.get(g[2])})
+    if not games:
         return None
-    return {'tiers': [(cut, wl[0], wl[1]) for cut, wl in tiers.items()], 'best': best}
+    games.sort(key=lambda x: (x['rank'] is None, x['rank'] or 0))
+    rated = [x for x in games if x['rank'] is not None]
+    tiers = [(cut, sum(1 for x in rated if x['rank'] <= cut and x['won']),
+              sum(1 for x in rated if x['rank'] <= cut and not x['won']))
+             for cut in (10, 25, 50)]
+    wins = [x for x in games if x['won']]
+    losses = [x for x in games if not x['won']]
+    return {'tiers': tiers, 'games': games,
+            'best_wins': wins[:3],
+            # worst first: the lowest-ranked opponent, and FCS below all of them
+            'losses': list(reversed(losses))}
+
 
 def _team_adv_from_row(ts):
     """A `SELECT * FROM team_stats` row as the advanced-metric dict the site

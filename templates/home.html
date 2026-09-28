@@ -57,38 +57,44 @@
         <p class="slate-empty">No games are scheduled for {% if season_type == 'postseason' %}the {{ home_season }} postseason{% else %}Week {{ selected_week }} of {{ home_season }}{% endif %}. Pick another week above, or see the <a href="/games">full season schedule</a>.</p>
         {% endif %}
       </section>
+
+      {% if movers and (movers.up or movers.down) %}
+      {# Week-over-week Net Savant Rating change, under the slate. Direction is
+         carried by the arrow and the sign, not by colour alone. #}
+      <section class="mv-card" aria-labelledby="mvTitle">
+        <div class="slate-head">
+            <h2 class="section-label" id="mvTitle">Savant Movers
+                <span class="section-label-season">Week {{ movers.prev_week }} → {{ movers.week }}</span>
+            </h2>
+            <a class="slate-head-note tg-all" href="/savant-rating">How the rating works →</a>
+        </div>
+        <p class="slate-caption">The biggest changes in Net Savant Rating since last week.</p>
+        <div class="mv-cols">
+            {% for label, rows, up in (('Rising', movers.up, true), ('Falling', movers.down, false)) %}
+            {% if rows %}
+            <div class="leader-card mv-col">
+                <h3 class="mv-group">{{ label }}</h3>
+                {% for m in rows %}
+                <a class="leader-row mv-row" href="{{ team_url(m.team, home_season) }}">
+                    {% if m.logo %}<img class="mv-logo" src="{{ m.logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}
+                    <div style="flex:1;min-width:0">
+                        <span class="leader-name">{{ m.team }}</span>
+                        <div class="leader-team">#{{ m.prev_rank }} → #{{ m.rank }}</div>
+                    </div>
+                    <span class="mv-delta {{ 'is-up' if up else 'is-down' }}"><span aria-hidden="true">{{ '▲' if up else '▼' }}</span> {{ ('%+.1f'|format(m.delta)).replace('-', '−') }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+      </section>
+      {% endif %}
     </div>
 
     <!-- Leaders Section -->
     <div class="col-lg-4">
       <div class="leader-rail">
-        {% if movers and (movers.up or movers.down) %}
-        {# Week-over-week Net Savant Rating change. Direction is carried by the
-           arrow and the sign, not by colour alone. #}
-        <section class="leader-card mv-card" aria-labelledby="mvTitle">
-            <div class="leader-head">
-                <h2 class="section-label" id="mvTitle">Savant Movers</h2>
-                <a class="leader-viewall" href="/savant-rating">How it works →</a>
-            </div>
-            <p class="mv-sub">Change in Net Savant Rating, Week {{ movers.prev_week }} → {{ movers.week }}</p>
-            {% for label, rows, up in (('Rising', movers.up, true), ('Falling', movers.down, false)) %}
-            {% if rows %}
-            <h3 class="mv-group">{{ label }}</h3>
-            {% for m in rows %}
-            <a class="leader-row mv-row" href="{{ team_url(m.team, home_season) }}">
-                {% if m.logo %}<img class="mv-logo" src="{{ m.logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}
-                <div style="flex:1;min-width:0">
-                    <span class="leader-name">{{ m.team }}</span>
-                    <div class="leader-team">#{{ m.prev_rank }} → #{{ m.rank }}</div>
-                </div>
-                <span class="mv-delta {{ 'is-up' if up else 'is-down' }}"><span aria-hidden="true">{{ '▲' if up else '▼' }}</span> {{ ('%+.1f'|format(m.delta)).replace('-', '−') }}</span>
-            </a>
-            {% endfor %}
-            {% endif %}
-            {% endfor %}
-        </section>
-        {% endif %}
-
         <div class="slate-head">
             <h2 class="section-label">Season Leaders</h2>
             {% if leader_seasons and leader_seasons|length > 1 %}

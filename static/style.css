@@ -9791,7 +9791,6 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
 
 
 /* ── Savant Movers (home rail) ─────────────────────────────────────────── */
-.mv-sub { color: var(--text-secondary); font-size: var(--text-xs); margin: 0 0 6px; }
 .mv-group {
     color: var(--text-secondary); font-size: var(--text-xs); font-weight: 800;
     letter-spacing: 0.14em; text-transform: uppercase; margin: 10px 0 2px;
@@ -9799,6 +9798,11 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
 .mv-row { min-height: 44px; }
 .mv-row:hover { background: rgba(255,255,255,0.04); }
 .mv-row:active { background: rgba(255,255,255,0.08); }
+.mv-card { margin-top: 40px; }
+.mv-cols { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 768px) { .mv-cols { grid-template-columns: 1fr 1fr; } }
+.mv-col { margin-bottom: 0; }
+.mv-col .mv-group { margin-top: 2px; }
 .mv-card .leader-row:last-child { padding-bottom: 7px; }
 .mv-logo { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
 .mv-delta { font-weight: 800; font-size: var(--text-sm); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -9814,14 +9818,47 @@ a.gps-p:active { background: rgba(255,255,255,0.09); }
 .rs-value { color: var(--text-primary); font-size: var(--text-2xl); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .rs-value.is-empty { color: var(--text-secondary); }
 .rs-sub { margin-top: 6px; color: var(--text-secondary); font-size: var(--text-xs); }
-.rs-best {
-    display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px;
-    padding: 0 8px; margin-left: -8px; border-radius: var(--r-sm);
-    color: var(--text-secondary); font-size: var(--text-sm); text-decoration: none;
-    transition: background 0.15s, color 0.15s;
-}
-.rs-best b { color: var(--text-primary); margin-left: 0.3em; }
-.rs-best:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
-.rs-best:active { background: rgba(255,255,255,0.08); }
-.rs-best:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rs-note { color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.6; margin: 6px 0 0; }
+
+
+/* ── Résumé tab ────────────────────────────────────────────────────────── */
+.rs-intro { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; max-width: 72ch; margin: 0; }
+.rs-h3 {
+    color: var(--text-secondary); font-size: var(--text-xs); font-weight: 800;
+    letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 10px;
+}
+.rs-list { padding: 4px 16px; }
+.rs-list-row {
+    display: flex; align-items: center; gap: 12px; min-height: 52px;
+    border-bottom: 1px solid var(--border);
+}
+.rs-list-row:last-child { border-bottom: none; }
+.rs-list-row .rs-opp { flex: 1; }
+.rs-list-empty { color: var(--text-secondary); font-size: var(--text-sm); padding: 14px 0; }
+.rs-rank { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 800; min-width: 40px; font-variant-numeric: tabular-nums; }
+.rs-site { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 700; min-width: 20px; }
+.rs-num { color: var(--text-secondary); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.rs-opp {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0;
+    color: var(--text-primary); font-weight: 600; font-size: var(--text-sm); text-decoration: none;
+}
+.rs-opp img { width: 24px; height: 24px; object-fit: contain; flex-shrink: 0; }
+.rs-opp span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-opp:hover span { color: var(--accent); }
+.rs-opp:focus-visible, .rs-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+.rs-opp:active span, .rs-result:active { opacity: 0.8; }
+.rs-result {
+    display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px;
+    min-height: 44px; padding: 0 6px; border-radius: var(--r-sm);
+    color: var(--text-primary); font-size: var(--text-sm); font-weight: 700;
+    font-variant-numeric: tabular-nums; text-decoration: none; white-space: nowrap;
+    transition: background 0.15s;
+}
+.rs-result:hover { background: rgba(255,255,255,0.06); }
+.rs-wl { font-size: var(--text-xs); font-weight: 900; min-width: 14px; text-align: center; }
+.rs-result.is-w .rs-wl { color: var(--green); }
+.rs-result.is-l .rs-wl { color: #ff6b73; }   /* lifted red: var(--red) is 4.31:1 on a card */
+.rs-table-wrap { overflow-x: auto; }
+.rs-table { width: 100%; min-width: 520px; }
+.rs-table th { color: var(--text-secondary); font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 10px 12px; }
+.rs-table td { padding: 2px 12px; border-top: 1px solid var(--border); vertical-align: middle; }

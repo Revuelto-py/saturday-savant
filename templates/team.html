@@ -157,6 +157,9 @@
         <div class="tabs-bar" style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <ul class="nav nav-tabs" id="teamTabs" style="margin-top:28px;flex:1;min-width:0">
             <li class="nav-item"><button class="nav-link{{ ' active' if not tab or tab == 'overview' }}" data-bs-toggle="tab" id="tab-overview" aria-controls="overview" data-bs-target="#overview">Overview</button></li>
+            {% if resume or remaining_path %}
+            <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'resume' }}" data-bs-toggle="tab" id="tab-resume" aria-controls="resume" data-bs-target="#resume">Résumé</button></li>
+            {% endif %}
             <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'team-stats' }}" data-bs-toggle="tab" id="tab-team-stats" aria-controls="team-stats" data-bs-target="#team-stats">Team Stats</button></li>
             <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'player-stats' }}" data-bs-toggle="tab" id="tab-player-stats" aria-controls="player-stats" data-bs-target="#player-stats">Player Stats</button></li>
             <li class="nav-item"><button class="nav-link{{ ' active' if tab == 'trends' }}" data-bs-toggle="tab" id="tab-trends" aria-controls="trends" data-bs-target="#trends">Trends</button></li>
@@ -320,40 +323,6 @@
         </div>
     </div>
 
-    <!-- Résumé + remaining path — keyed on current Savant ranks -->
-    {% if resume or remaining_path %}
-    <section class="mt-4" aria-labelledby="rs-heading">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" id="rs-heading" style="margin:0;font-size: var(--text-sm)">{{ season }} Résumé{% if remaining_path %} &amp; Remaining Path{% endif %}</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-        </div>
-        <div class="row g-3">
-            {% if resume %}{% for cut, w, l in resume.tiers %}
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-3 text-center">
-                    <div class="rs-label">vs Savant Top {{ cut }}</div>
-                    <div class="rs-value{{ ' is-empty' if w + l == 0 }}">{{ w }}-{{ l }}</div>
-                </div>
-            </div>
-            {% endfor %}{% endif %}
-            {% if remaining_path %}
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-3 text-center">
-                    <div class="rs-label">Remaining schedule</div>
-                    <div class="rs-value">{{ ordinal(remaining_path.rank) }}</div>
-                    <div class="rs-sub">hardest of {{ remaining_path.of }} · opp avg {{ ('%+.1f'|format(remaining_path.avg)).replace('-', '−') }}</div>
-                </div>
-            </div>
-            {% endif %}
-        </div>
-        {% if resume and resume.best %}
-        {% set b = resume.best %}
-        <a class="rs-best" href="/game/{{ b.game_id }}">Best win:<b>#{{ b.rank }} {{ b.opp }}</b>,&nbsp;{{ b.pf }}–{{ b.pa }}{{ ' (away)' if b.site == 'away' }}</a>
-        {% endif %}
-        <p class="rs-note">Tiers use each opponent&rsquo;s current Savant rank.{% if remaining_path %} Remaining difficulty averages the Net Savant Rating of the {{ remaining_path.n }} rated opponents left{% if remaining_path.unrated %} ({{ remaining_path.unrated }} FCS opponent{{ 's' if remaining_path.unrated > 1 }} not counted){% endif %} and ignores home and away.{% endif %}</p>
-    </section>
-    {% endif %}
-
     <!-- Recruiting Rankings — program identity, kept in the Overview glance -->
     {% if recruiting %}
     <div class="mt-4">
@@ -382,6 +351,116 @@
 </div>
 <!-- ===== END OVERVIEW ===== -->
 
+
+
+<!-- ===== RÉSUMÉ ===== -->
+{# Everything keyed on CURRENT Savant ranks, so a win over a team that has
+   since surged reads as the quality win it now is. Inline, not a lazy pane:
+   it is built from the schedule rows the page already has. #}
+{% if resume or remaining_path %}
+{% macro opp_cell(x) -%}
+    <a class="row-link rs-opp" href="{{ team_url(x.opp, season) }}">
+        {% if x.logo %}<img src="{{ x.logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}
+        <span>{{ x.opp }}</span>
+    </a>
+{%- endmacro %}
+{% macro rank_txt(x) %}{{ ('#' ~ x.rank) if x.rank else 'FCS' }}{% endmacro %}
+{% macro result_link(x) -%}
+    <a class="rs-result {{ 'is-w' if x.won else 'is-l' }}" href="/game/{{ x.game_id }}" aria-label="{{ 'Won' if x.won else 'Lost' }} {{ x.pf }} to {{ x.pa }}, game details">
+        <span class="rs-wl">{{ 'W' if x.won else 'L' }}</span> {{ x.pf }}–{{ x.pa }}
+    </a>
+{%- endmacro %}
+<div class="tab-pane fade{{ ' show active' if tab == 'resume' }}" id="resume" aria-labelledby="tab-resume" tabindex="0">
+<div class="pt-4">
+    <div style="margin-bottom:20px">
+        <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Résumé</h2>
+        <p class="rs-intro">Every result measured against the opponent&rsquo;s current Savant Rating rank, so a win over a team that has since surged counts as the quality win it now is.</p>
+    </div>
+
+    <div class="row g-3">
+        {% if resume %}{% for cut, w, l in resume.tiers %}
+        <div class="col-6 col-lg">
+            <div class="dark-card p-3 text-center h-100">
+                <div class="rs-label">vs Savant Top {{ cut }}</div>
+                <div class="rs-value{{ ' is-empty' if w + l == 0 }}">{{ w }}-{{ l }}</div>
+            </div>
+        </div>
+        {% endfor %}{% endif %}
+        {% if played_path and resume %}
+        <div class="col-6 col-lg">
+            <div class="dark-card p-3 text-center h-100">
+                <div class="rs-label">Schedule so far</div>
+                <div class="rs-value">{{ ordinal(played_path.rank) }}</div>
+                <div class="rs-sub">hardest of {{ played_path.of }} · opp avg {{ ('%+.1f'|format(played_path.avg)).replace('-', '−') }}</div>
+            </div>
+        </div>
+        {% endif %}
+        {% if remaining_path %}
+        <div class="col-6 col-lg">
+            <div class="dark-card p-3 text-center h-100">
+                <div class="rs-label">Still to play</div>
+                <div class="rs-value">{{ ordinal(remaining_path.rank) }}</div>
+                <div class="rs-sub">hardest of {{ remaining_path.of }} · opp avg {{ ('%+.1f'|format(remaining_path.avg)).replace('-', '−') }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if resume %}
+    <div class="row g-4 mt-1">
+        {% for title, rows, empty in (('Best wins', resume.best_wins, 'No wins yet.'), ('Losses · worst first', resume.losses, 'No losses.')) %}
+        <div class="col-md-6">
+            <h3 class="rs-h3">{{ title }}</h3>
+            <div class="dark-card rs-list">
+                {% for x in rows %}
+                <div class="rs-list-row">
+                    <span class="rs-rank">{{ rank_txt(x) }}</span>
+                    {{ opp_cell(x) }}
+                    <span class="rs-site">{{ x.site }}</span>
+                    {{ result_link(x) }}
+                </div>
+                {% else %}
+                <div class="rs-list-empty">{{ empty }}</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3 class="rs-h3" style="margin-top:28px">Strength of schedule, by opponent faced</h3>
+    <div class="dark-card rs-table-wrap">
+        <table class="data-table rs-table">
+            <caption class="visually-hidden">{{ season }} opponents ordered by current Savant rank</caption>
+            <thead>
+                <tr>
+                    <th scope="col" style="text-align:center">Opp rank</th>
+                    <th scope="col" style="text-align:left">Opponent</th>
+                    <th scope="col" style="text-align:center">Site</th>
+                    <th scope="col" style="text-align:right">Opp Net</th>
+                    <th scope="col" style="text-align:center">Wk</th>
+                    <th scope="col" style="text-align:right">Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for x in resume.games %}
+                <tr>
+                    <td class="rs-rank" style="text-align:center">{{ rank_txt(x) }}</td>
+                    <td>{{ opp_cell(x) }}</td>
+                    <td class="rs-site" style="text-align:center">{{ x.site }}</td>
+                    <td class="rs-num" style="text-align:right">{{ ('%+.1f'|format(x.net)).replace('-', '−') if x.net is not none else '—' }}</td>
+                    <td class="rs-num" style="text-align:center">{{ 'Post' if x.post else x.week }}</td>
+                    <td style="text-align:right">{{ result_link(x) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <p class="rs-note">Ranks and Net Ratings are each opponent&rsquo;s current Savant Rating. Schedule strength averages the Net Rating of rated opponents and ignores home and away; FCS opponents have no rating and are not counted{% if played_path and played_path.unrated %} ({{ played_path.unrated }} so far){% endif %}. Site: vs = home, @ = away, N = neutral.</p>
+</div>
+</div>
+{% endif %}
 
 <!-- ===== TEAM STATS ===== -->
 <div class="tab-pane fade{{ ' show active' if tab == 'team-stats' }}" id="team-stats" aria-labelledby="tab-team-stats" tabindex="0">
