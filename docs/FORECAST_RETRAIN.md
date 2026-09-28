@@ -143,6 +143,20 @@ carry 0.45 −0.0011, + season-only Elo +0.0010 (p=0.51), + late-weighted form
 is genuine talent signal, not stale history. By 8+ games v2 already takes 7%
 from last season's ratings, 27% from roster and 53% from in-season.
 
+**Follow-up — returning production in the portal era (no change).** Prompted by
+2026 Oklahoma State (3.0% returning after a portal rebuild, 3-1 with wins over
+Oregon and at WVU, still 11% at Houston). The FBS median returning production
+fell from ~62% (2017–20) to 25–38% (2025–26), and the definition counts only
+same-school players, so a transfer's production is lost to his old team and
+zero for his new one. Every fix tested worse than v2 (walk-forward 2019–25):
+returning + incoming transfers' prior production (99% coverage, corr 0.64 with
+the old measure) replacing it −0.0036 (p=0.29), added alongside −0.0057
+(p=0.024, significantly WORSE); per-season percentile rank −0.0048 (p=0.031,
+worse); returning production early-only −0.0029 (p=0.33). Continuity at the
+same school predicts results better than imported production, all season.
+Re-check the transfers variant in January, since only 2024–25 are true portal
+seasons in the sample.
+
 **Tested the same day and NOT shipped** (same protocol):
 
 | candidate | Δacc | p | note |
