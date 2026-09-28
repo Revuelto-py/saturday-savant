@@ -133,6 +133,16 @@ above (73.5%). The 2025 backtest rows in `game_predictions` were rewritten with
 v2 (still out-of-sample: trained 2017–23, C picked on 2024) and their `contrib`
 regenerated with 0 drift. 2026 scored rows stay frozen as v1.
 
+**Follow-up the same day — "should in-season play count for more?" (no).**
+When season-to-date margin and last season's SP+ disagree (both teams ≥4 games),
+the in-form team wins ~3 pts more often than v2 says (444 games; residual vs
+form, 8+ games: t=+1.66) — a lean, not a significant bias. Every way of acting on
+it scored flat or worse (walk-forward vs v2 0.7171): Elo carry 0.3 −0.0015,
+carry 0.45 −0.0011, + season-only Elo +0.0010 (p=0.51), + late-weighted form
+−0.0004, roster inputs early-only −0.0044. The roster inputs' late-season weight
+is genuine talent signal, not stale history. By 8+ games v2 already takes 7%
+from last season's ratings, 27% from roster and 53% from in-season.
+
 **Tested the same day and NOT shipped** (same protocol):
 
 | candidate | Δacc | p | note |
