@@ -320,6 +320,40 @@
         </div>
     </div>
 
+    <!-- Résumé + remaining path — keyed on current Savant ranks -->
+    {% if resume or remaining_path %}
+    <section class="mt-4" aria-labelledby="rs-heading">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <h2 class="section-label" id="rs-heading" style="margin:0;font-size: var(--text-sm)">{{ season }} Résumé{% if remaining_path %} &amp; Remaining Path{% endif %}</h2>
+            <div style="flex:1;height:1px;background: var(--border)"></div>
+        </div>
+        <div class="row g-3">
+            {% if resume %}{% for cut, w, l in resume.tiers %}
+            <div class="col-6 col-lg-3">
+                <div class="dark-card p-3 text-center">
+                    <div class="rs-label">vs Savant Top {{ cut }}</div>
+                    <div class="rs-value{{ ' is-empty' if w + l == 0 }}">{{ w }}-{{ l }}</div>
+                </div>
+            </div>
+            {% endfor %}{% endif %}
+            {% if remaining_path %}
+            <div class="col-6 col-lg-3">
+                <div class="dark-card p-3 text-center">
+                    <div class="rs-label">Remaining schedule</div>
+                    <div class="rs-value">{{ ordinal(remaining_path.rank) }}</div>
+                    <div class="rs-sub">hardest of {{ remaining_path.of }} · opp avg {{ ('%+.1f'|format(remaining_path.avg)).replace('-', '−') }}</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% if resume and resume.best %}
+        {% set b = resume.best %}
+        <a class="rs-best" href="/game/{{ b.game_id }}">Best win:<b>#{{ b.rank }} {{ b.opp }}</b>,&nbsp;{{ b.pf }}–{{ b.pa }}{{ ' (away)' if b.site == 'away' }}</a>
+        {% endif %}
+        <p class="rs-note">Tiers use each opponent&rsquo;s current Savant rank.{% if remaining_path %} Remaining difficulty averages the Net Savant Rating of the {{ remaining_path.n }} rated opponents left{% if remaining_path.unrated %} ({{ remaining_path.unrated }} FCS opponent{{ 's' if remaining_path.unrated > 1 }} not counted){% endif %} and ignores home and away.{% endif %}</p>
+    </section>
+    {% endif %}
+
     <!-- Recruiting Rankings — program identity, kept in the Overview glance -->
     {% if recruiting %}
     <div class="mt-4">

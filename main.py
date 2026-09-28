@@ -3223,7 +3223,8 @@ def home(week=None, season_type='regular'):
         leaders=leaders, ap_rankings=ap_rankings,
         forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
-        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id)
+        fbs_team_count=fbs_team_count, featured_game_id=featured_game_id,
+        movers=_savant_movers(home_season))
 
 @app.route('/games')
 @cache.cached(timeout=21600, query_string=True)
@@ -5639,6 +5640,12 @@ def team(team_ref):
         # W/L badges (drives the schedule legend).
         schedule_has_projections = any(g[10] == 0 and g[14] is not None for g in schedule)
 
+        # Résumé (vs Savant top-10/25/50) and, for the season in progress, how
+        # hard the rest of the schedule is — both keyed on current Savant ranks.
+        _paths = _savant_paths(season)
+        resume = _team_resume(schedule, _paths['ranks'])
+        remaining_path = _paths['remaining'].get(team_name) if is_current else None
+
         # Every view shows the roster for the season being viewed — 2016-2025
         # from that year's rosters table, 2026 from the current active roster.
         roster_season = season
@@ -5957,6 +5964,7 @@ def team(team_ref):
                 schedule=schedule, schedule_next=schedule_next,
                 roster=roster, lineup=lineup, starter_meta=starter_meta,
                 schedule_has_projections=schedule_has_projections,
+                resume=resume, remaining_path=remaining_path,
                 passing_stats=passing_stats, rushing_stats=rushing_stats,
                 receiving_stats=receiving_stats, defensive_stats=defensive_stats,
                 kicking_stats=kicking_stats, punting_stats=punting_stats,
@@ -6274,6 +6282,141 @@ def _game_market(game_id):
             'total': float(row[1]) if row[1] is not None else None}
 
 
+
+def _game_weather(game_id):
+    """Conditions for one game from game_weather (CFBD), or None.
+
+    Rows exist for every season from 2016; for a game not yet played CFBD's row
+    is a forecast, refreshed by the weekly chain, so the caller labels it as
+    one. Returns {'parts': [...], 'indoors': bool}; parts are display strings
+    in reading order (temperature, wind, condition, precipitation)."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT temperature, wind_speed, precipitation, snowfall,
+                              weather_condition, game_indoors
+                         FROM game_weather WHERE game_id = %s""", (game_id,))
+        row = cur.fetchone()
+    except Exception:
+        conn.rollback()          # table absent on a fresh DB
+        row = None
+    finally:
+        release_db(conn)
+    if not row or row[0] is None:
+        return None
+    temp, wind, precip, snow, cond, indoors = row
+    if indoors:
+        return {'parts': ['Indoors'], 'indoors': True}
+    parts = [f'{temp:.0f}°F']
+    if wind is not None:
+        parts.append(f'Wind {wind:.0f} mph')
+    if cond:
+        parts.append(cond)
+    if snow and snow >= 0.1:
+        parts.append(f'{snow:.1f} in snow')
+    elif precip and precip >= 0.01:     # hourly inches; a trace reads 0.00
+        parts.append(f'{precip:.2f} in rain')
+    return {'parts': parts, 'indoors': False}
+
+
+@cache.memoize(timeout=21600)
+def _savant_movers(season, n=5):
+    """Biggest week-over-week Net Savant Rating changes for `season`: the two
+    latest regular-season snapshots in savant_weekly (week 20 is the postseason
+    sentinel, not a week). None until two weeks exist."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT DISTINCT week FROM savant_weekly
+                        WHERE season = %s AND week < 20 ORDER BY week DESC LIMIT 2""", (season,))
+        weeks = [r[0] for r in cur.fetchall()]
+        if len(weeks) < 2:
+            return None
+        cur.execute("""SELECT c.team, c.net_rating, c.net_ranking,
+                              c.net_rating - p.net_rating, p.net_ranking, t.logo_dark, t.logo
+                         FROM savant_weekly c
+                         JOIN savant_weekly p ON p.team = c.team AND p.season = c.season AND p.week = %s
+                         JOIN teams t ON t.name = c.team
+                        WHERE c.season = %s AND c.week = %s
+                          AND c.net_rating IS NOT NULL AND p.net_rating IS NOT NULL""",
+                    (weeks[1], season, weeks[0]))
+        rows = [{'team': r[0], 'net': r[1], 'rank': r[2], 'delta': r[3],
+                 'prev_rank': r[4], 'logo': r[5] or r[6]} for r in cur.fetchall()]
+    except Exception:
+        conn.rollback()          # savant_weekly absent on a fresh DB
+        return None
+    finally:
+        release_db(conn)
+    rows.sort(key=lambda r: r['delta'])
+    return {'week': weeks[0], 'prev_week': weeks[1],
+            'up': [r for r in reversed(rows[-n:]) if r['delta'] > 0],
+            'down': [r for r in rows[:n] if r['delta'] < 0]}
+
+
+@cache.memoize(timeout=21600)
+def _savant_paths(season):
+    """Savant ranks and remaining-schedule difficulty for every rated team in
+    `season`: {'ranks': {team: net_ranking}, 'remaining': {team: {...}}}.
+
+    Remaining difficulty = mean Net Savant Rating of the team's unplayed
+    opponents that HAVE a rating (FCS opponents are counted separately, not
+    guessed), ranked 1 = hardest among teams with a rated game left. It ignores
+    home/away — a deliberate simplification the page states."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT team, net_rating, net_ranking FROM savant_ratings
+                        WHERE season = %s AND net_rating IS NOT NULL""", (season,))
+        net, ranks = {}, {}
+        for t, v, rk in cur.fetchall():
+            net[t] = v; ranks[t] = rk
+        cur.execute("""SELECT home_team, away_team FROM games
+                        WHERE season = %s AND completed = 0""", (season,))
+        left = {}
+        for h, a in cur.fetchall():
+            for team, opp in ((h, a), (a, h)):
+                if team in net:
+                    left.setdefault(team, []).append(opp)
+    except Exception:
+        conn.rollback()
+        return {'ranks': {}, 'remaining': {}}
+    finally:
+        release_db(conn)
+    remaining = {}
+    for team, opps in left.items():
+        rated = [net[o] for o in opps if o in net]
+        if rated:
+            remaining[team] = {'avg': sum(rated) / len(rated), 'n': len(rated),
+                               'unrated': len(opps) - len(rated)}
+    order = sorted(remaining, key=lambda t: -remaining[t]['avg'])
+    for i, t in enumerate(order, 1):
+        remaining[t]['rank'] = i
+        remaining[t]['of'] = len(order)
+    return {'ranks': ranks, 'remaining': remaining}
+
+
+def _team_resume(schedule, ranks):
+    """W-L against Savant top-10/25/50 opponents (cumulative tiers, by the
+    opponents' CURRENT rank) from _team_schedule rows, plus the best win.
+    None when nothing has been played against a rated opponent."""
+    tiers = {10: [0, 0], 25: [0, 0], 50: [0, 0]}
+    best = None
+    played = 0
+    for g in schedule:
+        if not g[10] or g[4] is None or g[5] is None or g[2] not in ranks:
+            continue
+        played += 1
+        rk, won = ranks[g[2]], g[4] > g[5]
+        for cut, wl in tiers.items():
+            if rk <= cut:
+                wl[0 if won else 1] += 1
+        if won and (best is None or rk < best['rank']):
+            best = {'opp': g[2], 'rank': rk, 'pf': g[4], 'pa': g[5],
+                    'game_id': g[0], 'site': g[1]}
+    if not played:
+        return None
+    return {'tiers': [(cut, wl[0], wl[1]) for cut, wl in tiers.items()], 'best': best}
+
 def _team_adv_from_row(ts):
     """A `SELECT * FROM team_stats` row as the advanced-metric dict the site
     displays: rates scaled to percentages, everything else rounded the way each
@@ -6588,6 +6731,7 @@ def game_detail(game_id):
             # Matchup preview: each side's season form, plus the market's
             # read on the game. Only assembled for games not yet played.
             market=_game_market(game_id),
+            weather=_game_weather(game_id),
             preview={'away': _preview_team(away_team, game_season),
                      'home': _preview_team(home_team, game_season)},
             # Projected starters for both sides, position against position. Only
@@ -7540,6 +7684,7 @@ def game_detail(game_id):
         venue_location=venue_location,
         attendance_fmt=attendance_fmt,
         tv_broadcast=tv_broadcast,
+        weather=_game_weather(game_id),
         plays=plays,
         team_stats=team_stats,
         home_stats=home_stats,

@@ -329,6 +329,19 @@
 {# ── MAIN PAGE CONTENT ─────────────────────────────────────────────────────── #}
 <div class="page-wrapper" style="padding-top:24px">
 
+{# Weather, shared by the upcoming and completed layouts. CFBD's row for an
+   unplayed game is a forecast refreshed weekly by the pipeline — labelled as
+   one so a Sunday forecast isn't read as Saturday's weather. #}
+{% macro weather_row() %}
+    <div class="gi-row">
+        <svg class="gi-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></svg>
+        <div>
+            <div class="t-meta" style="font-size: var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">{{ 'Forecast · updated weekly' if is_scheduled else 'Kickoff conditions' }}</div>
+            <div class="t-label" style="font-size: var(--text-base)">{{ weather.parts|join(' · ') }}</div>
+        </div>
+    </div>
+{% endmacro %}
+
 {% if is_scheduled %}
 {# ── UPCOMING GAME — no box score / drives / win prob until it's played ──────
    The hero already carries the matchup, the kickoff date and time, and the
@@ -591,6 +604,10 @@
         </div>
         {% endif %}
     </section>
+    {% endif %}
+
+    {% if weather %}
+    <div class="dark-card mb-3" style="padding:4px 20px">{{ weather_row() }}</div>
     {% endif %}
 
     <div class="dark-card sched-empty">
@@ -1180,6 +1197,8 @@ if (typeof Plotly !== 'undefined') {
         </div>
     </div>
     {% endif %}
+
+    {% if weather %}{{ weather_row() }}{% endif %}
 
     {% if attendance_fmt %}
     <div class="gi-row">
