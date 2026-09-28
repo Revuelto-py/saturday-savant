@@ -186,15 +186,19 @@ html {
     padding-right: 0.5rem;
     border-right: 1px solid var(--border);
 }
+.ticker-wp-crest { display: flex; align-items: center; gap: 4px; }
 .ticker-wp-crest img { display: block; object-fit: contain; }
+/* Keys each crest to its line (colour set inline, per team). */
+.ticker-wp-key { display: block; width: 3px; height: 14px; border-radius: 2px; }
 
 .ticker-wp-body { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
 .ticker-wp-chart { flex: 1 1 auto; min-height: 0; display: block; }
 .ticker-wp-svg { display: block; }
 /* The line is the reading; the fill only gives it a body. */
-.ticker-wp-area { fill: rgba(28,156,240,0.20); stroke: none; }
-.ticker-wp-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
-.ticker-wp-dot  { fill: var(--accent); }
+/* Colours come inline per team (the game page's line colours); the fill is
+   kept faint so the two areas can overlap without muddying the lines. */
+.ticker-wp-area { fill-opacity: 0.12; stroke: none; }
+.ticker-wp-line { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
 /* Even. Without it the shape says how the game moved but not which side of the
    coin flip it was on. */
 .ticker-wp-mid  { stroke: rgba(255,255,255,0.22); stroke-width: 1; stroke-dasharray: 3 3; }

@@ -603,7 +603,7 @@
                     {%- else %}Final{% endif -%}
                 </div>
                 {% for side in [g.away, g.home] %}
-                <div class="ticker-team">
+                <div class="ticker-team" data-color="{{ side.color }}">
                     {% if side.logo %}<img src="{{ side.logo }}" alt="" loading="lazy" width="16" height="16">{% endif %}
                     <span class="ticker-name{{ ' won' if side.won else '' }}">
                         {% if side.rank %}<span class="ticker-rank">{{ side.rank }}</span>{% endif %}{{ side.abbr }}
@@ -983,22 +983,44 @@
             return pending;
         }
 
-        // Home win probability as a line over its own fill, with the 50% mark
-        // drawn in — the shape alone doesn't say which side of even it is on.
-        // Sized to the box it is going into, so the stroke never gets scaled
-        // unevenly the way a stretched viewBox would do it.
-        function spark(series, W, H) {
+        // Both teams' win probability, one line each in the team's colour over
+        // a faint fill — the same picture as the game page's chart (which draws
+        // away and home as mirror lines), with the 50% mark drawn in. Sized to
+        // the box it is going into, so the stroke never gets scaled unevenly
+        // the way a stretched viewBox would do it.
+        function lum(rgb) {
+            var a = rgb.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+            return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
+        }
+        // Lighten a dark brand colour until it reads on the dark bar — the
+        // game page's readableLineColor, so the two charts use one colour.
+        function lineColor(hex) {
+            var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+            var rgb = m ? [0, 2, 4].map(function (i) { return parseInt(m[1].substr(i, 2), 16); }) : [148, 154, 159];
+            for (var g = 0; lum(rgb) < 0.16 && g < 12; g++) rgb = rgb.map(function (v) { return v + (255 - v) * 0.22; });
+            return 'rgb(' + rgb.map(Math.round).join(',') + ')';
+        }
+        function spark(series, W, H, awayC, homeC) {
             var P = 2, n = series.length, iw = W - P * 2, ih = H - P * 2;
             var xs = function (i) { return P + (n === 1 ? iw / 2 : i * iw / (n - 1)); };
             var ys = function (v) { return P + (100 - v) * ih / 100; };
-            var d = '', i;
-            for (i = 0; i < n; i++) d += (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(series[i]).toFixed(1);
-            var area = d + 'L' + xs(n - 1).toFixed(1) + ' ' + (H - P) + 'L' + xs(0).toFixed(1) + ' ' + (H - P) + 'Z';
+            function path(f) {
+                var d = '';
+                for (var i = 0; i < n; i++) d += (i ? 'L' : 'M') + xs(i).toFixed(1) + ' ' + ys(f(series[i])).toFixed(1);
+                return d;
+            }
+            function side(f, c) {
+                var d = path(f);
+                var area = d + 'L' + xs(n - 1).toFixed(1) + ' ' + (H - P) + 'L' + xs(0).toFixed(1) + ' ' + (H - P) + 'Z';
+                return '<path class="ticker-wp-area" style="fill:' + c + '" d="' + area + '"/>' +
+                       '<path class="ticker-wp-line" style="stroke:' + c + '" d="' + d + '"/>' +
+                       '<circle class="ticker-wp-dot" style="fill:' + c + '" cx="' + xs(n - 1).toFixed(1) + '" cy="' + ys(f(series[n - 1])).toFixed(1) + '" r="2.2"/>';
+            }
+            var mid = ys(50).toFixed(1);
             return '<svg class="ticker-wp-svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" aria-hidden="true">' +
-                   '<path class="ticker-wp-area" d="' + area + '"/>' +
-                   '<line class="ticker-wp-mid" x1="' + P + '" y1="' + ys(50).toFixed(1) + '" x2="' + (W - P) + '" y2="' + ys(50).toFixed(1) + '"/>' +
-                   '<path class="ticker-wp-line" d="' + d + '"/>' +
-                   '<circle class="ticker-wp-dot" cx="' + xs(n - 1).toFixed(1) + '" cy="' + ys(series[n - 1]).toFixed(1) + '" r="2.2"/>' +
+                   '<line class="ticker-wp-mid" x1="' + P + '" y1="' + mid + '" x2="' + (W - P) + '" y2="' + mid + '"/>' +
+                   side(function (v) { return 100 - v; }, awayC) +
+                   side(function (v) { return v; }, homeC) +
                    '</svg>';
         }
 
@@ -1027,11 +1049,17 @@
             }
             if (box.dataset.built) { item.classList.add('wp-on'); return; }
 
+            var colors = Array.prototype.map.call(teams, function (t) {
+                return lineColor(t.getAttribute('data-color'));
+            });
             var logos = '';
-            Array.prototype.forEach.call(teams, function (t) {
+            Array.prototype.forEach.call(teams, function (t, i) {
                 var img = t.querySelector('img');
+                // A swatch per crest keys each line to its team, as the game
+                // page's legend does.
                 logos += '<span class="ticker-wp-crest">' +
                     (img ? '<img src="' + img.getAttribute('src') + '" alt="" width="18" height="18">' : '') +
+                    '<i class="ticker-wp-key" style="background:' + colors[i] + '"></i>' +
                     '</span>';
             });
             var last = series[series.length - 1];
@@ -1049,7 +1077,7 @@
             var slot = box.querySelector('.ticker-wp-chart');
             var w = Math.max(60, Math.round(slot.clientWidth));
             var h = Math.max(26, Math.round(slot.clientHeight));
-            slot.innerHTML = spark(series, w, h);
+            slot.innerHTML = spark(series, w, h, colors[0], colors[1]);
             box.dataset.built = '1';
             // Named in text as well as drawn, so the cell still says something
             // to a reader who cannot use the line.

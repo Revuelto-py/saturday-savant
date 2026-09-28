@@ -2688,7 +2688,8 @@ def get_ticker_data():
         cursor.execute('''
             SELECT g.away_team, g.away_points, g.home_team, g.home_points,
                    ta.abbreviation, th.abbreviation, ta.logo_dark, th.logo_dark,
-                   g.id, g.notes, g.completed, g.start_date, g.start_time_tbd
+                   g.id, g.notes, g.completed, g.start_date, g.start_time_tbd,
+                   ta.color, th.color
             FROM games g
             LEFT JOIN teams th ON g.home_team = th.name
             LEFT JOIN teams ta ON g.away_team = ta.name
@@ -2696,7 +2697,8 @@ def get_ticker_data():
         ''', (season, week, stype))
         games = []
         for (away, apts, home, hpts, a_abbr, h_abbr, a_logo, h_logo,
-             gid, notes, completed, start_date, time_tbd) in cursor.fetchall():
+             gid, notes, completed, start_date, time_tbd,
+             a_color, h_color) in cursor.fetchall():
             # Same rule the game cards use: points on a row that is not
             # complete means the game is under way.
             if completed:
@@ -2713,10 +2715,14 @@ def get_ticker_data():
                 'round': _ticker_game_label(notes),
                 'kickoff': kick_time,
                 'sort_time': et.isoformat() if et else '',
+                # Line colours for the hover win-probability chart: the same
+                # team_hex rule and fallbacks the game page's chart uses.
                 'away': {'abbr': a_abbr or away, 'pts': apts, 'logo': a_logo,
+                         'color': team_hex(a_color, '#7f1d1d'),
                          'rank': ranks.get(away),
                          'won': state == 'final' and (apts or 0) > (hpts or 0)},
                 'home': {'abbr': h_abbr or home, 'pts': hpts, 'logo': h_logo,
+                         'color': team_hex(h_color, '#1e3a5f'),
                          'rank': ranks.get(home),
                          'won': state == 'final' and (hpts or 0) > (apts or 0)},
             })

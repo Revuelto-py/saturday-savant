@@ -268,7 +268,20 @@
     var prog = gl.createProgram();
     gl.attachShader(prog, vs); gl.attachShader(prog, fs);
     gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+    // Asking for LINK_STATUS blocks the main thread until the driver has
+    // finished compiling — tens to hundreds of ms on some Windows/ANGLE
+    // drivers, landing on page load. Where the browser compiles in parallel,
+    // wait for it off-thread first and only then ask.
+    var par = gl.getExtension('KHR_parallel_shader_compile');
+    (function ready() {
+        if (par && !gl.getProgramParameter(prog, par.COMPLETION_STATUS_KHR)) {
+            requestAnimationFrame(ready);
+            return;
+        }
+        if (gl.getProgramParameter(prog, gl.LINK_STATUS)) start();
+    })();
+
+    function start() {
     gl.useProgram(prog);
 
     function attrib(name, data, size) {
@@ -286,7 +299,7 @@
     ['uMV', 'uProj', 'uP22', 'uP32', 'uShield', 'uShieldB', 'uAssemble', 'uBreak', 'uTime', 'uPx', 'uScale', 'uOpacity', 'uMaxPt'].forEach(function (n) {
         U[n] = gl.getUniformLocation(prog, n);
     });
-    gl.uniform1f(U.uMaxPt, gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1]);
+    var HW_MAX_PT = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE)[1];
     gl.uniform1f(U.uP22, (100 + 0.1) / (0.1 - 100));               // projection terms for FAR 100, NEAR 0.1
     gl.uniform1f(U.uP32, 2 * 100 * 0.1 / (0.1 - 100));
 
@@ -301,8 +314,11 @@
     hero.classList.add('has-ball');
 
     /* ── Column-major matrix helpers ─────────────────────────────────────── */
-    function mul(a, b) {
-        var o = new Float32Array(16);
+    // Every matrix is written into a buffer allocated once: a new Float32Array
+    // per multiply was ~10 short-lived arrays a frame, 600-1200 a second, and
+    // the collections they caused are exactly the odd dropped frame.
+    function M() { return new Float32Array(16); }
+    function mul(a, b, o) {
         for (var col = 0; col < 4; col++) for (var row = 0; row < 4; row++) {
             var s = 0;
             for (var k = 0; k < 4; k++) s += a[k * 4 + row] * b[col * 4 + k];
@@ -310,10 +326,12 @@
         }
         return o;
     }
-    function rotX(t) { var c = Math.cos(t), s = Math.sin(t); return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]); }
-    function rotY(t) { var c = Math.cos(t), s = Math.sin(t); return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]); }
-    function rotZ(t) { var c = Math.cos(t), s = Math.sin(t); return new Float32Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); }
-    function place(x, y, z, k) { return new Float32Array([k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, x, y, z, 1]); }
+    function set(o, v) { for (var j = 0; j < 16; j++) o[j] = v[j]; return o; }
+    function rotX(o, t) { var c = Math.cos(t), s = Math.sin(t); return set(o, [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]); }
+    function rotY(o, t) { var c = Math.cos(t), s = Math.sin(t); return set(o, [c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]); }
+    function rotZ(o, t) { var c = Math.cos(t), s = Math.sin(t); return set(o, [c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); }
+    function place(o, x, y, z, k) { return set(o, [k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, x, y, z, 1]); }
+    var mA = M(), mB = M(), mC = M(), mD = M(), mE = M(), mF = M(), mG = M(), mH = M(), mMV = M();
 
     var FOV = 35 * Math.PI / 180, DIST = 10, NEAR = 0.1, FAR = 100;
     var tanHalf = Math.tan(FOV / 2), halfH = tanHalf * DIST;
@@ -322,12 +340,21 @@
        fixed canvas repositioned from JS each frame lags the compositor's scroll
        on phones, which is what made the ball jitter. Its size only changes when
        the hero's does; mobile toolbar show/hide does not reallocate it. */
-    var cw = 0, ch = 0;
-    function resize() {
-        var w = canvas.clientWidth, h = canvas.clientHeight;
+    var cw = 0, ch = 0, shieldsDirty = true;
+    // Every sprite ray-marches a lit ball per pixel, so cost follows the pixel
+    // count. A budget of ~4.2M device pixels holds a 2x phone and a 1440-wide
+    // retina laptop at full sharpness, and brings a 1920-wide 2x screen from
+    // 7.2M to 4.2M pixels — each sprite antialiases its own edge, so the step
+    // down is not visible, and it keeps weaker integrated GPUs off the cliff.
+    var PIXEL_BUDGET = 4.2e6;
+    function resize(w, h) {
+        w = w || canvas.clientWidth; h = h || canvas.clientHeight;
         if (!w || !h || (w === cw && h === ch)) return;
         cw = w; ch = h;
-        var dpr = Math.min(window.devicePixelRatio || 1, cw < 700 ? 1.5 : 2);
+        shieldsDirty = true;
+        var dpr = Math.min(window.devicePixelRatio || 1, cw < 700 ? 1.5 : 2,
+                           Math.sqrt(PIXEL_BUDGET / (cw * ch)));
+        dpr = Math.max(dpr, 1);
         canvas.width = Math.round(cw * dpr);
         canvas.height = Math.round(ch * dpr);
         gl.viewport(0, 0, canvas.width, canvas.height);
@@ -338,9 +365,25 @@
             0, 0, 2 * FAR * NEAR / (NEAR - FAR), 0
         ]));
         gl.uniform1f(U.uPx, canvas.height / (2 * tanHalf));
+        // No single piece may cover more than a sixth of the canvas height: a
+        // few pieces pass close to the camera while they fly in, and at the
+        // hardware maximum each is a huge per-pixel ray-march for one frame.
+        gl.uniform1f(U.uMaxPt, Math.min(HW_MAX_PT, canvas.height / 6));
     }
-    window.addEventListener('resize', resize);
+    // Size changes arrive from a ResizeObserver, not a clientWidth read inside
+    // every frame. (The resize event stays as a fallback for old engines.)
+    if (window.ResizeObserver) {
+        new ResizeObserver(function (entries) {
+            var r = entries[0].contentRect;
+            resize(Math.round(r.width), Math.round(r.height));
+            wake();
+        }).observe(canvas);
+    } else {
+        window.addEventListener('resize', function () { resize(); });
+    }
     resize();
+    // The name and subline re-wrap when the display font arrives.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { shieldsDirty = true; wake(); });
 
     var mx = 0, my = 0, emx = 0, emy = 0;
     if (!reduce && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
@@ -351,23 +394,35 @@
     }
 
     // An element's padded box in the canvas's clip space, for the text shields.
+    // The text scrolls with the canvas, so the box only moves when the layout
+    // does: it is measured on resize / font load, not in every frame.
     function shieldBox(loc, el, pad, cr) {
         if (!el) { gl.uniform4f(loc, 2, 2, 2, 2); return; }
         var b = el.getBoundingClientRect();
         gl.uniform4f(loc, (b.left - cr.left - pad) / cw * 2 - 1, 1 - (b.bottom - cr.top + pad) / ch * 2,
                           (b.right - cr.left + pad) / cw * 2 - 1, 1 - (b.top - cr.top - pad) / ch * 2);
     }
+    function shields() {
+        var cr = canvas.getBoundingClientRect();
+        shieldBox(U.uShield, sub, 18, cr);
+        shieldBox(U.uShieldB, wm, 20, cr);
+        shieldsDirty = false;
+    }
 
     function ss(a, b, x) { x = Math.min(Math.max((x - a) / (b - a), 0), 1); return x * x * (3 - 2 * x); }
 
-    var t0 = 0, last = 0, eased = 0, running = false, cleared = false, lost = false;
+    // `clock` is animation time, advanced by at most 1/30 s a frame. Driving the
+    // motion from wall time meant any main-thread stall — another script's long
+    // task during page load, a GC — became a visible jump in the assembly; now a
+    // stall only holds the motion for that frame and it carries on smoothly.
+    var clock = 0, last = 0, eased = 0, running = false, cleared = false, lost = false;
 
     function frame(now) {
         if (lost) { running = false; return; }
-        if (!t0) { t0 = now; last = now; }
-        var t = reduce ? 0 : (now - t0) / 1000;
-        var dt = Math.min(0.05, (now - last) / 1000); last = now;
-        resize();
+        if (!last) last = now;
+        var dt = Math.min(1 / 30, Math.max(0, (now - last) / 1000)); last = now;
+        if (!reduce) clock += dt;
+        var t = clock;
         var raw = Math.max(0, window.scrollY / Math.max(ch, 1));
         // Frame-rate independent easing on the scroll link, so a 120Hz phone and
         // a 60Hz laptop move the ball the same way.
@@ -393,8 +448,9 @@
         // Drifts down a little as the page scrolls up, so it lingers while it breaks apart.
         var fx = 0.5, fy = (narrow ? 0.47 : 0.5) + p * 0.4;
 
-        emx += (mx - emx) * 0.05;
-        emy += (my - emy) * 0.05;
+        var kp = 1 - Math.exp(-dt * 3);            // the old 0.05-per-frame at 60 Hz, at any refresh rate
+        emx += (mx - emx) * kp;
+        emy += (my - emy) * kp;
         var scale = lenPx / (ch / (2 * halfH)) / (2 * A);
         var px = (fx - 0.5) * 2 * halfH * (cw / ch);
         var py = (0.5 - fy) * 2 * halfH;
@@ -404,15 +460,13 @@
         // laces never turn down behind the name.
         var laceTurn = (narrow ? 1.2 : 1.0) + 0.15 * Math.sin(t * 0.3);
 
-        var mv = mul(place(px, py, -DIST, scale),
-                 mul(rotX(emy * 0.25),
-                 mul(rotY(0.55 * Math.sin(t * 0.25) + p * 2.6 + emx * 0.35),   // sways, never turns end-on at rest
-                 mul(rotZ(tilt), rotX(laceTurn)))));
+        var mv = mul(place(mA, px, py, -DIST, scale),
+                 mul(rotX(mB, emy * 0.25),
+                 mul(rotY(mC, 0.55 * Math.sin(t * 0.25) + p * 2.6 + emx * 0.35),   // sways, never turns end-on at rest
+                 mul(rotZ(mD, tilt), rotX(mE, laceTurn), mF), mG), mH), mMV);
 
-        var cr = canvas.getBoundingClientRect();
         gl.uniformMatrix4fv(U.uMV, false, mv);
-        shieldBox(U.uShield, sub, 18, cr);
-        shieldBox(U.uShieldB, wm, 20, cr);
+        if (shieldsDirty) shields();
         gl.uniform1f(U.uScale, scale);
         gl.uniform1f(U.uTime, t);
         gl.uniform1f(U.uAssemble, reduce ? 1.2 : Math.min(t / 2.6, 1.2));
@@ -426,7 +480,7 @@
     }
 
     function wake() {
-        if (!running && !lost) { running = true; requestAnimationFrame(frame); }
+        if (!running && !lost) { running = true; last = 0; requestAnimationFrame(frame); }
     }
     window.addEventListener('scroll', wake, { passive: true });
     window.addEventListener('resize', wake);
@@ -438,4 +492,5 @@
     });
 
     wake();
+    }
 })();
