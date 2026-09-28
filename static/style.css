@@ -203,17 +203,6 @@ html {
    coin flip it was on. */
 .ticker-wp-mid  { stroke: rgba(255,255,255,0.22); stroke-width: 1; stroke-dasharray: 3 3; }
 
-.ticker-wp-cap {
-    flex: 0 0 auto;
-    font-size: var(--text-xs);
-    line-height: 1.2;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-variant-numeric: tabular-nums;
-}
-.ticker-wp-cap b { color: var(--text-primary); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
     .ticker-face, .ticker-wp { transition: none; }

@@ -1070,7 +1070,6 @@
             box.innerHTML = '<span class="ticker-wp-crests">' + logos + '</span>' +
                             '<span class="ticker-wp-body">' +
                               '<span class="ticker-wp-chart"></span>' +
-                              '<span class="ticker-wp-cap"><b>' + lead + '</b> ' + pct + '%</span>' +
                             '</span>';
             item.classList.add('wp-on');
             // Measure after the box is laid out, then draw to that exact size.
@@ -1079,8 +1078,9 @@
             var h = Math.max(26, Math.round(slot.clientHeight));
             slot.innerHTML = spark(series, w, h, colors[0], colors[1]);
             box.dataset.built = '1';
-            // Named in text as well as drawn, so the cell still says something
-            // to a reader who cannot use the line.
+            // No visible caption — the two coloured lines already show who won.
+            // Still named in text, so the cell says something to a reader who
+            // cannot use the line.
             item.setAttribute('aria-description',
                 'Win probability: ' + lead + ' finished at ' + pct + ' percent');
         }
