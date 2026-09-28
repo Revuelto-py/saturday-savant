@@ -151,9 +151,12 @@ SEASON = next((int(a) for a in _argv if a.isdigit()), current_cfb_season())
 # offseason has zero), so the script exits cleanly without writing anything.
 MIN_GAMES = 20
 
-# FCS conferences — mirrors FCS_CONFS in main.py
-FCS_CONFS = ('CAA', 'Big Sky', 'MVFC', 'SWAC', 'MEAC', 'Southland', 'Big South',
-             'OVC', 'Patriot', 'NEC', 'Pioneer', 'FCS Independents')
+# FCS conferences: the site's one shared definition. This file kept its own
+# copy, which predated UAC, Big South-OVC and Southern, so 24 FCS teams were
+# rated in 2026 (Tarleton State 81st off one game) and their FBS opponents were
+# opponent-adjusted against an FCS team anchored at the national average.
+# Backtest 2023-26: +0.8 pts straight-up (p=0.04); 2019-22 unchanged.
+from divisions import FCS_CONFS
 
 # Garbage time: margin at drive start beyond which the drive is excluded
 GARBAGE_MARGIN = {1: None, 2: 38, 3: 28, 4: 21}
