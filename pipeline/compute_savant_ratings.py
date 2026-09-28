@@ -50,8 +50,11 @@ Home-field neutralization:
     and early-season schedules are deliberately unbalanced, so measuring it
     in September reads about 2.0 instead of its true ~1.19 and mangles
     every rating. The full derivation, and the backtest that settled it,
-    are on the constant. Games carrying an event note (bowls, playoff
-    games, kickoff classics) are treated as neutral-site.
+    are on the constant. Neutral sites come from games.neutral_site (the
+    CFBD flag). The old rule — any game carrying a note, or any postseason
+    game — was wrong both ways: 2026 notes carry SEC TV windows ("NIGHT:
+    6 - 8pm ET start"), which made Alabama–Georgia neutral, while Red River
+    has no note, and CFP first-round games are on campus.
 
 Opponent adjustment — iterative, KenPom-style:
     A team's adjusted offensive efficiency in one game is its raw
@@ -287,7 +290,8 @@ def load_game_samples(cur):
     fbs = {r[0] for r in cur.fetchall()}
 
     cur.execute('''
-        SELECT g.id, g.week, g.season_type, g.home_team, g.away_team, g.notes, s.summary_gz
+        SELECT g.id, g.week, g.season_type, g.home_team, g.away_team,
+               COALESCE(g.neutral_site, 0), s.summary_gz
         FROM games g JOIN game_summaries s ON s.game_id = g.id
         WHERE g.completed = 1 AND g.season = %s
         ORDER BY g.week, g.id
@@ -297,7 +301,7 @@ def load_game_samples(cur):
     home_pts = home_drv = away_pts = away_drv = 0
     skipped_non_fbs = skipped_no_drives = 0
 
-    for gid, week, stype, home, away, notes, gz in cur.fetchall():
+    for gid, week, stype, home, away, neutral_site, gz in cur.fetchall():
         if home not in fbs or away not in fbs:
             skipped_non_fbs += 1
             continue
@@ -307,7 +311,7 @@ def load_game_samples(cur):
             skipped_no_drives += 1
             continue
         is_post = 'postseason' in (stype or '').lower()
-        neutral = bool(notes) or is_post
+        neutral = bool(neutral_site)
         g = {'home': home, 'away': away, 'neutral': neutral,
              'order': (1 if is_post else 0, week or 0),
              'h_pts': 0, 'h_drv': 0, 'a_pts': 0, 'a_drv': 0}
@@ -342,7 +346,7 @@ def load_game_samples_cfbd(cur, season):
     fbs = {r[0] for r in cur.fetchall()}
 
     cur.execute('''
-        SELECT id, week, season_type, home_team, away_team, notes
+        SELECT id, week, season_type, home_team, away_team, COALESCE(neutral_site, 0)
         FROM games WHERE completed = 1 AND season = %s
     ''', (season,))
     meta = {r[0]: r[1:] for r in cur.fetchall()}
@@ -357,7 +361,7 @@ def load_game_samples_cfbd(cur, season):
     games = []
     home_pts = home_drv = away_pts = away_drv = 0
     skipped_non_fbs = skipped_no_drives = 0
-    for gid, (week, stype, home, away, notes) in meta.items():
+    for gid, (week, stype, home, away, neutral_site) in meta.items():
         if home not in fbs or away not in fbs:
             skipped_non_fbs += 1
             continue
@@ -366,7 +370,7 @@ def load_game_samples_cfbd(cur, season):
             skipped_no_drives += 1
             continue
         is_post = 'postseason' in (stype or '').lower()
-        neutral = bool(notes) or is_post
+        neutral = bool(neutral_site)
         g = {'home': home, 'away': away, 'neutral': neutral,
              'order': (1 if is_post else 0, week or 0),
              'h_pts': 0, 'h_drv': 0, 'a_pts': 0, 'a_drv': 0}
