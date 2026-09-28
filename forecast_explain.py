@@ -15,26 +15,30 @@ Positive contribution = pushes toward the HOME team, negative = toward AWAY,
 matching how game_predictions stores everything home-perspective.
 
 WHICH FEATURES ARE PUBLIC
-The model fits 16 features, but only six carry independently meaningful,
+The model fits 21 features, but only six carry independently meaningful,
 sign-correct weight; the rest are collinearity artifacts or bookkeeping and
 were deliberately kept out of the public explanation (a wpct_diff that lands
-NEGATIVE is re-expressing Elo, not saying wins hurt you). The six below are
-exactly the ones the methodology write-up named, at the weights it stated:
+NEGATIVE is re-expressing Elo, not saying wins hurt you). v2 weights, full
+season / extra early-season weight from the `_early` twin (folded into the
+same row, see contrib()):
 
-    elo_diff       +0.67    recruit4_diff  +0.39    ppg_diff   +0.31
-    ret_prod_diff  +0.28    papg_diff      -0.27    prior_sp_diff +0.23
+    elo_diff       +0.89 / −0.35    recruit4_diff  +0.30 / +0.17
+    ppg_diff       +0.37            ret_prod_diff  +0.24 / +0.05
+    papg_diff      −0.32            prior_sp_diff  −0.04 / +0.34
 
-Omitted: prior_savant_diff (-0.02, collinear with prior SP+), recruit_diff
-(-0.01, collinear with the 4-year average), transfer_diff (-0.001, a measured
-null), wpct_diff (-0.12, sign-flipped Elo restatement), and the bookkeeping
-inputs prior_missing / games_min / rest_diff / week / postseason.
+So Elo's weight grows as the season goes and last season's SP+ matters in
+September and is ~0 by November — the fade the twins exist to express.
+Omitted: prior_savant_diff (collinear with prior SP+), recruit_diff
+(collinear with the 4-year average), transfer_diff (a measured null),
+wpct_diff (sign-flipped Elo restatement), and the bookkeeping inputs
+prior_missing / games_min / rest_diff / week / postseason.
 
 HOME FIELD is not a feature — it lives in the intercept, which is the model's
 log-odds for a game where every feature sits at its training mean (sigmoid of
 +0.435 = 60.7%, the historical home win rate). The `neutral` feature adjusts
 it, so the pair is reported as one "Home field" / "Neutral site" row.
 
-Because six of sixteen features are shown, the displayed rows do not sum to
+Because six of the features are shown, the displayed rows do not sum to
 the full logit — the UI says so rather than implying a closed ledger.
 """
 import json
@@ -95,7 +99,12 @@ def explain(model, feats):
     def contrib(name):
         i = idx[name]
         z = (feats[i] - model['scaler_mean'][i]) / model['scaler_std'][i]
-        return model['coef'][i] * z
+        c = model['coef'][i] * z
+        # An `_early` twin is the same signal with an early-season weight, so
+        # its push belongs to the parent's row, not a row of its own.
+        if name + '_early' in idx:
+            c += contrib(name + '_early')
+        return c
 
     # Before either side has kicked off, season-to-date scoring is 0−0: the
     # feature is present but carries no information, so a "0.0 pts/gm" row

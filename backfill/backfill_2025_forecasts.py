@@ -107,6 +107,7 @@ def main_():
                 ON CONFLICT (game_id) DO UPDATE SET
                     home_prob = EXCLUDED.home_prob,
                     predicted_margin = EXCLUDED.predicted_margin,
+                    model_version = EXCLUDED.model_version,
                     scored = 1, home_won = EXCLUDED.home_won,
                     correct = EXCLUDED.correct, week = EXCLUDED.week
             ''', (gid, SEASON, week, home, away, prob, margin,

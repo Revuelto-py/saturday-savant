@@ -27,7 +27,12 @@ path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
 model = json.load(open(path))
 coef = model['coef']
 coef = coef[0] if isinstance(coef[0], list) else coef
-weight = {name: abs(c) for name, c in zip(model['feature_names'], coef)}
+# An `_early` twin (the early-season weight of the same signal) counts toward
+# its parent's family.
+weight = {}
+for name, c in zip(model['feature_names'], coef):
+    name = name.removesuffix('_early')
+    weight[name] = weight.get(name, 0.0) + abs(c)
 
 # A feature that moved between families, or one added by a retrain, would
 # silently vanish from the chart and leave the shares summing to under 100.
@@ -40,6 +45,6 @@ if unknown:
     sys.exit(f'Families name features the model does not have: {sorted(unknown)}')
 
 total = sum(weight.values())
-print(f'{model["feature_names"].__len__()} features, trained {model["trained_at"][:10]}\n')
+print(f'{len(model["feature_names"])} features, trained {model["trained_at"][:10]}\n')
 for family, names in FAMILIES.items():
     print(f'  {family:<22} {100 * sum(weight[n] for n in names) / total:5.1f}%')

@@ -32,7 +32,7 @@ os.environ.setdefault('POOL_BACKFILL', '1')
 import main
 from season_util import current_cfb_season
 from forecast_features import (build_dataset, _feature_vector, _fcs_feature_vector,
-                               _parse_dt, ELO_START, ELO_CARRY, ELO_NEW_TEAM)
+                               _parse_dt, FEATURE_NAMES, ELO_START, ELO_CARRY, ELO_NEW_TEAM)
 from forecast_explain import explain
 
 _HERE = ROOT
@@ -52,6 +52,10 @@ def _predict(mdl, feats):
 def main_():
     with open(MODEL_PATH) as f:
         model = json.load(f)
+    # The dot product zips features against coefficients, so a stale artifact
+    # would silently drop the extra features instead of failing.
+    if model['feature_names'] != FEATURE_NAMES:
+        _sys.exit('forecast_model.json does not match FEATURE_NAMES — retrain it')
     try:
         with open(FCS_MODEL_PATH) as f:
             fcs_model = json.load(f)

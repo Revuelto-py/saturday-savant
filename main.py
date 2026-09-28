@@ -4799,16 +4799,16 @@ def savant_rating_methodology():
 # couple the web process to a model file. Recompute after any retrain with
 # tools/forecast_family_shares.py and update these four numbers.
 FORECAST_FAMILIES = [
-    ('In-season form', 56.0,
+    ('In-season form', 57.6,
      'Game-by-game Elo, points scored and allowed per game, record, games played.',
      'var(--accent)'),
-    ('Roster & recruiting', 27.0,
+    ('Roster & recruiting', 22.4,
      'Four-year recruiting average, returning production, transfer-portal talent.',
      '#34d399'),
-    ('Preseason priors', 10.7,
+    ('Preseason priors', 15.3,
      "Last season's SP+ and Savant Net, and a flag for teams that have neither.",
      '#c084fc'),
-    ('Situation', 6.3,
+    ('Situation', 4.8,
      'Neutral site, postseason, days of rest, week of the season.',
      '#f0a868'),
 ]

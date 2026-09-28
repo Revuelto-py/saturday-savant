@@ -212,7 +212,7 @@ def main():
 
     # ── artifact ────────────────────────────────────────────────────────────
     artifact = {
-        'version': 1,
+        'version': 2,   # 2 = early-season twins (2026-09-28)
         'trained_at': datetime.now(timezone.utc).isoformat(),
         'train_seasons': TRAIN_SEASONS, 'val_season': VAL_SEASON, 'test_season': TEST_SEASON,
         'feature_names': FEATURE_NAMES,

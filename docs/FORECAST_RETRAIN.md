@@ -1,6 +1,7 @@
 # Savant Forecast — retrain plan & experiment log
 
-The production model (`forecast_model.json`, v1, 16 features) is trained
+The production model (`forecast_model.json`, v2, 21 features — the 16 inputs
+plus five early-season twins, see "Shipped 2026-09-28" below) is trained
 **locally only** by `forecast/train_forecast.py`; sklearn never deploys. Serving is a dot
 product in `pipeline/predict_games.py`.
 
@@ -103,6 +104,46 @@ rejected on them, and one near-miss was caused by skipping the third.
 4. **Test candidates one at a time first, then in combination.** Combined
    effects differ, and on ~8.6k games more features is a real overfitting risk:
    all 13 candidates together scored *worse* than the production 16.
+
+## Shipped 2026-09-28 — early-season twins (v1 → v2)
+
+**The problem was the model's shape, not missing data.** A plain logistic gives
+each input one weight for the whole season, so prior SP+ had to carry the same
+weight in week 1 and week 13. v2 adds `x_early = x · exp(−games_min / 4)` for
+`elo_diff, prior_savant_diff, prior_sp_diff, ret_prod_diff, recruit4_diff`,
+computed inside `_feature_vector` (still the single shared path). The fitted
+weights do what you'd hope: prior SP+ is +0.34 early and ~0 late, and Elo's
+weight *grows* through the season (early Elo is just carried-over prior).
+
+Walk-forward 2019–2025 (baseline re-measured at **0.7087** / Brier 0.1866 —
+lower than the 0.7110 logged above because the Savant rebuild moved
+`prior_savant_diff`):
+
+| variant | Δacc | Δbrier | v1/v2 right | McNemar p |
+|---|---|---|---|---|
+| **twins, τ=4 (shipped)** | **+0.0084** | **−0.0014** | 65/109 | **0.001** |
+| twins, τ=2 | +0.0067 | −0.0012 | 60/95 | 0.006 |
+| twins, τ=6 | +0.0067 | −0.0014 | 67/102 | 0.009 |
+| twins without Elo | +0.0061 | −0.0011 | 32/64 | 0.001 |
+| Elo twin only | +0.0010 | +0.0002 | 25/30 | 0.590 |
+
+Better in 6 of 7 seasons (2023 −0.25 pts). Held-out 2025 test: **71.78% → 72.77%**,
+Brier 0.1839 → 0.1817, every calibration bucket within ~2 pts, Vegas still
+above (73.5%). The 2025 backtest rows in `game_predictions` were rewritten with
+v2 (still out-of-sample: trained 2017–23, C picked on 2024) and their `contrib`
+regenerated with 0 drift. 2026 scored rows stay frozen as v1.
+
+**Tested the same day and NOT shipped** (same protocol):
+
+| candidate | Δacc | p | note |
+|---|---|---|---|
+| as-of-week Savant, rebuilt snapshots | +0.0017 | 0.545 | Brier −0.0010; the rebuild didn't change the verdict |
+| recency weighting, half-life 3/5/8 seasons | +0.0023/+0.0010/+0.0002 | 0.18+ | |
+| Elo K=40, carry 0.7 (best of a 60-config grid on 2017–22 Elo log loss) | +0.0008 | 0.608 | Elo-alone log loss only 0.5602 → 0.5575 |
+| stale model (train through S−2) | −0.0016 | 0.595 | cost of serving a model a season old — small |
+
+For January: re-check τ and the twin set with 2026 included, and re-run the
+as-of Savant twin (`savant_asof × fade`) — it was +0.0015, p=0.587 here.
 
 ## Open experiment — as-of-week Savant Rating (`savant_asof_diff`)
 

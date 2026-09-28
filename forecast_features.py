@@ -28,6 +28,7 @@ the whole model rests on:
 FBS membership is per season, proxied by presence in that season's sp_ratings
 (SP+ covers exactly the FBS field each year, 128–137 teams).
 """
+import math
 import os
 from datetime import datetime, timezone
 
@@ -58,7 +59,20 @@ FEATURE_NAMES = [
     'week',
     'neutral',             # 1 = neutral site (home-field intercept shouldn't apply)
     'postseason',
+    # Early-season copies of the strength signals: value × exp(−games_min/τ).
+    # A plain logistic gives each input ONE weight for the whole season, so it
+    # can't let the priors lead in September and fade by November. These let
+    # it: the pair (x, x_early) is effectively a weight that slides with games
+    # played. Walk-forward 2019–2025: +0.84 pts accuracy, McNemar p=0.001,
+    # Brier −0.0014, 6 of 7 seasons better (2026-09-28, docs/FORECAST_RETRAIN.md).
+    'elo_diff_early',
+    'prior_savant_diff_early',
+    'prior_sp_diff_early',
+    'ret_prod_diff_early',
+    'recruit4_diff_early',
 ]
+EARLY_FADE_GAMES = 4.0  # τ; 2, 4 and 6 all cleared the bar, 4 was best
+_EARLY_OF = ['elo_diff', 'prior_savant_diff', 'prior_sp_diff', 'ret_prod_diff', 'recruit4_diff']
 
 # ── FBS-vs-FCS forecast ─────────────────────────────────────────────────────
 # The main model can't rate an FCS opponent (no Elo, no priors), so these games
@@ -151,7 +165,7 @@ def _feature_vector(season, week, neutral, post, home, away,
         (season - 1, home) not in savant and (season - 1, home) not in sp
         or (season - 1, away) not in savant and (season - 1, away) not in sp) else 0.0
 
-    return [
+    vec = [
         elo[home] - elo[away],
         savant.get((season - 1, home), 0.0) - savant.get((season - 1, away), 0.0),
         sp.get((season - 1, home), 0.0) - sp.get((season - 1, away), 0.0),
@@ -169,6 +183,8 @@ def _feature_vector(season, week, neutral, post, home, away,
         float(neutral),
         post,
     ]
+    fade = math.exp(-vec[FEATURE_NAMES.index('games_min')] / EARLY_FADE_GAMES)
+    return vec + [vec[FEATURE_NAMES.index(n)] * fade for n in _EARLY_OF]
 
 
 def build_dataset(first_season=2016, last_season=2025, return_state=False, collect_fcs=False):
@@ -289,7 +305,6 @@ def build_dataset(first_season=2016, last_season=2025, return_state=False, colle
         exp_home = 1.0 / (1.0 + 10 ** ((elo[away] - h_eff) / 400.0))
         margin = abs(hp - ap)
         winner_elo_diff = (h_eff - elo[away]) if hp > ap else (elo[away] - h_eff)
-        import math
         mov = math.log(margin + 1) * (2.2 / (winner_elo_diff * 0.001 + 2.2))
         delta = ELO_K * mov * ((1 if hp > ap else 0) - exp_home)
         elo[home] += delta
