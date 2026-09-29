@@ -49,136 +49,122 @@
     {% endif %}
 {% endmacro %}
 
+{# Value in a column's own format, for the leaders strip. #}
+{% macro fmt_val(v, fmt) -%}
+{%- if v is none -%}—
+{%- elif fmt in ('epa', 'epa_inv') -%}{{ '+' if v > 0 else '' }}{{ v }}
+{%- elif fmt == 'pct1' -%}{{ v }}%
+{%- elif fmt == 'int' and v >= 1000 -%}{{ '{:,}'.format(v) }}
+{%- else -%}{{ v }}{%- endif -%}
+{%- endmacro %}
+{% set CATS = TEAM_CATS if mode == 'team' else PLAYER_CATS %}
+{% set cat_path = team_path if mode == 'team' else player_path %}
+{% set noun = 'team' if mode == 'team' else ('qualified player' if qualified else 'player') %}
+{% set sort_label = (column_defs | selectattr('0', 'equalto', sort_col) | map(attribute='1') | first) or sort_col %}
+
 <!-- #lb-content is swapped wholesale on any control change (tab/filter/sort/page)
      so navigation is AJAX and scroll position is preserved. -->
-<div id="lb-content">
+<div id="lb-content" class="lb-page">
 
-<!-- Page header -->
-<div style="margin-bottom:20px">
-    <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
-        {% if mode == 'team' %}
-            {% for c, l in TEAM_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
-        {% else %}
-            {% for c, l in PLAYER_CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %}
-        {% endif %}
-        <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} Season</span>
-    </h1>
-</div>
+<header class="lb-head">
+    <h1 class="lb-title">Leaderboards<span class="visually-hidden"> · {{ 'Teams' if mode == 'team' else 'Players' }} · {% for c, l in CATS %}{% if c == category %}{{ l }}{% endif %}{% endfor %} · {{ season }}</span></h1>
+    <div class="lb-mode" role="group" aria-label="Board">
+        <a href="/leaderboards/passing" onclick="return lbGo(this)" class="lb-mode-link" {{ 'aria-current=page' if mode == 'player' }}>Players</a>
+        <a href="/leaderboards/teams/savant" onclick="return lbGo(this)" class="lb-mode-link" {{ 'aria-current=page' if mode == 'team' }}>Teams</a>
+    </div>
+    <nav class="lb-cats" aria-label="Category">
+        {% for cat, label in CATS %}
+        <a href="{{ cat_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='', page='') | urlencode }}" onclick="return lbGo(this)"
+           class="lb-cat" {{ 'aria-current=page' if category == cat }}>{{ label }}</a>
+        {% endfor %}
+    </nav>
+</header>
 
-<!-- Player | Team mode toggle -->
-<div class="lb-mode-toggle">
-    <a href="/leaderboards/passing" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if mode == 'player' else '' }}">Player</a>
-    <a href="/leaderboards/teams/savant" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if mode == 'team' else '' }}">Team</a>
-</div>
-
-{% if mode == 'player' %}
-<!-- Category tabs (player) -->
-<div class="lb-team-tabs">
-    {% for cat, label in PLAYER_CATS %}
-    <a href="{{ player_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
-       class="lb-team-tab {{ 'active' if category == cat else '' }}">{{ label }}</a>
-    {% endfor %}
-</div>
-
-<!-- Filter bar -->
-<form method="GET" action="{{ player_path(category) }}" class="lb-filter-section">
+{# ── One toolbar: find, filter, and how the table reads ──────────────────── #}
+{% set active = [] %}
+{% if conf_filter %}{% set _ = active.append(('conf', conf_filter)) %}{% endif %}
+{% if team_filter %}{% set _ = active.append(('team', team_filter)) %}{% endif %}
+{% if mode == 'player' and pos_filter %}{% set _ = active.append(('pos', pos_filter)) %}{% endif %}
+<form method="GET" action="{{ cat_path(category) }}" class="lb-tools" id="lb-tools" onsubmit="return lbFilter(this.elements.q || this.elements.season)">
     <input type="hidden" name="view" value="{{ view }}">
-    <input type="hidden" name="qualified" value="{{ '1' if qualified else '0' }}">
-    <div class="lb-filter-row">
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-season-1">Season</label>
-            {% if available_seasons and available_seasons|length > 1 %}
-            <select id="lf-season-1" aria-label="Season" name="season" class="lb-select" onchange="lbFilter(this)">
-                {% for s in available_seasons %}
-                <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
-                {% endfor %}
-            </select>
-            {% else %}
-            <select id="lf-conference-2" aria-label="Conference" class="lb-select" disabled><option selected>{{ season }}</option></select>
-            {% endif %}
-        </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-conference-2">Conference</label>
-            <select id="lf-team-3" aria-label="Team" name="conf" class="lb-select" onchange="lbFilter(this)">
-                <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
-                {% for conf in conferences %}
-                <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-team-3">Team</label>
-            <select id="lf-position-group-4" aria-label="Position Group" name="team" class="lb-select" onchange="lbFilter(this)">
-                <option value="" {{ 'selected' if not team_filter }}>All Teams</option>
-                {% for conf, team_list in all_teams.items() %}
-                <optgroup label="{{ conf }}">
-                    {% for tname in team_list %}
-                    <option value="{{ tname }}" {{ 'selected' if team_filter == tname }}>{{ tname }}</option>
-                    {% endfor %}
-                </optgroup>
-                {% endfor %}
-            </select>
-        </div>
-    </div>
-    <div class="lb-filter-row">
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-position-group-4">Position Group</label>
-            <select id="lf-season-5" aria-label="Season" name="pos" class="lb-select" onchange="lbFilter(this)">
-                <option value="" {{ 'selected' if not pos_filter }}>All Positions</option>
-                {% for pg in position_groups %}
-                <option value="{{ pg }}" {{ 'selected' if pos_filter == pg }}>{{ pg }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="lb-filter-count" id="lb-count">
-            {% if pagination %}Showing {{ pagination.start }}-{{ pagination.end }} of {{ pagination.total_count }} players{% else %}{{ players|length }} players{% endif %}
-        </div>
-    </div>
-</form>
+    <input type="hidden" name="heat" value="{{ '1' if heat else '0' }}">
+    <input type="hidden" name="n" value="{{ per_page }}">
+    {% if mode == 'player' %}<input type="hidden" name="qualified" value="{{ '1' if qualified else '0' }}">{% endif %}
+    {% if sort_col %}<input type="hidden" name="sort" value="{{ sort_col }}"><input type="hidden" name="dir" value="{{ sort_dir }}">{% endif %}
 
-<!-- Stat View tabs + Qualified Only toggle -->
-<div class="lb-view-row">
-    <div class="lb-view-tabs">
-        <a href="{{ player_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
-           class="lb-view-tab {{ 'active' if view == 'standard' else '' }}">Standard</a>
-        {% if has_advanced %}
-        <a href="{{ player_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
-           class="lb-view-tab {{ 'active' if view == 'advanced' else '' }}">Advanced</a>
-        {% endif %}
-        {% include '_lb_heat_control.html' %}
-    </div>
-    {# The bar moves week to week, so it still has to be sayable — but as forty
-       words of prose above the table it was furniture. It hangs off the toggle
-       now: hovering "Qualified Only" reveals it, and the icon carries the same
-       popover for keyboard and touch, which have no hover to give. #}
-    <div class="lb-qual-wrap">
-        <div class="lb-mode-toggle lb-qualified-toggle">
-            <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='1') | urlencode }}" onclick="return lbGo(this)" class="lb-mode-btn lb-qual-btn {{ 'active' if qualified else '' }}">Qualified Only</a>
-            <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='0') | urlencode }}" onclick="return lbGo(this)" class="lb-mode-btn {{ 'active' if not qualified else '' }}">All Players</a>
-        </div>
-        {% if qual_note %}
-        <button type="button" class="lb-qual-tip" aria-describedby="lb-qual-pop"
-                aria-label="What counts as a qualified player">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="9"></circle>
-                <path d="M12 16v-4M12 8h.01"></path>
-            </svg>
-        </button>
-        <span class="lb-qual-pop" id="lb-qual-pop" role="tooltip">
-            <b class="lb-qual-pop-bar">{{ qual_note.bar }} {{ qual_note.unit }}</b>
-            Qualifying is a rate, not a season total — {{ qual_note.rate }} {{ qual_note.unit }} per team
-            game, the way baseball asks a hitter for 3.1 plate appearances. {{ qual_note.games }}
-            game{{ '' if qual_note.games == 1 else 's' }} in, that comes to {{ qual_note.bar }}; it reaches
-            {{ qual_note.full }} across a full season, and a team that has played fewer games is held to less.
+    <label class="lb-search">
+        <span class="visually-hidden">Find a {{ 'team' if mode == 'team' else 'player' }}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" name="q" id="lb-q" value="{{ search_q }}" placeholder="Find a {{ 'team' if mode == 'team' else 'player' }}" autocomplete="off" oninput="lbSearch(this)">
+    </label>
+    <button type="button" class="lb-tools-toggle" aria-expanded="false" aria-controls="lb-tools-more" onclick="lbToggleTools(this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        Filters{% if active or (mode == 'player' and qualified) %} · {{ active|length + (1 if mode == 'player' and qualified else 0) }}{% endif %}
+    </button>
+
+    <div class="lb-tools-more" id="lb-tools-more">
+        <label class="lb-field{{ ' is-set' if false }}" for="lf-season">Season
+            {% if available_seasons and available_seasons|length > 1 %}
+            <select id="lf-season" name="season" onchange="lbFilter(this)">
+                {% for s in available_seasons %}<option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>{% endfor %}
+            </select>
+            {% else %}<select id="lf-season" name="season" disabled><option selected>{{ season }}</option></select>{% endif %}
+        </label>
+        <label class="lb-field{{ ' is-set' if conf_filter }}" for="lf-conf">Conf
+            <select id="lf-conf" name="conf" onchange="lbFilter(this)">
+                <option value="" {{ 'selected' if not conf_filter }}>All</option>
+                {% for conf in conferences %}<option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="lb-field{{ ' is-set' if team_filter }}" for="lf-team">Team
+            <select id="lf-team" name="team" onchange="lbFilter(this)">
+                <option value="" {{ 'selected' if not team_filter }}>All</option>
+                {% for conf, team_list in all_teams.items() %}
+                <optgroup label="{{ conf }}">{% for tname in team_list %}<option value="{{ tname }}" {{ 'selected' if team_filter == tname }}>{{ tname }}</option>{% endfor %}</optgroup>
+                {% endfor %}
+            </select>
+        </label>
+        {% if mode == 'player' %}
+        <label class="lb-field{{ ' is-set' if pos_filter }}" for="lf-pos">Pos
+            <select id="lf-pos" name="pos" onchange="lbFilter(this)">
+                <option value="" {{ 'selected' if not pos_filter }}>All</option>
+                {% for pg in position_groups %}<option value="{{ pg }}" {{ 'selected' if pos_filter == pg }}>{{ pg }}</option>{% endfor %}
+            </select>
+        </label>
+        <span class="lb-qual-wrap">
+            <a href="{{ player_path(category) }}?{{ dict(current_filters, qualified='0' if qualified else '1', page='') | urlencode }}" onclick="return lbGo(this)"
+               class="lb-chip-btn{{ ' is-on' if qualified }}" aria-pressed="{{ 'true' if qualified else 'false' }}">
+                {% if qualified %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{% endif %}
+                Qualified only{% if qual_note %} · {{ qual_note.bar }}+ {{ qual_note.unit }}{% endif %}
+            </a>
+            {% if qual_note %}
+            <button type="button" class="lb-qual-tip" aria-describedby="lb-qual-pop" aria-label="What counts as a qualified player">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+            </button>
+            <span class="lb-qual-pop" id="lb-qual-pop" role="tooltip">
+                <b class="lb-qual-pop-bar">{{ qual_note.bar }} {{ qual_note.unit }}</b>
+                Qualifying is a rate, not a season total — {{ qual_note.rate }} {{ qual_note.unit }} per team
+                game, the way baseball asks a hitter for 3.1 plate appearances. {{ qual_note.games }}
+                game{{ '' if qual_note.games == 1 else 's' }} in, that comes to {{ qual_note.bar }}; it reaches
+                {{ qual_note.full }} across a full season, and a team that has played fewer games is held to less.
+            </span>
+            {% endif %}
         </span>
         {% endif %}
     </div>
-</div>
 
-{# When the source only parsed part of a season, the air-yard columns are blank
-   for most players. Saying so turns a column that looks broken into a column
-   that is honest about what it knows. #}
+    {% if active or search_q %}
+    <div class="lb-active" aria-label="Active filters">
+        {% if search_q %}<a class="lb-active-chip" href="{{ cat_path(category) }}?{{ dict(current_filters, q='', page='') | urlencode }}" onclick="return lbGo(this)">“{{ search_q }}” <span aria-label="remove">×</span></a>{% endif %}
+        {% for k, v in active %}{% set f = dict(current_filters, page='') %}{% set _ = f.update({k: ''}) %}<a class="lb-active-chip" href="{{ cat_path(category) }}?{{ f | urlencode }}" onclick="return lbGo(this)">{{ v }} <span aria-label="remove">×</span></a>{% endfor %}
+    </div>
+    {% endif %}
+</form>
+
+{% if mode == 'team' and category == 'savant' %}
+<p class="lb-note">Savant Rating is Saturday Savant’s opponent-adjusted points per 10 drives. <a href="/savant-rating">How it works →</a></p>
+{% endif %}
+{% if category_note %}<div class="lb-coverage-note">{{ category_note }}</div>{% endif %}
 {% if coverage_note %}
 <div class="lb-coverage-note">
     <strong>{{ coverage_note.covered }}</strong> of {{ coverage_note.total }} qualifying players
@@ -188,7 +174,49 @@
 </div>
 {% endif %}
 
-<!-- Table -->
+{# ── Leaders: the top three in each headline stat, from the whole pool ──── #}
+{% if leaders %}
+<section class="lb-leaders" aria-label="Category leaders">
+    {% for l in leaders %}
+    {% set on = (sort_col == l.key) %}
+    {% if l.view %}<a class="lb-leader{{ ' is-on' if on }}" href="{{ cat_path(category) }}?{{ dict(current_filters, view=l.view, sort=l.key, dir=l.dir, page='', q='') | urlencode }}" onclick="return lbGo(this)" aria-label="{{ l.label }} leaders{{ ', sort the table by ' ~ l.label if not on }}">
+    {% else %}<div class="lb-leader">{% endif %}
+        <span class="lb-leader-top"><span class="lb-leader-stat">{{ l.label }}</span>{% if l.view %}<span class="lb-leader-hint">{{ 'sorted' if on else 'sort →' }}</span>{% endif %}</span>
+        {% for r in l.top %}
+        <span class="lb-leader-row">
+            <span class="lb-leader-n">{{ loop.index }}</span>
+            {% if mode == 'team' %}
+                {% if r.logo %}<img class="lb-leader-img is-logo" src="{{ r.logo }}" alt="" loading="lazy">{% else %}<span class="lb-leader-img"></span>{% endif %}
+                <span class="lb-leader-id"><span class="lb-leader-name">{{ r.name }}</span></span>
+            {% else %}
+                {% if r.headshot %}<img class="lb-leader-img" src="{{ r.headshot }}" alt="" loading="lazy">{% else %}<span class="lb-leader-img" aria-hidden="true">{{ r.first[0] if r.first else '' }}{{ r.last[0] if r.last else '' }}</span>{% endif %}
+                <span class="lb-leader-id"><span class="lb-leader-name">{{ r.name }}</span><span class="lb-leader-team">{{ r.team }}</span></span>
+            {% endif %}
+            <span class="lb-leader-v">{{ fmt_val(r[l.key], l.fmt) }}</span>
+        </span>
+        {% endfor %}
+    {% if l.view %}</a>{% else %}</div>{% endif %}
+    {% endfor %}
+</section>
+{% endif %}
+
+{# ── The table ────────────────────────────────────────────────────────── #}
+<section class="lb-board" aria-label="Leaderboard table">
+<div class="lb-board-meta">
+    <span>Sorted by <b>{{ sort_label }}</b>, {{ 'low to high' if sort_dir == 'asc' else 'high to low' }}<span class="lb-hide-sm"> · select a column heading to sort</span></span>
+    <span class="lb-board-view">
+        {% if has_advanced %}
+        <div class="lb-seg" role="group" aria-label="Stat view">
+            <a href="{{ cat_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='', page='') | urlencode }}" onclick="return lbGo(this)" aria-pressed="{{ 'true' if view == 'standard' else 'false' }}">Standard</a>
+            <a href="{{ cat_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='', page='') | urlencode }}" onclick="return lbGo(this)" aria-pressed="{{ 'true' if view == 'advanced' else 'false' }}">Advanced</a>
+        </div>
+        {% endif %}
+        {% include '_lb_heat_control.html' %}
+    </span>
+    <span id="lb-count">{% if pagination %}{% if search_q %}{{ pagination.total_count }} match{{ '' if pagination.total_count == 1 else 'es' }} for “{{ search_q }}”{% else %}{{ pagination.start }}–{{ pagination.end }} of {{ pagination.total_count }} {{ noun }}{{ '' if pagination.total_count == 1 else 's' }}{% endif %}{% endif %}</span>
+</div>
+
+{% if mode == 'player' %}
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
 <table class="lb-table lb-matrix{{ ' no-heat' if not heat else '' }}">
@@ -268,91 +296,7 @@
 </table>
 </div>
 </div>
-</div>
-
 {% else %}
-{# ══════════════════════════════ TEAM MODE ══════════════════════════════ #}
-
-<!-- Category tabs (team) -->
-<div class="lb-team-tabs">
-    {% for cat, label in TEAM_CATS %}
-    <a href="{{ team_path(cat) }}?{{ dict(current_filters, category=cat, sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
-       class="lb-team-tab {{ 'active' if category == cat else '' }}">{{ label }}</a>
-    {% endfor %}
-</div>
-
-{# Turnovers and Vs Spread read tables that stop short of the live season. #}
-{% if category_note %}
-<div class="lb-coverage-note">{{ category_note }}</div>
-{% endif %}
-
-{% if category == 'savant' %}
-<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 16px;color: var(--text-dim);font-size: var(--text-sm)">
-    <span style="color: var(--gold);font-weight:800;font-size: var(--text-xs);letter-spacing:0.08em">SVR</span>
-    <span>Saturday Savant's proprietary opponent-adjusted points-per-drive model.</span>
-    <a href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
-       class="lb-howitworks" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
-</div>
-{% endif %}
-
-<!-- Filter bar -->
-<form method="GET" action="{{ team_path(category) }}" class="lb-filter-section">
-    <input type="hidden" name="view" value="{{ view }}">
-    <div class="lb-filter-row">
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-season-5">Season</label>
-            {% if available_seasons and available_seasons|length > 1 %}
-            <select id="lf-conference-6" aria-label="Conference" name="season" class="lb-select" onchange="lbFilter(this)">
-                {% for s in available_seasons %}
-                <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
-                {% endfor %}
-            </select>
-            {% else %}
-            <select id="lf-team-7" aria-label="Team" class="lb-select" disabled><option selected>{{ season }}</option></select>
-            {% endif %}
-        </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-conference-6">Conference</label>
-            <select name="conf" class="lb-select" aria-label="Conference" onchange="lbFilter(this)">
-                <option value="" {{ 'selected' if not conf_filter }}>All Conferences</option>
-                {% for conf in conferences %}
-                <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="lf-team-7">Team</label>
-            <select name="team" class="lb-select" aria-label="Team" onchange="lbFilter(this)">
-                <option value="" {{ 'selected' if not team_filter }}>All Teams</option>
-                {% for conf, team_list in all_teams.items() %}
-                <optgroup label="{{ conf }}">
-                    {% for tname in team_list %}
-                    <option value="{{ tname }}" {{ 'selected' if team_filter == tname }}>{{ tname }}</option>
-                    {% endfor %}
-                </optgroup>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="lb-filter-count" id="lb-count">
-            {% if pagination %}Showing {{ pagination.start }}-{{ pagination.end }} of {{ pagination.total_count }} teams{% endif %}
-        </div>
-    </div>
-</form>
-
-<!-- Stat View tabs -->
-<div class="lb-view-row">
-    <div class="lb-view-tabs">
-        <a href="{{ team_path(category) }}?{{ dict(current_filters, view='standard', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
-           class="lb-view-tab {{ 'active' if view == 'standard' else '' }}">Standard</a>
-        {% if has_advanced %}
-        <a href="{{ team_path(category) }}?{{ dict(current_filters, view='advanced', sort='', dir='') | urlencode }}" onclick="return lbGo(this)"
-           class="lb-view-tab {{ 'active' if view == 'advanced' else '' }}">Advanced</a>
-        {% endif %}
-        {% include '_lb_heat_control.html' %}
-    </div>
-</div>
-
-<!-- Team table -->
 <div class="lb-team-table-wrap" id="lb-table">
 <div class="lb-table-scroll">
 <table class="lb-table lb-matrix{{ ' no-heat' if not heat else '' }}">
@@ -365,6 +309,7 @@
                 scope="colgroup">{{ label }}</th>
             {% endfor %}
             <th class="lb-th lb-th-grp is-empty"></th>
+            {% if profile %}<th class="lb-th lb-th-grp" scope="colgroup">Profile</th>{% endif %}
         </tr>
         {% endif %}
         <tr>
@@ -382,6 +327,7 @@
             </th>
             {% endfor %}
             <th class="lb-th lb-th-team" scope="col">Conf</th>
+            {% if profile %}<th class="lb-th lb-th-prof" scope="col">Pts per 10 drives: <i class="lb-dot is-off"></i> scored <i class="lb-dot is-def"></i> allowed</th>{% endif %}
         </tr>
         {% if pool_avg and teams %}
         <tr class="lb-avgrow">
@@ -395,6 +341,7 @@
             </td>
             {% endfor %}
             <td class="lb-td-avg"></td>
+            {% if profile %}<td class="lb-td-avg"></td>{% endif %}
         </tr>
         {% endif %}
     </thead>
@@ -415,6 +362,17 @@
             {{ matrix_cell(t, key, fmt, sort_col == key) }}
             {% endfor %}
             <td class="lb-td-team"><span class="lb-team-name">{{ t.conf }}</span></td>
+            {% if profile %}
+            {% set span = (profile.hi - profile.lo) or 1 %}
+            <td class="lb-td-prof">
+                {% if t.off_rating is not none and t.def_rating is not none %}
+                <span class="lb-prof" role="img" aria-label="Scores {{ t.off_rating }}, allows {{ t.def_rating }} per 10 drives">
+                    <i class="lb-dot is-def" style="left: {{ '%.1f'|format(100 * (t.def_rating - profile.lo) / span) }}%"></i>
+                    <i class="lb-dot is-off" style="left: {{ '%.1f'|format(100 * (t.off_rating - profile.lo) / span) }}%"></i>
+                </span>
+                {% endif %}
+            </td>
+            {% endif %}
         </tr>
         {% else %}
         <tr><td colspan="20" class="lb-empty">No teams found — try adjusting the filters.</td></tr>
@@ -424,12 +382,16 @@
 </div>
 </div>
 {% endif %}
-
 <!-- Pagination — always render the #lb-pagination shell so partial swaps can
      add/remove the controls when a sort or filter changes the page count -->
-<div id="lb-pagination">
+<div id="lb-pagination" class="lb-board-foot">
+    <label class="lb-rows" for="lb-n">Rows
+        <select id="lb-n" onchange="lbRows(this)">
+            {% for n in per_page_choices %}<option value="{{ n }}" {{ 'selected' if n == per_page }}>{{ n }}</option>{% endfor %}
+        </select>
+    </label>
 {% if pagination and pagination.total_pages > 1 %}
-<div class="lb-pagination">
+<nav class="lb-pagination" aria-label="Pages">
     <a href="#" class="lb-page-btn {{ 'disabled' if pagination.page <= 1 }}"
        onclick="goToPage({{ pagination.page - 1 }}); return false;">← Prev</a>
 
@@ -437,7 +399,7 @@
     {% set tp = pagination.total_pages %}
     {% for n in range(1, tp + 1) %}
         {% if n == 1 or n == tp or (n >= p - 1 and n <= p + 1) %}
-        <a href="#" class="lb-page-btn {{ 'active' if n == p }}" onclick="goToPage({{ n }}); return false;">{{ n }}</a>
+        <a href="#" class="lb-page-btn {{ 'active' if n == p }}" {{ 'aria-current=page' if n == p }} onclick="goToPage({{ n }}); return false;">{{ n }}</a>
         {% elif n == p - 2 or n == p + 2 %}
         <span class="lb-page-ellipsis">…</span>
         {% endif %}
@@ -445,9 +407,10 @@
 
     <a href="#" class="lb-page-btn {{ 'disabled' if pagination.page >= pagination.total_pages }}"
        onclick="goToPage({{ pagination.page + 1 }}); return false;">Next →</a>
-</div>
+</nav>
 {% endif %}
 </div>
+</section>
 </div>{# /#lb-content #}
 
 </div>
@@ -483,12 +446,18 @@ function lbGo(a) { lbNavigate(a.href, false); return false; }
 function lbFilter(sel) {
     var f = sel.form;
     var params = new URLSearchParams(new FormData(f));
+    params.delete('page');
+    if (!params.get('q')) params.delete('q');
     lbNavigate(f.action + '?' + params.toString(), false);
     return false;
 }
 function lbNavigate(url, scrollToTable, pushHistory = true) {
-    if (lbBusy) return;
+    if (lbBusy) { lbPending = [url, scrollToTable, pushHistory]; return; }
     lbBusy = true;
+    // The search box is swapped out with everything else; note where the
+    // caret was so typing carries on in the new one.
+    const q = document.activeElement && document.activeElement.id === 'lb-q'
+        ? document.activeElement.selectionStart : null;
     // Capture the scroll position *now*, synchronously — clicking an anchor can
     // reset scrollY to 0 before the async fetch resolves, so reading it later
     // would pin us to the top.
@@ -518,6 +487,11 @@ function lbNavigate(url, scrollToTable, pushHistory = true) {
             requestAnimationFrame(pin);
             requestAnimationFrame(() => requestAnimationFrame(pin));
             if (pushHistory) history.pushState({ lb: true }, '', url);
+            lbToolsInit();
+            if (q !== null) {
+                const box = document.getElementById('lb-q');
+                if (box) { box.focus({ preventScroll: true }); box.setSelectionRange(q, q); }
+            }
             if (scrollToTable) {
                 const t = document.getElementById('lb-table');
                 if (t) {
@@ -527,9 +501,41 @@ function lbNavigate(url, scrollToTable, pushHistory = true) {
                 }
             }
             lbBusy = false;
+            if (lbPending) { const next = lbPending; lbPending = null; lbNavigate(...next); }
         })
         .catch(() => { window.location = url; });
 }
+
+let lbPending = null;
+// Search as you type, a beat after the last keystroke.
+let lbSearchTimer = null;
+function lbSearch(box) {
+    clearTimeout(lbSearchTimer);
+    lbSearchTimer = setTimeout(() => lbFilter(box), 250);
+}
+// Rows per page: a new page size starts again from page one.
+function lbRows(sel) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('n', sel.value);
+    url.searchParams.delete('page');
+    lbNavigate(url.toString(), false);
+}
+// On a phone the filters fold behind one button. Without script they stay
+// open, which is why the fold is applied here rather than in the markup.
+let lbToolsOpen = false;
+function lbToolsInit() {
+    const tools = document.getElementById('lb-tools');
+    if (!tools) return;
+    tools.classList.add('is-foldable');
+    tools.classList.toggle('is-open', lbToolsOpen);
+    const btn = tools.querySelector('.lb-tools-toggle');
+    if (btn) btn.setAttribute('aria-expanded', String(lbToolsOpen));
+}
+function lbToggleTools(btn) {
+    lbToolsOpen = !lbToolsOpen;
+    lbToolsInit();
+}
+lbToolsInit();
 
 // Back/forward restore the table for the URL in the address bar
 // (no pushHistory — the browser already moved the history pointer)

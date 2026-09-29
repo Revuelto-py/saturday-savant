@@ -2092,6 +2092,25 @@ def _promoted_fbs_exclusion(season, team_col):
 
 
 LEADERBOARD_PER_PAGE = 25
+LEADERBOARD_PER_PAGE_CHOICES = (25, 50, 100)
+
+# The leaders strip above each board: the stats a reader most often asks
+# "who leads?" about, four per category. Direction comes from the lower-better
+# sets, so "Fewest penalties" ranks ascending without a special case.
+LEADERBOARD_LEADERS = {
+    ('player', 'passing'):   [('yds', 'Passing yards'), ('td', 'Touchdowns'), ('rtg', 'Passer rating'), ('ypa', 'Yards / attempt')],
+    ('player', 'rushing'):   [('yds', 'Rushing yards'), ('td', 'Touchdowns'), ('ypc', 'Yards / carry'), ('long', 'Longest run')],
+    ('player', 'receiving'): [('yds', 'Receiving yards'), ('rec', 'Receptions'), ('td', 'Touchdowns'), ('ypr', 'Yards / catch')],
+    ('player', 'defense'):   [('tot', 'Tackles'), ('sacks', 'Sacks'), ('tfl', 'Tackles for loss'), ('int', 'Interceptions')],
+    ('player', 'kicking'):   [('fgm', 'Field goals made'), ('fgpct', 'Field goal %'), ('lng', 'Longest field goal'), ('pts', 'Kicking points')],
+    ('player', 'punting'):   [('ypp', 'Yards / punt'), ('in20', 'Inside the 20'), ('punts', 'Punts'), ('lng', 'Longest punt')],
+    ('team', 'savant'):      [('net_rating', 'Net rating'), ('off_rating', 'Offense'), ('def_rating', 'Defense'), ('sos', 'Toughest schedule')],
+    ('team', 'offense'):     [('off_ppa', 'EPA / play'), ('off_success_rate', 'Success rate'), ('off_explosiveness', 'Explosiveness'), ('off_line_yards', 'Line yards')],
+    ('team', 'defense'):     [('def_ppa', 'EPA / play allowed'), ('def_success_rate', 'Success rate allowed'), ('def_explosiveness', 'Explosiveness allowed'), ('def_stuff_rate', 'Stuff rate')],
+    ('team', 'sp'):          [('rating', 'SP+ overall'), ('offense_rating', 'SP+ offense'), ('defense_rating', 'SP+ defense'), ('special_teams_rating', 'SP+ special teams')],
+    ('team', 'discipline'):  [('tov_margin', 'Turnover margin'), ('takeaways_pg', 'Takeaways / game'), ('pen_pg', 'Fewest penalties'), ('top_pg', 'Time of possession')],
+    ('team', 'betting'):     [('ats_pct', 'Cover rate'), ('cover_margin', 'Cover margin'), ('ats_w', 'Covers'), ('ou_over', 'Overs')],
+}
 
 # ── Leaderboard column definitions ──────────────────────────────────────────
 # Each entry: (key, label, tooltip, sortable, format).
@@ -2502,21 +2521,71 @@ def _default_sort_col(columns, category, view):
 def _sortable_keys(columns, category, view):
     return {key for key, _, _, sortable, _ in columns[category][view] if sortable}
 
-def _sort_and_paginate(rows, sort_col, sort_dir, page_raw):
+def _sort_and_paginate(rows, sort_col, sort_dir, page_raw, q='', per_page=LEADERBOARD_PER_PAGE):
     """Sort a list of dicts by `sort_col`, always pushing None values to the
     end regardless of direction (mirrors SQL's NULLS LAST) — needed because
     several leaderboard columns (RTG, TKL%, ADJ YPA, ...) are computed in
-    Python from multiple joined sources and can't be ORDER BY'd in SQL."""
+    Python from multiple joined sources and can't be ORDER BY'd in SQL.
+
+    Every row is ranked on the full sorted pool BEFORE the name search is
+    applied, so a player found by search keeps the rank he holds in the table
+    rather than becoming #1 of one."""
     reverse = sort_dir != 'asc'
     with_val = [r for r in rows if r.get(sort_col) is not None]
     without_val = [r for r in rows if r.get(sort_col) is None]
     with_val.sort(key=lambda r: r[sort_col], reverse=reverse)
     ordered = with_val + without_val
-    page, offset, pagination = _pagination_ctx(page_raw, len(ordered))
-    page_rows = ordered[offset:offset + LEADERBOARD_PER_PAGE]
-    for i, r in enumerate(page_rows):
-        r['rank'] = offset + i + 1
-    return page_rows, pagination
+    for i, r in enumerate(ordered):
+        r['rank'] = i + 1
+    ordered = _lb_search(ordered, q)
+    page, offset, pagination = _pagination_ctx(page_raw, len(ordered), per_page)
+    return ordered[offset:offset + per_page], pagination
+
+
+def _lb_search(rows, q):
+    """Rows whose name contains every word of `q`, case-insensitively."""
+    words = [w for w in (q or '').lower().split() if w]
+    if not words:
+        return rows
+    return [r for r in rows if all(w in (r.get('name') or '').lower() for w in words)]
+
+
+def _lb_per_page():
+    """Rows per page from ?n=, limited to the choices the page offers."""
+    try:
+        n = int(request.args.get('n', LEADERBOARD_PER_PAGE))
+    except (TypeError, ValueError):
+        n = LEADERBOARD_PER_PAGE
+    return n if n in LEADERBOARD_PER_PAGE_CHOICES else LEADERBOARD_PER_PAGE
+
+
+def _lb_leaders(rows, mode, category, lower_better, view='standard'):
+    """The leaders strip: for each of a category's headline stats, the top
+    three of the pool on screen (every filter applied, search aside). Drawn
+    from the whole pool, so it answers "who leads" whatever page is showing.
+
+    Returns [{key, label, fmt, dir, view, top: [row, row, row]}]; `view` is
+    the stat view whose table can sort by it (the current one when it can),
+    None when neither can. A stat nobody in the pool has a value for is left
+    out."""
+    table = PLAYER_COLUMNS if mode == 'player' else TEAM_COLUMNS
+    fmts = {c[0]: c[4] for v in table[category].values() for c in v}
+    sortable_in = {}
+    for vname in (view, 'standard', 'advanced'):
+        for c in table[category].get(vname) or []:
+            if c[3]:
+                sortable_in.setdefault(c[0], vname)
+    out = []
+    for key, label in LEADERBOARD_LEADERS.get((mode, category), []):
+        present = [r for r in rows if r.get(key) is not None]
+        if not present:
+            continue
+        low = key in lower_better
+        present.sort(key=lambda r: r[key], reverse=not low)
+        out.append({'key': key, 'label': label, 'fmt': fmts.get(key, 'int'),
+                    'dir': 'asc' if low else 'desc', 'view': sortable_in.get(key),
+                    'top': present[:3]})
+    return out
 
 def get_teams_by_conference(cursor):
     cursor.execute("SELECT name, conference FROM teams WHERE conference IS NOT NULL ORDER BY conference, name")
@@ -2527,22 +2596,22 @@ def get_teams_by_conference(cursor):
         out.setdefault(conf, []).append(name)
     return out
 
-def _pagination_ctx(page_raw, total_count):
+def _pagination_ctx(page_raw, total_count, per_page=LEADERBOARD_PER_PAGE):
     """Clamp the requested page against the real total and compute offset +
     display context. Returns (page, offset, ctx) — use `page`/`offset` for the
     SQL query, pass `ctx` straight to the template."""
-    total_pages = max(1, -(-total_count // LEADERBOARD_PER_PAGE))  # ceil div
+    total_pages = max(1, -(-total_count // per_page))  # ceil div
     try:
         page = int(page_raw)
     except (TypeError, ValueError):
         page = 1
     page = max(1, min(page, total_pages))
-    offset = (page - 1) * LEADERBOARD_PER_PAGE
+    offset = (page - 1) * per_page
     start = offset + 1 if total_count > 0 else 0
-    end = min(offset + LEADERBOARD_PER_PAGE, total_count)
+    end = min(offset + per_page, total_count)
     ctx = {
         'page': page, 'total_pages': total_pages, 'total_count': total_count,
-        'per_page': LEADERBOARD_PER_PAGE, 'start': start, 'end': end,
+        'per_page': per_page, 'start': start, 'end': end,
     }
     return page, offset, ctx
 
@@ -3641,6 +3710,8 @@ def leaderboards(category='passing'):
         # query string so the AJAX nav and the per-combination page cache treat
         # them like every other control.
         heat        = request.args.get('heat', '1') != '0'
+        search_q    = request.args.get('q', '').strip()[:40]
+        per_page    = _lb_per_page()
 
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall() if r[0] not in FCS_CONFS]
@@ -4044,10 +4115,15 @@ def leaderboards(category='passing'):
 
         # Heat + the pool average line, over the FULL qualified pool — before
         # pagination, so a percentile means the same thing on every page.
-        pool_avg = _attach_heat(players, column_defs, PLAYER_LOWER_BETTER)
+        # A defender's interceptions are takeaways, the more the better; only
+        # a passer's are a mistake.
+        lower = set() if category == 'defense' else PLAYER_LOWER_BETTER
+        pool_avg = _attach_heat(players, column_defs, lower)
         pool_size = len(players)
+        leaders = _lb_leaders(players, 'player', category, lower, view)
 
-        players, pagination = _sort_and_paginate(players, sort_col, sort_dir, page_raw)
+        players, pagination = _sort_and_paginate(players, sort_col, sort_dir, page_raw,
+                                                 q=search_q, per_page=per_page)
 
     finally:
         release_db(conn)
@@ -4056,7 +4132,7 @@ def leaderboards(category='passing'):
         'mode': 'player', 'category': category, 'view': view, 'season': season,
         'conf': conf_filter, 'team': team_filter, 'pos': pos_filter,
         'qualified': '1' if qualified else '0', 'sort': sort_col, 'dir': sort_dir,
-        'heat': '1' if heat else '0',
+        'heat': '1' if heat else '0', 'q': search_q, 'n': per_page,
     }
     has_advanced = len(PLAYER_COLUMNS[category]['advanced']) > 0
 
@@ -4091,7 +4167,9 @@ def leaderboards(category='passing'):
         ap_rankings=ap_rankings, pagination=pagination,
         column_groups=PLAYER_COLUMN_GROUPS.get((category, view)),
         pool_avg=pool_avg, pool_size=pool_size,
-        heat=heat,
+        heat=heat, leaders=leaders, search_q=search_q, per_page=per_page,
+        per_page_choices=LEADERBOARD_PER_PAGE_CHOICES,
+        sortable_keys={c[0] for c in column_defs if c[3]},
     )
 
 # ── Team leaderboards ───────────────────────────────────────────────────────
@@ -4425,6 +4503,8 @@ def leaderboards_teams(category='savant'):
     view        = request.args.get('view', 'standard')
     view        = view if view in ('standard', 'advanced') else 'standard'
     heat        = request.args.get('heat', '1') != '0'
+    search_q    = request.args.get('q', '').strip()[:40]
+    per_page    = _lb_per_page()
 
     column_defs = TEAM_COLUMNS[category][view] or TEAM_COLUMNS[category]['standard']
 
@@ -4622,8 +4702,17 @@ def leaderboards_teams(category='savant'):
         # Heat over the whole pool, then slice the page out of it.
         pool_avg = _attach_heat(teams_out, column_defs, TEAM_LOWER_BETTER)
         pool_size = len(teams_out)
-        page, offset, pagination = _pagination_ctx(page_raw, pool_size)
-        teams_out = teams_out[offset:offset + LEADERBOARD_PER_PAGE]
+        leaders = _lb_leaders(teams_out, 'team', category, TEAM_LOWER_BETTER, view)
+        # The Savant board's profile column plots offense against defense on
+        # one scale; the scale spans the pool so every row is comparable.
+        profile = None
+        if category == 'savant':
+            pts = [v for t in teams_out for v in (t.get('off_rating'), t.get('def_rating')) if v is not None]
+            if pts:
+                profile = {'lo': min(pts), 'hi': max(pts)}
+        teams_out = _lb_search(teams_out, search_q)
+        page, offset, pagination = _pagination_ctx(page_raw, len(teams_out), per_page)
+        teams_out = teams_out[offset:offset + per_page]
     finally:
         release_db(conn)
 
@@ -4631,7 +4720,7 @@ def leaderboards_teams(category='savant'):
         'mode': 'team', 'category': category, 'view': view, 'season': season,
         'conf': conf_filter, 'team': team_filter,
         'sort': sort_col, 'dir': sort_dir,
-        'heat': '1' if heat else '0',
+        'heat': '1' if heat else '0', 'q': search_q, 'n': per_page,
     }
     # Say why a borrowed-table category is empty rather than leaving a grid of
     # dashes to read as a bug.
@@ -4658,7 +4747,9 @@ def leaderboards_teams(category='savant'):
         pagination=pagination,
         column_groups=TEAM_COLUMN_GROUPS.get((category, view)),
         pool_avg=pool_avg, pool_size=pool_size,
-        heat=heat,
+        heat=heat, leaders=leaders, search_q=search_q, per_page=per_page,
+        per_page_choices=LEADERBOARD_PER_PAGE_CHOICES, profile=profile,
+        sortable_keys={c[0] for c in column_defs if c[3]},
     )
 
 @app.route('/teams')
