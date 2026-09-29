@@ -54,11 +54,20 @@ def team_id_from_logo(url):
     return m.group(1) if m else None
 
 
+def _team_id(entry):
+    """ESPN team id out of a poll entry's team `$ref`, or None."""
+    ref = ((entry.get('team') or {}).get('$ref')) or ''
+    m = re.search(r'/teams/(\d+)', ref)
+    return m.group(1) if m else None
+
+
 def _poll(season, stype, week, timeout):
     """One week's AP poll, or None when ESPN has no such poll.
 
     Returns {'week', 'season_type', 'date', 'ranks': [{'espn_id', 'rank',
-    'points', 'first_place_votes'}]}.
+    'points', 'first_place_votes'}], 'others': [{'espn_id', 'points',
+    'first_place_votes'}]}. `others` is the AP's "others receiving votes" list,
+    highest points first; CFBD does not carry it, so ESPN is its only source.
     """
     url = CORE.format(season=season, stype=stype, week=week)
     try:
@@ -67,11 +76,7 @@ def _poll(season, stype, week, timeout):
         return None
     ranks = []
     for r in d.get('ranks') or []:
-        tid = None
-        ref = ((r.get('team') or {}).get('$ref')) or ''
-        m = re.search(r'/teams/(\d+)', ref)
-        if m:
-            tid = m.group(1)
+        tid = _team_id(r)
         if not tid or r.get('current') is None:
             continue
         pts = r.get('points')
@@ -85,11 +90,24 @@ def _poll(season, stype, week, timeout):
         })
     if not ranks:
         return None
+    others = []
+    for r in d.get('others') or []:
+        tid = _team_id(r)
+        pts = r.get('points')
+        if not tid or not pts:
+            continue
+        fpv = r.get('firstPlaceVotes')
+        others.append({
+            'espn_id': tid,
+            'points': int(pts),
+            'first_place_votes': int(fpv) if fpv else None,
+        })
     return {
         'week': week,
         'season_type': 'postseason' if stype == _TYPE_POST else 'regular',
         'date': d.get('date'),
         'ranks': sorted(ranks, key=lambda x: x['rank']),
+        'others': sorted(others, key=lambda x: -x['points']),
     }
 
 

@@ -62,6 +62,20 @@ for col in ('prev_rank INTEGER', 'season_type TEXT'):
 # One poll row per team, keyed so a re-run can't duplicate.
 cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_ap_rankings '
                'ON ap_rankings (season, season_type, week, team)')
+# The AP's "others receiving votes" — teams outside the 25 that drew points.
+# ESPN is the only source (CFBD stops at 25), so this table is filled from the
+# same ESPN walk that backs up ap_rankings, and is simply empty when ESPN is.
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ap_others (
+        season            INTEGER NOT NULL,
+        season_type       TEXT    NOT NULL,
+        week              INTEGER NOT NULL,
+        team              TEXT    NOT NULL,
+        points            INTEGER NOT NULL,
+        first_place_votes INTEGER,
+        PRIMARY KEY (season, season_type, week, team)
+    )
+''')
 conn.commit()
 
 
@@ -100,7 +114,7 @@ def espn_id_map(cursor):
     return out
 
 
-def merge_espn(season, polls, id_map):
+def merge_espn(season, polls, id_map, espn_polls):
     """Fill weeks CFBD has no poll for from ESPN, and report what was added.
 
     CFBD keeps precedence on every week it has an opinion about; this only adds
@@ -111,7 +125,7 @@ def merge_espn(season, polls, id_map):
     """
     have = {(wk, st) for wk, st, _ in polls}
     added = []
-    for p in espn_rankings.ap_polls(season):
+    for p in espn_polls:
         key = (p['week'], p['season_type'])
         if key in have:
             continue
@@ -146,6 +160,41 @@ def poll_rows(season, polls):
     return rows
 
 
+def others_rows(season, espn_polls, id_map):
+    """ap_others rows for every ESPN poll. A team ESPN names that isn't in
+    `teams` (usually an FCS school drawing a few votes) is left out rather than
+    stored under an id nobody can link to."""
+    rows = []
+    for p in espn_polls:
+        for r in p.get('others') or []:
+            name = id_map.get(r['espn_id'])
+            if name:
+                rows.append((season, p['season_type'], p['week'], name,
+                             r['points'], r['first_place_votes']))
+    return rows
+
+
+def write_others(cursor, season, espn_polls, id_map):
+    """Replace the season's ap_others rows when they changed; True if written.
+    An empty ESPN response writes nothing, for the same reason ap_rankings
+    never deletes on one."""
+    if not espn_polls:
+        return False
+    wanted = others_rows(season, espn_polls, id_map)
+    cursor.execute('''SELECT season, season_type, week, team, points, first_place_votes
+                        FROM ap_others WHERE season = %s''', (season,))
+    if set(wanted) == set(cursor.fetchall()):
+        return False
+    cursor.execute('DELETE FROM ap_others WHERE season = %s', (season,))
+    cursor.executemany('''
+        INSERT INTO ap_others (season, season_type, week, team, points, first_place_votes)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    ''', wanted)
+    conn.commit()
+    print(f"{season}: others receiving votes — {len(wanted)} rows", flush=True)
+    return True
+
+
 def stored_rows(cursor, season):
     cursor.execute('''SELECT team, rank, points, first_place_votes, week, season,
                              prev_rank, season_type
@@ -169,9 +218,12 @@ with cfbd.ApiClient(configuration) as api_client:
 
         # CFBD can lag the poll's release by days. Fill only the weeks it has
         # nothing for; see espn_rankings for which ESPN endpoint to trust.
-        added = merge_espn(season, polls, id_map)
+        espn_polls = espn_rankings.ap_polls(season)
+        added = merge_espn(season, polls, id_map, espn_polls)
         if added:
             print(f"{season}: filled from ESPN — {', '.join(added)}", flush=True)
+        if write_others(cursor, season, espn_polls, id_map):
+            changed_seasons.append(season)
 
         if not polls:
             # Never delete on an empty response — an outage at BOTH sources must
@@ -192,7 +244,8 @@ with cfbd.ApiClient(configuration) as api_client:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ''', wanted)
         conn.commit()
-        changed_seasons.append(season)
+        if season not in changed_seasons:
+            changed_seasons.append(season)
         print(f"{season}: UPDATED — {len(polls)} polls, {len(wanted)} rows "
               f"(latest: {polls[-1][1]} week {polls[-1][0]})", flush=True)
 

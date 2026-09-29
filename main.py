@@ -6109,13 +6109,15 @@ def rankings():
         return 'Preseason' if wk == 1 else f'Week {wk}'
 
     conn = get_db()
+    teams, others, dropped, gaps, gap_axis = [], [], [], [], 30
+    history, prev_poll, other_rows = {}, {}, []
+    sel_week = sel_type = None
     try:
         cursor = conn.cursor()
         # Every poll this season has, chronological (regular weeks, then final).
         cursor.execute('SELECT DISTINCT week, season_type FROM ap_rankings WHERE season = %s', (season,))
         polls = sorted(cursor.fetchall(), key=lambda r: (0 if r[1] == 'regular' else 1, r[0]))
 
-        sel_week = sel_type = None
         rows = []
         if polls:
             # Selected poll from ?w=<season_type>-<week>; default to the final.
@@ -6151,13 +6153,109 @@ def rankings():
                 ORDER BY a.rank
             ''', {'season': season, 'wk': sel_week, 'stype': sel_type, 'post': is_post})
             rows = cursor.fetchall()
+
+            # Rank in each of the last five polls up to this one, for the
+            # sparklines, and the poll before this one for "dropped out".
+            upto = polls[:polls.index(chosen) + 1]
+            recent = upto[-5:]
+            cursor.execute('''SELECT team, week, season_type, rank FROM ap_rankings
+                              WHERE season = %s''', (season,))
+            by_poll = {}
+            for team, wk, st, rk in cursor.fetchall():
+                by_poll.setdefault((wk, st), {})[team] = rk
+            history = {r[1]: [by_poll.get(p, {}).get(r[1]) for p in recent] for r in rows}
+            prev_poll = by_poll.get(upto[-2], {}) if len(upto) > 1 else {}
+
+            # Savant Net rank AS OF this poll. savant_weekly week N holds ratings
+            # through week N's games, and poll week W reflects games through
+            # W-1, so the snapshot wanted is the latest at or before W-1. The
+            # final poll uses the season's closing rating. The preseason poll
+            # has none, and the comparison is left out.
+            svr = {}
+            try:
+                if is_post:
+                    cursor.execute('SELECT team, net_ranking FROM savant_ratings WHERE season = %s', (season,))
+                else:
+                    cursor.execute('''SELECT team, net_ranking FROM savant_weekly
+                                      WHERE season = %(s)s AND week = (
+                                          SELECT MAX(week) FROM savant_weekly
+                                          WHERE season = %(s)s AND week <= %(w)s - 1)''',
+                                   {'s': season, 'w': sel_week})
+                svr = {t: rk for t, rk in cursor.fetchall() if rk}
+            except Exception:
+                conn.rollback()
+
+            # Others receiving votes (ESPN only; empty until the fetch has run).
+            try:
+                cursor.execute('''
+                    SELECT o.team, o.points, t.logo, t.logo_dark, t.conference, t.color, t.alt_color
+                    FROM ap_others o LEFT JOIN teams t ON o.team = t.name
+                    WHERE o.season = %s AND o.week = %s AND o.season_type = %s
+                    ORDER BY o.points DESC, o.team
+                ''', (season, sel_week, sel_type))
+                other_rows = cursor.fetchall()
+            except Exception:
+                conn.rollback()
+                other_rows = []
     finally:
         release_db(conn)
 
+    def spark(ranks):
+        """SVG polyline points on a 100x28 box: #1 at the top, unranked (26)
+        at the bottom. None when there is only one poll to draw."""
+        if len(ranks) < 2:
+            return None
+        step = 100 / (len(ranks) - 1)
+        return ' '.join(f'{i * step:.1f},{2 + (min(r or 26, 26) - 1) / 25 * 24:.1f}'
+                        for i, r in enumerate(ranks))
+
+    for r in rows:
+        hist = history.get(r[1], [])
+        teams.append({
+            'rank': r[0], 'team': r[1], 'points': r[2], 'fpv': r[3],
+            'logo': r[13] or r[5], 'conf': r[6],
+            'c1': r[7] or '#1e3a5f', 'c2': r[14] or '#0f1e3a',
+            'sp_rank': r[9], 'wins': r[10], 'losses': r[11],
+            'move': (r[12] - r[0]) if r[12] is not None else None,
+            'svr': svr.get(r[1]),
+            'spark': spark(hist),
+            'spark_label': 'Rank in the last {} polls: {}'.format(
+                len(hist), ', '.join(str(x) if x else 'unranked' for x in hist)),
+        })
+
+    # Teams in the previous poll that are not in this one: noted on their
+    # "others" card when they still drew votes, listed on their own otherwise.
+    current = {t['team'] for t in teams}
+    fell = {t: rk for t, rk in prev_poll.items() if t not in current} if teams else {}
+    for o in other_rows:
+        others.append({'team': o[0], 'points': o[1], 'logo': o[3] or o[2], 'conf': o[4],
+                       'c1': o[5] or '#1e3a5f', 'c2': o[6] or '#0f1e3a',
+                       'was': fell.get(o[0])})
+    listed = {o['team'] for o in others}
+    dropped = sorted(((t, rk) for t, rk in fell.items() if t not in listed), key=lambda x: x[1])
+
+    # Where the poll and the numbers disagree: the six biggest gaps of five or
+    # more spots between AP rank and Savant rank.
+    rated = [t for t in teams if t['svr']]
+    big = sorted((t for t in rated if abs(t['svr'] - t['rank']) >= 5),
+                 key=lambda t: (-abs(t['svr'] - t['rank']), t['rank']))[:6]
+    if big:
+        gap_axis = max(30, -(-max(t['svr'] for t in big) // 10) * 10)
+        for t in big:
+            gaps.append({'team': t['team'], 'ap': t['rank'], 'svr': t['svr'],
+                         'ap_x': 100 * (t['rank'] - 1) / (gap_axis - 1),
+                         'svr_x': 100 * (t['svr'] - 1) / (gap_axis - 1)})
+
     poll_options = [{'value': f'{st}-{wk}', 'label': poll_label(wk, st),
                      'selected': (wk == sel_week and st == sel_type)} for wk, st in polls]
-    return render_template('rankings.html', rankings=rows,
-                           poll_options=poll_options,
+    idx = next((i for i, p in enumerate(poll_options) if p['selected']), None)
+    prev_opt = poll_options[idx - 1] if idx else None
+    next_opt = poll_options[idx + 1] if idx is not None and idx + 1 < len(poll_options) else None
+    half = (len(teams) - 5 + 1) // 2 if len(teams) > 5 else 0
+    return render_template('rankings.html', teams=teams,
+                           top=teams[:5], cols=[teams[5:5 + half], teams[5 + half:]],
+                           others=others, dropped=dropped, gaps=gaps, gap_axis=gap_axis,
+                           poll_options=poll_options, prev_opt=prev_opt, next_opt=next_opt,
                            sel_label=poll_label(sel_week, sel_type) if sel_week else None,
                            sel_is_final=(sel_type == 'postseason'),
                            season=season, available_seasons=get_ranking_seasons())
