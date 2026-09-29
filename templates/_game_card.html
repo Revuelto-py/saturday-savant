@@ -6,12 +6,9 @@
 
        ┌──────────────────────────────────────┐
        │ what this game is         STATE      │  head
-       ├──────────────────────────────────────┤
-       │ logo  rank  Away Team          score │  teams  (flex:1, centred)
-       │ logo  rank  Home Team          score │
-       ├──────────────────────────────────────┤
-       │ Savant Forecast                      │  foot
-       └──────────────────────────────────────┘
+       │ logo  rank  Away Team      27%  score │  teams
+       │ logo  rank  Home Team      73%  score │
+       └▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀┘  edge: forecast split
 
    This replaced three divergent shapes. The head used to be dropped entirely
    for a scheduled game under a day header, the kickoff time lived in the body
@@ -26,99 +23,69 @@
              right-hand chip answers "what is happening with this game". The
              left is what the game IS (rivalry, bowl, event), which is why a
              title never pushes the matchup down: the row exists regardless.
-     teams — ALWAYS two rows with a score slot. The slot is rendered empty
-             before kickoff rather than omitted, so names align across states.
-     foot  — ALWAYS the Savant Forecast, rendered in the form the state calls
-             for: the split bar before and during the game, the recap after.
-             One idea, one place, three renderings.
+     teams — ALWAYS two rows. The Savant Forecast % sits in the same column
+             in every state (the live call before kickoff, the frozen call
+             after), so the forecast has one place instead of a footer that
+             changed form per state. The score slot is always rendered; CSS
+             hides it only before kickoff, when the % is the headline figure.
+     edge  — the same forecast as a 3px split along the bottom edge. It costs
+             no height, which is what let the old footer row go.
 #}
 {% macro game_card(g, prob=None, forecast=None, show_date=True, featured=False) %}
 {% set state = 'final' if g.completed else ('live' if g.live else 'upcoming') %}
 {% set home_won = g.completed and (g.home_pts or 0) > (g.away_pts or 0) %}
 {% set away_won = g.completed and (g.away_pts or 0) > (g.home_pts or 0) %}
-{% set has_foot = (prob is not none and state != 'final') or (forecast and state == 'final') %}
+{# Home win probability for the pct column and the edge: the current forecast
+   before and during the game, the frozen pre-kickoff call once it is final. #}
+{% if state == 'final' %}
+    {% set hp = none if not forecast else (forecast.fav_prob if forecast.favorite == g.home else 1 - forecast.fav_prob) %}
+{% else %}
+    {% set hp = prob %}
+{% endif %}
 <a class="game-card-v2 is-{{ state }}{{ ' is-featured' if featured else '' }}" href="/game/{{ g.id }}" data-gid="{{ g.id }}">
 
-    {# ── head ───────────────────────────────────────────────────────────── #}
+    {# ── head: what this game IS (left), what is happening with it (right) ── #}
     <div class="gc-head">
-        {# What this game IS. Falls back to the date when the view is not
-           already grouped by day; the week is not repeated here because the
-           section heading above the grid already states it. #}
         <span class="gc-note">
             {%- if g.rivalry %}<span class="gc-note-rivalry">{{ g.rivalry }}</span>{% endif -%}
             {%- if g.rivalry and g.notes %}<span class="gc-note-sep">·</span>{% endif -%}
-            {%- if g.notes %}{{ g.notes }}
-            {%- elif show_date and not g.rivalry %}{{ g.kickoff_date }}{% endif -%}
+            {%- if g.notes %}{{ g.notes }}{% endif -%}
         </span>
         <span class="gc-badges">
             {% if state == 'final' and forecast and forecast.is_upset %}<span class="gc-upset">Upset</span>{% endif %}
-            {%- if state == 'final' %}<span class="gc-final" data-live-status>Final</span>
-            {%- elif state == 'live' %}<span class="gc-live" data-live-status>Live</span>
-            {%- else %}<span class="gc-upcoming" data-live-status>{{ g.kickoff_time or 'TBD' }}</span>{% endif -%}
+            {#- Outside data-live-status, so a live-score poll rewriting the
+                state never wipes the date. Off under a day header (/games),
+                where the header already says it. -#}
+            {%- if show_date %}<span class="gc-date">{{ g.kickoff_date }}</span>{% endif -%}
+            {%- if state == 'final' %}<span class="gc-state gc-final" data-live-status>Final</span>
+            {%- elif state == 'live' %}<span class="gc-state gc-live" data-live-status>Live</span>
+            {%- else %}<span class="gc-state gc-upcoming" data-live-status>{{ g.kickoff_time or 'TBD' }}</span>{% endif -%}
         </span>
     </div>
 
-    {# ── teams ──────────────────────────────────────────────────────────── #}
+    {# ── teams: logo · rank + name · forecast % · score ── #}
     <div class="gc-teams">
-        <div class="gc-team{{ ' winner' if away_won else '' }}">
-            {% if g.away_logo %}<img src="{{ g.away_logo }}" alt="{{ g.away }} logo" loading="lazy">{% endif %}
+        {% for side, won, pct in [('away', away_won, none if hp is none else 1 - hp),
+                                  ('home', home_won, hp)] %}
+        <div class="gc-team{{ ' winner' if won else '' }}{{ ' is-fav' if pct is not none and pct >= 0.5 else '' }}">
+            {% if g[side ~ '_logo'] %}<img src="{{ g[side ~ '_logo'] }}" alt="" loading="lazy">{% else %}<span class="gc-logo-gap"></span>{% endif %}
             <span class="gc-name">
-                {% if g.away_rank %}<span class="gc-rank">{{ g.away_rank }}</span>{% endif %}{{ g.away }}
+                {% if g[side ~ '_rank'] %}<span class="gc-rank"><span class="sr-only">AP rank </span>{{ g[side ~ '_rank'] }}</span>{% endif %}{{ g[side] }}
             </span>
-            <span class="gc-score" data-live-away>{% if state != 'upcoming' %}{{ g.away_pts }}{% endif %}</span>
+            {% if pct is not none %}<span class="gc-pct"><span class="sr-only">Savant Forecast </span>{{ '%.0f' % (pct * 100) }}%</span>{% endif %}
+            <span class="gc-score" {{ 'data-live-' ~ side }}>{% if state != 'upcoming' %}{{ g[side ~ '_pts'] }}{% endif %}</span>
         </div>
-        <div class="gc-team{{ ' winner' if home_won else '' }}">
-            {% if g.home_logo %}<img src="{{ g.home_logo }}" alt="{{ g.home }} logo" loading="lazy">{% endif %}
-            <span class="gc-name">
-                {% if g.home_rank %}<span class="gc-rank">{{ g.home_rank }}</span>{% endif %}{{ g.home }}
-            </span>
-            <span class="gc-score" data-live-home>{% if state != 'upcoming' %}{{ g.home_pts }}{% endif %}</span>
-        </div>
+        {% endfor %}
     </div>
 
-    {# ── foot ───────────────────────────────────────────────────────────── #}
-    <div class="gc-foot{{ '' if has_foot else ' is-empty' }}">
-        {% if state == 'final' %}
-            {% if forecast %}
-            {# The frozen pre-kickoff call, and whether it hit. #}
-            <span class="gc-fc-recap{{ ' is-hit' if forecast.correct else '' }}">
-                Savant: {{ forecast.favorite }} {{ '%.0f' % (forecast.fav_prob * 100) }}%{% if forecast.correct %} ✓{% endif %}
-            </span>
-            {% endif %}
-        {% elif prob is not none %}
-            {# Split bar in the two team colours, favourite's share called out. #}
-            {# Same guard as the game hero: the old test checked the shape of the
-               value but not whether the colour can be seen, so a black brand
-               colour drew an invisible half to the forecast split bar. #}
-            {% set pair = forecast_pair(g.away_color | team_hex('#5a2b2b'),
-                                        g.home_color | team_hex('#2b3a55')) %}
-            {% set ac = pair[0] %}{% set hc = pair[1] %}
-            {% set home_fav = prob >= 0.5 %}
-            {% set fav = g.home if home_fav else g.away %}
-            {% set dog = g.away if home_fav else g.home %}
-            {% set fav_pct = (prob if home_fav else 1 - prob) * 100 %}
-            {% set split = (1 - prob) * 100 %}
-            {# Geometry only: a 0.3% share yields a negative calc() and drops the
-               segment entirely, so the drawn split is floored well below the
-               point where it could misstate anything. The text carries the
-               true number either way. #}
-            {% set gsplit = '%.1f' % ([[split, 1.2] | max, 98.8] | min) %}
-            <span class="gc-forecast" title="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }}%"
-                  role="img" aria-label="Savant Forecast: {{ fav }} {{ '%.0f' % fav_pct }} percent, {{ dog }} {{ '%.0f' % (100 - fav_pct) }} percent">
-                <span class="fc-bar">
-                    {# A 2px gap of track between the segments rather than an edge
-                       to edge meeting. forecast_pair() guarantees the two sides
-                       differ in tone; this just sharpens the boundary where the
-                       track is darker than both of them. #}
-                    <span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                        {{ ac }} 0%, {{ ac }} calc({{ gsplit }}% - 1px),
-                        transparent calc({{ gsplit }}% - 1px), transparent calc({{ gsplit }}% + 1px),
-                        {{ hc }} calc({{ gsplit }}% + 1px), {{ hc }} 100%)"></span>
-                    <span class="fc-bar-tick fc-bar-even" aria-hidden="true"></span>
-                </span>
-                <span class="gc-fc-pct"><span class="fc-swatch" style="background:{{ hc if home_fav else ac }}" aria-hidden="true"></span>{{ fav }} {{ '%.0f' % fav_pct }}%</span>
-            </span>
-        {% endif %}
-    </div>
+    {# ── edge: the forecast split in the two team colours, away share first.
+       Decorative — the pct column carries the number. forecast_pair() keeps a
+       black brand colour from drawing an invisible half. ── #}
+    {% if hp is not none %}
+        {% set pair = forecast_pair(g.away_color | team_hex('#5a2b2b'),
+                                    g.home_color | team_hex('#2b3a55')) %}
+        <span class="gc-edge" aria-hidden="true"
+              style="--ac:{{ pair[0] }};--hc:{{ pair[1] }};--split:{{ '%.1f' % ((1 - hp) * 100) }}%"></span>
+    {% endif %}
 </a>
 {% endmacro %}

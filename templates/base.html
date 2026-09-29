@@ -705,7 +705,9 @@
                 var live = g.state === 'live';
                 if (live) anyLive = true;
                 el.classList.toggle('is-live', live);
-                if (g.state === 'final') el.classList.remove('is-upcoming');
+                // Off at kickoff, not just at the final: the card hides its
+                // score slot while is-upcoming, so a live game kept it hidden.
+                if (live || g.state === 'final') el.classList.remove('is-upcoming');
                 // Only the game's OWN page changes shape when it ends (box score,
                 // drives, win probability appear), and that cannot be patched in.
                 // A card just becomes "Final" with its score, which we have already

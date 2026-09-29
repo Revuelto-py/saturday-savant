@@ -7,68 +7,66 @@
 {% block content %}
 <div class="page-wrapper">
 
-    <!-- Page header -->
-    <div style="margin-bottom:20px">
-        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
-            {% if sel_team %}{{ sel_team }}
-                <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} schedule</span>
-            {% else %}
-                {% for o in week_options %}{% if o.week == sel_week and o.stype == sel_stype %}{{ o.label }}{% endif %}{% endfor %}
-                <span style="color: var(--text-dim);font-weight:400;font-size: 1.4rem"> · {{ season }} Season</span>
-            {% endif %}
-        </h1>
-    </div>
-
-    <!-- Season toggle -->
-    <div class="lb-mode-toggle" style="margin-bottom: var(--s5)">
-        {% for s in seasons %}
-        <a href="{{ url_for('games_hub', season=s) }}" class="lb-mode-btn {{ 'active' if s == season else '' }}">{{ s }}</a>
-        {% endfor %}
-    </div>
-
-    <!-- Filters: week / conference / team -->
-    <div class="lb-filter-section">
-        <div class="lb-filter-row">
-            <div class="lb-filter-group">
-                <label class="lb-filter-label" for="gf-week-1">Week</label>
-                <select id="gf-week-1" aria-label="Week" class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
-                    {% for o in week_options %}
-                    <option value="{{ url_for('games_hub', season=season, week=o.week, stype=o.stype, conf=(sel_conf or none)) }}"
-                        {{ 'selected' if (o.week == sel_week and o.stype == sel_stype) else '' }}>{{ o.label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="lb-filter-group">
-                <label class="lb-filter-label" for="gf-conference-2">Conference</label>
-                <select id="gf-conference-2" aria-label="Conference" class="lb-select" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
-                    <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
-                        {{ 'selected' if not sel_conf else '' }}>All Conferences</option>
-                    {% for c in conferences %}
-                    <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype, conf=c) }}"
-                        {{ 'selected' if sel_conf == c else '' }}>{{ c }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="lb-filter-group">
-                <label class="lb-filter-label" for="gf-team-3">Team</label>
-                <select id="gf-team-3" aria-label="Team" class="lb-select" onchange="location=this.value">
-                    <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
-                        {{ 'selected' if not sel_team else '' }}>All Teams</option>
-                    {% for t in team_names %}
-                    <option value="{{ url_for('games_hub', season=season, team=t) }}"
-                        {{ 'selected' if sel_team == t else '' }}>{{ t }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="games-count">{{ games|length }} game{{ '' if games|length == 1 else 's' }}</div>
+    {# Header, week strip, filters. The season is a select rather than a row of
+       eleven buttons, and the week is a strip rather than a select: the week is
+       what people change most, so it is the control that is always visible. #}
+    {% set cur = namespace(i=none) %}
+    {% for o in week_options %}{% if not sel_team and o.week == sel_week and o.stype == sel_stype %}{% set cur.i = loop.index0 %}{% endif %}{% endfor %}
+    <div class="gm-head">
+        <div class="gm-title">
+            <h1>{% if sel_team %}{{ sel_team }}{% elif cur.i is not none %}{{ week_options[cur.i].label }}{% endif %}</h1>
+            <span class="gm-sub">
+                {%- if sel_team %}{{ season }} schedule
+                {%- elif day_groups and day_groups[0].date %}{{ day_groups[0].date }}{% if day_groups|length > 1 and day_groups[-1].date %} – {{ day_groups[-1].date }}{% endif %}, {{ season }}
+                {%- else %}{{ season }} season{% endif %} · {{ games|length }} game{{ '' if games|length == 1 else 's' }}
+            </span>
         </div>
+        <label class="gm-season">Season
+            <select class="lb-select" onchange="location=this.value">
+                {% for s in seasons %}
+                <option value="{{ url_for('games_hub', season=s) }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </label>
     </div>
 
-    {# The split bar under each scheduled card is this model's output, and the
-       page never said so — it appeared only inside a title= attribute. #}
-    <p class="slate-caption">
-        <span class="slate-caption-model">Savant Forecast</span> — pre-kickoff win probability on scheduled games, and the frozen call it made on completed ones.{% if forecast_record %} Correct on {{ forecast_record.pct }}% of the {{ forecast_record.total }} {{ season }} games scored so far.{% endif %}
-    </p>
+    <nav class="gm-weeks" aria-label="Week">
+        {% set prev = week_options[cur.i - 1] if cur.i is not none and cur.i > 0 else none %}
+        {% set next = week_options[cur.i + 1] if cur.i is not none and cur.i + 1 < week_options|length else none %}
+        {% if prev %}<a class="gm-step" href="{{ url_for('games_hub', season=season, week=prev.week, stype=prev.stype, conf=(sel_conf or none)) }}" aria-label="Previous week">{% else %}<span class="gm-step" aria-hidden="true">{% endif %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>{% if prev %}</a>{% else %}</span>{% endif %}
+        <div class="gm-week-list">
+            {% for o in week_options %}
+            <a class="gm-week{{ ' is-active' if loop.index0 == cur.i else '' }}" href="{{ url_for('games_hub', season=season, week=o.week, stype=o.stype, conf=(sel_conf or none)) }}"
+               {% if loop.index0 == cur.i %}aria-current="page"{% endif %} aria-label="{{ o.label }}">{{ 'Bowls' if o.stype == 'postseason' else o.week }}</a>
+            {% endfor %}
+        </div>
+        {% if next %}<a class="gm-step" href="{{ url_for('games_hub', season=season, week=next.week, stype=next.stype, conf=(sel_conf or none)) }}" aria-label="Next week">{% else %}<span class="gm-step" aria-hidden="true">{% endif %}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>{% if next %}</a>{% else %}</span>{% endif %}
+    </nav>
+
+    <div class="gm-filters">
+        <select class="lb-select" aria-label="Conference" onchange="location=this.value" {{ 'disabled' if sel_team else '' }}>
+            <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
+                {{ 'selected' if not sel_conf else '' }}>All conferences</option>
+            {% for c in conferences %}
+            <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype, conf=c) }}"
+                {{ 'selected' if sel_conf == c else '' }}>{{ c }}</option>
+            {% endfor %}
+        </select>
+        <select class="lb-select" aria-label="Team" onchange="location=this.value">
+            <option value="{{ url_for('games_hub', season=season, week=sel_week, stype=sel_stype) }}"
+                {{ 'selected' if not sel_team else '' }}>All teams</option>
+            {% for t in team_names %}
+            <option value="{{ url_for('games_hub', season=season, team=t) }}"
+                {{ 'selected' if sel_team == t else '' }}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        {# The % beside each team and the coloured edge under each card are this
+           model's output; the page says so once, here. #}
+        <p class="gm-legend">
+            <span class="gm-legend-bar" aria-hidden="true"></span>
+            <span><b>Savant Forecast</b> win probability{% if forecast_record %} · right on {{ forecast_record.pct }}% of {{ forecast_record.total }} games in {{ season }}{% endif %}</span>
+        </p>
+    </div>
 
     {% if sel_team %}
     <div class="games-context">
@@ -133,6 +131,12 @@
 
 {% block scripts %}
 <script>
+// The week strip scrolls sideways on a phone; start it on the selected week.
+(function () {
+    var a = document.querySelector('.gm-week.is-active');
+    if (a) a.parentNode.scrollLeft = a.offsetLeft - a.parentNode.clientWidth / 2 + a.clientWidth / 2;
+})();
+
 /* ── Long-day collapse (small screens only) ───────────────────────────────
    A full Saturday is ~60 cards stacked one-up, which put this page at 18,925px
    on a phone and buried the upsets strip under all of it. The day is already
