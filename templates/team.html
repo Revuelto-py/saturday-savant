@@ -358,103 +358,153 @@
    since surged reads as the quality win it now is. Inline, not a lazy pane:
    it is built from the schedule rows the page already has. #}
 {% if resume or remaining_path %}
+{% macro signed(v) %}{{ ('%+.1f'|format(v)).replace('-', '−') }}{% endmacro %}
+{% macro rank_txt(x) %}{{ ('#' ~ x.rank) if x.rank else 'FCS' }}{% endmacro %}
+{% macro wk_txt(x) %}{{ 'Post' if x.post else x.week }}{% endmacro %}
 {% macro opp_cell(x) -%}
     <a class="row-link rs-opp" href="{{ team_url(x.opp, season) }}">
-        {% if x.logo %}<img src="{{ x.logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}
+        {% if x.logo %}<img src="{{ x.logo }}" alt="" width="28" height="28" loading="lazy">{% endif %}
         <span>{{ x.opp }}</span>
     </a>
 {%- endmacro %}
-{% macro rank_txt(x) %}{{ ('#' ~ x.rank) if x.rank else 'FCS' }}{% endmacro %}
 {% macro result_link(x) -%}
     <a class="rs-result {{ 'is-w' if x.won else 'is-l' }}" href="/game/{{ x.game_id }}" aria-label="{{ 'Won' if x.won else 'Lost' }} {{ x.pf }} to {{ x.pa }}, game details">
         <span class="rs-wl">{{ 'W' if x.won else 'L' }}</span> {{ x.pf }}–{{ x.pa }}
     </a>
 {%- endmacro %}
-<div class="tab-pane fade{{ ' show active' if tab == 'resume' }}" id="resume" aria-labelledby="tab-resume" tabindex="0">
-<div class="pt-4">
-    <div style="margin-bottom:20px">
-        <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Résumé</h2>
-        <p class="rs-intro">Every result measured against the opponent&rsquo;s current Savant Rating rank, so a win over a team that has since surged counts as the quality win it now is.</p>
+{% macro ladder_row(x) -%}
+    <tr>
+        <td class="rs-rank">{{ rank_txt(x) }}</td>
+        <td class="rs-opp-cell">
+            {{ opp_cell(x) }}
+            <div class="rs-meta">{{ x.site }} · Wk {{ wk_txt(x) }} · {{ ('Net ' ~ signed(x.net)) if x.net is not none else 'no rating' }}</div>
+        </td>
+        <td class="rs-site rs-col-x">{{ x.site }}</td>
+        <td class="rs-col-x">
+            <div class="rs-net">
+                <span class="rs-net-track" aria-hidden="true"><span class="rs-net-bar" style="left: {{ x.bar_left }}%; width: {{ x.bar_w }}%"></span></span>
+                <span class="rs-num">{{ signed(x.net) if x.net is not none else '—' }}</span>
+            </div>
+        </td>
+        <td class="rs-num rs-col-x rs-c">{{ wk_txt(x) }}</td>
+        <td class="rs-r">{{ result_link(x) }}</td>
+    </tr>
+{%- endmacro %}
+{% macro ladder_head() -%}
+    <thead>
+        <tr>
+            <th scope="col">Rank</th>
+            <th scope="col">Opponent</th>
+            <th scope="col" class="rs-col-x">Site</th>
+            <th scope="col" class="rs-col-x rs-c">Opp Net</th>
+            <th scope="col" class="rs-col-x rs-c">Wk</th>
+            <th scope="col" class="rs-r">Result</th>
+        </tr>
+    </thead>
+{%- endmacro %}
+{% macro highlight(x, kind) -%}
+    <a class="dark-card rs-hl {{ 'is-w' if x.won else 'is-l' }}" href="/game/{{ x.game_id }}">
+        {% if x.logo %}<img class="rs-hl-logo" src="{{ x.logo }}" alt="" width="52" height="52" loading="lazy">{% endif %}
+        <span class="rs-hl-body">
+            <span class="rs-hl-kicker">{{ kind }}</span>
+            <span class="rs-hl-title">{{ x.site }} {{ ('#' ~ x.rank ~ ' ') if x.rank }}{{ x.opp }}{{ ' (FCS)' if not x.rank }}</span>
+            <span class="rs-hl-sub">{{ 'Postseason' if x.post else 'Week ' ~ x.week }}{% if x.net is not none %} · Opp Net {{ signed(x.net) }}{% endif %}</span>
+        </span>
+        <span class="rs-hl-score">{{ 'W' if x.won else 'L' }} {{ x.pf }}–{{ x.pa }}</span>
+    </a>
+{%- endmacro %}
+{% macro sos_card(label, p) -%}
+    {% set fill = (100 * (1 - (p.rank - 1) / (p.of - 1))) if p.of > 1 else 100 %}
+    <div class="dark-card rs-sos">
+        <div class="rs-sos-top">
+            <h3 class="rs-kicker">{{ label }}</h3>
+            <span class="rs-sos-avg">opp avg {{ signed(p.avg) }}</span>
+        </div>
+        <div class="rs-sos-rank"><span class="rs-big">{{ ordinal(p.rank) }}</span> hardest of {{ p.of }}</div>
+        <div class="rs-sos-track" aria-hidden="true"><span style="width: {{ '%.1f'|format(fill) }}%"></span></div>
+        <div class="rs-sos-ends" aria-hidden="true"><span>Hardest</span><span>Easiest</span></div>
     </div>
+{%- endmacro %}
+<div class="tab-pane fade{{ ' show active' if tab == 'resume' }}" id="resume" aria-labelledby="tab-resume" tabindex="0">
+<div class="pt-4 rs-pane">
+    <header class="rs-head">
+        <div class="rs-kicker">{{ season }} Résumé</div>
+        {% if resume %}
+        {% set t25 = resume.tiers[1][1] %}{% set t50 = resume.tiers[2][1] %}
+        <h2 class="rs-headline">{{ resume.w }}–{{ resume.l }}{% if t25 %}, with {{ t25 }} win{{ 's' if t25 != 1 }} over the Savant Top 25{% elif t50 %}, with {{ t50 }} win{{ 's' if t50 != 1 }} over the Savant Top 50{% else %}, no wins over the Savant Top 50{% endif %}</h2>
+        {% else %}
+        <h2 class="rs-headline">No games played yet</h2>
+        {% endif %}
+        <p class="rs-intro">Every result is measured against the opponent&rsquo;s current Savant Rating rank, so a win over a team that has since surged counts as the quality win it now is.</p>
+    </header>
 
     <div class="row g-3">
-        {% if resume %}{% for cut, w, l in resume.tiers %}
-        <div class="col-6 col-lg">
-            <div class="dark-card p-3 text-center h-100">
-                <div class="rs-label">vs Savant Top {{ cut }}</div>
-                <div class="rs-value{{ ' is-empty' if w + l == 0 }}">{{ w }}-{{ l }}</div>
-            </div>
-        </div>
-        {% endfor %}{% endif %}
-        {% if played_path and resume %}
-        <div class="col-6 col-lg">
-            <div class="dark-card p-3 text-center h-100">
-                <div class="rs-label">Schedule so far</div>
-                <div class="rs-value">{{ ordinal(played_path.rank) }}</div>
-                <div class="rs-sub">hardest of {{ played_path.of }} · opp avg {{ ('%+.1f'|format(played_path.avg)).replace('-', '−') }}</div>
+        {% if resume %}
+        <div class="col-lg-7">
+            <div class="dark-card rs-tiers">
+                <h3 class="rs-kicker">Record vs Savant tiers</h3>
+                {% for cut, w, l, xs in resume.tiers %}
+                <div class="rs-tier">
+                    <div class="rs-tier-label">vs Top {{ cut }}</div>
+                    <div class="rs-big{{ ' is-empty' if w + l == 0 }}">{{ w }}–{{ l }}</div>
+                    {% if xs %}
+                    <ul class="rs-pips" aria-label="Games vs the Savant Top {{ cut }}">
+                        {% for x in xs %}
+                        <li><a class="rs-pip {{ 'is-w' if x.won else 'is-l' }}" href="/game/{{ x.game_id }}" title="{{ 'W' if x.won else 'L' }} {{ x.pf }}–{{ x.pa }} {{ x.site }} #{{ x.rank }} {{ x.opp }}" aria-label="{{ 'Won' if x.won else 'Lost' }} {{ x.pf }} to {{ x.pa }} {{ x.site }} number {{ x.rank }} {{ x.opp }}">
+                            {% if x.logo %}<img src="{{ x.logo }}" alt="" width="20" height="20" loading="lazy">{% else %}{{ 'W' if x.won else 'L' }}{% endif %}
+                        </a></li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="rs-pips-empty">No games</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
         </div>
         {% endif %}
-        {% if remaining_path %}
-        <div class="col-6 col-lg">
-            <div class="dark-card p-3 text-center h-100">
-                <div class="rs-label">Still to play</div>
-                <div class="rs-value">{{ ordinal(remaining_path.rank) }}</div>
-                <div class="rs-sub">hardest of {{ remaining_path.of }} · opp avg {{ ('%+.1f'|format(remaining_path.avg)).replace('-', '−') }}</div>
+        <div class="{{ 'col-lg-5' if resume else 'col-12' }}">
+            <div class="rs-sos-stack">
+                {% if played_path and resume %}{{ sos_card('Schedule so far', played_path) }}{% endif %}
+                {% if remaining_path %}{{ sos_card('Still to play', remaining_path) }}{% endif %}
             </div>
         </div>
-        {% endif %}
     </div>
 
     {% if resume %}
-    <div class="row g-4 mt-1">
-        {% for title, rows, empty in (('Best wins', resume.best_wins, 'No wins yet.'), ('Losses · worst first', resume.losses, 'No losses.')) %}
-        <div class="col-md-6">
-            <h3 class="rs-h3">{{ title }}</h3>
-            <div class="dark-card rs-list">
-                {% for x in rows %}
-                <div class="rs-list-row">
-                    <span class="rs-rank">{{ rank_txt(x) }}</span>
-                    {{ opp_cell(x) }}
-                    <span class="rs-site">{{ x.site }}</span>
-                    {{ result_link(x) }}
-                </div>
-                {% else %}
-                <div class="rs-list-empty">{{ empty }}</div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
+    <div class="rs-hls">
+        {% if resume.best_win %}{{ highlight(resume.best_win, 'Best win') }}
+        {% else %}<div class="dark-card rs-hl is-none"><span class="rs-hl-body"><span class="rs-hl-kicker">Best win</span><span class="rs-hl-title">No wins yet</span></span></div>{% endif %}
+        {% if resume.worst_loss %}{{ highlight(resume.worst_loss, 'Worst loss') }}
+        {% else %}<div class="dark-card rs-hl is-none"><span class="rs-hl-body"><span class="rs-hl-kicker">Worst loss</span><span class="rs-hl-title">Unbeaten</span></span></div>{% endif %}
     </div>
 
-    <h3 class="rs-h3" style="margin-top:28px">Strength of schedule, by opponent faced</h3>
-    <div class="dark-card rs-table-wrap">
-        <table class="data-table rs-table">
-            <caption class="visually-hidden">{{ season }} opponents ordered by current Savant rank</caption>
-            <thead>
-                <tr>
-                    <th scope="col" style="text-align:center">Opp rank</th>
-                    <th scope="col" style="text-align:left">Opponent</th>
-                    <th scope="col" style="text-align:center">Site</th>
-                    <th scope="col" style="text-align:right">Opp Net</th>
-                    <th scope="col" style="text-align:center">Wk</th>
-                    <th scope="col" style="text-align:right">Result</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for x in resume.games %}
-                <tr>
-                    <td class="rs-rank" style="text-align:center">{{ rank_txt(x) }}</td>
-                    <td>{{ opp_cell(x) }}</td>
-                    <td class="rs-site" style="text-align:center">{{ x.site }}</td>
-                    <td class="rs-num" style="text-align:right">{{ ('%+.1f'|format(x.net)).replace('-', '−') if x.net is not none else '—' }}</td>
-                    <td class="rs-num" style="text-align:center">{{ 'Post' if x.post else x.week }}</td>
-                    <td style="text-align:right">{{ result_link(x) }}</td>
-                </tr>
+    <section class="rs-ladder" aria-labelledby="rs-ladder-h">
+        <div class="rs-ladder-top">
+            <h3 class="rs-h3" id="rs-ladder-h">Opponent ladder</h3>
+            <div class="rs-view" role="group" aria-label="Order games" hidden>
+                <button type="button" class="rs-view-btn" data-rs-view="rank" aria-pressed="true">By opponent rank</button>
+                <button type="button" class="rs-view-btn" data-rs-view="week" aria-pressed="false">By week</button>
+            </div>
+        </div>
+        <div class="dark-card rs-table-wrap">
+            <table class="rs-table" data-rs-pane="rank">
+                <caption class="visually-hidden">{{ season }} opponents grouped by current Savant rank</caption>
+                {{ ladder_head() }}
+                {% for label, w, l, xs in resume.bands %}
+                <tbody>
+                    <tr class="rs-band"><th scope="rowgroup" colspan="6"><span>{{ label }}</span><span class="rs-band-rec">{{ w }}–{{ l }}</span></th></tr>
+                    {% for x in xs %}{{ ladder_row(x) }}{% endfor %}
+                </tbody>
                 {% endfor %}
-            </tbody>
-        </table>
-    </div>
+            </table>
+            <table class="rs-table" data-rs-pane="week" hidden>
+                <caption class="visually-hidden">{{ season }} opponents in week order</caption>
+                {{ ladder_head() }}
+                <tbody>{% for x in resume.by_week %}{{ ladder_row(x) }}{% endfor %}</tbody>
+            </table>
+        </div>
+    </section>
     {% endif %}
 
     <p class="rs-note">Ranks and Net Ratings are each opponent&rsquo;s current Savant Rating. Schedule strength averages the Net Rating of rated opponents and ignores home and away; FCS opponents have no rating and are not counted{% if played_path and played_path.unrated %} ({{ played_path.unrated }} so far){% endif %}. Site: vs = home, @ = away, N = neutral.</p>
@@ -949,6 +999,23 @@ function showSchedule(season) {
     // A link straight to #roster opens that tab without a click.
     var hash = (location.hash || '').replace(/^#/, '');
     if (hash) check(hash);
+})();
+// Résumé ladder: flip between opponent-rank bands and week order. The
+// toggle stays hidden without JS, which leaves the rank view.
+(function () {
+    var group = document.querySelector('#resume .rs-view');
+    if (!group) return;
+    group.hidden = false;
+    var btns = group.querySelectorAll('[data-rs-view]');
+    btns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var view = btn.dataset.rsView;
+            btns.forEach(function (b) { b.setAttribute('aria-pressed', String(b === btn)); });
+            document.querySelectorAll('#resume [data-rs-pane]').forEach(function (t) {
+                t.hidden = t.dataset.rsPane !== view;
+            });
+        });
+    });
 })();
 </script>
 {% endblock %}

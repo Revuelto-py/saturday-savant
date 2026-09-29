@@ -6413,31 +6413,55 @@ def _savant_paths(season):
 
 def _team_resume(schedule, ranks, net):
     """A season's résumé from _team_schedule rows, keyed on opponents' CURRENT
-    Savant rank: W-L against the top 10/25/50 (cumulative tiers), the best wins
-    and worst losses, and every completed game ordered by opponent strength
-    (unrated FCS opponents last). None before any game is played."""
+    Savant rank: W-L against the top 10/25/50 (cumulative tiers), the best win
+    and worst loss, and every completed game ordered by opponent strength and
+    grouped into exclusive rank bands (unrated FCS opponents last), plus the
+    same games in week order. None before any game is played."""
     games = []
     for g in schedule:
         if not g[10] or g[4] is None or g[5] is None:
             continue
+        n = net.get(g[2])
+        # Opp Net as a bar diverging from zero, as percentages of its track:
+        # ±25 fills a half, which covers all but the very top of FBS.
+        half = min(abs(n) / 25, 1) * 50 if n is not None else 0
         games.append({'game_id': g[0], 'opp': g[2], 'logo': g[9], 'week': g[6],
                       'post': 'POSTSEASON' in (g[7] or ''),
                       'site': 'N' if g[15] else ('vs' if g[1] == 'home' else '@'),
                       'pf': g[4], 'pa': g[5], 'won': g[4] > g[5],
-                      'rank': ranks.get(g[2]), 'net': net.get(g[2])})
+                      'rank': ranks.get(g[2]), 'net': n,
+                      'bar_left': round(50 - half if n is not None and n < 0 else 50, 2),
+                      'bar_w': round(half, 2)})
     if not games:
         return None
+    by_week = sorted(games, key=lambda x: (x['post'], x['week'] or 0))
     games.sort(key=lambda x: (x['rank'] is None, x['rank'] or 0))
     rated = [x for x in games if x['rank'] is not None]
-    tiers = [(cut, sum(1 for x in rated if x['rank'] <= cut and x['won']),
-              sum(1 for x in rated if x['rank'] <= cut and not x['won']))
-             for cut in (10, 25, 50)]
+
+    def wl(xs):
+        return sum(1 for x in xs if x['won']), sum(1 for x in xs if not x['won'])
+
+    tiers = []
+    for cut in (10, 25, 50):
+        xs = [x for x in rated if x['rank'] <= cut]
+        tiers.append((cut,) + wl(xs) + (xs,))
+    bands = []
+    for label, lo, hi in (('Top 10', 1, 10), ('11–25', 11, 25),
+                          ('26–50', 26, 50), ('51 and below', 51, None)):
+        xs = [x for x in rated if x['rank'] >= lo and (hi is None or x['rank'] <= hi)]
+        if xs:
+            bands.append((label,) + wl(xs) + (xs,))
+    fcs = [x for x in games if x['rank'] is None]
+    if fcs:
+        bands.append(('FCS · unrated',) + wl(fcs) + (fcs,))
     wins = [x for x in games if x['won']]
     losses = [x for x in games if not x['won']]
-    return {'tiers': tiers, 'games': games,
-            'best_wins': wins[:3],
-            # worst first: the lowest-ranked opponent, and FCS below all of them
-            'losses': list(reversed(losses))}
+    w, l = wl(games)
+    return {'tiers': tiers, 'bands': bands, 'games': games, 'by_week': by_week,
+            'w': w, 'l': l,
+            'best_win': wins[0] if wins else None,
+            # worst: the lowest-ranked opponent, and FCS below all of them
+            'worst_loss': losses[-1] if losses else None}
 
 
 def _team_adv_from_row(ts):
