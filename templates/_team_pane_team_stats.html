@@ -19,19 +19,16 @@
 {% macro tier(r) -%}
 {%- if r <= 10 %}top-10{% elif r <= 25 %}top-25{% elif r <= 50 %}top-50{% elif r <= 86 %}mid-pack{% else %}bottom-50{% endif -%}
 {%- endmacro %}
-{% macro pct_colour(p) -%}
-{#- The site's five Savant bands. Lifted from pure red and blue so the knob can
-    print its number on the band at 4.5:1. -#}
-{%- if p >= 80 %}#d44f41{% elif p >= 60 %}#e74c3c{% elif p >= 45 %}#95a5a6{% elif p >= 25 %}#5d8aa8{% else %}#2a83bd{% endif -%}
-{%- endmacro %}
+{# Percentile colour is the sitewide continuous scale (pct_fill / pct_knob in
+   main.py), shared with the player and compare pages. #}
 {% macro pct_row(label, val, metric, kind='') %}
 {% set p = percentiles.get(metric) %}
 <div class="ts-pct">
     <span class="ts-pct-label">{{ label }}</span>
     <span class="ts-pct-track">
         {% if p is not none %}
-        <span class="ts-pct-fill" style="width: {{ p }}%; background: {{ pct_colour(p) }}"></span>
-        <span class="ts-pct-knob" style="left: {{ p }}%; background: {{ pct_colour(p) }}" aria-label="{{ p }}th percentile">{{ p }}</span>
+        <span class="ts-pct-fill" style="width: {{ p }}%; background: {{ pct_fill(p) }}"></span>
+        <span class="ts-pct-knob" style="left: {{ p }}%; background: {{ pct_knob(p) }}" aria-label="{{ p }}th percentile">{{ p }}</span>
         {% endif %}
     </span>
     <span class="ts-pct-val">{% if val is none %}—{% elif kind == 'epa' %}{{ signed(val, '%+.2f') }}{% elif kind == 'pct' %}{{ val }}%{% elif kind == 'yd' %}{{ val }} yd{% else %}{{ val }}{% endif %}</span>
@@ -209,10 +206,10 @@
             </div>
         </div>
     </section>
-    <div class="ts-legend" aria-label="Percentile colours">
-        {% for p, label in ((10, '1–24 · poor'), (30, '25–44'), (50, '45–59 · average'), (70, '60–79'), (90, '80–99 · great')) %}
-        <span><span class="ts-legend-swatch" style="background: {{ pct_colour(p) }}"></span>{{ label }}</span>
-        {% endfor %}
+    <div class="ts-legend" aria-label="Percentile colours: blue is poor, grey-blue average, red great">
+        <span>Poor</span>
+        <span class="ts-legend-scale" style="background: linear-gradient(90deg, {{ pct_fill(0) }}, {{ pct_fill(50) }}, {{ pct_fill(100) }})"></span>
+        <span>Great</span>
     </div>
     {% endif %}
 

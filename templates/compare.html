@@ -174,7 +174,7 @@
     {% macro lane(v, e) %}
     {% set has_p = v.percentile is not none %}
     <div class="cmp-lane{% if v.raw is none %} is-empty{% elif not has_p %} is-unranked{% endif %}"
-         style="--hue:{{ e.hue }};--ink:{{ e.ink }};--pp:{{ v.percentile or 0 }};--ps:{{ v.share or 0 }}"
+         style="--hue:{{ e.hue }};--kc:{{ e.kc }};--pp:{{ v.percentile or 0 }};--ps:{{ v.share or 0 }}"
          {% if v.raw is not none and not has_p %}title="No qualified percentile for this stat"{% endif %}>
         {% if v.raw is not none %}
         <span class="cmp-fill"></span>
@@ -253,7 +253,7 @@
                 <span class="cmp-shot-label">{{ row.label }}</span>
                 <div class="cmp-shot-lanes">
                     {% for v in row['values'] %}{% set e = active_entities[loop.index0] %}
-                    <div class="cmp-shot-lane" style="--hue:{{ e.hue }};--ink:{{ e.ink }};--w:{{ v.percentile }}">
+                    <div class="cmp-shot-lane" style="--hue:{{ e.hue }};--kc:{{ e.kc }};--w:{{ v.percentile }}">
                         <span class="cmp-shot-fill"></span><span class="cmp-shot-knob">{{ v.percentile }}</span>
                     </div>
                     {% endfor %}

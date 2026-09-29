@@ -1357,6 +1357,129 @@ _PRIMARY_CATEGORY = {'QB':'passing','RB':'rushing','WR':'receiving','TE':'receiv
                      'K':'kicking','P':'punting'}
 
 
+def _transfer_path(rows):
+    """Every school in order, each move carrying its season and star rating.
+
+    rows: (origin, destination, transfer_date, year, stars, rating), oldest
+    first. A portal entry with no destination is a stop called "In portal";
+    when a later move starts somewhere else, that stop was where he went, so it
+    takes that school's name. A path with one school means no transfer."""
+    path = []
+    for origin, dest, _d, yr, stars, _r in rows:
+        if origin and (not path or path[-1]['school'] != origin):
+            if path and path[-1]['portal']:
+                path[-1].update(school=origin, portal=False)
+            elif not path or path[-1]['school'] != origin:
+                path.append({'school': origin, 'year': None, 'stars': 0, 'portal': False})
+        if dest == origin:
+            continue
+        path.append({'school': dest or 'In portal', 'year': yr, 'stars': stars or 0, 'portal': not dest})
+    return path
+
+
+# Player-page glossary. Each percentile label maps to the term that explains
+# it; several labels share one term. Only terms for what the page shows are
+# listed, so a kicker's glossary has no EPA and a lineman's no passing.
+PLAYER_GLOSSARY = {
+    'Percentile': 'Where this player ranks among the qualified FBS players at his position on a stat, from 1 to 99. Each one is oriented so higher is better: for stuffed runs or touchbacks, a low raw number earns a high percentile. The bar runs from blue (poor) through grey (average) to red (great).',
+    'Qualified': 'The peer pool a percentile is measured against: players at the same position with enough playing time to rank. The count is stated above the bars.',
+    'FBS rank': 'Position among all FBS players on the stat, 1st best. Shown under each headline figure in the header; top-10 ranks are marked in gold.',
+    'EPA / play': 'Expected Points Added per play: how much each play moved the offense toward scoring, given the down, distance and field position before it. The best single measure of efficiency.',
+    'Pass and rush EPA / play': 'EPA / play counted on pass plays or rush plays alone, showing where a player creates value.',
+    'Total EPA': 'The sum of EPA across every play: efficiency multiplied by volume.',
+    'Completion %': 'Completions divided by pass attempts.',
+    'Yards / attempt': 'Passing yards divided by pass attempts.',
+    'Avg depth of target': 'Average depth of target (ADOT): mean air yards per pass attempt. Higher means a more vertical passer.',
+    'Air yards share': 'Share of passing yards gained before the catch rather than after it: what the quarterback creates versus the receivers.',
+    'Deep attempt rate': 'Share of pass attempts the play-by-play marks as thrown deep.',
+    'Passer rating': 'The NCAA passer efficiency formula, built from completion rate, yards, touchdowns and interceptions per attempt.',
+    'Yards / carry': 'Rushing yards divided by carries.',
+    'Yards / reception': 'Receiving yards divided by receptions.',
+    'Usage rate': 'Share of the team’s offensive plays that end with this player, split by play type and down. Standard downs are 1st down, 2nd and 7 or fewer, and 3rd or 4th and 4 or fewer; everything else is a passing down.',
+    'Success rate': 'Share of plays that count as successful: 50% of the yards needed on 1st down, 70% on 2nd, and all of them on 3rd or 4th. Measures consistency.',
+    'Line yards': 'Rushing yards credited to the offensive line, roughly the first 5 yards of each carry.',
+    'Second-level yards': 'Rushing yards gained 5 to 10 yards past the line of scrimmage, where linebackers are responsible.',
+    'Open-field yards': 'Rushing yards gained more than 10 yards past the line of scrimmage: largely the runner’s speed and elusiveness.',
+    'Explosiveness': 'Average EPA on successful plays only: how big the gains are when things go right.',
+    'Stuffed rate': 'Share of carries stopped at or behind the line of scrimmage. Lower is better, and the percentile accounts for that.',
+    'Sacks and TFL': 'Sacks bring down the quarterback behind the line; tackles for loss (TFL) are any tackle behind the line, sacks included. Half values are shared plays.',
+    'QB hurries': 'Pressures that forced the quarterback to throw early or move, without a sack.',
+    'Passes defended': 'Passes broken up or intercepted.',
+    'Interceptions': 'Passes caught by the defender.',
+    'Tackles': 'Total tackles, solo plus assisted. Solo tackles are made without help.',
+    'Field goal %': 'Field goals made divided by field goals attempted.',
+    'Longest': 'Longest kick of the season.',
+    'Extra points': 'Point-after kicks made.',
+    'Kicking points': 'Points from field goals (3 each) and extra points (1 each).',
+    'Yards / punt': 'Gross punting average: punt yards divided by punts.',
+    'Inside 20': 'Punts downed or fair-caught inside the opponent’s 20-yard line.',
+    'Touchbacks': 'Punts that reach the end zone and come out to the 25. Fewer is better.',
+    'Transfer': 'Each move through the transfer portal, with the season and the player’s star rating as a transfer. “In portal” marks an entry with no destination yet.',
+    'Awards': 'National awards won. The Heisman Trophy is shown on its own at the top of the header.',
+}
+_GLOSS_FOR_LABEL = {
+    'EPA / Play': 'EPA / play', 'Pass EPA / Play': 'Pass and rush EPA / play', 'Rush EPA / Play': 'Pass and rush EPA / play',
+    'Total EPA': 'Total EPA', 'Completion %': 'Completion %', 'Yards / Attempt': 'Yards / attempt',
+    'Avg Depth of Target': 'Avg depth of target', 'Air Yards Share': 'Air yards share', 'Deep Attempt Rate': 'Deep attempt rate',
+    'Yards / Carry': 'Yards / carry', 'Usage Rate': 'Usage rate', 'Success Rate': 'Success rate', 'Line Yards': 'Line yards',
+    'Second-Level Yards': 'Second-level yards', 'Open-Field Yards': 'Open-field yards', 'Explosiveness': 'Explosiveness',
+    'Stuffed Rate': 'Stuffed rate', 'Yards / Reception': 'Yards / reception', 'Sacks': 'Sacks and TFL',
+    'Tackles for Loss': 'Sacks and TFL', 'QB Hurries': 'QB hurries', 'Passes Defended': 'Passes defended',
+    'Interceptions': 'Interceptions', 'Tackles': 'Tackles', 'Solo Tackles': 'Tackles', 'Field Goal %': 'Field goal %',
+    'Longest': 'Longest', 'Extra Points': 'Extra points', 'Kicking Points': 'Kicking points', 'Yards / Punt': 'Yards / punt',
+    'Inside 20': 'Inside 20', 'Touchbacks': 'Touchbacks',
+}
+
+def _player_glossary(percentile_rows, is_qb, has_usage, has_transfer, has_awards):
+    terms = ['Percentile', 'Qualified', 'FBS rank'] if percentile_rows else ['FBS rank']
+    for r in percentile_rows:
+        t = _GLOSS_FOR_LABEL.get(r['label'])
+        if t and t not in terms:
+            terms.append(t)
+    for flag, t in ((is_qb, 'Passer rating'), (has_usage, 'Usage rate'), (has_transfer, 'Transfer'), (has_awards, 'Awards')):
+        if flag and t not in terms:
+            terms.append(t)
+    return [(t, PLAYER_GLOSSARY[t]) for t in terms]
+
+
+def _last_game(game_log):
+    """The latest decided game in the log, with the score split into this
+    player's team and the opponent. result reads "W 42-26" / "L 41-27": the
+    winner's score comes first either way."""
+    done = [g for g in (game_log or []) if (g.get('result') or '')[:1] in 'WLT' and g.get('result')]
+    if not done:
+        return None
+    g = done[-1]
+    try:
+        a, b = (int(x) for x in g['result'][2:].split('-'))
+    except ValueError:
+        return None
+    won = g['result'][0] == 'W'
+    return dict(g, us=a if won or g['result'][0] == 'T' else b, them=b if won or g['result'][0] == 'T' else a, won=won)
+
+
+# Rates that some pools store as a fraction (0.44) and others as a percent.
+_PCT_RATE_KEYS = {'PCT', 'air_share', 'deep_pct', 'overall', 'sr', 'stuff'}
+
+def _fmt_pct_raw(stat_key, v):
+    """A percentile row's raw value, formatted for the column beside the bar."""
+    try:
+        v = float(str(v).rstrip('%'))
+    except (TypeError, ValueError):
+        return ''
+    if stat_key in _PCT_RATE_KEYS:
+        return f'{v * 100 if abs(v) <= 1 else v:.1f}%'
+    if stat_key.startswith('avg_ppa'):
+        return f'{v:+.3f}'.replace('+', '')
+    if stat_key in ('total_ppa',):
+        return f'{v:.1f}'
+    if stat_key in ('expl',):
+        return f'{v:.2f}'
+    if v == int(v):
+        return f'{int(v):,}'
+    return f'{v:.1f}'
+
+
 def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
     """Assemble the player-page percentile rankings for one player.
 
@@ -1437,16 +1560,24 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
         if r is not None:
             national[key] = r
 
+    def raw_of(src, stat_key):
+        entry = sources.get(src)
+        v = (entry[0].get(player_id) or {}).get(stat_key) if entry else None
+        return 0 if (v is None and entry and entry[1]) else v
+
     rows, peer = [], 0
     for label, src, stat_key, hb in specs:
         _, p, n = rank_one(src, stat_key, hb)
         if p is not None:
+            # The value being ranked, printed beside its bar: taken from the
+            # same pool the percentile came from, so the two always agree.
+            raw = _fmt_pct_raw(stat_key, raw_of(src, stat_key))
             # n travels with the row. Rows are NOT all ranked against the same
             # pool: a metric is dropped for any peer whose value is None, so in
             # week 1 of 2026 the counting stats ranked against 40 qualified QBs
             # while the air-yard rows ranked against the 12 whose season is
             # measured enough to have one. The page has to be able to say so.
-            rows.append({'label': label, 'pct': p, 'n': n})
+            rows.append({'label': label, 'pct': p, 'n': n, 'raw': raw})
             peer = max(peer, n)
 
     return national, rows, qgroup, peer
@@ -4416,6 +4547,15 @@ def compare_colors(pairs):
     return out
 
 
+def white_knob(hex_color):
+    """hex_color darkened only as far as a white number on it needs to clear
+    4.5:1 — the percentile knob's rule, applied to a team colour."""
+    c = _to_rgb(hex_color)
+    while 1.05 / (_srgb_lum(c) + 0.05) < 4.5:
+        c = tuple(round(v * 0.94) for v in c)
+    return '#%02x%02x%02x' % c
+
+
 def ink_on(hex_color):
     """Dark or white text, whichever reads on this fill."""
     return '#0a0b0d' if _srgb_lum(_to_rgb(hex_color)) > 0.3 else '#ffffff'
@@ -4424,6 +4564,37 @@ def ink_on(hex_color):
 def hex_rgba(hex_color, alpha):
     r, g, b = _to_rgb(hex_color)
     return f'rgba({r},{g},{b},{alpha})'
+
+
+def shade(hex_color, t):
+    """hex_color darkened toward black by t (0-1)."""
+    r, g, b = _to_rgb(team_hex(hex_color, '#334155'))
+    return '#%02x%02x%02x' % tuple(round(c * (1 - t)) for c in (r, g, b))
+
+
+# ── Percentile bars, sitewide ────────────────────────────────────────────
+# One continuous scale, the way Baseball Savant draws it: blue at the bottom,
+# grey-blue at average, red at the top. The player page, the team page and the
+# compare page all read it from here, so a number means one colour everywhere.
+_PCT_LO, _PCT_MID, _PCT_HI = (50, 90, 168), (184, 201, 207), (210, 45, 45)
+
+def _pct_rgb(p):
+    p = max(0, min(100, p or 0))
+    a, b, t = (_PCT_LO, _PCT_MID, p / 50) if p < 50 else (_PCT_MID, _PCT_HI, (p - 50) / 50)
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+def pct_fill(p):
+    return '#%02x%02x%02x' % _pct_rgb(p)
+
+def pct_knob(p):
+    """The knob prints its number in white on every percentile, so it is the
+    bar's colour darkened only as far as white needs to clear 4.5:1."""
+    c = _pct_rgb(p)
+    while 1.05 / (_srgb_lum(c) + 0.05) < 4.5:
+        c = tuple(round(v * 0.94) for v in c)
+    return '#%02x%02x%02x' % c
+
+app.jinja_env.globals.update(shade=shade, pct_fill=pct_fill, pct_knob=pct_knob, hex_rgba=hex_rgba)
 
 
 def _hex_to_rgba(hex_color, alpha):
@@ -8671,8 +8842,9 @@ def _player_detail_cached(player_id, season):
                                      AND LOWER(last_name) = LOWER(%s))
             ORDER BY year ASC, transfer_date ASC
         ''', (player_id, player['first_name'], player['last_name']))
+        transfer_rows = cursor.fetchall()
         transfers_history = []
-        for origin, destination, transfer_date, t_year, stars, rating in cursor.fetchall():
+        for origin, destination, transfer_date, t_year, stars, rating in transfer_rows:
             if not origin or not destination:
                 continue  # still in the portal / no completed move to show
             transfers_history.append({
@@ -8681,6 +8853,7 @@ def _player_detail_cached(player_id, season):
                 'year': t_year,
                 'stars': stars or 0,
             })
+        transfer_path = _transfer_path(transfer_rows)
 
         # ── Career hardware (Heisman, Biletnikoff, …) for the hero band ──────
         cursor.execute('''
@@ -9185,7 +9358,13 @@ def _player_detail_cached(player_id, season):
     # the hero and the boards can never disagree about it.
     games_played = _games_played_map(season).get(str(player_id))
 
+    last_game = _last_game(game_log)
+    glossary = _player_glossary(percentile_rows, (player.get('position') or '').upper() == 'QB',
+                                bool(usage) and (player.get('position') or '').upper() != 'QB',
+                                len(transfer_path) > 1, bool(player_awards))
+
     return render_template('player.html',
+        last_game=last_game, glossary=glossary, transfer_path=transfer_path,
         player=player, stats=stats, ppa=ppa, games_played=games_played,
         season=season, is_current_season=(season == CURRENT_SEASON),
         available_seasons=player_seasons,
@@ -10334,7 +10513,7 @@ def compare():
     # bars and the share image.
     hues = compare_colors([(e.get('color'), e.get('alt_color')) for e in active_entities])
     for e, hue in zip(active_entities, hues):
-        e.update(hue=hue, ink=ink_on(hue), glow=hex_rgba(hue, 0.32), halo=hex_rgba(hue, 0.7))
+        e.update(hue=hue, ink=ink_on(hue), kc=white_knob(hue), glow=hex_rgba(hue, 0.32), halo=hex_rgba(hue, 0.7))
 
     # "Stats led" per entity (a tie at the top credits both), and the share
     # image's rows: the metrics where the percentiles sit furthest apart.

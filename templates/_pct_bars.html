@@ -1,0 +1,29 @@
+{# Percentile bars, sitewide — the player page, the team page's Team Stats tab
+   and anything else that ranks a number against a pool.
+
+   Drawn the way Baseball Savant draws them: the fill runs the full height of
+   the row, the rest of the scale is a thin track, and a ringed knob at the end
+   prints the percentile. Colour is one continuous scale (pct_fill in main.py):
+   blue for poor, grey-blue for average, red for great. The number in the knob
+   is always white; pct_knob darkens the knob only as far as white needs. #}
+
+{% macro head() -%}
+<div class="pb-row pb-head" aria-hidden="true">
+    <span></span>
+    <span class="pb-marks"><span class="is-poor">Poor</span><span class="is-avg">Average</span><span class="is-great">Great</span></span>
+    <span></span>
+</div>
+{%- endmacro %}
+
+{% macro row(label, p, raw='', title='') -%}
+<div class="pb-row"{% if title %} title="{{ title }}"{% endif %}>
+    <span class="pb-label">{{ label }}</span>
+    <span class="pb-track">
+        {%- if p is not none %}
+        <span class="pb-fill" style="--p:{{ p }};--c:{{ pct_fill(p) }}"></span>
+        <span class="pb-knob" style="--p:{{ p }};--k:{{ pct_knob(p) }}" aria-label="{{ label }}: {{ p }}th percentile">{{ p }}</span>
+        {%- endif %}
+    </span>
+    <span class="pb-val">{{ raw }}</span>
+</div>
+{%- endmacro %}
