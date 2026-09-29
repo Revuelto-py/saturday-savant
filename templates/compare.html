@@ -4,108 +4,121 @@
 {% block og_description %}Compare {{ 'college football teams' if mode == 'team' else 'college football players' }} side by side — advanced stats, ratings, and percentile rankings on Saturday Savant.{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
 {% set slots = players if mode == 'player' else teams %}
 {% set n = active_entities|length %}
 {% set noun = 'player' if mode == 'player' else 'team' %}
 
-{# Band colours are the site's percentile scale — the same five used on the
-   player and team pages. A number has to mean the same colour wherever it is
-   drawn, so this page reads from that scale rather than inventing one. #}
-{% macro band(p) -%}
-{% if p >= 80 %}b4{% elif p >= 60 %}b3{% elif p >= 45 %}b2{% elif p >= 25 %}b1{% else %}b0{% endif %}
-{%- endmacro %}
-
 {% macro ord(x) -%}
 {{ x }}{% if (x % 100) in [11, 12, 13] %}th{% elif (x % 10) == 1 %}st{% elif (x % 10) == 2 %}nd{% elif (x % 10) == 3 %}rd{% else %}th{% endif %}
+{%- endmacro %}
+
+{# Display name, short name, photo and meta line, shared by the header, the
+   table and the share image. #}
+{% macro ename(e) %}{{ e.name if mode == 'team' else (e.first_name ~ ' ' ~ e.last_name) }}{% endmacro %}
+{% macro eshort(e) %}{{ e.name if mode == 'team' else e.last_name }}{% endmacro %}
+{% macro eimg(e) %}{{ (e.logo_dark if mode == 'team' else e.headshot) or '' }}{% endmacro %}
+{% macro einit(e) %}{{ (e.name or '?')[0] if mode == 'team' else ((e.first_name or '?')[0] ~ (e.last_name or '')[0]) }}{% endmacro %}
+{% macro emeta(e) %}{{ (e.conference or '') if mode == 'team' else ((e.position or '—') ~ ' · ' ~ e.team) }}{% endmacro %}
+
+{# A photo is a background image, not an <img>: html2canvas honours
+   background-size but not object-fit, and that warped every headshot in the
+   export. data-headshot lets the export route it through the image proxy. #}
+{% macro photo(e, cls) -%}
+{% set src = eimg(e) %}
+<div class="{{ cls }}{{ ' is-logo' if mode == 'team' else '' }}"{% if src %} data-headshot="{{ src }}" style="background-image:url('{{ src }}')"{% endif %}>{% if not src %}{{ einit(e) }}{% endif %}</div>
+{%- endmacro %}
+
+{# The glow behind the matchup: each side's colour from its own corner, the
+   middle team's from the top. #}
+{% macro glow(ents) -%}
+{%- if ents -%}radial-gradient(90% 120% at 0% 0%, {{ ents[0].glow }}, transparent 62%), {% endif -%}
+{%- if ents|length >= 2 -%}radial-gradient(90% 120% at 100% 0%, {{ ents[-1].glow }}, transparent 62%), {% endif -%}
+{%- if ents|length == 3 -%}radial-gradient(60% 90% at 50% 0%, {{ ents[1].glow }}, transparent 65%), {% endif -%}
+#0b0c0f
 {%- endmacro %}
 
 <div class="page-wrapper cmp-page">
 
     <header class="cmp-masthead">
         <h1 class="cmp-h1">Compare {{ 'teams' if mode == 'team' else 'players' }}</h1>
-        <p class="cmp-lede">Put two or three side by side. Read them by percentile against the
-            FBS field, or by the raw numbers.</p>
+        <!-- Switching a tab clears the board: a QB has no rushing-back rows,
+             so carrying him across only produced empty ones. -->
+        <nav class="cmp-tabs" aria-label="Compare by position">
+            {% for tab in ['QB','RB','WR','TE','DL','LB','DB'] %}
+            <a href="{{ tab_urls[tab] }}" class="cmp-tab{% if mode == 'player' and group_name == tab %} is-on{% endif %}"
+               {% if mode == 'player' and group_name == tab %}aria-current="page"{% endif %}>{{ tab }}</a>
+            {% endfor %}
+            <span class="cmp-tab-gap" aria-hidden="true"></span>
+            <a href="{{ tab_urls['TEAMS'] }}" class="cmp-tab cmp-tab-wide{% if mode == 'team' %} is-on{% endif %}"
+               {% if mode == 'team' %}aria-current="page"{% endif %}>Teams</a>
+        </nav>
     </header>
 
-    <!-- Position / mode tabs. Switching a tab clears the board: a QB has no
-         rushing-back rows, so carrying him across only produced empty ones. -->
-    <nav class="cmp-tabs" aria-label="Compare by position">
-        {% for tab in ['QB','RB','WR','TE','DL','LB','DB'] %}
-        <a href="{{ tab_urls[tab] }}" class="cmp-tab{% if mode == 'player' and group_name == tab %} is-on{% endif %}"
-           {% if mode == 'player' and group_name == tab %}aria-current="page"{% endif %}>{{ tab }}</a>
-        {% endfor %}
-        <span class="cmp-tab-gap" aria-hidden="true"></span>
-        <a href="{{ tab_urls['TEAMS'] }}" class="cmp-tab cmp-tab-wide{% if mode == 'team' %} is-on{% endif %}"
-           {% if mode == 'team' %}aria-current="page"{% endif %}>Teams</a>
-    </nav>
-
-    <!-- Selection slots -->
-    <div class="cmp-slots">
+    <!-- The matchup: every filled slot, then the first empty one to fill. -->
+    {% set ns = namespace(empty=none, k=0) %}
+    {% for e in slots %}{% if not e and ns.empty is none %}{% set ns.empty = loop.index %}{% endif %}{% endfor %}
+    <section class="cmp-hero" style="background:{{ glow(active_entities) }}">
+        <div class="cmp-hero-grid" style="--slots:{{ n + (1 if ns.empty else 0) }}">
         {% for i in [0, 1, 2] %}
-        {% set slot_num = i + 1 %}
-        {% set entity = slots[i] %}
-        {% set param_key = ('p' if mode == 'player' else 't') ~ slot_num %}
-        <div class="cmp-slot">
-            {% if entity %}
-                <div class="cmp-slot-filled">
-                    {% if mode == 'player' %}
-                        {% if entity.headshot %}
-                        <img src="{{ entity.headshot }}" class="cmp-avatar" alt="" loading="lazy">
-                        {% else %}
-                        <div class="cmp-avatar avatar-placeholder">{{ (entity.first_name or '?')[0] }}{{ (entity.last_name or '')[0] }}</div>
-                        {% endif %}
-                        <div class="cmp-slot-id">
-                            <a class="cmp-slot-name" href="{{ player_url(entity.id, entity.season) }}">{{ entity.first_name }} {{ entity.last_name }}</a>
-                            <div class="cmp-slot-meta">{{ entity.position or '—' }} · {{ entity.team }}</div>
-                        </div>
-                    {% else %}
-                        {% if entity.logo_dark %}<img src="{{ entity.logo_dark }}" class="cmp-slot-logo" alt="" loading="lazy">{% endif %}
-                        <div class="cmp-slot-id">
-                            <a class="cmp-slot-name" href="{{ team_url(entity.name, entity.season) }}">{{ entity.name }}</a>
-                            <div class="cmp-slot-meta">{{ entity.conference or '' }}</div>
-                        </div>
-                    {% endif %}
-                    {% set slot_years = entity.years or available_seasons %}
-                    {% if slot_years and slot_years|length > 1 %}
-                    <select class="cmp-slot-season" aria-label="Season for slot {{ slot_num }}"
-                            onchange="compareSetSeason({{ slot_num }}, this.value)">
-                        {% for s in slot_years %}
-                        <option value="{{ s }}" {{ 'selected' if s == entity.season else '' }}>{{ s }}</option>
-                        {% endfor %}
-                    </select>
-                    {% endif %}
-                    <div class="cmp-slot-actions">
-                        {% if i < 2 %}
-                        <button type="button" class="cmp-slot-btn" title="Move to slot {{ slot_num + 1 }}"
-                                aria-label="Move {{ entity.name or (entity.first_name ~ ' ' ~ entity.last_name) }} to slot {{ slot_num + 1 }}"
-                                onclick="compareSwap('{{ param_key }}', '{{ ('p' if mode == 'player' else 't') ~ (slot_num + 1) }}')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 5h18"/><polyline points="7 23 3 19 7 15"/><path d="M21 19H3"/></svg>
-                        </button>
-                        {% endif %}
-                        <button type="button" class="cmp-slot-btn is-remove" title="Remove"
-                                aria-label="Remove {{ entity.name or (entity.first_name ~ ' ' ~ entity.last_name) }}"
-                                onclick="compareRemove('{{ param_key }}')">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
-                        </button>
-                    </div>
+            {% set e = slots[i] %}
+            {% set slot_num = i + 1 %}
+            {% set key = ('p' if mode == 'player' else 't') ~ slot_num %}
+            {% if e %}
+            {% set k = ns.k %}{% set ns.k = ns.k + 1 %}
+            <div class="cmp-ent" style="--hue:{{ e.hue }};--halo:{{ e.halo }}">
+                {{ photo(e, 'cmp-ent-photo') }}
+                <a class="cmp-ent-name" href="{{ team_url(e.name, e.season) if mode == 'team' else player_url(e.id, e.season) }}">{{ ename(e) }}</a>
+                <div class="cmp-ent-meta">
+                    <span>{{ emeta(e) }}</span>
+                    {% if e.ap_rank %}<span class="cmp-ent-ap"><span class="sr-only">AP rank </span>AP {{ e.ap_rank }}</span>{% endif %}
                 </div>
-            {% else %}
+                {% if n >= 2 %}
+                <div class="cmp-ent-lead"><b>{{ leads[k] }}</b> <span>of {{ rows|length }} stats led</span></div>
+                {% endif %}
+                <div class="cmp-ent-ctrl">
+                    {% set years = e.years or available_seasons %}
+                    {% if years and years|length > 1 %}
+                    <select class="cmp-ent-season" aria-label="Season for {{ ename(e) }}"
+                            onchange="compareSetSeason({{ slot_num }}, this.value)">
+                        {% for s in years %}<option value="{{ s }}" {{ 'selected' if s == e.season else '' }}>{{ s }}</option>{% endfor %}
+                    </select>
+                    {% else %}
+                    <span class="cmp-ent-season is-static">{{ e.season }}</span>
+                    {% endif %}
+                    {% if i < 2 %}
+                    <button type="button" class="cmp-ent-btn" title="Move to slot {{ slot_num + 1 }}"
+                            aria-label="Move {{ ename(e) }} to slot {{ slot_num + 1 }}"
+                            onclick="compareSwap('{{ key }}', '{{ ('p' if mode == 'player' else 't') ~ (slot_num + 1) }}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 5h18"/><polyline points="7 23 3 19 7 15"/><path d="M21 19H3"/></svg>
+                    </button>
+                    {% endif %}
+                    <button type="button" class="cmp-ent-btn is-remove" title="Remove"
+                            aria-label="Remove {{ ename(e) }}" onclick="compareRemove('{{ key }}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+                    </button>
+                </div>
+            </div>
+            {% elif slot_num == ns.empty %}
+            <div class="cmp-ent cmp-ent-add">
+                <span class="cmp-ent-ring" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </span>
                 <div class="cmp-search">
                     <span class="cmp-search-icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
                     </span>
-                    <input type="text" class="cmp-search-input"
-                           placeholder="{{ 'Add a ' ~ group_name ~ '…' if mode == 'player' else 'Add a team…' }}"
-                           autocomplete="off" data-slot-input="{{ param_key }}"
-                           aria-label="Search {{ 'players' if mode == 'player' else 'teams' }} for slot {{ slot_num }}">
-                    <div class="cmp-dropdown" data-slot-dropdown="{{ param_key }}" role="listbox"></div>
+                    {% set what = (group_name if mode == 'player' else 'team') %}
+                    {% set lbl = ('Add a ' ~ what) if n == 0 else (('Add another ' ~ what) if n == 1 else ('Add a third ' ~ what)) %}
+                    <input type="text" class="cmp-search-input" placeholder="{{ lbl }}…"
+                           autocomplete="off" data-slot-input="{{ key }}" aria-label="{{ lbl }}">
+                    <div class="cmp-dropdown" data-slot-dropdown="{{ key }}" role="listbox"></div>
                 </div>
+            </div>
             {% endif %}
-        </div>
         {% endfor %}
-    </div>
+        </div>
+    </section>
 
     {% if n < 2 %}
     <div class="cmp-zero">
@@ -113,8 +126,8 @@
             {% if n == 1 %}
                 One more {{ noun }} and the board fills in.
             {% else %}
-                Pick two or three {{ noun }}s. Every metric lines up in a row, with each one's
-                standing against the FBS field on the bar and the raw number beside it.
+                Pick two or three {{ noun }}s. Every stat gets one row, with each one's
+                standing against the FBS field on a shared scale and the raw number beside it.
             {% endif %}
         </p>
         {% if suggested %}
@@ -133,8 +146,6 @@
 
     {% if n >= 2 %}
 
-    <!-- View switch + export. Both sit outside the card so neither lands in
-         the downloaded image. -->
     <div class="cmp-viewbar">
         <div class="cmp-seg" role="radiogroup" aria-label="How to read the numbers">
             <button type="button" class="cmp-seg-btn{% if view == 'percentiles' %} is-on{% endif %}"
@@ -144,6 +155,7 @@
                     role="radio" aria-checked="{{ 'true' if view == 'stats' else 'false' }}"
                     data-view="stats">Stats</button>
         </div>
+        <p class="cmp-pool">{{ pool_note }}</p>
         <div class="cmp-actions">
             <button type="button" class="cmp-btn" id="cmpShare">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"/></svg>
@@ -156,102 +168,105 @@
         </div>
     </div>
 
-    {# One cell. Both readings are rendered; the card's data-view decides which
-       one the eye gets. --pp is the percentile, --ps the cell's length within
-       this comparison — the bar reads one or the other, never both. #}
-    {% macro cell(v) %}
+    {# One lane per entity on a shared 0-100 scale. Both readings ship in the
+       markup: --pp is the percentile, --ps the cell's length within this
+       comparison, and the card's data-view picks which one the bar reads. #}
+    {% macro lane(v, e) %}
     {% set has_p = v.percentile is not none %}
-    <div class="cmp-cell{% if v.raw is none %} is-empty{% elif not has_p %} is-unranked{% endif %}{% if v.lead %} is-lead{% endif %}"
-         style="--pp:{{ v.percentile or 0 }};--ps:{{ v.share or 0 }}">
-        {# The track is drawn even when there is no value, so a metric one side
-           is missing does not knock the two columns out of step. #}
-        <div class="cmp-meter"{% if v.raw is not none and not has_p %} title="No qualified percentile for this metric"{% endif %}>
-            {% if v.raw is not none %}
-            <span class="cmp-fill {{ band(v.percentile) if has_p else 'b2' }}"></span>
-            {% if has_p %}
-            <span class="cmp-knob {{ band(v.percentile) }}"
-                  aria-label="{{ ord(v.percentile) }} percentile{{ ', leads this metric' if v.lead }}">{{ v.percentile }}</span>
-            {% endif %}
-            {% endif %}
-        </div>
-        <div class="cmp-val">{{ v.display }}</div>
-    </div>
-    {% endmacro %}
-
-    {% macro headcell(e) %}
-    <div class="cmp-hcell">
-        {% if mode == 'player' %}
-            <div class="cmp-hphoto-wrap">
-                {# A background-image with cover, rather than an image element with
-                   object-fit: html2canvas respects background-size but not
-                   object-fit, and that warped every headshot in the export. #}
-                {% if e.headshot %}
-                <div class="cmp-hphoto" data-headshot="{{ e.headshot }}" style="background-image:url('{{ e.headshot }}')"></div>
-                {% else %}
-                <div class="cmp-hphoto cmp-hphoto-none">{{ (e.first_name or '?')[0] }}{{ (e.last_name or '')[0] }}</div>
-                {% endif %}
-            </div>
-            <a class="cmp-hname" href="{{ player_url(e.id, e.season) }}">{{ e.first_name }}<br>{{ e.last_name }}</a>
-            <div class="cmp-hseason">{{ e.season }}</div>
-            <div class="cmp-hmeta">
-                {% if e.logo_dark %}<img src="{{ e.logo_dark }}" class="cmp-hlogo-sm" alt="">{% endif %}
-                <span>{{ e.position or '—' }} · {{ e.team }}</span>
-            </div>
-            {% if e.ap_rank %}<div class="cmp-hap">AP #{{ e.ap_rank }}</div>{% endif %}
-        {% else %}
-            <div class="cmp-hphoto-wrap">
-                {% if e.logo_dark %}
-                <div class="cmp-hphoto cmp-hphoto-logo" data-headshot="{{ e.logo_dark }}" style="background-image:url('{{ e.logo_dark }}')"></div>
-                {% else %}
-                <div class="cmp-hphoto cmp-hphoto-none">{{ (e.name or '?')[0] }}</div>
-                {% endif %}
-            </div>
-            <a class="cmp-hname" href="{{ team_url(e.name, e.season) }}">{{ e.name }}</a>
-            <div class="cmp-hseason">{{ e.season }}</div>
-            <div class="cmp-hmeta"><span>{{ e.conference or '' }}</span></div>
-            {% if e.ap_rank %}<div class="cmp-hap">AP #{{ e.ap_rank }}</div>{% endif %}
+    <div class="cmp-lane{% if v.raw is none %} is-empty{% elif not has_p %} is-unranked{% endif %}"
+         style="--hue:{{ e.hue }};--ink:{{ e.ink }};--pp:{{ v.percentile or 0 }};--ps:{{ v.share or 0 }}"
+         {% if v.raw is not none and not has_p %}title="No qualified percentile for this stat"{% endif %}>
+        {% if v.raw is not none %}
+        <span class="cmp-fill"></span>
+        {% if has_p %}<span class="cmp-knob" aria-label="{{ eshort(e) }}: {{ ord(v.percentile) }} percentile">{{ v.percentile }}</span>{% endif %}
         {% endif %}
     </div>
     {% endmacro %}
 
-    <div class="cmp-card" id="compareCard" data-view="{{ view }}" style="--cols:{{ n }}">
-
-        <div class="cmp-card-head">
-            <div class="cmp-brand">
-                <img src="/static/logo-mark-256.png" alt="" class="cmp-brand-mark">
-                <span class="cmp-brand-name">Saturday Savant</span>
-                <span class="cmp-brand-kind">{{ (group_name ~ ' comparison') if mode == 'player' else 'Team comparison' }}</span>
+    <section class="cmp-card" id="compareCard" data-view="{{ view }}" style="--cols:{{ n }}">
+        <div class="cmp-thead">
+            <span class="cmp-thead-label">Stat</span>
+            <div class="cmp-scale" aria-hidden="true">
+                <span style="left:0">0</span><span style="left:25%">25</span>
+                <span class="is-mid" style="left:50%">50 · median</span>
+                <span style="left:75%">75</span><span style="left:100%">100</span>
             </div>
-            <div class="cmp-cells cmp-cells-head">
-                {% for e in active_entities %}{{ headcell(e) }}{% endfor %}
-            </div>
+            {% for e in active_entities %}
+            <span class="cmp-colh"><i style="--hue:{{ e.hue }}"></i>{{ eshort(e) }}</span>
+            {% endfor %}
         </div>
 
-        {% if rows %}
-        {% set ns = namespace(section=None) %}
+        {% set sec = namespace(name=None) %}
         {% for row in rows %}
-            {% if row.section != ns.section %}
-                {% if ns.section is not none %}</div>{% endif %}
-                {% set ns.section = row.section %}
+            {% if row.section != sec.name %}
+                {% if sec.name is not none %}</div>{% endif %}
+                {% set sec.name = row.section %}
                 <div class="cmp-sect">
                 <h2 class="cmp-sect-h">{{ row.section }}</h2>
             {% endif %}
-            {# --i staggers the one animation on this page: the bars arriving. #}
             <div class="cmp-row" style="--i:{{ loop.index0 }}">
                 <div class="cmp-rlabel">{{ row.label }}</div>
-                <div class="cmp-cells">
-                    {% for v in row['values'] %}{{ cell(v) }}{% endfor %}
+                <div class="cmp-lanes">
+                    {% for v in row['values'] %}{{ lane(v, active_entities[loop.index0]) }}{% endfor %}
                 </div>
+                {% for v in row['values'] %}
+                <div class="cmp-val{% if v.lead %} is-lead{% endif %}{% if v.raw is none %} is-empty{% endif %}">{{ v.display }}</div>
+                {% endfor %}
             </div>
         {% endfor %}
-        {% if ns.section is not none %}</div>{% endif %}
-        {% endif %}
+        {% if sec.name is not none %}</div>{% endif %}
 
         <footer class="cmp-foot">
-            <span class="cmp-foot-site">saturdaysavant.com</span>
             <span class="cmp-foot-note cmp-foot-pct">{{ pool_note }} Hatched bars have no qualified percentile.</span>
             <span class="cmp-foot-note cmp-foot-stats">Bars show each {{ noun }}'s standing within this comparison. Per-game rates use completed team games.</span>
         </footer>
+    </section>
+
+    {# The share image: a fixed 1080×1350 (4:5) card the feeds show uncropped.
+       Off-screen, never read aloud; the download button rasterises it. It
+       carries the metrics where the percentiles sit furthest apart; "stats
+       led" still counts every row. #}
+    <div class="cmp-shot-wrap" aria-hidden="true">
+    <div class="cmp-shot" id="cmpShot" data-n="{{ n }}" style="background:{{ glow(active_entities) }}">
+        <div class="cmp-shot-top">
+            <span class="cmp-shot-brand"><img src="/static/logo-mark-256.png" alt="">Saturday <b>Savant</b></span>
+            <span class="cmp-shot-kind">{{ (group_name ~ ' comparison') if mode == 'player' else 'Team comparison' }}</span>
+        </div>
+        <div class="cmp-shot-match">
+            {% for e in active_entities %}
+            <div class="cmp-shot-ent" style="--hue:{{ e.hue }};--halo:{{ e.halo }}">
+                {{ photo(e, 'cmp-shot-photo') }}
+                <div class="cmp-shot-name">{{ ename(e) }}</div>
+                <div class="cmp-shot-meta">{{ emeta(e) }} · {{ e.season }}{% if e.ap_rank %} · AP {{ e.ap_rank }}{% endif %}</div>
+                <div class="cmp-shot-lead"><b>{{ leads[loop.index0] }}</b> of {{ rows|length }} stats led</div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="cmp-shot-head">
+            <span>Biggest gaps · {{ share_rows|length }} of {{ rows|length }}</span>
+            <div class="cmp-shot-scale"><span>0</span><span class="is-mid">50th</span><span>100</span></div>
+            {% for e in active_entities %}<span class="cmp-shot-dot"><i style="--hue:{{ e.hue }}"></i></span>{% endfor %}
+        </div>
+        <div class="cmp-shot-rows">
+            {% for row in share_rows %}
+            <div class="cmp-shot-row">
+                <span class="cmp-shot-label">{{ row.label }}</span>
+                <div class="cmp-shot-lanes">
+                    {% for v in row['values'] %}{% set e = active_entities[loop.index0] %}
+                    <div class="cmp-shot-lane" style="--hue:{{ e.hue }};--ink:{{ e.ink }};--w:{{ v.percentile }}">
+                        <span class="cmp-shot-fill"></span><span class="cmp-shot-knob">{{ v.percentile }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% for v in row['values'] %}<span class="cmp-shot-val{% if v.lead %} is-lead{% endif %}">{{ v.display }}</span>{% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        <div class="cmp-shot-foot">
+            <span>{{ pool_note }} Stats led counts all {{ rows|length }}.</span>
+            <b>saturdaysavant.com/compare</b>
+        </div>
+    </div>
     </div>
 
     {% endif %}
@@ -398,71 +413,83 @@
     }
 
     const downloadBtn = document.getElementById('cmpDownload');
-    if (downloadBtn) {
+    const shot = document.getElementById('cmpShot');
+    // Phones that can hand a file to the share sheet get "Share image": the
+    // point of the picture is to post it, and a download is one step further
+    // from that on a phone.
+    const canShareFiles = !!(navigator.canShare && window.File &&
+        navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] }) &&
+        matchMedia('(hover: none)').matches);
+    if (downloadBtn && canShareFiles) downloadBtn.querySelector('span').textContent = 'Share image';
+
+    if (downloadBtn && shot) {
         const label = downloadBtn.querySelector('span');
         const original = label.textContent;
-        downloadBtn.addEventListener('click', async function() {
-            if (!card || typeof html2canvas === 'undefined') return;
-            downloadBtn.disabled = true;
-            label.textContent = 'Rendering…';
+        const reset = function(t, ms) { label.textContent = t; setTimeout(function() { label.textContent = original; }, ms); };
+        const slug = (FILE.length ? FILE : ['compare'])
+            .join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const name = 'saturday-savant-' + (slug || 'compare') + '.png';
 
-            // A phone-width capture would export a phone-width graphic. The
-            // card is pinned to a fixed desktop width for the shot so the file
-            // is the same shareable image whatever it was taken on.
-            document.body.classList.add('cmp-exporting');
-
+        async function render() {
+            if (typeof html2canvas === 'undefined') throw new Error('html2canvas missing');
             const restores = [], loads = [];
-            function preload(url) {
-                loads.push(new Promise(function(res) {
-                    const im = new Image();
-                    im.onload = im.onerror = res;
-                    im.src = url;
-                }));
-            }
-            card.querySelectorAll('img').forEach(function(img) {
-                const px = proxied(img.getAttribute('src') || '');
-                if (!px) return;
-                img.setAttribute('data-orig-src', img.getAttribute('src'));
-                img.src = px;
-                restores.push(function() { img.src = img.getAttribute('data-orig-src'); img.removeAttribute('data-orig-src'); });
-                preload(px);
-            });
-            card.querySelectorAll('[data-headshot]').forEach(function(el) {
+            shot.querySelectorAll('[data-headshot]').forEach(function(el) {
                 const orig = el.getAttribute('data-headshot');
                 const px = proxied(orig);
                 if (!px) return;
                 el.style.backgroundImage = "url('" + px + "')";
                 restores.push(function() { el.style.backgroundImage = "url('" + orig + "')"; });
-                preload(px);
+                loads.push(new Promise(function(res) { const im = new Image(); im.onload = im.onerror = res; im.src = px; }));
             });
-            // preload, but never hang the export if a proxy fetch stalls
-            await Promise.race([
-                Promise.all(loads),
-                new Promise(function(r) { setTimeout(r, 5000); }),
-            ]);
-
-            const slug = (FILE.length ? FILE : ['compare'])
-                .join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-            html2canvas(card, {
-                backgroundColor: getComputedStyle(card).backgroundColor || '#0a0b0d',
-                scale: 2, useCORS: true, windowWidth: 1280,
-            }).then(function(canvas) {
-                const link = document.createElement('a');
-                link.download = 'saturday-savant-' + (slug || 'compare') + '.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-                label.textContent = 'Saved ✓';
-                setTimeout(function() { label.textContent = original; }, 2200);
-            }).catch(function(err) {
-                console.error('Compare image export failed:', err);
-                label.textContent = 'Could not render — try again';
-                setTimeout(function() { label.textContent = original; }, 3000);
-            }).finally(function() {
+            try {
+                // preload, but never hang the export if a proxy fetch stalls
+                await Promise.race([Promise.all(loads), new Promise(function(r) { setTimeout(r, 5000); })]);
+                const canvas = await html2canvas(shot, { backgroundColor: '#07080a', scale: 1, useCORS: true,
+                                                         width: 1080, height: 1350, windowWidth: 1280 });
+                const blob = await new Promise(function(r) { canvas.toBlob(r, 'image/png'); });
+                return new File([blob], name, { type: 'image/png' });
+            } finally {
                 restores.forEach(function(fn) { fn(); });
-                document.body.classList.remove('cmp-exporting');
-                downloadBtn.disabled = false;
+            }
+        }
+
+        // The share sheet only opens straight off a tap, and a render takes
+        // longer than Safari allows between the two. So on a phone the image
+        // is drawn once the page is idle and the tap just hands it over.
+        let ready = null;
+        if (canShareFiles) {
+            const warm = function() { ready = render().catch(function() { ready = null; }); };
+            window.addEventListener('load', function() {
+                (window.requestIdleCallback || function(f) { setTimeout(f, 800); })(warm);
             });
+        }
+
+        downloadBtn.addEventListener('click', async function() {
+            downloadBtn.disabled = true;
+            label.textContent = 'Rendering…';
+            try {
+                const file = (ready && await ready) || await render();
+                if (canShareFiles && file) {
+                    try {
+                        await navigator.share({ files: [file], title: document.title, url: location.href });
+                        reset('Shared ✓', 2200);
+                    } catch (e) {
+                        label.textContent = original;   // closing the sheet is not an error
+                    }
+                } else {
+                    const link = document.createElement('a');
+                    link.download = name;
+                    link.href = URL.createObjectURL(file);
+                    link.click();
+                    setTimeout(function() { URL.revokeObjectURL(link.href); }, 4000);
+                    reset('Saved ✓', 2200);
+                }
+            } catch (err) {
+                console.error('Compare image export failed:', err);
+                reset('Could not render. Try again', 3000);
+            } finally {
+                downloadBtn.disabled = false;
+            }
         });
     }
 

@@ -4397,6 +4397,35 @@ def forecast_pair(away_hex, home_hex):
 app.jinja_env.globals['forecast_pair'] = forecast_pair
 
 
+# Compare page: each entity is drawn in its team's primary. Distance, not
+# contrast ratio, decides a clash here — USC cardinal and SMU blue sit at
+# nearly the same luminance yet are nothing alike, while Texas burnt orange and
+# Ohio State scarlet are a near match. 90 is where those two cases part.
+CMP_MIN_DIST = 90
+
+def compare_colors(pairs):
+    """[(primary, secondary), ...] -> one visible, mutually distinct hex each.
+    A clash falls back to the team's secondary, then to white."""
+    out = []
+    def clash(h):
+        a = _to_rgb(h)
+        return any(sum((x - y) ** 2 for x, y in zip(a, _to_rgb(o))) ** 0.5 < CMP_MIN_DIST for o in out)
+    for primary, secondary in pairs:
+        cands = [team_hex(c, None) for c in (primary, secondary)] + ['#ffffff']
+        out.append(next((c for c in cands if c and not clash(c)), '#ffffff'))
+    return out
+
+
+def ink_on(hex_color):
+    """Dark or white text, whichever reads on this fill."""
+    return '#0a0b0d' if _srgb_lum(_to_rgb(hex_color)) > 0.3 else '#ffffff'
+
+
+def hex_rgba(hex_color, alpha):
+    r, g, b = _to_rgb(hex_color)
+    return f'rgba({r},{g},{b},{alpha})'
+
+
 def _hex_to_rgba(hex_color, alpha):
     if not hex_color:
         return None
@@ -10301,6 +10330,20 @@ def compare():
     teams_out = slots if mode == 'team' else [None, None, None]
     active_entities = [s for s in slots if s]
 
+    # Each entity carries its team colour through the matchup header, the
+    # bars and the share image.
+    hues = compare_colors([(e.get('color'), e.get('alt_color')) for e in active_entities])
+    for e, hue in zip(active_entities, hues):
+        e.update(hue=hue, ink=ink_on(hue), glow=hex_rgba(hue, 0.32), halo=hex_rgba(hue, 0.7))
+
+    # "Stats led" per entity (a tie at the top credits both), and the share
+    # image's rows: the metrics where the percentiles sit furthest apart.
+    leads = [sum(1 for r in rows if r['values'][i].get('lead')) for i in range(len(active_entities))]
+    ranked = [r for r in rows if all(v['percentile'] is not None for v in r['values'])]
+    share_rows = sorted(ranked, key=lambda r: max(v['percentile'] for v in r['values'])
+                                              - min(v['percentile'] for v in r['values']),
+                        reverse=True)[:10 if len(active_entities) == 2 else 8]
+
     base_params = request.args.to_dict()
     # Switching the position tab clears the slots. A QB carried into the RB tab
     # is not an RB, so every rushing row came back "—" and the page looked
@@ -10413,6 +10456,7 @@ def compare():
         season=season, available_seasons=get_available_seasons(),
         group_name=group_name, pos_filter=pos_filter, tab_urls=tab_urls,
         suggested=suggested, suggest_board=suggest_board, view=view, pool_note=pool_note,
+        leads=leads, share_rows=share_rows,
     )
 
 
