@@ -12,491 +12,350 @@
 {%- elif n % 10 == 1 -%}{{ n }}st{%- elif n % 10 == 2 -%}{{ n }}nd{%- elif n % 10 == 3 -%}{{ n }}rd
 {%- else -%}{{ n }}th{%- endif -%}
 {%- endmacro %}
-<div class="pt-4">
+{% macro signed(v, fmt='%+.1f') %}{{ (fmt|format(v)).replace('-', '−') }}{% endmacro %}
+{# A national rank as the share of a hardest-to-easiest bar: #1 fills it. #}
+{% macro rank_fill(r, n=136) %}{{ '%.1f'|format(100 * (1 - (r - 1) / (n - 1)) if r and r <= n else 0) }}{% endmacro %}
+{# "top-10", "top-25", … for the headline. #}
+{% macro tier(r) -%}
+{%- if r <= 10 %}top-10{% elif r <= 25 %}top-25{% elif r <= 50 %}top-50{% elif r <= 86 %}mid-pack{% else %}bottom-50{% endif -%}
+{%- endmacro %}
+{% macro pct_colour(p) -%}
+{#- The site's five Savant bands. Lifted from pure red and blue so the knob can
+    print its number on the band at 4.5:1. -#}
+{%- if p >= 80 %}#d44f41{% elif p >= 60 %}#e74c3c{% elif p >= 45 %}#95a5a6{% elif p >= 25 %}#5d8aa8{% else %}#2a83bd{% endif -%}
+{%- endmacro %}
+{% macro pct_row(label, val, metric, kind='') %}
+{% set p = percentiles.get(metric) %}
+<div class="ts-pct">
+    <span class="ts-pct-label">{{ label }}</span>
+    <span class="ts-pct-track">
+        {% if p is not none %}
+        <span class="ts-pct-fill" style="width: {{ p }}%; background: {{ pct_colour(p) }}"></span>
+        <span class="ts-pct-knob" style="left: {{ p }}%; background: {{ pct_colour(p) }}" aria-label="{{ p }}th percentile">{{ p }}</span>
+        {% endif %}
+    </span>
+    <span class="ts-pct-val">{% if val is none %}—{% elif kind == 'epa' %}{{ signed(val, '%+.2f') }}{% elif kind == 'pct' %}{{ val }}%{% elif kind == 'yd' %}{{ val }} yd{% else %}{{ val }}{% endif %}</span>
+</div>
+{% endmacro %}
+{% macro key_tile(label, val, sub='') %}
+<div class="ts-key"><span class="ts-key-label">{{ label }}</span><span class="ts-key-val">{{ val }}</span><span class="ts-key-sub">{{ sub }}</span></div>
+{% endmacro %}
+{% macro pctl_sub(metric) %}{% set p = percentiles.get(metric) if percentiles else none %}{{ (ordinal(p) ~ ' pctl') if p is not none else '' }}{% endmacro %}
+{% macro group(name) %}<div class="ts-group"><span>{{ name }}</span></div>{% endmacro %}
 
-    <div style="margin-bottom:24px">
-        <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">{{ season }} Team Analytics</h2>
-        <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">Predictive ratings and opponent-adjusted efficiency from the {{ season }} season — a deeper look at what {{ team[0] }} does well and poorly than the Overview glance.</p>
-    </div>
+<div class="pt-4 ts-pane">
+
+    <header class="ts-head">
+        <div class="ts-kicker">{{ season }} Team Analytics{% if svr_week %} · through week {{ svr_week }}{% endif %}</div>
+        {% if svr and svr.off_ranking and svr.def_ranking %}
+        {% set ro, rd = svr.off_ranking, svr.def_ranking %}
+        <h2 class="ts-headline">{% if ro * 2 <= rd and rd - ro >= 10 %}A {{ tier(ro) }} offense carrying a {{ tier(rd) }} defense{% elif rd * 2 <= ro and ro - rd >= 10 %}A {{ tier(rd) }} defense carrying a {{ tier(ro) }} offense{% else %}A {{ tier(ro) }} offense and a {{ tier(rd) }} defense{% endif %}</h2>
+        {% else %}
+        <h2 class="ts-headline">What {{ team[0] }} does well, and what it doesn&rsquo;t</h2>
+        {% endif %}
+        <p class="ts-intro">Predictive ratings and opponent-adjusted efficiency. Percentiles are against all FBS teams with garbage time removed, and every bar reads the same way: further right is better.</p>
+    </header>
 
     {% if not has_games %}
     <div class="pending-panel">Savant Rating, SP+, and opponent-adjusted efficiency for {{ season }} will appear here once games are played. The roster-based <b>Returning Production</b> breakdown below is available now for a preseason read.</div>
     {% endif %}
 
+    {% set has_disc = situational and (situational.box or situational.ats) %}
+    {% set has_pass = passing_profile and (passing_profile.offense or passing_profile.defense) %}
+    <nav class="ts-jump" aria-label="Team stats sections">
+        {% if svr or sp %}<a href="#ts-ratings">Ratings</a>{% endif %}
+        {% if team_adv %}<a href="#ts-sides">Offense &amp; Defense</a>{% endif %}
+        {% if has_disc %}<a href="#ts-disc">Discipline &amp; spread</a>{% endif %}
+        {% if has_pass %}<a href="#ts-pass">Passing game</a>{% endif %}
+        {% if returning %}<a href="#ts-ret">Returning production</a>{% endif %}
+        <a href="#ts-gloss">Glossary</a>
+    </nav>
 
-    <!-- Savant Rating (SVR) — the site's proprietary efficiency model -->
-    {% if svr %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Savant Rating</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Saturday Savant's opponent-adjusted model · {{ season }}{% if svr_week %} · through week {{ svr_week }}{% endif %} ·
-                <a class="lb-howitworks" href="/savant-rating" style="color: var(--text-secondary);font-weight:700;text-decoration:none"
-                   onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--text-secondary)'">How it works →</a>
-            </span>
-        </div>
-        <div class="row g-3">
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Net Rating</div>
-                    <div style="color: var(--gold);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.net_rating) }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(28, 156, 240,0.1);border:1px solid rgba(28, 156, 240,0.3);color: var(--gold);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.net_ranking }} Nationally</span></div>
-                </div>
+    {# ── Ratings: the two predictive models, same shape ─────────────────── #}
+    {% if svr or sp %}
+    <section id="ts-ratings" class="ts-models" aria-label="Ratings">
+        {% if svr %}
+        <div class="dark-card ts-model">
+            <div class="ts-model-top">
+                <h3 class="ts-kicker">Savant Rating</h3>
+                <a class="ts-link" href="/savant-rating">How it works →</a>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offense</div>
-                    <div style="color:#34d399;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.off_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.off_ranking }} Nationally</span></div>
-                </div>
+            <div class="ts-model-head">
+                <span class="ts-model-big">{{ signed(svr.net_rating) if svr.net_rating is not none else '—' }}</span>
+                <span class="ts-model-sub">Net{% if svr.net_ranking %} · #{{ svr.net_ranking }} nationally{% endif %}</span>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#7cc4ff;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ svr.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#7cc4ff;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ svr.def_ranking }} Nationally</span></div>
-                </div>
+            {% for label, val, rank in (('Offense', svr.off_rating, svr.off_ranking), ('Defense', svr.def_rating, svr.def_ranking)) %}
+            <div class="ts-model-row">
+                <span class="ts-model-label">{{ label }}</span>
+                <span class="ts-model-val">{{ val if val is not none else '—' }}</span>
+                <span class="ts-bar" aria-hidden="true"><span style="width: {{ rank_fill(rank) }}%"></span></span>
+                <span class="ts-model-rank">{{ ('#' ~ rank) if rank else '—' }}</span>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Schedule</div>
-                    <div style="color: var(--text-primary);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ '%+.1f'|format(svr.sos) }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-strong);color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">Avg Opponent Net</span></div>
-                </div>
+            {% endfor %}
+            <div class="ts-model-row">
+                <span class="ts-model-label">Schedule</span>
+                <span class="ts-model-val">{{ signed(svr.sos) if svr.sos is not none else '—' }}</span>
+                <span class="ts-model-note">average opponent Net</span>
             </div>
         </div>
+        {% endif %}
+        {% if sp %}
+        <div class="dark-card ts-model">
+            <div class="ts-model-top">
+                <h3 class="ts-kicker">SP+</h3>
+                <span class="ts-model-note">Bill Connelly&rsquo;s model</span>
+            </div>
+            <div class="ts-model-head">
+                <span class="ts-model-big">{{ sp.rating }}</span>
+                <span class="ts-model-sub">Overall{% if sp.ranking %} · #{{ sp.ranking }} nationally{% endif %}</span>
+            </div>
+            {% for label, val, rank in (('Offense', sp.off_rating, sp.off_ranking), ('Defense', sp.def_rating, sp.def_ranking)) %}
+            <div class="ts-model-row">
+                <span class="ts-model-label">{{ label }}</span>
+                <span class="ts-model-val">{{ val if val is not none else '—' }}</span>
+                <span class="ts-bar" aria-hidden="true"><span style="width: {{ rank_fill(rank) }}%"></span></span>
+                <span class="ts-model-rank">{{ ('#' ~ rank) if rank else '—' }}</span>
+            </div>
+            {% endfor %}
+            <div class="ts-model-row">
+                <span class="ts-model-label">Special teams</span>
+                <span class="ts-model-val">{{ sp.st_rating if sp.st_rating is not none else '—' }}</span>
+                <span class="ts-model-note">SP+ component</span>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {# ── Offense and defense side by side ─────────────────────────────────── #}
+    {% if team_adv %}
+    <section id="ts-sides" class="ts-sides" aria-label="Offense and defense">
+        <div class="dark-card ts-side">
+            <div class="ts-side-top">
+                <div class="ts-side-title"><h3>Offense</h3><span>{{ season }} · per game</span></div>
+                {% if season_stats %}
+                {% set gp = season_stats.games or 1 %}
+                {% set tot_ypg = (season_stats.pass_yds_pg + season_stats.rush_yds_pg) %}
+                {% set pass_pct = (season_stats.pass_yds_pg / tot_ypg * 100) if tot_ypg else 0 %}
+                {% set off_ypp = ((tot_ypg * gp) / team_adv.off_plays) if team_adv.off_plays else none %}
+                <div class="ts-keys">
+                    {{ key_tile('Points', '%.1f'|format(season_stats.pts_for_pg), ordinal(hero_ranks.pts_for_pg) if hero_ranks.pts_for_pg else '') }}
+                    {{ key_tile('Yards', '%.1f'|format(tot_ypg), '%.0f%% passing'|format(pass_pct)) }}
+                    {{ key_tile('Yards / play', '%.1f'|format(off_ypp) if off_ypp is not none else '—') }}
+                    {{ key_tile('Pass yards', '%.1f'|format(season_stats.pass_yds_pg), ordinal(hero_ranks.pass_yds_pg) if hero_ranks.pass_yds_pg else '') }}
+                    {{ key_tile('Rush yards', '%.1f'|format(season_stats.rush_yds_pg), ordinal(hero_ranks.rush_yds_pg) if hero_ranks.rush_yds_pg else '') }}
+                    {{ key_tile('EPA / play', signed(team_adv.off_ppa, '%+.2f') if team_adv.off_ppa is not none else '—', pctl_sub('off_ppa')) }}
+                </div>
+                {% endif %}
+            </div>
+            <div class="ts-bars">
+                {{ group('Efficiency') }}
+                {{ pct_row('EPA / play',         team_adv.off_ppa,           'off_ppa', 'epa') }}
+                {{ pct_row('Success rate',       team_adv.off_success_rate,  'off_success_rate', 'pct') }}
+                {{ pct_row('Explosiveness',      team_adv.off_explosiveness, 'off_explosiveness') }}
+                {{ group('Passing') }}
+                {{ pct_row('Pass EPA / play',    team_adv.off_pass_ppa,      'off_pass_ppa', 'epa') }}
+                {{ pct_row('Pass success rate',  team_adv.off_pass_sr,       'off_pass_sr', 'pct') }}
+                {{ pct_row('Pass explosiveness', team_adv.off_pass_exp,      'off_pass_exp') }}
+                {{ group('Rushing') }}
+                {{ pct_row('Rush EPA / play',    team_adv.off_rush_ppa,      'off_rush_ppa', 'epa') }}
+                {{ pct_row('Rush success rate',  team_adv.off_rush_sr,       'off_rush_sr', 'pct') }}
+                {{ pct_row('Rush explosiveness', team_adv.off_rush_exp,      'off_rush_exp') }}
+                {{ pct_row('Power success',      team_adv.off_power_success, 'off_power_success', 'pct') }}
+                {{ pct_row('Stuff rate',         team_adv.off_stuff_rate,    'off_stuff_rate', 'pct') }}
+                {{ pct_row('Line yards / carry', team_adv.off_line_yards,    'off_line_yards') }}
+                {{ pct_row('2nd level yards',    team_adv.off_second_level_yards, 'off_second_level_yards') }}
+                {{ pct_row('Open field yards',   team_adv.off_open_field_yards,   'off_open_field_yards') }}
+                {{ group('Field position') }}
+                {{ pct_row('Avg starting field position', havoc.off_fp if havoc else none, 'off_field_pos_avg_start', 'yd') }}
+            </div>
+        </div>
+
+        <div class="dark-card ts-side">
+            <div class="ts-side-top">
+                <div class="ts-side-title"><h3>Defense</h3><span>{{ season }} · allowed</span></div>
+                <div class="ts-keys">
+                    {% if season_stats %}{{ key_tile('Points allowed', '%.1f'|format(season_stats.pts_against_pg), ordinal(hero_ranks.pts_against_pg) if hero_ranks.pts_against_pg else '') }}{% endif %}
+                    {{ key_tile('EPA / play', signed(team_adv.def_ppa, '%+.2f') if team_adv.def_ppa is not none else '—', pctl_sub('def_ppa')) }}
+                    {{ key_tile('EPA / pass', signed(team_adv.def_pass_ppa, '%+.2f') if team_adv.def_pass_ppa is not none else '—', pctl_sub('def_pass_ppa')) }}
+                    {{ key_tile('EPA / rush', signed(team_adv.def_rush_ppa, '%+.2f') if team_adv.def_rush_ppa is not none else '—', pctl_sub('def_rush_ppa')) }}
+                    {{ key_tile('Success rate', ('%.1f%%'|format(team_adv.def_success_rate)) if team_adv.def_success_rate is not none else '—', pctl_sub('def_success_rate')) }}
+                    {{ key_tile('Havoc rate', ('%.1f%%'|format(havoc.total)) if havoc and havoc.total is not none else '—', pctl_sub('def_havoc_total')) }}
+                </div>
+            </div>
+            <div class="ts-bars">
+                {{ group('Efficiency') }}
+                {{ pct_row('EPA / play',         team_adv.def_ppa,           'def_ppa', 'epa') }}
+                {{ pct_row('Success rate',       team_adv.def_success_rate,  'def_success_rate', 'pct') }}
+                {{ pct_row('Explosiveness',      team_adv.def_explosiveness, 'def_explosiveness') }}
+                {{ group('Pass defense') }}
+                {{ pct_row('Pass EPA / play',    team_adv.def_pass_ppa,      'def_pass_ppa', 'epa') }}
+                {{ pct_row('Pass success rate',  team_adv.def_pass_sr,       'def_pass_sr', 'pct') }}
+                {{ pct_row('Pass explosiveness', team_adv.def_pass_exp,      'def_pass_exp') }}
+                {{ group('Run defense') }}
+                {{ pct_row('Rush EPA / play',    team_adv.def_rush_ppa,      'def_rush_ppa', 'epa') }}
+                {{ pct_row('Rush success rate',  team_adv.def_rush_sr,       'def_rush_sr', 'pct') }}
+                {{ pct_row('Rush explosiveness', team_adv.def_rush_exp,      'def_rush_exp') }}
+                {{ pct_row('Power success',      team_adv.def_power_success, 'def_power_success', 'pct') }}
+                {{ pct_row('Stuff rate',         team_adv.def_stuff_rate,    'def_stuff_rate', 'pct') }}
+                {{ pct_row('Line yards / carry', team_adv.def_line_yards,    'def_line_yards') }}
+                {{ pct_row('2nd level yards',    team_adv.def_second_level_yards, 'def_second_level_yards') }}
+                {{ pct_row('Open field yards',   team_adv.def_open_field_yards,   'def_open_field_yards') }}
+                {{ group('Havoc &amp; field position') }}
+                {{ pct_row('Havoc rate',         havoc.total if havoc else none,  'def_havoc_total', 'pct') }}
+                {{ pct_row('Front 7 havoc',      havoc.front7 if havoc else none, 'def_havoc_front7', 'pct') }}
+                {{ pct_row('DB havoc',           havoc.db if havoc else none,     'def_havoc_db', 'pct') }}
+                {{ pct_row('Opponent starting field position', havoc.def_fp if havoc else none, 'def_field_pos_avg_start', 'yd') }}
+            </div>
+        </div>
+    </section>
+    <div class="ts-legend" aria-label="Percentile colours">
+        {% for p, label in ((10, '1–24 · poor'), (30, '25–44'), (50, '45–59 · average'), (70, '60–79'), (90, '80–99 · great')) %}
+        <span><span class="ts-legend-swatch" style="background: {{ pct_colour(p) }}"></span>{{ label }}</span>
+        {% endfor %}
     </div>
     {% endif %}
 
-    <!-- Returning Production — share of last season's output back on this roster -->
-    {% if returning %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Returning Production</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Share of {{ returning.prior }} production back on the {{ season }} roster (same school)</span>
+    {# ── Discipline and the spread: what the box score and the betting lines
+       carry that nothing else on the page reports. #}
+    {% if has_disc %}
+    <section id="ts-disc" class="ts-section" aria-labelledby="ts-disc-h">
+        <div class="ts-section-top">
+            <h3 class="ts-h3" id="ts-disc-h">Discipline &amp; the spread</h3>
+            <span class="ts-section-note">{{ season }} · completed games{% if situational.box %} · {{ situational.box.n }} with a box score{% endif %}{% if situational.ats %} · {{ situational.ats.n }} with a closing line{% endif %}</span>
         </div>
-        <div class="row g-3">
-            {% set rp_cards = [
-                ('Offense',  returning.off_pct,     returning.off_rank,     '#34d399', 'rgba(52,211,153,0.1)',  'rgba(52,211,153,0.25)'),
-                ('Defense',  returning.def_pct,     returning.def_rank,     '#7cc4ff', 'rgba(96,165,250,0.1)',  'rgba(96,165,250,0.25)'),
-                ('Overall',  returning.overall_pct, returning.overall_rank, 'var(--gold)', 'rgba(28,156,240,0.1)', 'rgba(28,156,240,0.3)') ] %}
-            {% for label, pct, rank, color, chip_bg, chip_bd in rp_cards %}
-            <div class="col-6 col-lg-4">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">{{ label }}</div>
-                    <div style="color:{{ color }};font-size: var(--text-2xl);font-weight:900;line-height:1">{% if pct is not none %}{{ pct }}%{% else %}—{% endif %}</div>
-                    <div style="margin-top:8px">
-                        {% if rank %}<span style="background:{{ chip_bg }};border:1px solid {{ chip_bd }};color:{{ color }};font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ rank }} of {{ returning.n }}</span>
-                        {% else %}<span style="background:rgba(255,255,255,0.06);border:1px solid var(--border-strong);color: var(--text-secondary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">—</span>{% endif %}
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+        <dl class="dark-card ts-strip">
+            {% if situational.box %}{% set b = situational.box %}
+            <div><dt>Turnover margin</dt><dd class="{{ 'is-pos' if b.tov_margin > 0 else ('is-neg' if b.tov_margin < 0 else '') }}">{{ signed(b.tov_margin, '%+d') }}</dd><p>{{ signed(b.tov_margin_pg, '%+.2f') }} per game</p></div>
+            <div><dt>Giveaways</dt><dd>{{ b.giveaways_pg }}</dd><p>per game</p></div>
+            <div><dt>Takeaways</dt><dd>{{ b.takeaways_pg }}</dd><p>per game</p></div>
+            <div><dt>Penalties</dt><dd>{{ b.pen_pg }}</dd><p>{{ b.pen_yds_pg }} yards per game</p></div>
+            <div><dt>Time of possession</dt><dd>{{ b.top or '—' }}</dd><p>per game</p></div>
+            {% endif %}
+            {% if situational.ats %}{% set a = situational.ats %}
+            <div><dt>ATS record</dt><dd>{{ a.w }}–{{ a.l }}{% if a.p %}–{{ a.p }}{% endif %}</dd><p>{% if a.p %}{{ a.p }} push{{ '' if a.p == 1 else 'es' }}{% else %}no pushes{% endif %}</p></div>
+            <div><dt>Cover rate</dt><dd>{{ ('%.1f'|format(a.pct)) ~ '%' if a.pct is not none else '—' }}</dd><p>of decided games</p></div>
+            <div><dt>Cover margin</dt><dd class="{{ 'is-pos' if a.cover_margin > 0 else ('is-neg' if a.cover_margin < 0 else '') }}">{{ signed(a.cover_margin) }}</dd><p>points vs the number</p></div>
+            <div><dt>Over / Under</dt><dd>{{ a.over }} / {{ a.under }}</dd><p>games with a total</p></div>
+            {% endif %}
+        </dl>
+        {% if not situational.box and has_games %}
+        <p class="ts-note">Turnovers, penalties and time of possession come from a stored box-score
+           table that ends at 2025, so there are no {{ season }} rows yet. Choose an earlier season
+           to see them.</p>
+        {% endif %}
+    </section>
+    {% endif %}
 
-        {% if returning.returning_list or returning.departed_list %}
-        <div class="rp-breakdown">
-            {% for title, items, accent in [('Key Returners', returning.returning_list, 'var(--green)'), ('Notable Departures', returning.departed_list, 'var(--red)')] %}
-            {% if items %}
-            <div class="rp-col">
-                <div class="rp-col-head"><span class="rp-dot" style="background:{{ accent }}"></span>{{ title }}</div>
-                {% for pl in items %}
-                {% if pl.id %}<a class="rp-item" href="{{ player_url(pl.id, returning.prior) }}">{% else %}<span class="rp-item">{% endif %}
-                    <span class="rp-name">{{ pl.name }}</span>
-                    <span class="rp-meta">{% if pl.pos %}{{ pl.pos }} · {% endif %}{{ pl.stat }}</span>
-                {% if pl.id %}</a>{% else %}</span>{% endif %}
+    {# ── Pass offense vs pass defense, side by side because the comparison is
+       the point. The charts themselves are unchanged. #}
+    {% if has_pass %}
+    <section id="ts-pass" class="ts-section" aria-labelledby="ts-pass-h">
+        <div class="ts-section-top">
+            <h3 class="ts-h3" id="ts-pass-h">Passing game</h3>
+            <span class="ts-section-note">Where {{ team[0] }} throws it, and where opponents throw on them</span>
+        </div>
+        <div class="dark-card tp-passing" style="padding:24px">
+            <div class="pc-grid">
+                {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw', legend=false) }}
+                {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense', legend=false) }}
+            </div>
+            <p class="pc-legend">
+                <span class="ph-key ph-key-hot"></span> thrown here more often than the FBS average ·
+                <span class="ph-key ph-key-cold"></span> less often
+            </p>
+        </div>
+    </section>
+    {% endif %}
+
+    {# ── Returning production: share of last season's output back this year. #}
+    {% if returning %}
+    <section id="ts-ret" class="ts-section" aria-labelledby="ts-ret-h">
+        <div class="ts-section-top">
+            <h3 class="ts-h3" id="ts-ret-h">Returning production</h3>
+            <span class="ts-section-note">Share of {{ returning.prior }} production back on the {{ season }} roster (same school)</span>
+        </div>
+        <div class="ts-ret">
+            <div class="dark-card ts-ret-bars">
+                {% for label, pct, rank in (('Offense', returning.off_pct, returning.off_rank), ('Defense', returning.def_pct, returning.def_rank), ('Overall', returning.overall_pct, returning.overall_rank)) %}
+                <div class="ts-model-row ts-ret-row">
+                    <span class="ts-model-label">{{ label }}</span>
+                    <span class="ts-model-val">{{ ('%s%%'|format(pct)) if pct is not none else '—' }}</span>
+                    <span class="ts-bar" aria-hidden="true"><span style="width: {{ pct if pct is not none else 0 }}%"></span></span>
+                    <span class="ts-model-rank">{{ ('#' ~ rank ~ ' of ' ~ returning.n) if rank else '—' }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% if returning.returning_list or returning.departed_list %}
+            <div class="dark-card ts-ret-lists">
+                {% for title, items, cls in [('Key returners', returning.returning_list, 'is-in'), ('Notable departures', returning.departed_list, 'is-out')] %}
+                {% if items %}
+                <div class="ts-ret-col">
+                    <div class="ts-ret-head {{ cls }}">{{ title }}</div>
+                    {% for pl in items %}
+                    {% if pl.id %}<a class="rp-item" href="{{ player_url(pl.id, returning.prior) }}">{% else %}<span class="rp-item">{% endif %}
+                        <span class="rp-name">{{ pl.name }}</span>
+                        <span class="rp-meta">{% if pl.pos %}{{ pl.pos }} · {% endif %}{{ pl.stat }}</span>
+                    {% if pl.id %}</a>{% else %}</span>{% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
                 {% endfor %}
             </div>
             {% endif %}
-            {% endfor %}
         </div>
-        {% endif %}
-    </div>
+    </section>
     {% endif %}
 
-    <!-- SP+ Ratings -->
-    {% if sp %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">SP+ Ratings</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">Bill Connelly's SP+ model · {{ season }}</span>
-        </div>
-        <div class="row g-3">
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Overall</div>
-                    <div style="color: var(--text-primary);font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.rating }}</div>
-                    <div style="margin-top:8px"><span style="background:{{ c1 }}33;border:1px solid {{ c1 }}55;color: var(--text-primary);font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.ranking }} Nationally</span></div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Offense</div>
-                    <div style="color:#34d399;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.off_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.off_ranking }} Nationally</span></div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Defense</div>
-                    <div style="color:#7cc4ff;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.def_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);color:#7cc4ff;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">#{{ sp.def_ranking }} Nationally</span></div>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="dark-card p-4 text-center">
-                    <div style="color: var(--text-dim);font-size: var(--text-xs);font-weight:800;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">Special Teams</div>
-                    <div style="color:#f7b928;font-size: var(--text-2xl);font-weight:900;line-height:1">{{ sp.st_rating }}</div>
-                    <div style="margin-top:8px"><span style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);color:#f7b928;font-size: var(--text-xs);font-weight:800;padding:3px 10px;border-radius: var(--r-pill)">SP+ Rating</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Team Offense / Team Defense summary tables -->
-    {% if team_adv and season_stats %}
-    {% set gp = season_stats.games or 1 %}
-    {% set tot_ypg = (season_stats.pass_yds_pg + season_stats.rush_yds_pg) %}
-    {% set pass_pct = (season_stats.pass_yds_pg / tot_ypg * 100) if tot_ypg else 0 %}
-    {% set off_ypp = ((tot_ypg * gp) / team_adv.off_plays) if team_adv.off_plays else none %}
-
-    {% macro tcell(val, rank=none, accent=none, sub='') %}
-    <td style="padding:11px 12px;text-align:center;white-space:nowrap">
-        <div style="font-weight:800;font-size: var(--text-base);color:{{ accent or 'var(--text-primary)' }}">{{ val }}</div>
-        {% if rank %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ ordinal(rank) }}</div>{% endif %}
-        {% if sub %}<div style="color: var(--text-dim);font-size: var(--text-xs);margin-top:2px">{{ sub }}</div>{% endif %}
-    </td>
-    {% endmacro %}
-    {% macro epa_fmt(v) %}{{ '%+.2f'|format(v) if v is not none else '—' }}{% endmacro %}
-
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Offense</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · per game · national rank shown for scoring &amp; yardage</span>
-        </div>
-        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
-        <table class="data-table data-table--static" style="width:100%;min-width:760px">
-            <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
-                <th style="text-align:center">GP</th>
-                <th class="stat-header" data-tooltip="Points per game" style="text-align:center">PPG</th>
-                <th class="stat-header" data-tooltip="Total yards per game" style="text-align:center">YPG</th>
-                <th class="stat-header" data-tooltip="Passing yards per game" style="text-align:center">Pass YPG</th>
-                <th class="stat-header" data-tooltip="Rushing yards per game" style="text-align:center">Rush YPG</th>
-                <th class="stat-header" data-tooltip="Share of yards from the pass" style="text-align:center">Pass %</th>
-                <th class="stat-header" data-tooltip="Yards per play" style="text-align:center">YPP</th>
-                <th class="stat-header" data-tooltip="EPA per play (all)" style="text-align:center">EPA/Play</th>
-                <th class="stat-header" data-tooltip="EPA per pass play" style="text-align:center">EPA/Pass</th>
-                <th class="stat-header" data-tooltip="EPA per rush play" style="text-align:center">EPA/Rush</th>
-                <th class="stat-header" data-tooltip="Success rate" style="text-align:center">SR%</th>
-            </tr></thead>
-            <tbody><tr style="border-bottom: 1px solid var(--border)">
-                {{ tcell(gp) }}
-                {{ tcell('%.1f'|format(season_stats.pts_for_pg), hero_ranks.pts_for_pg, 'var(--gold)') }}
-                {{ tcell('%.1f'|format(tot_ypg)) }}
-                {{ tcell('%.1f'|format(season_stats.pass_yds_pg), hero_ranks.pass_yds_pg) }}
-                {{ tcell('%.1f'|format(season_stats.rush_yds_pg), hero_ranks.rush_yds_pg) }}
-                {{ tcell('%.0f%%'|format(pass_pct)) }}
-                {{ tcell('%.1f'|format(off_ypp) if off_ypp is not none else '—') }}
-                {{ tcell(epa_fmt(team_adv.off_ppa), none, '#34d399' if (team_adv.off_ppa or 0) > 0 else '#ff9aa2') }}
-                {{ tcell(epa_fmt(team_adv.off_pass_ppa), none, '#34d399' if (team_adv.off_pass_ppa or 0) > 0 else '#ff9aa2') }}
-                {{ tcell(epa_fmt(team_adv.off_rush_ppa), none, '#34d399' if (team_adv.off_rush_ppa or 0) > 0 else '#ff9aa2') }}
-                {{ tcell(('%.1f%%'|format(team_adv.off_success_rate)) if team_adv.off_success_rate is not none else '—') }}
-            </tr></tbody>
-        </table>
-        </div></div>
-    </div>
-
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Team Defense</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · yards allowed aren't tracked in our data source, so this is EPA/scoring-based</span>
-        </div>
-        <div class="dark-card" style="overflow:hidden"><div style="overflow-x:auto">
-        <table class="data-table data-table--static" style="width:100%;min-width:640px">
-            <thead><tr style="background:rgba(255,255,255,0.04);border-bottom: 1px solid var(--border)">
-                <th style="text-align:center">GP</th>
-                <th class="stat-header" data-tooltip="Points allowed per game" style="text-align:center">PPG Allowed</th>
-                <th class="stat-header" data-tooltip="EPA per play allowed (lower is better)" style="text-align:center">EPA/Play</th>
-                <th class="stat-header" data-tooltip="EPA per pass play allowed" style="text-align:center">EPA/Pass</th>
-                <th class="stat-header" data-tooltip="EPA per rush play allowed" style="text-align:center">EPA/Rush</th>
-                <th class="stat-header" data-tooltip="Success rate allowed" style="text-align:center">SR% Allowed</th>
-                <th class="stat-header" data-tooltip="Havoc rate — TFL, forced fumbles, PBUs, INTs" style="text-align:center">Havoc %</th>
-            </tr></thead>
-            <tbody><tr style="border-bottom: 1px solid var(--border)">
-                {{ tcell(gp) }}
-                {{ tcell('%.1f'|format(season_stats.pts_against_pg), hero_ranks.pts_against_pg, 'var(--gold)') }}
-                {# Defensive EPA-allowed isn't good/bad at zero (most defenses allow
-                   positive EPA/play), so leave it neutral — the Percentile
-                   Rankings section below conveys where it ranks. #}
-                {{ tcell(epa_fmt(team_adv.def_ppa)) }}
-                {{ tcell(epa_fmt(team_adv.def_pass_ppa)) }}
-                {{ tcell(epa_fmt(team_adv.def_rush_ppa)) }}
-                {{ tcell(('%.1f%%'|format(team_adv.def_success_rate)) if team_adv.def_success_rate is not none else '—') }}
-                {{ tcell(('%.1f%%'|format(havoc.total)) if havoc and havoc.total is not none else '—') }}
-            </tr></tbody>
-        </table>
-        </div></div>
-    </div>
-    {% endif %}
-
-    <!-- Discipline and the spread — the two things the box-score and betting
-         tables carry that nothing else on the page reports. Kept as two label/
-         value strips rather than eight tiles: these are supporting numbers,
-         not the headline the Savant Rating cards above already claim. -->
-    {% if situational and (situational.box or situational.ats) %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Discipline &amp; the Spread</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ season }} · completed games only</span>
-        </div>
-
-        {% if situational.box %}
-        {% set b = situational.box %}
-        <div class="dark-card tsit">
-            <div class="tsit-head">Turnovers, penalties &amp; possession <span>{{ b.n }} game{{ '' if b.n == 1 else 's' }}</span></div>
-            <dl class="tsit-grid">
-                <div class="tsit-item">
-                    <dt>Turnover margin</dt>
-                    <dd class="tsit-num {{ 'is-pos' if b.tov_margin > 0 else ('is-neg' if b.tov_margin < 0 else '') }}">{{ '%+d'|format(b.tov_margin) }}</dd>
-                    <p class="tsit-sub">{{ '%+.2f'|format(b.tov_margin_pg) }} per game</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Giveaways</dt>
-                    <dd class="tsit-num">{{ b.giveaways_pg }}</dd>
-                    <p class="tsit-sub">per game</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Takeaways</dt>
-                    <dd class="tsit-num">{{ b.takeaways_pg }}</dd>
-                    <p class="tsit-sub">per game</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Penalties</dt>
-                    <dd class="tsit-num">{{ b.pen_pg }}</dd>
-                    <p class="tsit-sub">{{ b.pen_yds_pg }} yards per game</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Time of possession</dt>
-                    <dd class="tsit-num">{{ b.top or '—' }}</dd>
-                    <p class="tsit-sub">per game</p>
-                </div>
-            </dl>
-        </div>
-        {% elif has_games %}
-        <p class="tsit-gap">Turnovers, penalties and time of possession come from a stored box-score
-           table that ends at 2025 — there are no {{ season }} rows yet. Choose an earlier season
-           to see them.</p>
-        {% endif %}
-
-        {% if situational.ats %}
-        {% set a = situational.ats %}
-        <div class="dark-card tsit">
-            <div class="tsit-head">Against the closing spread <span>{{ a.n }} game{{ '' if a.n == 1 else 's' }} with a line</span></div>
-            <dl class="tsit-grid">
-                <div class="tsit-item">
-                    <dt>ATS record</dt>
-                    <dd class="tsit-num">{{ a.w }}–{{ a.l }}{% if a.p %}–{{ a.p }}{% endif %}</dd>
-                    <p class="tsit-sub">{% if a.p %}{{ a.p }} push{{ '' if a.p == 1 else 'es' }}{% else %}no pushes{% endif %}</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Cover rate</dt>
-                    <dd class="tsit-num">{{ ('%.1f'|format(a.pct)) ~ '%' if a.pct is not none else '—' }}</dd>
-                    <p class="tsit-sub">of decided games</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Cover margin</dt>
-                    <dd class="tsit-num {{ 'is-pos' if a.cover_margin > 0 else ('is-neg' if a.cover_margin < 0 else '') }}">{{ '%+.1f'|format(a.cover_margin) }}</dd>
-                    <p class="tsit-sub">points vs the number</p>
-                </div>
-                <div class="tsit-item">
-                    <dt>Over / Under</dt>
-                    <dd class="tsit-num">{{ a.over }} / {{ a.under }}</dd>
-                    <p class="tsit-sub">games with a total</p>
-                </div>
-            </dl>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    <!-- Advanced Stats Percentile Rankings -->
-    {% if team_adv %}
-    <div class="mt-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Advanced Stats — Percentile Rankings</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">vs all 136 FBS teams · Garbage time excluded</span>
-        </div>
-
-        <!-- Legend -->
-        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin-bottom:16px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius: var(--r-md);border: 1px solid var(--border)">
-            <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:700;letter-spacing:0.05em">PERCENTILE:</span>
-            {% for color, label in [('#c0392b','80–99'),('#e74c3c','60–79'),('#95a5a6','45–59'),('#5d8aa8','25–44'),('#2980b9','1–24')] %}
-            <div style="display:flex;align-items:center;gap:6px">
-                <div style="width:28px;height:10px;background:{{ color }};border-radius: 2px"></div>
-                <span style="color: var(--text-secondary);font-size: var(--text-xs)">{{ label }}</span>
-            </div>
-            {% endfor %}
-        </div>
-
-        {% macro pct_bar(label, val, metric, suffix='') %}
-        {% set p = percentiles.get(metric) %}
-        {% if p is not none %}
-            {# Same five bands as the player page, and lifted for the same reason: the
-               knob prints its number on the band, and the deepest red and the blue
-               could carry neither light nor dark ink at 4.5:1. #}
-            {% if p >= 80 %}{% set bc = '#d44f41' %}
-            {% elif p >= 60 %}{% set bc = '#e74c3c' %}
-            {% elif p >= 45 %}{% set bc = '#95a5a6' %}
-            {% elif p >= 25 %}{% set bc = '#5d8aa8' %}
-            {% else %}{% set bc = '#2a83bd' %}{% endif %}
-        {% else %}{% set bc = 'rgba(255,255,255,0.08)' %}{% endif %}
-        <div class="percentile-row" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom: 1px solid var(--border)">
-            <div style="color: var(--text-secondary);font-size: var(--text-xs);min-width:160px;text-align:right;flex-shrink:0">{{ label }}</div>
-            <div style="flex:1;height:16px;background:rgba(255,255,255,0.08);border-radius: 3px;position:relative;overflow:visible">
-                {% if p is not none %}
-                <div style="position:absolute;left:0;top:0;height:100%;width:{{ p }}%;background:{{ bc }};border-radius: 3px 0 0 3px"></div>
-                <div style="position:absolute;top:50%;left:{{ p }}%;transform:translate(-50%,-50%);
-                            width:28px;height:28px;border-radius:50%;background:{{ bc }};
-                            border: 2px solid var(--border-strong);
-                            display:flex;align-items:center;justify-content:center;
-                            font-size: var(--text-xs);font-weight:900;color:#0b0f14;
-                            box-shadow:0 2px 8px rgba(0,0,0,0.6);z-index:3">{{ p }}</div>
-                {% endif %}
-            </div>
-            <div style="color: var(--text-secondary);font-size: var(--text-sm);font-weight:600;min-width:50px;flex-shrink:0">{% if val is not none %}{{ val }}{{ suffix }}{% else %}—{% endif %}</div>
-        </div>
-        {% endmacro %}
-
-        {% macro scale_header() %}
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 0 6px;margin-bottom:4px;border-bottom: 1px solid var(--border)">
-            <div style="min-width:160px;flex-shrink:0"></div>
-            <div style="flex:1;display:flex;justify-content:space-between;padding:0 4px">
-                <span style="color:#2b88c4;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">POOR</span>
-                <span style="color: var(--text-dim);font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">AVERAGE</span>
-                <span style="color:#d7594c;font-size: var(--text-xs);font-weight:900;letter-spacing:0.08em">GREAT</span>
-            </div>
-            <div style="min-width:50px;flex-shrink:0"></div>
-        </div>
-        {% endmacro %}
-
-        <div class="row g-3">
-            <div class="col-lg-6">
-                <div class="dark-card p-4">
-                    <div style="margin-bottom:8px"><span style="background:{{ c1 }}33;border:1px solid {{ c1 }}66;color: var(--text-primary);font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">OFFENSE</span></div>
-                    {{ scale_header() }}
-                    {{ pct_bar('EPA / Play',          team_adv.off_ppa,                'off_ppa') }}
-                    {{ pct_bar('Success Rate',         team_adv.off_success_rate,       'off_success_rate',   '%') }}
-                    {{ pct_bar('Explosiveness',        team_adv.off_explosiveness,      'off_explosiveness') }}
-                    {{ pct_bar('Power Success',        team_adv.off_power_success,      'off_power_success',  '%') }}
-                    {{ pct_bar('Stuff Rate',           team_adv.off_stuff_rate,         'off_stuff_rate',     '%') }}
-                    {{ pct_bar('Line Yards / Carry',   team_adv.off_line_yards,         'off_line_yards') }}
-                    {{ pct_bar('2nd Level Yards',      team_adv.off_second_level_yards, 'off_second_level_yards') }}
-                    {{ pct_bar('Open Field Yards',     team_adv.off_open_field_yards,   'off_open_field_yards') }}
-                    {{ pct_bar('Rush EPA / Play',      team_adv.off_rush_ppa,           'off_rush_ppa') }}
-                    {{ pct_bar('Pass EPA / Play',      team_adv.off_pass_ppa,           'off_pass_ppa') }}
-                    {{ pct_bar('Rush Success Rate',    team_adv.off_rush_sr,            'off_rush_sr',        '%') }}
-                    {{ pct_bar('Pass Success Rate',    team_adv.off_pass_sr,            'off_pass_sr',        '%') }}
-                    {{ pct_bar('Rush Explosiveness',   team_adv.off_rush_exp,           'off_rush_exp') }}
-                    {{ pct_bar('Pass Explosiveness',   team_adv.off_pass_exp,           'off_pass_exp') }}
-                    {{ pct_bar('Avg Starting Field Position', havoc.off_fp if havoc else none, 'off_field_pos_avg_start', ' yd') }}
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="dark-card p-4">
-                    <div style="margin-bottom:8px"><span style="background:rgba(28,156,240,0.15);border:1px solid rgba(28,156,240,0.3);color:#9ad4ff;font-size: var(--text-xs);font-weight:900;padding:3px 10px;border-radius: var(--r-pill);letter-spacing:0.08em">DEFENSE</span></div>
-                    {{ scale_header() }}
-                    {{ pct_bar('EPA / Play Allowed',         team_adv.def_ppa,                'def_ppa') }}
-                    {{ pct_bar('Success Rate Allowed',       team_adv.def_success_rate,       'def_success_rate',   '%') }}
-                    {{ pct_bar('Explosiveness Allowed',      team_adv.def_explosiveness,      'def_explosiveness') }}
-                    {{ pct_bar('Power Success Allowed',      team_adv.def_power_success,      'def_power_success',  '%') }}
-                    {{ pct_bar('Stuff Rate',                 team_adv.def_stuff_rate,         'def_stuff_rate',     '%') }}
-                    {{ pct_bar('Line Yards Allowed',         team_adv.def_line_yards,         'def_line_yards') }}
-                    {{ pct_bar('2nd Level Yds Allowed',      team_adv.def_second_level_yards, 'def_second_level_yards') }}
-                    {{ pct_bar('Open Field Yds Allowed',     team_adv.def_open_field_yards,   'def_open_field_yards') }}
-                    {{ pct_bar('Rush EPA Allowed',           team_adv.def_rush_ppa,           'def_rush_ppa') }}
-                    {{ pct_bar('Pass EPA Allowed',           team_adv.def_pass_ppa,           'def_pass_ppa') }}
-                    {{ pct_bar('Rush Success Allowed',       team_adv.def_rush_sr,            'def_rush_sr',        '%') }}
-                    {{ pct_bar('Pass Success Allowed',       team_adv.def_pass_sr,            'def_pass_sr',        '%') }}
-                    {{ pct_bar('Rush Explosiveness Allowed', team_adv.def_rush_exp,           'def_rush_exp') }}
-                    {{ pct_bar('Pass Explosiveness Allowed', team_adv.def_pass_exp,           'def_pass_exp') }}
-                    {{ pct_bar('Havoc Rate',                 havoc.total if havoc else none,  'def_havoc_total',        '%') }}
-                    {{ pct_bar('Front 7 Havoc',              havoc.front7 if havoc else none, 'def_havoc_front7',       '%') }}
-                    {{ pct_bar('DB Havoc',                   havoc.db if havoc else none,     'def_havoc_db',           '%') }}
-                    {{ pct_bar('Opponent Starting Field Position', havoc.def_fp if havoc else none, 'def_field_pos_avg_start', ' yd') }}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Pass offense vs pass defense. Side by side because the comparison is
-         the point: a team can throw deep and still surrender everything short.
-         The defensive half has no equivalent anywhere else on the site — the
-         opponent-adjusted metrics below are offense-only. -->
-    {% if passing_profile and (passing_profile.offense or passing_profile.defense) %}
-    <div class="dark-card tp-passing" style="padding:24px;margin-bottom:24px">
-        <div style="margin-bottom:18px">
-            <h2 class="section-label" style="margin:0 0 6px;font-size: var(--text-sm)">Passing Game</h2>
-            <p style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.6;max-width:72ch;margin:0">
-                Where {{ team[0] }} throws it, and where opponents throw on them. Depth of target
-                separates a vertical attack from a short-passing one; yards after catch separate
-                what the scheme creates from what the receivers do.
-            </p>
-        </div>
-        <div class="pc-grid">
-            {{ pc.passing_chart(passing_profile.offense, 'Offense', 'passes thrown', 'this offense threw', legend=false) }}
-            {{ pc.passing_chart(passing_profile.defense, 'Defense', 'passes allowed', 'opponents threw on this defense', legend=false) }}
-        </div>
-        {# One key for the pair. Each chart keeps its own sentence and its own
-           located-attempt count, which differ by side; only the colour key was
-           the same thing printed twice. #}
-        <p class="pc-legend">
-            <span class="ph-key ph-key-hot"></span> thrown here more often than the FBS average ·
-            <span class="ph-key ph-key-cold"></span> less often
-        </p>
-    </div>
-    {% endif %}
-
-    <!-- Glossary -->
-    <div class="mt-5 mb-4">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0;font-size: var(--text-sm)">Stats Glossary</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-        </div>
+    {# ── Glossary: every stat this tab shows, one disclosure each. Native
+       <details>, so it opens without script and each term is findable
+       with the browser's find-in-page. #}
+    <section id="ts-gloss" class="ts-section" aria-labelledby="ts-gloss-h">
+        <div class="ts-section-top"><h3 class="ts-h3" id="ts-gloss-h">Glossary</h3></div>
         {% set glossary = [
-            ('Savant Rating (SVR)', 'Saturday Savant\'s proprietary efficiency model. Offense = opponent-adjusted points scored per 10 drives; Defense = points allowed per 10 drives (lower is better); Net = the difference, i.e. the expected margin against an average FBS team on a neutral field. Garbage time, kneel-downs, and overtime are excluded, and every number is adjusted for schedule strength.'),
-            ('SP+', 'Bill Connelly\'s tempo- and opponent-adjusted efficiency metric. Combines offense, defense, and special teams into a single predictive rating. Higher is better.'),
-            ('EPA / Play', 'Expected Points Added per play. Measures how much a team moves the needle toward scoring relative to what\'s expected given down, distance, and field position. The single best measure of efficiency.'),
-            ('Success Rate', 'The percentage of plays deemed "successful" — gaining 50% of yards needed on 1st down, 70% on 2nd, or 100% on 3rd/4th. Measures consistency.'),
-            ('Explosiveness', 'Average EPA on successful plays only. Measures the ability to create big gains when things go right. High explosiveness with high success rate = elite offense.'),
-            ('Power Success', 'Percentage of short-yardage situations (2nd/3rd/4th and ≤2 yards) converted. Measures ability to win in the trenches.'),
-            ('Stuff Rate', 'Percentage of rush attempts stopped at or behind the line of scrimmage. High offensive stuff rate = bad O-line. High defensive stuff rate = dominant D-line.'),
-            ('Line Yards / Carry', 'Rushing yards credited to the offensive line (first 5 yards). Isolates O-line performance from the running back\'s contribution.'),
-            ('2nd Level Yards', 'Rushing yards gained 5–10 yards past the line of scrimmage. Represents yards where linebackers have primary responsibility.'),
-            ('Open Field Yards', 'Rushing yards gained beyond 10 yards. Largely a function of the running back\'s speed and elusiveness in space.'),
-            ('Rush / Pass EPA', 'EPA per play broken down by run vs pass. Helps identify whether a team\'s success comes from the ground or through the air.'),
-            ('Rush / Pass Success Rate', 'Success rate broken down by run vs pass. Shows whether a team is consistently effective in each phase.'),
-            ('Rush / Pass Explosiveness', 'Average EPA on successful rush or pass plays only. Identifies big-play threats in each phase of the offense.'),
-            ('Havoc Rate', 'The percentage of opponent plays this defense disrupts — tackles for loss, forced fumbles, pass breakups, and interceptions. Broken down into Front 7 (line/linebacker) and DB (secondary) contributions. Higher is better.'),
-            ('Field Position', 'Average yards a drive needs to travel to reach the end zone, based on where it starts. For "Avg Starting Field Position," lower is better — the offense starts closer to the opponent\'s end zone. For "Opponent Starting Field Position," higher is better — the defense (and special teams) is pinning opponents back, forcing them to go further.'),
+            ('Percentile', 'Where this team ranks among every FBS team on a stat, from 1 to 99. Each one is oriented so higher is better: on defense and for stuff rate on offense, a low raw number earns a high percentile. Colours follow the bands in the key under the charts.'),
+            ('National rank', 'Position among all FBS teams, #1 best. The bars under the ratings fill further for a better rank.'),
+            ('Savant Rating · Net', 'Saturday Savant’s own efficiency model. Net is Offense minus Defense: the expected margin against an average FBS team on a neutral field. Garbage time, kneel-downs and overtime are excluded, and every number is adjusted for schedule strength.'),
+            ('Savant Rating · Offense and Defense', 'Opponent-adjusted points scored (Offense) and allowed (Defense) per 10 drives. For Defense, lower is better.'),
+            ('Schedule (Savant)', 'The average Net Savant Rating of the opponents played. Higher means a harder schedule.'),
+            ('SP+', 'Bill Connelly’s tempo- and opponent-adjusted rating. Overall combines Offense, Defense and Special teams into one predictive number; higher is better, except SP+ Defense, where lower is better.'),
+            ('SP+ Special teams', 'The special-teams part of SP+. Higher is better.'),
+            ('Points / points allowed', 'Points scored or allowed per game, with the national rank underneath.'),
+            ('Yards, pass yards, rush yards', 'Total, passing and rushing yards per game. The share under Yards is the part of the offense’s yardage gained through the air.'),
+            ('Yards / play', 'Total yards divided by offensive plays.'),
+            ('EPA / play', 'Expected Points Added per play: how much each play moved a team toward scoring, given the down, distance and field position before it. The best single measure of efficiency. On defense it is EPA allowed, so lower raw numbers are better.'),
+            ('Success rate', 'Share of plays that count as successful: 50% of the yards needed on 1st down, 70% on 2nd, and all of them on 3rd or 4th. Measures consistency.'),
+            ('Explosiveness', 'Average EPA on successful plays only: how big the gains are when things go right.'),
+            ('Pass and rush splits', 'EPA / play, success rate and explosiveness counted on pass plays or rush plays alone, showing whether a team wins through the air or on the ground.'),
+            ('Power success', 'Share of short-yardage situations (2nd, 3rd or 4th and 2 or fewer yards to go) converted. A test of who wins in the trenches.'),
+            ('Stuff rate', 'Share of runs stopped at or behind the line of scrimmage. High is bad for an offensive line and good for a defensive front, and the percentiles account for that.'),
+            ('Line yards / carry', 'Rushing yards credited to the offensive line, roughly the first 5 yards of each carry. Isolates line play from the running back’s contribution.'),
+            ('2nd level yards', 'Rushing yards gained 5 to 10 yards past the line of scrimmage, where linebackers are responsible.'),
+            ('Open field yards', 'Rushing yards gained more than 10 yards past the line of scrimmage: largely the running back’s speed and elusiveness.'),
+            ('Havoc rate', 'Share of opponent plays this defense disrupts with a tackle for loss, forced fumble, pass breakup or interception. Front 7 havoc counts those by linemen and linebackers, DB havoc those by the secondary.'),
+            ('Starting field position', 'Average yards a drive has to travel to score. For the offense, fewer is better. For opponents’ drives against this defense and special teams, more is better.'),
+            ('Turnover margin', 'Takeaways minus giveaways over the season, and per game. Giveaways are turnovers lost, takeaways are turnovers gained.'),
+            ('Penalties', 'Penalties per game, and the yards they cost.'),
+            ('Time of possession', 'Average minutes and seconds per game with the ball.'),
+            ('ATS record', 'Wins, losses and pushes against the closing point spread.'),
+            ('Cover rate', 'Share of decided games (pushes left out) in which the team covered the spread.'),
+            ('Cover margin', 'Average points by which the team beat (positive) or missed (negative) the closing spread.'),
+            ('Over / Under', 'Games that finished over or under the closing total.'),
+            ('ADOT', 'Average depth of target: mean air yards per pass attempt. Higher means a more vertical passing game.'),
+            ('Air share', 'Share of passing yards gained before the catch rather than after it: what the scheme and quarterback create versus the receivers.'),
+            ('YAC / rec', 'Yards after the catch per reception.'),
+            ('Deep rate', 'Share of pass attempts the play-by-play marks as thrown deep.'),
+            ('Passing heat map', 'Where passes were thrown, compared with the FBS average at the same depth and spot. Warmer cells saw more throws than average, cooler cells fewer.'),
+            ('Returning production', 'Share of last season’s production that is back on this season’s roster at the same school. Offense counts passing, rushing and receiving yards; defense counts tackles, tackles for loss, sacks, pass breakups and interceptions.'),
         ] %}
-        <div class="row g-3">
+        <div class="ts-gloss">
             {% for term, definition in glossary %}
-            <div class="col-lg-6">
-                <div class="dark-card p-3" style="height:100%">
-                    <div style="color: var(--text-primary);font-weight:800;font-size: var(--text-base);margin-bottom:5px">{{ term }}</div>
-                    <div style="color: var(--text-secondary);font-size: var(--text-sm);line-height:1.55">{{ definition }}</div>
-                </div>
-            </div>
+            <details class="ts-term">
+                <summary>{{ term }}</summary>
+                <p>{{ definition }}</p>
+            </details>
             {% endfor %}
         </div>
-    </div>
+    </section>
 
 </div>
