@@ -420,6 +420,54 @@ def ensure_indexes():
 
 ensure_indexes()
 
+
+def ensure_search_indexes():
+    """Name search: an accent- and punctuation-folding normaliser, and the
+    trigram / prefix indexes over it. Separate from ensure_indexes because the
+    extensions need privileges a restricted role may lack — search then falls
+    back to scanning, slower but correct."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('CREATE EXTENSION IF NOT EXISTS pg_trgm')
+        cur.execute('CREATE EXTENSION IF NOT EXISTS unaccent')
+        # "D.J." -> "dj", "O'Brien" -> "obrien", "José" -> "jose",
+        # "Pola-Gates" -> "pola gates". _snorm() in Python is the mirror image.
+        cur.execute(r'''
+            CREATE OR REPLACE FUNCTION search_norm(t text) RETURNS text
+            LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+                SELECT btrim(regexp_replace(
+                         regexp_replace(lower(public.unaccent('public.unaccent'::regdictionary, coalesce(t, ''))),
+                                        '[.''’]', '', 'g'),
+                         '[^a-z0-9]+', ' ', 'g'))
+            $$''')
+        # Stored, not computed per query: folding costs ~0.05ms a call, which
+        # over the ~2,000 candidates of a three-letter query was the whole
+        # 400ms. Postgres recomputes these on every insert and update, and
+        # every writer names its columns, so nothing else has to know.
+        for col, expr in (('search_name', "first_name || ' ' || last_name"),
+                          ('search_first', 'first_name'), ('search_last', 'last_name'),
+                          ('search_team', 'team')):
+            cur.execute(f'ALTER TABLE players ADD COLUMN IF NOT EXISTS {col} text '
+                        f'GENERATED ALWAYS AS (search_norm({expr})) STORED')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_players_search_name_trgm ON players '
+                    'USING gin (search_name gin_trgm_ops)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_players_search_last ON players (search_last text_pattern_ops)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_players_search_first ON players (search_first text_pattern_ops)')
+        cur.execute('DROP INDEX IF EXISTS idx_players_name_trgm')
+        cur.execute('DROP INDEX IF EXISTS idx_players_last_norm')
+        cur.execute('DROP INDEX IF EXISTS idx_players_first_norm')
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f'Search index setup skipped (non-fatal): {e}')
+        conn.rollback()
+        return False
+    finally:
+        release_db(conn)
+
+SEARCH_INDEXED = ensure_search_indexes()
+
 # ── Seasons ──────────────────────────────────────────────────────────────────
 # CURRENT_SEASON is the most recent season that actually has stats loaded — the
 # default for leaderboards, team stats, and player pages. It's DERIVED from the
@@ -3963,7 +4011,7 @@ _SEARCH_ALIASES = {
     'unc': 'North Carolina', 'mizzou': 'Missouri', 'cal': 'California',
     'vt': 'Virginia Tech', 'wvu': 'West Virginia', 'psu': 'Penn State',
     'fsu': 'Florida State', 'jmu': 'James Madison', 'nova': 'Villanova',
-    'the u': 'Miami', 'ND': 'Notre Dame',
+    'the u': 'Miami', 'nd': 'Notre Dame',
 }
 
 # Word-level fixes so "ohio st" reaches "Ohio State".
@@ -4017,48 +4065,86 @@ def _search_teams(cursor, q, n, limit=10):
             for r in cursor.fetchall()]
 
 
-def _search_players(cursor, q, n, limit=50):
+def _snorm(s):
+    """Python mirror of the search_norm() SQL function."""
+    import unicodedata
+    s = unicodedata.normalize('NFKD', s or '').encode('ascii', 'ignore').decode().lower()
+    s = re.sub(r"[.'’]", '', s)
+    return ' '.join(re.sub(r'[^a-z0-9]+', ' ', s).split())
+
+
+def _search_players(cursor, q, n=None, limit=50, positions=None):
     """Players, best match first.
 
-    The old query matched any substring, so searching "lsu" returned two
-    receivers named Alsup — the letters are in the name — ranked alongside the
-    school itself. Substring hits now sort last, and for a query of four
-    characters or fewer they are dropped entirely: at that length a substring
-    match is a coincidence, not an intent."""
-    p = _search_params(q, n)
-    p['limit'] = limit
-    cursor.execute('''
+    Every word typed must start a word of the player's name or his team, in
+    any order — "mendoza fernando" and "smith indiana" both work — except that
+    a word of five letters or more may also sit inside a name. Short
+    substrings are coincidences: "lsu" must not find two receivers named
+    Alsup. Names are compared folded ("jose" finds José, "dj" finds D.J.).
+    When nothing matches, a trigram similarity pass catches typos
+    ("mendosa"); those rows carry fuzzy=True.
+
+    Ranking: exact full name, last-name prefix, full-name prefix, all words in
+    the name, then team-assisted or inside-a-name matches; among equals, a
+    trophy winner, then a drafted player, then someone on a current roster.
+    """
+    toks = _snorm(q).split()
+    if not toks:
+        return []
+    full = ' '.join(toks)
+    N = 'p.search_name'
+    params = {'full': full, 'fullpre': full + '%', 'limit': limit, 'pos': list(positions or [])}
+    longs = [t for t in toks if len(t) >= 3]
+    # Candidate filter the indexes can answer: a trigram hit on any 3+ letter
+    # word, else a first/last-name prefix for a short query ("dj", "ma").
+    if longs:
+        cand = ' OR '.join(f'{N} LIKE %(c{i})s' for i in range(len(longs)))
+        params.update({f'c{i}': f'%{t}%' for i, t in enumerate(longs)})
+    else:
+        cand = 'p.search_last LIKE %(p0)s OR p.search_first LIKE %(p0)s'
+        params['p0'] = toks[0] + '%'
+    checks, in_name = [], []
+    for i, t in enumerate(toks):
+        params[f'w{i}'] = r'(^| )' + re.escape(t)
+        alt = f' OR s.n LIKE %(s{i})s' if len(t) >= 5 else ''
+        if alt:
+            params[f's{i}'] = f'%{t}%'
+        checks.append(f"(s.n ~ %(w{i})s OR s.tn ~ %(w{i})s{alt})")
+        in_name.append(f's.n ~ %(w{i})s')
+    pos_sql = 'AND p.position = ANY(%(pos)s)' if positions else ''
+    select = f"""
         SELECT p.id, p.first_name, p.last_name, p.team, p.position,
                p.jersey, p.headshot, t.conference, t.logo_dark,
-               p.active_2026, p.year,
-               CASE WHEN LOWER(p.first_name || ' ' || p.last_name) IN (LOWER(%(q)s), LOWER(%(n)s)) THEN 0
-                    WHEN p.last_name ILIKE %(qpre)s                       THEN 1
-                    WHEN (p.first_name || ' ' || p.last_name) ILIKE %(qpre)s THEN 2
-                    WHEN p.first_name ILIKE %(qpre)s                      THEN 3
-                    WHEN (p.first_name || ' ' || p.last_name) ILIKE %(qword)s THEN 4
-                    ELSE 5 END AS rank
+               p.active_2026, p.year, {{rank}} AS rank
         FROM players p
         INNER JOIN teams t ON p.team = t.name
-        WHERE (p.first_name || ' ' || p.last_name) ILIKE %(qsub)s
-           OR p.last_name ILIKE %(qsub)s
-           OR p.first_name ILIKE %(qsub)s
-        ORDER BY rank,
-                 -- Among equal name matches, the player a fan is likely asking
-                 -- about: a trophy winner, then a drafted player, then someone
-                 -- currently on a roster. Searching "Mendoza" should not bury
-                 -- the Heisman winner under five alphabetical namesakes.
-                 (SELECT COUNT(*) FROM awards a WHERE a.player_id = p.id) DESC,
+        CROSS JOIN LATERAL (SELECT p.search_name AS n, p.search_last AS ln, p.search_team AS tn) s
+        LEFT JOIN (SELECT player_id, count(*) AS n FROM awards GROUP BY player_id) aw ON aw.player_id = p.id
+        WHERE {{where}} {pos_sql}
+        ORDER BY {{order}}
+                 aw.n DESC NULLS LAST,
                  (p.nfl_status = 'drafted') DESC,
                  COALESCE(p.active_2026, 0) DESC,
+                 (p.headshot IS NOT NULL) DESC,
                  p.last_name, p.first_name
-        LIMIT %(limit)s
-    ''', p)
-    rows = [{'id': r[0], 'first': r[1], 'last': r[2], 'team': r[3], 'pos': r[4],
+        LIMIT %(limit)s"""
+    rank = f"""CASE WHEN s.n = %(full)s THEN 0
+                    WHEN s.ln LIKE %(fullpre)s THEN 1
+                    WHEN s.n LIKE %(fullpre)s THEN 2
+                    WHEN {' AND '.join(in_name)} THEN 3
+                    ELSE 4 END"""
+    where = f'({cand})' if (len(toks) == 1 and not longs) else f"({cand}) AND {' AND '.join(checks)}"
+    cursor.execute(select.format(rank=rank, where=where, order='rank,'), params)
+    rows = cursor.fetchall()
+    fuzzy = False
+    if not rows and len(full) >= 4 and SEARCH_INDEXED:
+        # Typos: the closest names by trigram word-similarity.
+        cursor.execute(select.format(rank='5', where=f'%(full)s <%% {N}',
+                                     order='word_similarity(%(full)s, s.n) DESC,'), params)
+        rows, fuzzy = cursor.fetchall(), True
+    return [{'id': r[0], 'first': r[1], 'last': r[2], 'team': r[3], 'pos': r[4],
              'jersey': r[5], 'headshot': r[6], 'conference': r[7], 'logo': r[8],
-             'active': r[9], 'year': r[10], 'rank': r[11]} for r in cursor.fetchall()]
-    if len(q) <= 4:
-        rows = [r for r in rows if r['rank'] < 5]
-    return rows
+             'active': r[9], 'year': r[10], 'rank': r[11], 'fuzzy': fuzzy} for r in rows]
 
 
 def _search_rivalries(cursor, q, n, teams, limit=6):
@@ -4123,6 +4209,8 @@ def search():
             cursor = conn.cursor()
             team_results = _search_teams(cursor, raw, norm)
             player_results = _search_players(cursor, raw, norm)
+            if team_results and team_results[0]['rank'] <= 1:
+                player_results = [p for p in player_results if not p['fuzzy']]
             rivalry_results = _search_rivalries(cursor, raw, norm, team_results)
             # Games only when one school clearly answers the query.
             top = team_results[0] if team_results and team_results[0]['rank'] <= 1 else None
@@ -6715,52 +6803,46 @@ def team_starters(team_ref):
 
 @app.route('/api/players')
 def api_players():
-    q = request.args.get('q', '').strip()
+    q = request.args.get('q', '').strip()[:60]
     if len(q) < 2:
         return jsonify([])
-    # Optional position filter (used by the compare page's position tabs).
-    # Backward compatible: the navbar search sends no `pos`, so it is ignored.
+    # Optional position filter (the compare page's position tabs); the navbar
+    # sends none and gets teams as well as players.
     pos = request.args.get('pos', '').strip().upper()
     pos_cols = POSITION_GROUPS.get(pos)
-    conn = get_db()
-    try:
-        cursor = conn.cursor()
-        if pos_cols:
-            pos_ph = ','.join(['%s'] * len(pos_cols))
-            cursor.execute(f'''
-                SELECT p.id, p.first_name, p.last_name, p.team, p.position,
-                       p.jersey, p.headshot, t.logo_dark, 'player' as result_type
-                FROM players p
-                INNER JOIN teams t ON p.team = t.name
-                WHERE ((p.first_name || ' ' || p.last_name) ILIKE %s OR p.last_name ILIKE %s)
-                  AND p.position IN ({pos_ph})
-                ORDER BY p.last_name, p.first_name
-                LIMIT 6
-            ''', (f'%{q}%', f'{q}%', *pos_cols))
-            player_dicts = [{'id': r[0], 'first': r[1], 'last': r[2], 'team': r[3],
-                             'pos': r[4], 'jersey': r[5], 'headshot': r[6], 'logo': r[7]}
-                            for r in cursor.fetchall()]
-            team_dicts = []  # a position filter means the user is picking a player
-        else:
-            # The same ranking the /search page uses, so the dropdown and the
-            # results page agree about what "lsu" means: the school first, never
-            # a receiver whose surname merely contains those three letters.
+    # Every visitor typing "ma" asks the same question; answers are cached for
+    # ten minutes per worker and for five in the browser.
+    key = f'apiq:{pos if pos_cols else ""}:{_snorm(q)}'
+    results = data_cache.get(key)
+    if results is None:
+        conn = get_db()
+        try:
+            cursor = conn.cursor()
             raw, norm = _search_terms(q)
-            player_dicts = _search_players(cursor, raw, norm, limit=6)
-            team_dicts = _search_teams(cursor, raw, norm, limit=4)
-    finally:
-        release_db(conn)
-    results = []
-    for t in team_dicts:
-        results.append({'type': 'team', 'name': t['name'], 'conference': t['conference'],
-                        'logo': t['logo'], 'color': t['color'],
-                        'url': f"/team/{slugify_team(t['name'])}"})
-    for pl in player_dicts:
-        results.append({'type': 'player', 'id': pl['id'], 'first': pl['first'], 'last': pl['last'],
-                        'team': pl['team'], 'pos': pl['pos'], 'jersey': pl['jersey'],
-                        'headshot': pl['headshot'], 'logo': pl['logo'],
-                        'url': f"/player/{pl['id']}"})
-    return jsonify(results)
+            player_dicts = _search_players(cursor, raw, norm, limit=6, positions=pos_cols)
+            # The same team ranking the /search page uses, so the dropdown and
+            # the results page agree about what "lsu" means.
+            team_dicts = [] if pos_cols else _search_teams(cursor, raw, norm, limit=4)
+            # A school that answers the query outright ("bama") makes near-miss
+            # player names noise, not suggestions.
+            if team_dicts and team_dicts[0]['rank'] <= 1:
+                player_dicts = [p for p in player_dicts if not p['fuzzy']]
+        finally:
+            release_db(conn)
+        results = []
+        for t in team_dicts:
+            results.append({'type': 'team', 'name': t['name'], 'conference': t['conference'],
+                            'logo': t['logo'], 'color': t['color'],
+                            'url': f"/team/{slugify_team(t['name'])}"})
+        for pl in player_dicts:
+            results.append({'type': 'player', 'id': pl['id'], 'first': pl['first'], 'last': pl['last'],
+                            'team': pl['team'], 'pos': pl['pos'], 'jersey': pl['jersey'],
+                            'headshot': pl['headshot'], 'logo': pl['logo'], 'fuzzy': pl['fuzzy'],
+                            'url': f"/player/{pl['id']}"})
+        data_cache.set(key, results, timeout=600)
+    resp = jsonify(results)
+    resp.headers['Cache-Control'] = 'public, max-age=300'
+    return resp
 
 @app.route('/rankings')
 @cache.cached(timeout=21600, query_string=True)  # 1 hour; season is in the query string

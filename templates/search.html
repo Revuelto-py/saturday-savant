@@ -105,7 +105,7 @@
     {% if player_results %}
     <div style="margin-top:32px">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0">Players</h2>
+            <h2 class="section-label" style="margin:0">{{ 'Did you mean' if player_results[0].fuzzy else 'Players' }}</h2>
             <div style="flex:1;height:1px;background: var(--border)"></div>
             <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ player_results|length }} found</span>
         </div>
