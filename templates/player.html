@@ -64,7 +64,11 @@
 
 <!-- HERO: the team's colours from each corner, the photo seated on the
      bottom edge, and the facts a reader checks first. -->
-<div class="pp-top">
+{# The phone draws the header as a poster in the team's colour: the fill is
+   the primary darkened only as far as white type needs, the jersey number
+   takes the secondary when it reads on that fill. #}
+{% set poster = white_knob(c1 | team_hex('#334155')) %}
+<div class="pp-top" style="--poster:{{ poster }};--num:{{ poster_ink(c2, poster) }}">
 <header class="pp-hero" style="--c1:{{ c1 | team_hex('#334155') }};--g:linear-gradient(100deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 30%, #121013 55%, {{ shade(c2, 0.78) }} 85%, {{ shade(c2, 0.62) }} 100%);--gm:linear-gradient(160deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 40%, #121013 68%, {{ shade(c2, 0.72) }} 100%){% if player.logo_dark %};--logo:url('{{ player.logo_dark }}'){% endif %}">
 <div class="page-wrapper pp-hero-in">
 
@@ -80,13 +84,23 @@
         <div class="pp-teamline">
             {% if player.logo_dark %}<img src="{{ player.logo_dark }}" alt="" aria-hidden="true">{% endif %}
             <a href="{{ team_url(player.team, season) }}">{{ player.team }}</a>
-            {% if player.position %}<span class="pp-dot">·</span><span>{{ player.position }}</span>{% endif %}
-            {% if player.jersey %}<span class="pp-dot">·</span><span>#{{ player.jersey }}</span>{% endif %}
+            {% if player.position %}<span class="pp-dot pp-tl-x">·</span><span class="pp-tl-x">{{ player.position }}</span>{% endif %}
+            {% if player.jersey %}<span class="pp-dot pp-tl-x">·</span><span class="pp-tl-x">#{{ player.jersey }}</span>{% endif %}
             {% if not is_active_2026 %}<span class="pp-status">No longer with team</span>{% endif %}
         </div>
         {# A long name steps down a size so it stays on one line and every header
    keeps the same height. #}
-<h1 class="pp-name{{ ' is-long' if (player.first_name ~ ' ' ~ player.last_name) | length > 17 else '' }}">{{ player.first_name }} {{ player.last_name }}</h1>
+{% if player.jersey or pos %}
+        <div class="pp-numline">{% if player.jersey %}<span class="pp-num">{{ player.jersey }}</span>{% endif %}<span>{{ POSITION_NAMES.get(pos, player.position or '') }}</span></div>
+        {% endif %}
+        {% set ln = (player.last_name or '') | length %}
+        <h1 class="pp-name{{ ' is-long' if (player.first_name ~ ' ' ~ player.last_name) | length > 17 else '' }}{{ ' ln-l' if ln > 11 else (' ln-m' if ln > 8 else '') }}"><span class="pp-first">{{ player.first_name }}</span> <span class="pp-last">{{ player.last_name }}</span></h1>
+        {% if heisman or transfer_path | length > 1 %}
+        <div class="pp-pills">
+        {% if heisman %}<span class="pp-hchip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>Heisman ’{{ (heisman[-1].season | string)[2:] }}</span>{% endif %}
+        {% if transfer_path | length > 1 %}{% set dest = transfer_path[-1] %}<span class="pp-pill">Transfer from {{ transfer_path[-2].school }}{% if dest.stars %} <span class="pp-pill-stars" aria-label="{{ dest.stars }}-star transfer">{{ '★' * dest.stars }}</span>{% endif %}</span>{% endif %}
+        </div>
+        {% endif %}
         <dl class="pp-bio">
             {% if player.height_fmt or player.weight %}
             <div><dt>HT / WT</dt><dd>{{ player.height_fmt or '—' }}{% if player.weight %}<span class="pp-wt">, {{ player.weight }}<span class="pp-lbs"> lbs</span></span>{% endif %}</dd></div>
@@ -155,6 +169,14 @@
     </div>
 </div>
 </header>
+{# Phone only: the facts a reader checks first, on a card that overlaps the
+   poster's bottom edge. #}
+<dl class="pp-mcard">
+    <div><dt>Height</dt><dd>{{ player.height_fmt or '—' }}</dd></div>
+    <div><dt>Weight</dt><dd>{% if player.weight %}{{ player.weight }}<small> lbs</small>{% else %}—{% endif %}</dd></div>
+    <div><dt>Class</dt><dd>{{ player.year_fmt or '—' }}</dd></div>
+    <div><dt>Conf</dt><dd>{{ player.conference or '—' }}</dd></div>
+</dl>
 {# Hardware and history — the Heisman, transfers, the draft, awards — sit in
    their own panel so they never change the header's height: beside it on a
    wide screen, just below it on a narrow one. #}
@@ -169,7 +191,7 @@
     </div>
     {% endif %}
     {% if transfer_path | length > 1 %}
-    <div class="pp-fact">
+    <div class="pp-fact is-transfer">
         <span class="pp-fact-k">Transfer</span>
         <span class="pp-fact-v">
         {% set lg = transfer_team_logos.get(transfer_path[0].school) %}
@@ -195,6 +217,25 @@
         <span class="pp-hop pp-muted">Undrafted free agent</span>
         {% endif %}
         </span>
+    </div>
+    {% endif %}
+    {# Phone: every school as a stop on one line, oldest first, the current
+       one ringed. Five fit at 360px; more scroll sideways inside the strip. #}
+    {% if transfer_path | length > 1 %}
+    <div class="pp-path">
+        <div class="pp-path-head"><span class="pp-fact-k">Transfer</span><span class="pp-yr">{{ transfer_path | length }} schools</span></div>
+        <ol class="pp-path-stops">
+            {% for t in transfer_path %}
+            {% set lg = transfer_team_logos.get(t.school) %}
+            <li class="pp-stop{{ ' is-now' if loop.last else '' }}">
+                <span class="pp-stop-dot">{% if lg %}<img src="{{ lg }}" alt="" aria-hidden="true">{% endif %}</span>
+                <b title="{{ t.school }}">{{ team_abbrevs.get(t.school, t.school) }}</b>
+                {% set yr = t.year or (career_log | selectattr('team', 'equalto', t.school) | map(attribute='season') | min if career_log else none) %}
+                <span class="pp-yr">{{ yr or '' }}{{ '–' if loop.last and yr else '' }}</span>
+                {% if t.stars %}<span class="pp-stars" aria-label="{{ t.stars }}-star transfer">{{ '★' * t.stars }}</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ol>
     </div>
     {% endif %}
     {% if other_awards %}
@@ -353,7 +394,7 @@
 
 {% if game_log %}
 <section class="pp-card">
-    <h2 class="pp-h2">{{ season }} game log</h2>
+    <div class="pp-card-head"><h2 class="pp-h2">{{ season }} game log</h2><span class="pp-note pp-mnote">Tap a game for the full line</span></div>
     <div class="pp-log" style="--n:{{ kept.cols | length }}">
         <div class="pp-log-row pp-log-head" aria-hidden="true">
             <span>Wk</span><span>Opponent</span><span>Result</span>
@@ -367,6 +408,36 @@
             <span class="pp-log-res{{ ' is-w' if res.startswith('W') else (' is-l' if res.startswith('L') else '') }}">{{ res or '—' }}</span>
             {% for label, key in kept.cols %}<span class="pp-log-c{{ ' is-m' if loop.index0 < 5 else '' }}" data-k="{{ label }}">{{ cell(label, g.stats.get(key)) }}</span>{% endfor %}
         </a>
+        {% endfor %}
+    </div>
+    {# Phone: each game is a row of four key figures that opens to the rest of
+       its line. The four are the position's; a position without them takes
+       the first four columns kept. #}
+    {% set mkeys = {'qb': ['Yds','TD','INT','Rtg'], 'rb': ['Car','Yds','TD','Rec'], 'rec': ['Rec','Yds','TD','Long'],
+                    'dl': ['Tot','Sack','TFL','PD'], 'db': ['Tot','INT','PD','TFL'], 'k': ['FGM','FGA','Long','Pts'], 'p': ['No','Avg','Long','In20']}
+                   ['qb' if is_qb else 'rb' if is_rb else 'rec' if is_receiver else 'dl' if is_def_dl else 'db' if is_def_db else 'k' if is_kicker else 'p' if is_punter else 'qb'] %}
+    {% set mcols = kept.cols | selectattr(0, 'in', mkeys) | list %}
+    {% if not mcols %}{% set mcols = kept.cols[:4] %}{% endif %}
+    {% set rest = kept.cols | reject('in', mcols) | list %}
+    <div class="pp-mlog" style="--n:{{ mcols | length }}">
+        <div class="pp-mlog-row pp-log-head" aria-hidden="true">
+            <span>Wk</span><span>Opp</span><span>Result</span>
+            {% for label, key in mcols %}<span>{{ label }}</span>{% endfor %}
+        </div>
+        {% for g in game_log %}
+        {% set res = g.result or '' %}
+        <details class="pp-mlog-g">
+            <summary class="pp-mlog-row{{ ' is-post' if g.season_type == 'SeasonType.POSTSEASON' or g.game_label != g.week | string else '' }}">
+                <span class="pp-log-wk"{% if not (g.game_label | string).isdigit() %} title="{{ g.game_label }}"{% endif %}>{{ g.game_label | game_abbr }}</span>
+                <span class="pp-log-opp">{% if g.home_away != 'home' %}<span class="pp-muted">@</span>{% endif %}{% if g.opp_logo %}<img src="{{ g.opp_logo }}" alt="" aria-hidden="true">{% endif %}<b title="{{ g.opponent }}">{{ team_abbrevs.get(g.opponent, g.opponent) or '—' }}</b></span>
+                <span class="pp-log-res{{ ' is-w' if res.startswith('W') else (' is-l' if res.startswith('L') else '') }}">{{ res or '—' }}</span>
+                {% for label, key in mcols %}<span class="pp-log-c">{{ cell(label, g.stats.get(key)) }}</span>{% endfor %}
+            </summary>
+            <div class="pp-mlog-more">
+                {% for label, key in rest %}<div><b>{{ cell(label, g.stats.get(key)) }}</b><span>{{ label }}</span></div>{% endfor %}
+                {% if g.game_id %}<a class="pp-link" href="/game/{{ g.game_id }}">Game page</a>{% endif %}
+            </div>
+        </details>
         {% endfor %}
     </div>
 </section>

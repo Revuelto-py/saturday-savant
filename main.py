@@ -4596,7 +4596,30 @@ def pct_knob(p):
         c = tuple(round(v * 0.94) for v in c)
     return '#%02x%02x%02x' % c
 
-app.jinja_env.globals.update(shade=shade, pct_fill=pct_fill, pct_knob=pct_knob, hex_rgba=hex_rgba)
+def poster_ink(hex_color, bg):
+    """The team's second colour for large type on the poster fill, or white
+    when it would not clear 3:1 there (large-text contrast)."""
+    c = team_hex(hex_color, None)
+    if not c:
+        return '#ffffff'
+    a, b = sorted((_srgb_lum(_to_rgb(c)), _srgb_lum(_to_rgb(bg))))
+    return c if (b + 0.05) / (a + 0.05) >= 3 else '#ffffff'
+
+
+# The phone poster spells the position out under the jersey number.
+POSITION_NAMES = {
+    'QB': 'Quarterback', 'RB': 'Running back', 'HB': 'Running back', 'FB': 'Fullback',
+    'WR': 'Wide receiver', 'TE': 'Tight end', 'OL': 'Offensive line', 'OT': 'Offensive tackle',
+    'OG': 'Offensive guard', 'G': 'Guard', 'C': 'Center', 'DL': 'Defensive line',
+    'DE': 'Defensive end', 'DT': 'Defensive tackle', 'NT': 'Nose tackle', 'EDGE': 'Edge rusher',
+    'LB': 'Linebacker', 'ILB': 'Linebacker', 'OLB': 'Linebacker', 'MLB': 'Linebacker',
+    'CB': 'Cornerback', 'S': 'Safety', 'SS': 'Safety', 'FS': 'Safety', 'SAF': 'Safety',
+    'DB': 'Defensive back', 'PK': 'Kicker', 'K': 'Kicker', 'P': 'Punter', 'LS': 'Long snapper',
+    'ATH': 'Athlete',
+}
+
+app.jinja_env.globals.update(shade=shade, pct_fill=pct_fill, pct_knob=pct_knob, hex_rgba=hex_rgba,
+                             white_knob=white_knob, poster_ink=poster_ink, POSITION_NAMES=POSITION_NAMES)
 
 
 def _hex_to_rgba(hex_color, alpha):
@@ -9383,6 +9406,20 @@ def _player_detail_cached(player_id, season):
     # Games played, from the same stored-log measure the leaderboards use, so
     # the hero and the boards can never disagree about it.
     games_played = _games_played_map(season).get(str(player_id))
+
+    # The phone game log prints opponents by abbreviation; the lookup above
+    # only covered the player's own teams.
+    _opps = sorted({g.get('opponent') for g in game_log if g.get('opponent')} - set(team_abbrevs))
+    if _opps:
+        _conn = get_db()
+        try:
+            _cur = _conn.cursor()
+            _cur.execute('SELECT name, abbreviation FROM teams WHERE name = ANY(%s)', (_opps,))
+            team_abbrevs.update({n: a for n, a in _cur.fetchall() if a})
+        except Exception:
+            pass
+        finally:
+            release_db(_conn)
 
     last_game = _last_game(game_log)
     glossary = _player_glossary(percentile_rows, (player.get('position') or '').upper() == 'QB',

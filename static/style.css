@@ -10701,39 +10701,105 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
     .page-wrapper.pp-hero-in { grid-template-columns: 200px minmax(0, 1fr); column-gap: 28px; }
     .pp-photo { height: 250px; }
 }
-/* Phone: the photo takes its own panel on the left, the full height of the
-   header's top half, seated on a divider; everything else runs full width
-   beneath it. */
+/* Phone-only pieces of the poster header and the game log; the desktop
+   header and log are unchanged. */
+.pp-hchip, .pp-numline, .pp-pills, .pp-mcard, .pp-path, .pp-mlog, .pp-mnote { display: none; }
+
+/* Phone: the header becomes a poster in the team's colour — logo and team up
+   top, the photo bleeding off the right edge, jersey number, position and a
+   stacked name bottom-left. The poster is one fixed height for every player;
+   the facts card overlaps its bottom edge, and awards, the draft and the
+   transfer strip sit below it. */
 @media (max-width: 700px) {
-    .pp-hero { background: var(--gm); }
-    .page-wrapper.pp-hero-in {
-        grid-template-columns: 146px minmax(0, 1fr);
-        grid-template-areas: "photo info" "more more";
-        column-gap: 12px;
-        padding: 0;
-    }
+    .pp-top { --ph: 400px; display: flex; flex-direction: column; overflow-x: clip; }
+    .pp-top::before { content: ""; position: absolute; inset: 0 0 auto; height: var(--ph); background: var(--poster); }
+    .pp-hero, .page-wrapper.pp-hero-in { display: contents; }
     .pp-photo {
-        height: auto; min-height: 232px; margin: 0; align-self: stretch; overflow: hidden;
-        border-bottom: 1px solid rgba(255,255,255,0.12);
+        position: absolute; z-index: 1; right: -36px; top: calc(var(--ph) - 236px);
+        width: 300px; height: 236px; margin: 0; overflow: visible;
+        display: flex; align-items: flex-end; justify-content: center;
     }
     /* The team's logo, faded, behind the photo. */
     .pp-photo::before {
-        content: ""; position: absolute; inset: 14px 6px 40px;
+        content: ""; position: absolute; inset: -40px 10px 16px 30px;
         background: var(--logo, none) center / contain no-repeat;
-        opacity: 0.22;
+        opacity: 0.16;
     }
-    .pp-photo img { position: relative; z-index: 1; height: 206px; width: 100%; }
-    .pp-photo-none { position: relative; z-index: 1; width: 120px; height: 170px; font-size: 2.25rem; }
-    .pp-info { padding: 18px 16px 16px 0; border-bottom: 1px solid rgba(255,255,255,0.12); }
-    .pp-heisman { margin-bottom: 8px; padding: 4px 10px; }
-    .pp-teamline { font-size: 0.875rem; }
-    .pp-teamline img { width: 20px; height: 20px; }
-    .pp-name { font-size: 2.125rem; }
-    .pp-bio { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-top: 14px; }
-    .pp-bio dt { font-size: 0.6875rem; }
-    .pp-bio dd { margin-top: 2px; }
-    .pp-lbs { display: none; }
-    .pp-more { padding: 0 16px 18px; }
+    .pp-photo img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; object-position: bottom center; filter: none; }
+    .pp-photo-none { position: relative; z-index: 1; width: 170px; height: 200px; border-radius: 85px 85px 0 0; font-size: 2.75rem; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7); }
+    .pp-info {
+        order: 1; position: relative; z-index: 2;
+        height: var(--ph); box-sizing: border-box; padding: 18px 16px 42px;
+        justify-content: flex-end; pointer-events: none;
+    }
+    .pp-info a, .pp-info .pp-pill { pointer-events: auto; }
+    .pp-teamline { position: absolute; top: 18px; left: 16px; right: 16px; font-size: 0.9375rem; }
+    .pp-teamline img { width: 32px; height: 32px; }
+    .pp-teamline a { color: #fff; }
+    .pp-tl-x { display: none; }
+    .pp-hchip {
+        display: inline-flex; align-items: center; gap: 5px;
+        padding: 5px 10px; border-radius: var(--r-pill);
+        background: #e8c35a; color: #2a1d00; font-size: 0.75rem; font-weight: 750;
+    }
+    .pp-hchip svg { width: 13px; height: 13px; }
+    .pp-heisman { margin-bottom: 0; }
+    .pp-numline {
+        display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px;
+        color: #fff; font-size: 0.9375rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+        text-shadow: 0 1px 8px rgba(0,0,0,0.35);
+    }
+    .pp-num { color: var(--num); font-family: var(--font-display); font-stretch: 75%; font-size: 2.75rem; font-weight: 800; line-height: 1; letter-spacing: 0; }
+    .pp-name, .pp-name.is-long {
+        display: flex; flex-direction: column; max-width: 76%;
+        margin: 0; font-stretch: 75%; line-height: 0.92; text-transform: uppercase;
+        text-shadow: 0 2px 16px rgba(0,0,0,0.35);
+    }
+    .pp-first { font-size: 2.125rem; font-weight: 600; line-height: 0.98; }
+    .pp-last { font-size: 3.875rem; font-weight: 850; overflow-wrap: anywhere; }
+    .pp-name.ln-m .pp-last { font-size: 3.125rem; }
+    .pp-name.ln-l .pp-last { font-size: 2.5rem; }
+    .pp-bio { display: none; }
+    .pp-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .pp-pill { padding: 5px 10px; border-radius: var(--r-pill); background: rgba(0,0,0,0.3); color: #fff; font-size: 0.8125rem; font-weight: 600; }
+    .pp-pill-stars { color: #ffd95a; letter-spacing: 1px; }
+
+    .pp-mcard {
+        order: 2; position: relative; z-index: 3;
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: -18px 16px 0; padding: 12px 4px;
+        border-radius: 12px; background: #171a1f; border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 12px 28px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .pp-mcard div { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 4px; text-align: center; min-width: 0; }
+    .pp-mcard div + div { border-left: 1px solid rgba(255,255,255,0.08); }
+    .pp-mcard dt { color: var(--text-secondary); font-size: 0.6875rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
+    .pp-mcard dd { margin: 0; color: #fff; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 1.0625rem; font-weight: 700; line-height: 1.15; }
+    .pp-mcard small { color: var(--text-secondary); font-size: 0.75rem; font-weight: 500; }
+
+    .page-wrapper.pp-facts-wrap { order: 3; min-width: 0; width: 100%; box-sizing: border-box; padding-top: 12px; padding-bottom: 0; }
+    .pp-facts { width: 100%; min-width: 0; box-sizing: border-box; background: #171a1f; border-color: rgba(255,255,255,0.1); }
+    .pp-facts .pp-fact.is-transfer { display: none; }
+    .pp-path { order: 5; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+    .pp-path-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .pp-path-stops {
+        display: grid; grid-auto-flow: column; grid-auto-columns: minmax(56px, 1fr); scrollbar-width: thin;
+        margin: 0; padding: 0 0 2px; list-style: none; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    }
+    .pp-stop { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+    .pp-stop:not(:last-child)::after { content: ""; position: absolute; top: 15px; left: 50%; width: 100%; height: 2px; background: rgba(255,255,255,0.14); }
+    .pp-stop-dot {
+        position: relative; z-index: 1; width: 32px; height: 32px; box-sizing: border-box;
+        display: grid; place-items: center; border-radius: 50%;
+        background: #22262c; border: 2px solid #171a1f;
+    }
+    .pp-stop-dot img { width: 22px; height: 22px; object-fit: contain; }
+    .pp-stop.is-now .pp-stop-dot { border-color: #fff; }
+    .pp-stop b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 600; }
+    .pp-stop.is-now b { color: #fff; font-weight: 700; }
+    .pp-stop .pp-stars { line-height: 1; letter-spacing: 0; font-size: 0.6875rem; color: #ffd95a; }
+
+    .pp-more { order: 4; padding: 0 16px 18px; }
     .pp-fact-k { width: 76px; }
     .pp-season { justify-content: space-between; margin-top: 16px; }
     .pp-select { height: 40px; font-size: 0.875rem; }
@@ -10758,23 +10824,38 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
     .pp-stat b { font-size: 1rem; }
     .pp-usage { gap: 14px 16px; }
 
-    /* A game becomes two lines: who and the result, then its key figures. */
-    .pp-log .pp-log-head { display: none; }
-    .pp-log-row {
-        display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
-        min-width: 0; min-height: 0; padding: 12px 0;
-        border-top: 1px solid rgba(255,255,255,0.06); border-bottom: 0;
+    /* The game log: four key figures per game, a tap opens the rest. */
+    .pp-log { display: none; }
+    .pp-mnote { display: inline; }
+    .pp-mlog { display: block; margin: 10px -14px 0; }
+    .pp-mlog-row {
+        display: grid; grid-template-columns: 22px minmax(0, 1fr) 54px repeat(var(--n), 36px);
+        column-gap: 4px; align-items: center; min-height: 48px; padding: 0 14px;
+        font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 0.9375rem;
+        list-style: none; cursor: pointer;
     }
-    .pp-log-wk { flex: 0 0 32px; font-size: 0.8125rem; }
-    .pp-log-opp { flex: 1 1 0; font-size: 0.9375rem; }
-    .pp-log-opp img { align-self: center; }
-    .pp-log-res { flex: 0 0 auto; }
-    .pp-log-c { display: none; }
-    .pp-log-c.is-m { display: inline; color: #c4c8cc; font-size: 0.9375rem; }
-    .pp-log-c.is-m::after { content: " " attr(data-k); color: var(--text-secondary); font-size: var(--text-xs); }
-    .pp-log-res + .pp-log-c { margin-left: 44px; }
-    .pp-log-opp { flex-basis: calc(100% - 44px - 12px - 90px); }
-    .pp-log-res { flex-basis: 78px; text-align: right; }
+    .pp-mlog-row::-webkit-details-marker { display: none; }
+    .pp-mlog-row.pp-log-head { min-height: 0; padding-block: 8px; cursor: default; font-family: var(--font-body); font-size: 0.6875rem; }
+    .pp-mlog-row > span:nth-child(n+4) { text-align: right; }
+    .pp-mlog-g { border-top: 1px solid rgba(255,255,255,0.06); }
+    .pp-mlog-g[open] { background: rgba(28,156,240,0.07); }
+    .pp-mlog-row:hover { background: rgba(255,255,255,0.03); }
+    .pp-mlog-row:active { background: rgba(255,255,255,0.06); }
+    .pp-mlog-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .pp-mlog .pp-log-opp { gap: 4px; }
+    .pp-mlog .pp-log-opp .pp-muted { font-size: 0.75rem; }
+    .pp-mlog .pp-log-opp img { width: 16px; height: 16px; }
+    .pp-mlog .pp-log-opp b { font-weight: 600; }
+    .pp-mlog .pp-log-res { font-size: 0.875rem; }
+    .pp-mlog b { color: #fff; font-weight: 600; }
+    .pp-mlog .is-td { color: #7cc4f7; }
+    .pp-mlog .is-int { color: #ff8a90; }
+    .pp-mlog .is-none { color: #6e7378; }
+    .pp-mlog-more { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; padding: 4px 14px 14px; }
+    .pp-mlog-more div { display: flex; flex-direction: column; gap: 2px; }
+    .pp-mlog-more div > b { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 1.0625rem; line-height: 1.1; }
+    .pp-mlog-more span { color: var(--text-secondary); font-size: 0.75rem; }
+    .pp-mlog-more .pp-link { grid-column: 1 / -1; display: inline-flex; align-items: center; min-height: 44px; justify-self: start; }
 
     .pp-career-row {
         grid-template-columns: 46px minmax(0, 1fr) repeat(var(--m), minmax(36px, auto));
