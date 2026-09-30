@@ -50,6 +50,7 @@
 {% set is_defense  = is_def_dl or is_def_db %}
 {% set is_kicker   = pos in ('PK', 'K') %}
 {% set is_punter   = pos == 'P' %}
+{% set is_ol       = pos in ('OL','OT','OG','C','G','T','LT','LG','RG','RT','IOL','OC') %}
 
 {% macro ordinal(rk) -%}
 {%- if rk % 100 in [11,12,13] %}{{ rk }}th{% elif rk % 10 == 1 %}{{ rk }}st{% elif rk % 10 == 2 %}{{ rk }}nd{% elif rk % 10 == 3 %}{{ rk }}rd{% else %}{{ rk }}th{% endif -%}
@@ -91,7 +92,7 @@
         {# A long name steps down a size so it stays on one line and every header
    keeps the same height. #}
 {% if player.jersey or pos %}
-        <div class="pp-numline">{% if player.jersey %}<span class="pp-num">{{ player.jersey }}</span>{% endif %}<span>{{ POSITION_NAMES.get(pos, player.position or '') }}</span></div>
+        <div class="pp-numline">{% if player.jersey %}<span class="pp-num">{{ player.jersey }}</span>{% endif %}<span>{{ line.spot_name if line and line.spot_name else POSITION_NAMES.get(pos, player.position or '') }}</span></div>
         {% endif %}
         {% set ln = (player.last_name or '') | length %}
         <h1 class="pp-name{{ ' is-long' if (player.first_name ~ ' ' ~ player.last_name) | length > 17 else '' }}{{ ' ln-l' if ln > 11 else (' ln-m' if ln > 8 else '') }}"><span class="pp-first">{{ player.first_name }}</span> <span class="pp-last">{{ player.last_name }}</span></h1>
@@ -145,10 +146,13 @@
         {% set tiles = namespace(list=[]) %}
         {% for label, val, rk in cards %}{% if val is not none %}{% set tiles.list = tiles.list + [(label, num(val), national_ranks.get(rk) if rk else none)] %}{% endif %}{% endfor %}
         {% if ppa and ppa.avg_all is not none %}{% set tiles.list = tiles.list + [('EPA / play', ppa.avg_all, national_ranks.get('epa_rank'))] %}{% endif %}
+        {# A lineman's figures are his line's, ranked against every FBS line. #}
+        {% if line %}{% set tiles.list = line.tiles %}{% endif %}
 
         <div class="pp-season">
             <span class="pp-season-k">{{ season }} season
-                {%- if previous_stat_teams %}{% set prev_team = previous_stat_teams[0] %} <span class="pp-muted">· with {{ team_abbrevs.get(prev_team, prev_team) }}</span>{% endif %}</span>
+                {%- if line %} <span class="pp-muted">· {{ team_abbrevs.get(line.team, line.team) }} offensive line</span>
+                {%- elif previous_stat_teams %}{% set prev_team = previous_stat_teams[0] %} <span class="pp-muted">· with {{ team_abbrevs.get(prev_team, prev_team) }}</span>{% endif %}</span>
             {% if available_seasons and available_seasons | length > 1 %}
             <select class="pp-select" aria-label="Season" onchange="location='?season='+this.value">
                 {% for s in available_seasons %}<option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>{% endfor %}
@@ -267,6 +271,9 @@
 {% set cols = [('Tot','totalTackles'),('Solo','soloTackles'),('INT','interceptions'),('PD','passesDefended'),('TFL','tacklesForLoss'),('Sack','sacks'),('FF','forcedFumbles'),('TD','interceptionTouchdowns')] %}
 {% elif is_kicker %}
 {% set cols = [('FGM','fieldGoalsMade'),('FGA','fieldGoalAttempts'),('Pct','fieldGoalPct'),('Long','longFieldGoal'),('XPM','extraPointsMade'),('XPA','extraPointAttempts'),('Pts','totalKickingPoints')] %}
+{% elif is_ol %}
+{# The line's game: what the defense got, and the carries it blocked for. #}
+{% set cols = [('Sacks','sacksAllowed'),('Hurries','hurriesAllowed'),('TFL','tflAllowed'),('Rush att','rushingAttempts'),('Rush yds','rushingYards'),('Pass att','passingAttempts')] %}
 {% elif is_punter %}
 {# netAvgPuntYards is not in the stored log, so NET is not a column. #}
 {% set cols = [('No','punts'),('Yds','puntYards'),('Avg','grossAvgPuntYards'),('Long','longPunt'),('In20','puntsInsideTwenty'),('TB','touchbacks')] %}
@@ -355,14 +362,50 @@
         {% if is_punter and stats.get('punting') %}{% set p = stats.get('punting', {}) %}
             {{ table('Punting', [('No', num(p.get('NO')), ''), ('Avg', num(p.get('YPP') if p.get('YPP') is not none else p.get('AVG')), 'lead'), ('Yds', num(p.get('YDS')), ''), ('Long', num(p.get('LONG')), '')]) }}
         {% endif %}
-        {% if not stats %}<p class="pp-empty">No {{ season }} season stats yet.</p>{% endif %}
+        {% if line %}{% set u = line.unit %}
+            {{ table('Pass protection', [('Sacks', num(u.sacks), 'int' if u.sacks else ''), ('Hurries', num(u.hurries), ''), ('Sack rate', line.fmt.sack_rate, 'lead'), ('Pressure', line.fmt.pressure_rate, ''), ('TFL / gm', line.fmt.tfl_pg, '')]) }}
+            {{ table('Run blocking', [('Line yds', line.fmt.line_yards, 'lead'), ('Stuff', line.fmt.stuff_rate, ''), ('Power', line.fmt.power_success, ''), ('Success', line.fmt.rush_sr, ''), ('EPA', line.fmt.rush_epa, '')]) }}
+            <p class="pp-ol-note">Line stats: individual snaps, pressures and pancakes aren't publicly charted, so these are what {{ line.team }}'s offensive line allowed and blocked for as a unit.</p>
+        {% elif not stats %}<p class="pp-empty">No {{ season }} season stats yet.</p>{% endif %}
     </section>
+
+    {# Runs by direction, with the lane he blocks for marked. #}
+    {% if line and line.directions %}
+    <section class="pp-card">
+        <div class="pp-card-head">
+            <h2 class="pp-h2">Runs by direction</h2>
+            <span class="pp-note">{{ team_abbrevs.get(line.team, line.team) }} · {{ season }}</span>
+        </div>
+        <div class="pp-dirs">
+            {% for d in line.directions %}
+            <div class="pp-dir{{ ' is-mine' if d.mine else '' }}">
+                <div class="pp-dir-head"><b>{{ d.label }}</b>{% if d.mine %}<span class="pp-dir-tag">His side</span>{% endif %}</div>
+                <div class="pp-dir-ypc"><b>{{ '%.1f' | format(d.ypc) if d.ypc is not none else '—' }}</b><span>yds / carry</span></div>
+                <dl>
+                    <div><dt>Carries</dt><dd>{{ d.carries }}</dd></div>
+                    <div><dt>Success</dt><dd>{{ '%.0f%%' | format(d.sr * 100) if d.sr is not none else '—' }}</dd></div>
+                    <div><dt>Line yds</dt><dd>{{ '%.1f' | format(d.line_yards) if d.line_yards is not none else '—' }}</dd></div>
+                    <div><dt>Stuffed</dt><dd>{{ '%.0f%%' | format(d.stuff * 100) if d.stuff is not none else '—' }}</dd></div>
+                </dl>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
 </div>
 
 <aside class="pp-card pp-pct">
     <h2 class="pp-h2">Percentile rankings</h2>
-    {% if percentile_rows %}
+    {% if line and line.pct_rows %}
+    <p class="pp-sub">{{ line.team }} offensive line vs {{ line.n_lines }} FBS lines · {{ season }}</p>
+    <div class="pb">
+        {{ pb.head() }}
+        {% for row in line.pct_rows %}
+        {{ pb.row(row.label, row.pct, row.raw, 'Ranked against ' ~ row.n ~ ' FBS offensive lines') }}
+        {% endfor %}
+    </div>
+    {% elif percentile_rows %}
     <p class="pp-sub">vs {% if player_percentiles.get('peer_count') %}{{ player_percentiles['peer_count'] }} {% endif %}qualified FBS {{ player_percentiles.get('group', '') }}s · {{ season }}</p>
     <div class="pb">
         {{ pb.head() }}
@@ -394,7 +437,7 @@
 
 {% if game_log %}
 <section class="pp-card">
-    <div class="pp-card-head"><h2 class="pp-h2">{{ season }} game log</h2><span class="pp-note pp-mnote">Tap a game for the full line</span></div>
+    <div class="pp-card-head"><h2 class="pp-h2">{{ season }} {{ 'line ' if line else '' }}game log</h2><span class="pp-note pp-mnote">Tap a game for the full line</span></div>
     <div class="pp-log" style="--n:{{ kept.cols | length }}">
         <div class="pp-log-row pp-log-head" aria-hidden="true">
             <span>Wk</span><span>Opponent</span><span>Result</span>
@@ -414,8 +457,9 @@
        its line. The four are the position's; a position without them takes
        the first four columns kept. #}
     {% set mkeys = {'qb': ['Yds','TD','INT','Rtg'], 'rb': ['Car','Yds','TD','Rec'], 'rec': ['Rec','Yds','TD','Long'],
-                    'dl': ['Tot','Sack','TFL','PD'], 'db': ['Tot','INT','PD','TFL'], 'k': ['FGM','FGA','Long','Pts'], 'p': ['No','Avg','Long','In20']}
-                   ['qb' if is_qb else 'rb' if is_rb else 'rec' if is_receiver else 'dl' if is_def_dl else 'db' if is_def_db else 'k' if is_kicker else 'p' if is_punter else 'qb'] %}
+                    'dl': ['Tot','Sack','TFL','PD'], 'db': ['Tot','INT','PD','TFL'], 'k': ['FGM','FGA','Long','Pts'], 'p': ['No','Avg','Long','In20'],
+                    'ol': ['Sacks','Hurries','TFL','Rush yds']}
+                   ['ol' if is_ol else 'qb' if is_qb else 'rb' if is_rb else 'rec' if is_receiver else 'dl' if is_def_dl else 'db' if is_def_db else 'k' if is_kicker else 'p' if is_punter else 'qb'] %}
     {% set mcols = kept.cols | selectattr(0, 'in', mkeys) | list %}
     {% if not mcols %}{% set mcols = kept.cols[:4] %}{% endif %}
     {% set rest = kept.cols | reject('in', mcols) | list %}

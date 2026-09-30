@@ -1479,6 +1479,16 @@ def _transfer_path(rows):
 # it; several labels share one term. Only terms for what the page shows are
 # listed, so a kicker's glossary has no EPA and a lineman's no passing.
 PLAYER_GLOSSARY = {
+    'Line stats': "Snaps, pressures allowed and pancakes are charted privately (by PFF and the teams themselves) and aren't in any public feed, so a lineman's page shows his offensive line as a unit: what opposing defenses recorded against it, and how the runs it blocked for went. Every lineman on a roster shares these figures.",
+    'Sack rate allowed': 'Sacks allowed divided by dropbacks (pass attempts plus sacks). Lower is better. Counted from the opposing defenses\' box scores.',
+    'Pressure rate allowed': 'Sacks plus QB hurries allowed, divided by dropbacks. Lower is better. Hurries are only as complete as each stat crew\'s charting, so the rate is left blank for a line whose opponents charted hurries in fewer than half its games.',
+    'TFL allowed / game': 'Tackles for loss recorded against the offense per game, runs and passes alike. Lower is better.',
+    'Line yards / carry': 'Rushing yards credited to the offensive line: yards 0-4 of each carry count fully, 5-10 at half, and a loss counts 120%, so the line is judged on the part of the run it controls.',
+    'Stuff rate allowed': 'Share of carries stopped at or behind the line of scrimmage. Lower is better.',
+    'Power success': 'Share of runs on third or fourth down with two yards or fewer to go, or at the goal line, that gained a first down or scored.',
+    'Rush success rate': 'Share of carries that were successful: 50% of the yards needed on first down, 70% on second, all of them on third and fourth.',
+    'Rush EPA / play': 'Expected points added per carry: how much each run moved the offense toward scoring.',
+    'Runs by direction': 'Carries split by where they went: left, middle or right. His side is the lane at his spot on the line: tackles and guards on their side, the center in the middle.',
     'Percentile': 'Where this player ranks among the qualified FBS players at his position on a stat, from 1 to 99. Each one is oriented so higher is better: for stuffed runs or touchbacks, a low raw number earns a high percentile. The bar runs from blue (poor) through grey (average) to red (great).',
     'Qualified': 'The peer pool a percentile is measured against: players at the same position with enough playing time to rank. The count is stated above the bars.',
     'FBS rank': 'Position among all FBS players on the stat, 1st best. Shown under each headline figure in the header; a top-10 figure is printed in blue.',
@@ -1528,7 +1538,15 @@ _GLOSS_FOR_LABEL = {
     'Inside 20': 'Inside 20', 'Touchbacks': 'Touchbacks',
 }
 
-def _player_glossary(percentile_rows, is_qb, has_usage, has_transfer, has_awards):
+_LINE_GLOSSARY = ['Line stats', 'Percentile', 'FBS rank', 'Sack rate allowed', 'Pressure rate allowed',
+                  'TFL allowed / game', 'Line yards / carry', 'Stuff rate allowed', 'Power success',
+                  'Rush success rate', 'Rush EPA / play', 'Runs by direction']
+
+
+def _player_glossary(percentile_rows, is_qb, has_usage, has_transfer, has_awards, is_line=False):
+    if is_line:
+        terms = _LINE_GLOSSARY + [t for f, t in ((has_transfer, 'Transfer'), (has_awards, 'Awards')) if f]
+        return [(t, PLAYER_GLOSSARY[t]) for t in terms]
     terms = ['Percentile', 'Qualified', 'FBS rank'] if percentile_rows else ['FBS rank']
     for r in percentile_rows:
         t = _GLOSS_FOR_LABEL.get(r['label'])
@@ -2494,6 +2512,174 @@ def _player_games_played(player_id, season):
         return None
     finally:
         release_db(conn)
+
+
+# ── Offensive line ──────────────────────────────────────────────────────────
+# No public feed charts an individual lineman: snaps, pressures allowed and
+# pancakes are PFF's and the teams' own. What the data does record is the line
+# as a unit — what opposing defenses got (sacks, hurries, tackles for loss; see
+# pipeline/fetch_line_stats.py) and how the run game fared, including by
+# direction. A lineman's page shows his line, labelled as such, and uses his
+# spot on it (from the same internal source the Starters tab slots him with —
+# never displayed as a rating) to pick out the runs behind his side.
+OL_POSITIONS = {'OL', 'OT', 'OG', 'C', 'G', 'T', 'LT', 'LG', 'RG', 'RT', 'IOL', 'OC'}
+_OL_SPOT_NAME = {'LT': 'Left tackle', 'LG': 'Left guard', 'C': 'Center',
+                 'RG': 'Right guard', 'RT': 'Right tackle'}
+_OL_SPOT_SIDE = {'LT': 'left', 'LG': 'left', 'C': 'middle', 'RG': 'right', 'RT': 'right'}
+
+# (key, label, higher is better, format)
+LINE_METRICS = [
+    ('sack_rate',     'Sack rate allowed',     False, 'pct'),
+    ('pressure_rate', 'Pressure rate allowed', False, 'pct'),
+    ('tfl_pg',        'TFL allowed / game',    False, '1'),
+    ('line_yards',    'Line yards / carry',    True,  '2'),
+    ('stuff_rate',    'Stuff rate allowed',    False, 'pct'),
+    ('power_success', 'Power success',         True,  'pct'),
+    ('rush_sr',       'Rush success rate',     True,  'pct'),
+    ('rush_epa',      'Rush EPA / play',       True,  '3'),
+]
+
+
+def _fmt_line(fmt, v):
+    if v is None:
+        return '—'
+    if fmt == 'pct':
+        return f'{v * 100:.1f}%'
+    return f'{v:.{fmt}f}'
+
+
+@data_cache.memoize(timeout=21600)
+def _line_unit_pool(season):
+    """{team: {metric: value}} for every FBS offensive line in a season."""
+    fbs = _fbs_team_names(season)
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT team, count(*), sum(pass_att), sum(sacks_allowed), sum(hurries_allowed),
+                   sum(tfl_allowed), count(*) FILTER (WHERE hurries_allowed > 0)
+              FROM line_game_stats
+             WHERE season = %s AND sacks_allowed IS NOT NULL AND pass_att IS NOT NULL
+             GROUP BY team""", (season,))
+        box = {r[0]: r[1:] for r in cur.fetchall()}
+        cur.execute("""
+            SELECT team, off_line_yards, off_stuff_rate, off_power_success,
+                   off_rushing_success_rate, off_rushing_plays_ppa
+              FROM team_stats WHERE season = %s""", (season,))
+        run = {r[0]: r[1:] for r in cur.fetchall()}
+    except Exception:
+        conn.rollback()
+        return {}
+    finally:
+        release_db(conn)
+    pool = {}
+    for team in fbs:
+        b, r = box.get(team), run.get(team)
+        if not b and not r:
+            continue
+        m = {}
+        if b:
+            games, att, sacks, hurries, tfl, hurry_games = b
+            drop = (att or 0) + (sacks or 0)
+            m.update(games=games, sacks=sacks, hurries=hurries, tfl=tfl, pass_att=att,
+                     sack_rate=(sacks / drop) if drop else None,
+                     tfl_pg=(tfl / games) if games and tfl is not None else None)
+            # A crew that charts no hurries at all would make a line look
+            # spotless; the rate needs hurries in at least half its games.
+            m['pressure_rate'] = ((sacks + (hurries or 0)) / drop) if drop and hurry_games * 2 >= games else None
+        if r:
+            m.update(line_yards=r[0], stuff_rate=r[1], power_success=r[2], rush_sr=r[3], rush_epa=r[4])
+        pool[team] = m
+    return pool
+
+
+def _player_line_context(player_id, team, season):
+    """Everything a lineman's page shows about his line, or None without data."""
+    pool = _line_unit_pool(season)
+    unit = pool.get(team)
+    if not unit:
+        return None
+    teams = list(pool)
+    pct_rows, ranks = [], {}
+    for key, label, higher, fmt in LINE_METRICS:
+        vals = [pool[t].get(key) for t in teams]
+        mine = unit.get(key)
+        if mine is None:
+            continue
+        pct = _percentiles(vals, lower_better=not higher)[teams.index(team)]
+        present = [v for v in vals if v is not None]
+        ranks[key] = 1 + sum(1 for v in present if (v > mine if higher else v < mine))
+        pct_rows.append({'label': label, 'pct': pct, 'raw': _fmt_line(fmt, mine), 'n': len(present)})
+
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        spot = None
+        try:
+            cur.execute('SELECT position FROM ea_ratings WHERE player_id = %s LIMIT 1', (player_id,))
+            row = cur.fetchone()
+            spot = row[0] if row and row[0] in _OL_SPOT_NAME else None
+        except Exception:
+            conn.rollback()
+        cur.execute("""SELECT directions, success_rate, ypc, line_yards, stuff_rate
+                         FROM rushing_team_season WHERE team = %s AND season = %s AND side = 'offense'""",
+                    (team, season))
+        rrow = cur.fetchone()
+        cur.execute("""
+            SELECT l.game_id, l.week, l.season_type, l.opponent, l.sacks_allowed, l.hurries_allowed,
+                   l.tfl_allowed, l.rush_att, l.rush_yds, l.pass_att,
+                   g.home_team, g.home_points, g.away_points, g.notes, t.logo_dark
+              FROM line_game_stats l
+              JOIN games g ON g.id = l.game_id
+              LEFT JOIN teams t ON t.name = l.opponent
+             WHERE l.team = %s AND l.season = %s
+             ORDER BY g.start_date, g.id""", (team, season))
+        games = cur.fetchall()
+    except Exception:
+        conn.rollback()
+        return None
+    finally:
+        release_db(conn)
+
+    side = _OL_SPOT_SIDE.get(spot)
+    directions = []
+    if rrow and rrow[0]:
+        for d in ('left', 'middle', 'right'):
+            x = (rrow[0] or {}).get(d) or {}
+            if x.get('carries'):
+                directions.append({'dir': d, 'label': d.capitalize(), 'mine': d == side,
+                                   'carries': x.get('carries'), 'ypc': x.get('yardsPerCarry'),
+                                   'sr': x.get('successRate'), 'line_yards': x.get('lineYards'),
+                                   'stuff': x.get('stuffRate')})
+
+    log = []
+    for (gid, wk, stype, opp, sk, hu, tfl, ra, ry, pa, home, hp, ap, notes, ologo) in games:
+        is_home = home == team
+        us, them = (hp, ap) if is_home else (ap, hp)
+        result = ''
+        if us is not None and them is not None:
+            result = f"{'W' if us > them else 'L' if us < them else 'T'} {max(us, them)}-{min(us, them)}"
+        post = stype == 'postseason'
+        log.append({
+            'game_id': gid, 'week': wk, 'game_label': (event_name(notes) or 'Bowl') if post else str(wk),
+            'season_type': 'SeasonType.POSTSEASON' if post else 'SeasonType.REGULAR',
+            'opponent': opp, 'opp_logo': ologo, 'home_away': 'home' if is_home else 'away',
+            'result': result, 'team': team,
+            'stats': {'sacksAllowed': sk, 'hurriesAllowed': hu, 'tflAllowed': tfl,
+                      'rushingAttempts': ra, 'rushingYards': ry, 'passingAttempts': pa},
+        })
+
+    def tile(key, label):
+        fmt = next(f for k, _, _, f in LINE_METRICS if k == key)
+        return (label, _fmt_line(fmt, unit.get(key)), ranks.get(key)) if unit.get(key) is not None else None
+
+    tiles = [t for t in (tile('sack_rate', 'Sack rate'), tile('pressure_rate', 'Pressure rate'),
+                         tile('line_yards', 'Line yds'), tile('stuff_rate', 'Stuff rate'),
+                         tile('rush_sr', 'Rush success')) if t]
+    return {'team': team, 'unit': unit, 'n_lines': len(pool), 'pct_rows': pct_rows, 'ranks': ranks,
+            'tiles': tiles, 'spot': spot, 'spot_name': _OL_SPOT_NAME.get(spot), 'side': side,
+            'directions': directions, 'log': log,
+            'fmt': {k: _fmt_line(f, unit.get(k)) for k, _, _, f in LINE_METRICS}}
 
 
 PLAYER_COLUMNS = {
@@ -9569,6 +9755,16 @@ def _player_detail_cached(player_id, season):
     # the hero and the boards can never disagree about it.
     games_played = _player_games_played(player_id, season)
 
+    # A lineman has no stat line of his own; his page shows his line's, and
+    # its game-by-game line replaces the personal game log, which for a
+    # lineman is a row of blanks.
+    line = None
+    if (player.get('position') or '').upper() in OL_POSITIONS:
+        line = _player_line_context(player_id, player.get('team'), season)
+        if line:
+            game_log = line['log']
+            games_played = line['unit'].get('games') or games_played
+
     # The phone game log prints opponents by abbreviation; the lookup above
     # only covered the player's own teams.
     _opps = sorted({g.get('opponent') for g in game_log if g.get('opponent')} - set(team_abbrevs))
@@ -9586,7 +9782,7 @@ def _player_detail_cached(player_id, season):
     last_game = _last_game(game_log)
     glossary = _player_glossary(percentile_rows, (player.get('position') or '').upper() == 'QB',
                                 bool(usage) and (player.get('position') or '').upper() != 'QB',
-                                len(transfer_path) > 1, bool(player_awards))
+                                len(transfer_path) > 1, bool(player_awards), is_line=bool(line))
 
     return render_template('player.html',
         last_game=last_game, glossary=glossary, transfer_path=transfer_path,
@@ -9596,7 +9792,7 @@ def _player_detail_cached(player_id, season):
         career_log=career_log, career_cols=career_cols,
         career_team_count=career_team_count,
         ap_rank=ap_rank, c1=c1, c2=c2,
-        game_log=game_log,
+        game_log=game_log, line=line,
         player_percentiles=player_percentiles,
         percentile_rows=percentile_rows,
         national_ranks=national_ranks,
