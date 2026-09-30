@@ -170,9 +170,10 @@
     <div class="pp-fact">
         <span class="pp-fact-k">Transfer</span>
         <span class="pp-fact-v">
-        <span class="pp-hop"><b>{{ transfer_path[0].school }}</b></span>
+        {% set lg = transfer_team_logos.get(transfer_path[0].school) %}
+        <span class="pp-hop">{% if lg %}<img src="{{ lg }}" alt="" aria-hidden="true">{% endif %}<b>{{ transfer_path[0].school }}</b></span>
         {% for t in transfer_path[1:] %}
-        <span class="pp-hop"><span class="pp-arrow">→</span><b{% if t.portal %} class="is-portal"{% endif %}>{{ t.school }}</b>{% if t.year %}<span class="pp-yr">’{{ (t.year | string)[2:] }}</span>{% endif %}{% if t.stars %}<span class="pp-stars" aria-label="{{ t.stars }}-star transfer">{{ '★' * t.stars }}</span>{% endif %}</span>
+        {% set lg = transfer_team_logos.get(t.school) %}<span class="pp-hop"><span class="pp-arrow">→</span>{% if lg %}<img src="{{ lg }}" alt="" aria-hidden="true">{% endif %}<b{% if t.portal %} class="is-portal"{% endif %}>{{ t.school }}</b>{% if t.year %}<span class="pp-yr">’{{ (t.year | string)[2:] }}</span>{% endif %}{% if t.stars %}<span class="pp-stars" aria-label="{{ t.stars }}-star transfer">{{ '★' * t.stars }}</span>{% endif %}</span>
         {% endfor %}
         </span>
     </div>

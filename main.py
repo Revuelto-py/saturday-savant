@@ -8903,6 +8903,7 @@ def _player_detail_cached(player_id, season):
         for t in transfers_history:
             teams_needed.add(t['origin'])
             teams_needed.add(t['destination'])
+        teams_needed.update(t['school'] for t in transfer_path if not t['portal'])
         transfer_team_logos = {}
         team_abbrevs = {}
         if teams_needed:
