@@ -227,7 +227,7 @@
 {%- elif label == 'INT' and n > 0 %}<b class="is-int">{{ n | int }}</b>
 {%- elif label == 'Rtg' %}{{ '%.1f' | format(n) }}
 {%- elif label in ('Cmp%', 'Pct') %}{{ '%.1f' | format(n * 100 if n <= 1 else n) }}%
-{%- elif label in ('Yds', 'Rec yds', 'Rush yds') %}<b>{{ n | int }}</b>
+{%- elif label == 'Yds' %}<b>{{ n | int }}</b>
 {%- elif label in ('Y/A', 'Avg') %}{{ '%.1f' | format(n) }}
 {%- else %}{{ n | int if n == n | int else '%.1f' | format(n) }}{% endif -%}
 {%- endmacro %}
@@ -365,10 +365,12 @@
         <h2 class="pp-h2">Career</h2>
         <span class="pp-note">{{ career_log | length }} seasons{% if career_team_count > 1 %} · {{ career_team_count }} teams{% endif %}</span>
     </div>
-    <div class="pp-career" style="--n:{{ career_cols | length }}">
+    {# The phone keeps the first three columns and EPA. #}
+    {% set mcount = (career_cols[:3] | length) + (1 if (career_cols[3:] | selectattr(0, 'equalto', 'EPA') | list) else 0) %}
+    <div class="pp-career" style="--n:{{ career_cols | length }};--m:{{ mcount }}">
         <div class="pp-career-row pp-log-head" aria-hidden="true">
-            <span>Season</span><span>Team</span>
-            {% for label, tooltip in career_cols %}<span class="{{ 'is-m' if loop.index0 < 4 or label == 'EPA' else '' }}" title="{{ tooltip }}">{{ label }}</span>{% endfor %}
+            <span class="is-k">Season</span><span class="is-k">Team</span>
+            {% for label, tooltip in career_cols %}<span class="{{ 'is-m' if loop.index0 < 3 or label == 'EPA' else '' }}" title="{{ tooltip }}">{{ label }}</span>{% endfor %}
         </div>
         {% for row in career_log %}
         <a class="pp-career-row{{ ' is-current' if row.season == season else '' }}" href="/player/{{ player.id }}?season={{ row.season }}">
@@ -376,7 +378,7 @@
             <span class="pp-log-opp">{% if row.logo %}<img src="{{ row.logo }}" alt="" aria-hidden="true">{% endif %}{{ row.team or '—' }}</span>
             {% for v in row.stat_values %}
             {% set label = career_cols[loop.index0][0] %}
-            <span class="{{ 'is-m' if loop.index0 < 4 or label == 'EPA' else '' }}{{ ' is-epa' if label == 'EPA' else '' }}{{ ' is-neg' if label == 'EPA' and (v | string).startswith('-') else '' }}{{ ' is-none' if v == '—' else '' }}">{{ v }}</span>
+            <span class="{{ 'is-m' if loop.index0 < 3 or label == 'EPA' else '' }}{{ ' is-epa' if label == 'EPA' else '' }}{{ ' is-neg' if label == 'EPA' and (v | string).startswith('-') else '' }}{{ ' is-none' if v == '—' else '' }}">{{ v }}</span>
             {% endfor %}
         </a>
         {% endfor %}

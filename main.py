@@ -1475,6 +1475,8 @@ def _fmt_pct_raw(stat_key, v):
         return f'{v:.1f}'
     if stat_key in ('expl',):
         return f'{v:.2f}'
+    if stat_key in ('YPA', 'YPC', 'YPR', 'YPP', 'adot', 'line_yds', 'sec_yds', 'open_yds'):
+        return f'{v:.1f}'
     if v == int(v):
         return f'{int(v):,}'
     return f'{v:.1f}'
@@ -1562,7 +1564,7 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
 
     def raw_of(src, stat_key):
         entry = sources.get(src)
-        v = (entry[0].get(player_id) or {}).get(stat_key) if entry else None
+        v = (entry[0].get(str(player_id)) or {}).get(stat_key) if entry else None
         return 0 if (v is None and entry and entry[1]) else v
 
     rows, peer = [], 0
