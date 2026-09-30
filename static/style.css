@@ -10679,13 +10679,11 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
         height: auto; min-height: 232px; margin: 0; align-self: stretch; overflow: hidden;
         border-bottom: 1px solid rgba(255,255,255,0.12);
     }
+    /* The team's logo, faded, behind the photo. */
     .pp-photo::before {
-        content: ""; position: absolute; left: -34px; top: 18px;
-        width: 170px; height: 170px; border-radius: 50%; border: 14px solid var(--ring);
-    }
-    .pp-photo::after {
-        content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 34px;
-        background: linear-gradient(90deg, rgba(20,12,14,0), rgba(20,12,14,0.85));
+        content: ""; position: absolute; inset: 14px 6px 40px;
+        background: var(--logo, none) center / contain no-repeat;
+        opacity: 0.22;
     }
     .pp-photo img { position: relative; z-index: 1; height: 206px; width: 100%; }
     .pp-photo-none { position: relative; z-index: 1; width: 120px; height: 170px; font-size: 2.25rem; }

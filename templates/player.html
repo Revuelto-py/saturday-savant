@@ -64,7 +64,7 @@
 
 <!-- HERO: the team's colours from each corner, the photo seated on the
      bottom edge, and the facts a reader checks first. -->
-<header class="pp-hero" style="--c1:{{ c1 | team_hex('#334155') }};--g:linear-gradient(100deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 30%, #121013 55%, {{ shade(c2, 0.78) }} 85%, {{ shade(c2, 0.62) }} 100%);--gm:linear-gradient(160deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 40%, #121013 68%, {{ shade(c2, 0.72) }} 100%);--ring:{{ hex_rgba(c2 | team_hex('#ffffff'), 0.12) }}">
+<header class="pp-hero" style="--c1:{{ c1 | team_hex('#334155') }};--g:linear-gradient(100deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 30%, #121013 55%, {{ shade(c2, 0.78) }} 85%, {{ shade(c2, 0.62) }} 100%);--gm:linear-gradient(160deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 40%, #121013 68%, {{ shade(c2, 0.72) }} 100%){% if player.logo_dark %};--logo:url('{{ player.logo_dark }}'){% endif %}">
 <div class="page-wrapper pp-hero-in">
 
     <div class="pp-photo">
