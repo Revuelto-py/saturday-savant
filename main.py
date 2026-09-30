@@ -1383,7 +1383,7 @@ def _transfer_path(rows):
 PLAYER_GLOSSARY = {
     'Percentile': 'Where this player ranks among the qualified FBS players at his position on a stat, from 1 to 99. Each one is oriented so higher is better: for stuffed runs or touchbacks, a low raw number earns a high percentile. The bar runs from blue (poor) through grey (average) to red (great).',
     'Qualified': 'The peer pool a percentile is measured against: players at the same position with enough playing time to rank. The count is stated above the bars.',
-    'FBS rank': 'Position among all FBS players on the stat, 1st best. Shown under each headline figure in the header; top-10 ranks are marked in gold.',
+    'FBS rank': 'Position among all FBS players on the stat, 1st best. Shown under each headline figure in the header; a top-10 figure is printed in blue.',
     'EPA / play': 'Expected Points Added per play: how much each play moved the offense toward scoring, given the down, distance and field position before it. The best single measure of efficiency.',
     'Pass and rush EPA / play': 'EPA / play counted on pass plays or rush plays alone, showing where a player creates value.',
     'Total EPA': 'The sum of EPA across every play: efficiency multiplied by volume.',

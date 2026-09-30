@@ -84,7 +84,9 @@
             {% if player.jersey %}<span class="pp-dot">·</span><span>#{{ player.jersey }}</span>{% endif %}
             {% if not is_active_2026 %}<span class="pp-status">No longer with team</span>{% endif %}
         </div>
-        <h1 class="pp-name">{{ player.first_name }} {{ player.last_name }}</h1>
+        {# A long name steps down a size so it stays on one line and every header
+   keeps the same height. #}
+<h1 class="pp-name{{ ' is-long' if (player.first_name ~ ' ' ~ player.last_name) | length > 17 else '' }}">{{ player.first_name }} {{ player.last_name }}</h1>
         <dl class="pp-bio">
             {% if player.height_fmt or player.weight %}
             <div><dt>HT / WT</dt><dd>{{ player.height_fmt or '—' }}{% if player.weight %}<span class="pp-wt">, {{ player.weight }}<span class="pp-lbs"> lbs</span></span>{% endif %}</dd></div>
@@ -144,7 +146,7 @@
             {% for label, val, rk in tiles.list %}
             <div class="pp-tile">
                 <span class="pp-tile-k">{{ label }}</span>
-                <span class="pp-tile-v">{{ val }}</span>
+                <span class="pp-tile-v{{ ' is-top' if rk and rk <= 10 else '' }}">{{ val }}</span>
                 <span class="pp-tile-r{{ ' is-top' if rk and rk <= 10 else '' }}">{% if rk %}{{ ordinal(rk) }} in FBS{% else %}No FBS rank{% endif %}</span>
             </div>
             {% endfor %}
