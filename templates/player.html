@@ -65,11 +65,12 @@
 
 <!-- HERO: the team's colours from each corner, the photo seated on the
      bottom edge, and the facts a reader checks first. -->
-{# The phone draws the header as a poster in the team's colour: the fill is
-   the primary darkened only as far as white type needs, the jersey number
-   takes the secondary when it reads on that fill. #}
-{% set poster = white_knob(c1 | team_hex('#334155')) %}
-<div class="pp-top" style="--poster:{{ poster }};--num:{{ poster_ink(c2, poster) }}">
+{# The phone header is the desktop gradient turned to 160°: the primary at
+   the top-left behind the team line, near-black through the middle, the
+   secondary rising into the bottom-right behind the photo. The jersey number
+   takes the secondary when it reads on the darker middle, else white. #}
+{% set poster = shade(c1, 0.62) %}
+<div class="pp-top" style="--poster:{{ poster }};--pg:linear-gradient(160deg, {{ shade(c1, 0.31) }} 0%, {{ poster }} 34%, #121013 62%, {{ shade(c2, 0.75) }} 88%, {{ shade(c2, 0.62) }} 100%);--num:{{ poster_ink(c2, poster) }}">
 <header class="pp-hero" style="--c1:{{ c1 | team_hex('#334155') }};--g:linear-gradient(100deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 30%, #121013 55%, {{ shade(c2, 0.78) }} 85%, {{ shade(c2, 0.62) }} 100%);--gm:linear-gradient(160deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 40%, #121013 68%, {{ shade(c2, 0.72) }} 100%){% if player.logo_dark %};--logo:url('{{ player.logo_dark }}'){% endif %}">
 <div class="page-wrapper pp-hero-in">
 
