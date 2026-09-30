@@ -604,14 +604,22 @@ def get_ap_rankings(cursor, season=CURRENT_SEASON):
     """The FINAL AP poll for a season as {team: rank} — the postseason poll if
     it exists, else the latest regular-season week. ap_rankings now holds every
     weekly poll, so this pins to a single one (used for the home ticker, team
-    hero, etc., where a single poll is wanted)."""
-    cursor.execute('''
-        SELECT team, rank FROM ap_rankings WHERE season = %s
-          AND (season_type, week) = (
-              SELECT season_type, week FROM ap_rankings WHERE season = %s
-              ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
-    ''', (season, season))
-    return {t: r for t, r in cursor.fetchall()}
+    hero, etc., where a single poll is wanted).
+
+    Cached 10 minutes (the hourly poll rider is the only writer); callers get
+    a copy, so the shared dict is never mutated."""
+    key = f'ap_final:{season}'
+    hit = data_cache.get(key)
+    if hit is None:
+        cursor.execute('''
+            SELECT team, rank FROM ap_rankings WHERE season = %s
+              AND (season_type, week) = (
+                  SELECT season_type, week FROM ap_rankings WHERE season = %s
+                  ORDER BY (season_type = 'postseason') DESC, week DESC LIMIT 1)
+        ''', (season, season))
+        hit = {t: r for t, r in cursor.fetchall()}
+        data_cache.set(key, hit, timeout=600)
+    return dict(hit)
 
 
 def get_ap_week_map(cursor, season):
@@ -672,12 +680,17 @@ def ap_asof(ap_weekly, week, is_post):
 def get_conference_logos(cursor):
     """{conference_name: logo_url} for the Teams page and team-page standings.
     Populated by tools/fetch_conf_logos.py; empty dict if the table isn't present yet."""
+    hit = data_cache.get('conference_logos')
+    if hit is not None:
+        return dict(hit)
     try:
         cursor.execute('SELECT conference, logo FROM conference_logos')
-        return {row[0]: row[1] for row in cursor.fetchall()}
+        hit = {row[0]: row[1] for row in cursor.fetchall()}
     except psycopg2.Error:
         cursor.connection.rollback()
         return {}
+    data_cache.set('conference_logos', hit)
+    return dict(hit)
 
 # ── Conference standings ─────────────────────────────────────────────────────
 # Standings are ordered by CONFERENCE record (games vs same-conference opponents
@@ -1682,8 +1695,12 @@ def get_rivalry_map(cursor):
     """One query for the whole rivalries table, looked up in Python afterward.
     Avoids the N+1 pattern of calling get_rivalry() once per game in a loop
     (used by the home page's game list and a team's full schedule)."""
-    cursor.execute('SELECT team1, team2, rivalry_name FROM rivalries')
-    return {(t1, t2): name for t1, t2, name in cursor.fetchall()}
+    hit = data_cache.get('rivalry_map')
+    if hit is None:
+        cursor.execute('SELECT team1, team2, rivalry_name FROM rivalries')
+        hit = {(t1, t2): name for t1, t2, name in cursor.fetchall()}
+        data_cache.set('rivalry_map', hit)
+    return dict(hit)
 
 def get_frozen_forecasts(cursor, game_ids):
     """Frozen pre-kickoff Savant Forecast + graded outcome for completed games
@@ -2430,19 +2447,31 @@ def _games_played_map(season):
     reads that without expanding the array (~0.7s for a live season, 2.4s for a
     finished one). Memoized because every category and page asks for the same
     map.
+
+    A finished season's logs never change, so its map is also persisted in
+    pool_store: a restarted worker reads ~50KB instead of re-parsing every log.
     """
+    finished = season < CURRENT_SEASON
+    key = f'gp:{season}'
+    if finished:
+        stored = _pool_store_get(key)
+        if stored:
+            return {int(k): v for k, v in stored.items()}
     conn = get_db()
     try:
         cur = conn.cursor()
         cur.execute("""SELECT player_id, json_array_length(log::json)
                          FROM player_game_logs
                         WHERE season = %s AND log IS NOT NULL""", (season,))
-        return {pid: n for pid, n in cur.fetchall() if n}
+        out = {pid: n for pid, n in cur.fetchall() if n}
     except Exception:
         conn.rollback()      # table absent, or a row holding invalid JSON
         return {}
     finally:
         release_db(conn)
+    if finished and out:
+        _pool_store_put(key, season, out)
+    return out
 
 
 def _player_games_played(player_id, season):
@@ -4105,12 +4134,17 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='CAR'  THEN CAST(ps.stat AS REAL) END) as att,
                     MAX(CASE WHEN ps.stat_type='YPC'  THEN CAST(ps.stat AS REAL) END) as ypc,
                     MAX(CASE WHEN ps.stat_type='LONG' THEN CAST(ps.stat AS REAL) END) as long_,
-                    MAX(CASE WHEN pf.stat_type='FUM'  THEN CAST(pf.stat AS REAL) END) as fum
+                    MAX(pf.fum) as fum
                     {ppa_select}{usage_select}
                 FROM players p
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'rushing' AND ps.season = {season}
                 JOIN teams t ON ps.team = t.name
-                LEFT JOIN player_stats pf ON pf.player_id = p.id::text AND pf.category = 'fumbles' AND pf.season = {season}
+                -- Pre-aggregated to one row per player: joining the raw fumbles
+                -- rows multiplied every rushing row by each fumbles stat type
+                -- (~6k index probes, a disk-spilling sort — 1.7s per board).
+                LEFT JOIN (SELECT player_id, MAX(CASE WHEN stat_type='FUM' THEN CAST(stat AS REAL) END) AS fum
+                             FROM player_stats WHERE category = 'fumbles' AND season = {season}
+                            GROUP BY player_id) pf ON pf.player_id = p.id::text
                 {ppa_join}
                 {usage_join}{team_games_join}
                 WHERE p.position IN ('RB','FB','QB','WR','ATH')
@@ -4222,11 +4256,14 @@ def leaderboards(category='passing'):
                     MAX(CASE WHEN ps.stat_type='TFL'   THEN CAST(ps.stat AS REAL) END) as tfl,
                     MAX(CASE WHEN ps.stat_type='PD'    THEN CAST(ps.stat AS REAL) END) as pd,
                     MAX(CASE WHEN ps.stat_type='TD'    THEN CAST(ps.stat AS REAL) END) as td,
-                    MAX(CASE WHEN pi.stat_type='INT'   THEN CAST(pi.stat AS REAL) END) as int_
+                    MAX(pi.int_) as int_
                 FROM players p
                 JOIN player_stats ps ON ps.player_id = p.id::text AND ps.category = 'defensive' AND ps.season = {season}
                 JOIN teams t ON ps.team = t.name
-                LEFT JOIN player_stats pi ON pi.player_id = p.id::text AND pi.category = 'interceptions' AND pi.season = {season}{team_games_join}
+                -- One row per player, for the same reason as the fumbles join above.
+                LEFT JOIN (SELECT player_id, MAX(CASE WHEN stat_type='INT' THEN CAST(stat AS REAL) END) AS int_
+                             FROM player_stats WHERE category = 'interceptions' AND season = {season}
+                            GROUP BY player_id) pi ON pi.player_id = p.id::text{team_games_join}
                 WHERE p.position IN ('DE','DT','NT','DL','EDGE','LB','CB','S','DB')
                   AND t.conference NOT IN ('{fcs_in}') {_promoted_fbs_exclusion(season, 'ps.team')}
                   {conf_sql} {team_sql} {pos_sql}
@@ -5777,6 +5814,45 @@ def _projected_record(cursor, team, season, actual_wins, actual_losses):
     }
 
 
+@data_cache.memoize(timeout=21600)
+def _team_trend_rows(team_name):
+    """Raw per-season rows behind the team page's Trends tab, every season at
+    once. Keyed on the team alone: a reader stepping through ?season= views of
+    one program used to pay these seven queries on every view."""
+    queries = {
+        'savant': ('SELECT season, off_rating, def_rating, net_rating, net_ranking '
+                   'FROM savant_ratings WHERE team=%s', (team_name,)),
+        'sp': ('SELECT season, rating, offense_rating, defense_rating, ranking '
+               'FROM sp_ratings WHERE team=%s', (team_name,)),
+        'recruiting': ('SELECT year, rank, points FROM team_recruiting WHERE team=%s', (team_name,)),
+        # One rank per season = that season's FINAL poll (ap_rankings now
+        # holds every weekly poll, so an unpinned read yields many per year).
+        'ap': ('SELECT DISTINCT ON (season) season, rank FROM ap_rankings WHERE team=%s '
+               "ORDER BY season, (season_type='postseason') DESC, week DESC", (team_name,)),
+        'epa': ('SELECT season, off_ppa, def_ppa FROM team_stats WHERE team=%s', (team_name,)),
+        'record': ('''
+            SELECT season,
+                SUM(CASE WHEN (home_team=%s AND home_points>away_points)
+                          OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
+                SUM(CASE WHEN (home_team=%s AND home_points<away_points)
+                          OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
+            FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1
+            GROUP BY season''', (team_name,)*6),
+        'conf': ('SELECT season, MIN(conference) FROM player_stats '
+                 'WHERE team=%s AND conference IS NOT NULL GROUP BY season', (team_name,)),
+    }
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        out = {}
+        for key, (q, params) in queries.items():
+            cur.execute(q, params)
+            out[key] = cur.fetchall()
+        return out
+    finally:
+        release_db(conn)
+
+
 @data_cache.memoize(timeout=86400)
 def _hero_rank_maps(season):
     """National per-game maps (PF/PA, pass/rush yards) across the FBS field for a
@@ -5867,10 +5943,11 @@ def team(team_ref):
         # Canonical URLs use the slug (e.g. /team/north-texas). Old links that
         # passed the raw name (/team/North Texas) still resolve — they
         # 301-redirect to the slug so shared/bookmarked links don't break.
-        cursor.execute('SELECT name FROM teams WHERE slug = %s', (team_ref,))
-        _row = cursor.fetchone()
-        if _row:
-            team_name = _row[0]
+        cursor.execute('SELECT name, conference, abbreviation, logo, color, alt_color, logo_dark '
+                       'FROM teams WHERE slug = %s', (team_ref,))
+        team_info = cursor.fetchone()
+        if team_info:
+            team_name = team_info[0]
         else:
             cursor.execute('SELECT slug FROM teams WHERE name = %s', (team_ref,))
             _old = cursor.fetchone()
@@ -5888,11 +5965,6 @@ def team(team_ref):
             ORDER BY (award = 'National Champions') DESC, award
         ''', (team_name, season))
         team_awards = [r[0] for r in cursor.fetchall()]
-
-        cursor.execute('SELECT name, conference, abbreviation, logo, color, alt_color, logo_dark FROM teams WHERE name = %s', (team_name,))
-        team_info = cursor.fetchone()
-        if not team_info:
-            return render_template('404.html', message=f'Team "{team_name}" not found.'), 404
 
         # FCS teams live in the teams table only so their logo/name can render
         # when an FBS team plays them — they have no team page of their own.
@@ -5936,13 +6008,18 @@ def team(team_ref):
                 pass  # empty/unparseable hire_date -> show name only
             head_coach = {'name': _coach_row[0], 'tenure': _tenure}
 
+        # Record (every game) and regular-season scoring in one pass.
         cursor.execute('''
             SELECT
                 SUM(CASE WHEN (home_team=%s AND home_points>away_points) OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
-                SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
+                SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END),
+                COUNT(*) FILTER (WHERE season_type='SeasonType.REGULAR'),
+                SUM(CASE WHEN home_team=%s THEN home_points ELSE away_points END) FILTER (WHERE season_type='SeasonType.REGULAR'),
+                SUM(CASE WHEN home_team=%s THEN away_points ELSE home_points END) FILTER (WHERE season_type='SeasonType.REGULAR')
             FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season=%s
-        ''', (team_name,)*6 + (season,))
-        record = cursor.fetchone()
+        ''', (team_name,)*8 + (season,))
+        _rec_row = cursor.fetchone()
+        record = _rec_row[:2] if _rec_row else None
         # Postseason INCLUDED. It was filtered to SeasonType.REGULAR, so the
         # hero called Alabama 2021 12-1 when they were 13-2 — the bowl and the
         # national-championship game were dropped. Every convention including
@@ -5965,21 +6042,22 @@ def team(team_ref):
             projected_record = _projected_record(
                 cursor, team_name, season, record[0], record[1])
 
-        cursor.execute('''
-            SELECT COUNT(*),
-                SUM(CASE WHEN home_team=%s THEN home_points ELSE away_points END),
-                SUM(CASE WHEN home_team=%s THEN away_points ELSE home_points END)
-            FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1 AND season=%s AND season_type='SeasonType.REGULAR'
-        ''', (team_name, team_name, team_name, team_name, season))
-        g = cursor.fetchone()
+        g = _rec_row[2:] if _rec_row else (0, 0, 0)
         games_played = g[0] or 1
         pts_for = g[1] or 0
         pts_against = g[2] or 0
 
-        cursor.execute("SELECT SUM(stat) FROM player_stats WHERE team=%s AND season=%s AND category='passing' AND stat_type='YDS'", (team_name, season))
-        pass_yds = cursor.fetchone()[0] or 0
-        cursor.execute("SELECT SUM(stat) FROM player_stats WHERE team=%s AND season=%s AND category='rushing' AND stat_type='YDS'", (team_name, season))
-        rush_yds = cursor.fetchone()[0] or 0
+        # Every stat row for this team-season, read once: it feeds the yardage
+        # totals here and the stat tables, headshots and player links below.
+        cursor.execute('''
+            SELECT ps.player_name, ps.category, ps.stat_type, ps.stat, ps.player_id, p.headshot
+            FROM player_stats ps
+            LEFT JOIN players p ON p.id::text = ps.player_id
+            WHERE ps.team = %s AND ps.season = %s
+        ''', (team_name, season))
+        _team_stat_rows = cursor.fetchall()
+        pass_yds = sum(r[3] or 0 for r in _team_stat_rows if r[1] == 'passing' and r[2] == 'YDS')
+        rush_yds = sum(r[3] or 0 for r in _team_stat_rows if r[1] == 'rushing' and r[2] == 'YDS')
 
         season_stats = {
             'games': games_played,
@@ -6111,8 +6189,7 @@ def team(team_ref):
         # passed so OL seniority (the year column) is available to the slotter.
         lineup, starter_meta = project_starters(cursor, team_name, roster) if is_upcoming else ({}, {})
 
-        cursor.execute('SELECT player_name, category, stat_type, stat FROM player_stats WHERE team=%s AND season=%s', (team_name, season))
-        all_stats = pivot_stats(cursor.fetchall())
+        all_stats = pivot_stats([r[:4] for r in _team_stat_rows])
 
         passing_stats     = sort_players(all_stats.get('passing', {}),    'YDS')
         rushing_stats     = sort_players(all_stats.get('rushing', {}),    'YDS')
@@ -6144,13 +6221,7 @@ def team(team_ref):
         # transferred OUT — whose stats still belong to this team but whose
         # players row now lists their new team — still resolve to a headshot
         # and a clickable /player/<id> link instead of a broken entry.
-        cursor.execute('''
-            SELECT DISTINCT ps.player_name, ps.player_id, p.headshot
-            FROM player_stats ps
-            LEFT JOIN players p ON p.id::text = ps.player_id
-            WHERE ps.team = %s AND ps.season = %s
-        ''', (team_name, season))
-        _player_rows = cursor.fetchall()
+        _player_rows = {(r[0], r[4], r[5]) for r in _team_stat_rows}
         headshot_map   = {row[0]: row[2] for row in _player_rows}
         player_id_map  = {row[0]: row[1] for row in _player_rows}
 
@@ -6301,40 +6372,24 @@ def team(team_ref):
         # the charts render honest gaps instead of misleading zeros.
         all_seasons = sorted(get_available_seasons())
 
-        def _series(query, params, cols):
-            cursor.execute(query, params)
-            by = {r[0]: r[1:] for r in cursor.fetchall()}
+        # The history is the same for every ?season= view of this team, so the
+        # seven queries behind it run once per team (data_cache), not per view.
+        _hist = _team_trend_rows(team_name)
+
+        def _series(key, cols):
+            by = {r[0]: r[1:] for r in _hist[key]}
             return [[(by[s][i] if s in by and by[s][i] is not None else None)
                      for s in all_seasons] for i in range(cols)]
 
-        sv_off, sv_def, sv_net, sv_rank = _series(
-            'SELECT season, off_rating, def_rating, net_rating, net_ranking '
-            'FROM savant_ratings WHERE team=%s', (team_name,), 4)
-        sp_rt, sp_off, sp_def, sp_rank = _series(
-            'SELECT season, rating, offense_rating, defense_rating, ranking '
-            'FROM sp_ratings WHERE team=%s', (team_name,), 4)
-        rec_rank, rec_pts = _series(
-            'SELECT year, rank, points FROM team_recruiting WHERE team=%s', (team_name,), 2)
-        ap_rank, = _series(
-            # One rank per season = that season's FINAL poll (ap_rankings now
-            # holds every weekly poll, so an unpinned read yields many per year).
-            'SELECT DISTINCT ON (season) season, rank FROM ap_rankings WHERE team=%s '
-            "ORDER BY season, (season_type='postseason') DESC, week DESC", (team_name,), 1)
-        epa_off, epa_def = _series(
-            'SELECT season, off_ppa, def_ppa FROM team_stats WHERE team=%s', (team_name,), 2)
-        t_wins, t_losses = _series('''
-            SELECT season,
-                SUM(CASE WHEN (home_team=%s AND home_points>away_points)
-                          OR (away_team=%s AND away_points>home_points) THEN 1 ELSE 0 END),
-                SUM(CASE WHEN (home_team=%s AND home_points<away_points)
-                          OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
-            FROM games WHERE (home_team=%s OR away_team=%s) AND completed=1
-            GROUP BY season''', (team_name,)*6, 2)
+        sv_off, sv_def, sv_net, sv_rank = _series('savant', 4)
+        sp_rt, sp_off, sp_def, sp_rank = _series('sp', 4)
+        rec_rank, rec_pts = _series('recruiting', 2)
+        ap_rank, = _series('ap', 1)
+        epa_off, epa_def = _series('epa', 2)
+        t_wins, t_losses = _series('record', 2)
         # Conference per season (from that season's stat rows) — realignment
         # context for hover tooltips and the header note.
-        confs, = _series(
-            'SELECT season, MIN(conference) FROM player_stats '
-            'WHERE team=%s AND conference IS NOT NULL GROUP BY season', (team_name,), 1)
+        confs, = _series('conf', 1)
 
         trends = {
             'seasons': all_seasons,
