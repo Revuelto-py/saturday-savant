@@ -1622,6 +1622,160 @@ def _last_game(game_log):
     return dict(g, us=a if won or g['result'][0] == 'T' else b, them=b if won or g['result'][0] == 'T' else a, won=won)
 
 
+# ── Last game card ───────────────────────────────────────────────────────────
+# The card reads like a slice of the game page — both teams, the score, the
+# Savant Forecast verdict — then the player's line and a line of his last five
+# games in the position's headline stat. Team colour stays in the logo glows
+# and name underlines: the header above already carries the player's colours,
+# and a second wash under it would fight it.
+_LG_STATS = {
+    'qb':  [('Pass yds', 'passingYards', 'lead'), ('C/Att', ('completions', 'passingAttempts'), ''),
+            ('TD', 'passingTouchdowns', 'td'), ('INT', 'interceptions', 'int'), ('Rating', 'QBRating', '')],
+    'rb':  [('Rush yds', 'rushingYards', 'lead'), ('Carries', 'rushingAttempts', ''),
+            ('YPC', 'yardsPerRushAttempt', ''), ('TD', 'rushingTouchdowns', 'td'), ('Rec yds', 'receivingYards', '')],
+    'rec': [('Rec yds', 'receivingYards', 'lead'), ('Rec', 'receptions', ''), ('Avg', 'yardsPerReception', ''),
+            ('TD', 'receivingTouchdowns', 'td'), ('Long', 'longReception', '')],
+    'dl':  [('Tackles', 'totalTackles', 'lead'), ('Sacks', 'sacks', ''), ('TFL', 'tacklesForLoss', ''),
+            ('PD', 'passesDefended', ''), ('FF', 'forcedFumbles', '')],
+    'db':  [('Tackles', 'totalTackles', 'lead'), ('INT', 'interceptions', 'td'), ('PD', 'passesDefended', ''),
+            ('TFL', 'tacklesForLoss', ''), ('FF', 'forcedFumbles', '')],
+    'k':   [('Points', 'totalKickingPoints', 'lead'), ('FG', ('fieldGoalsMade', 'fieldGoalAttempts'), ''),
+            ('Long', 'longFieldGoal', ''), ('XP', ('extraPointsMade', 'extraPointAttempts'), '')],
+    'p':   [('Punts', 'punts', 'lead'), ('Avg', 'grossAvgPuntYards', ''), ('Long', 'longPunt', ''),
+            ('Inside 20', 'puntsInsideTwenty', '')],
+    'ol':  [('Sacks allowed', 'sacksAllowed', 'int'), ('Hurries', 'hurriesAllowed', ''),
+            ('TFL allowed', 'tflAllowed', ''), ('Rush yds', 'rushingYards', 'lead'), ('Rush att', 'rushingAttempts', '')],
+}
+_LG_TREND = {'qb': ('passingYards', 'pass yds'), 'rb': ('rushingYards', 'rush yds'),
+             'rec': ('receivingYards', 'rec yds'), 'dl': ('totalTackles', 'tackles'),
+             'db': ('totalTackles', 'tackles'), 'k': ('totalKickingPoints', 'points'),
+             'p': ('grossAvgPuntYards', 'punt avg'), 'ol': ('rushingYards', 'team rush yds')}
+_LG_DECIMAL = {'YPC', 'Avg', 'Rating', 'punt avg'}
+
+
+def _pos_group(pos):
+    pos = (pos or '').upper()
+    if pos == 'QB': return 'qb'
+    if pos in ('RB', 'HB', 'FB'): return 'rb'
+    if pos in ('WR', 'TE'): return 'rec'
+    if pos in ('DE', 'DT', 'NT', 'DL', 'EDGE', 'LB', 'ILB', 'OLB', 'MLB'): return 'dl'
+    if pos in ('CB', 'S', 'SS', 'FS', 'SAF', 'DB'): return 'db'
+    if pos in ('PK', 'K'): return 'k'
+    if pos == 'P': return 'p'
+    if pos in OL_POSITIONS: return 'ol'
+    return None
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _smooth_path(pts):
+    """Catmull-Rom through (x, y) points as cubic Béziers."""
+    if len(pts) < 2:
+        return ''
+    d = f'M{pts[0][0]:.2f} {pts[0][1]:.2f}'
+    for i in range(len(pts) - 1):
+        p0 = pts[i - 1] if i else pts[i]
+        p1, p2 = pts[i], pts[i + 1]
+        p3 = pts[i + 2] if i + 2 < len(pts) else p2
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d += f' C{c1[0]:.2f} {c1[1]:.2f} {c2[0]:.2f} {c2[1]:.2f} {p2[0]:.2f} {p2[1]:.2f}'
+    return d
+
+
+def _last_game_panel(g, game_log, pos, team_abbrevs, team_logo):
+    """Everything the last game card draws, or None without a decided game."""
+    if not g:
+        return None
+    grp = _pos_group(pos)
+    st = g.get('stats') or {}
+
+    def fmt(label, v):
+        return f'{v:.1f}' if label in _LG_DECIMAL else f'{v:.0f}'
+
+    stats = []
+    for label, key, kind in _LG_STATS.get(grp, []):
+        if isinstance(key, tuple):
+            a, b = _num(st.get(key[0])), _num(st.get(key[1]))
+            if a is None or b is None:
+                continue
+            stats.append({'label': label, 'value': f'{a:.0f}/{b:.0f}', 'kind': ''})
+            continue
+        v = _num(st.get(key))
+        if v is None:
+            continue
+        k = kind if kind == 'lead' or v > 0 else ''
+        stats.append({'label': label, 'value': fmt(label, v), 'kind': k})
+
+    # Last five decided games in the headline stat, oldest first, with the
+    # player's own average across every game this season as the dashed line.
+    trend = None
+    key, unit = _LG_TREND.get(grp, (None, None))
+    if key:
+        played = [x for x in (game_log or []) if (x.get('result') or '')[:1] in 'WLT' and x.get('result')
+                  and _num((x.get('stats') or {}).get(key)) is not None]
+        last5 = played[-5:]
+        if len(last5) >= 2:
+            vals = [_num(x['stats'][key]) for x in last5]
+            avg = sum(_num(x['stats'][key]) for x in played) / len(played)
+            lo, hi = min(vals + [avg]), max(vals + [avg])
+            if hi == lo:
+                hi = lo + 1
+            H, top, bot = 66, 18, 10
+            ys = [top + (hi - v) / (hi - lo) * (H - top - bot) for v in vals]
+            n = len(vals)
+            xs = [50.0] if n == 1 else [4 + i * 92 / (n - 1) for i in range(n)]
+            path = _smooth_path(list(zip(xs, ys)))
+            trend = {
+                'unit': unit, 'height': H,
+                'path': path, 'area': f'{path} L{xs[-1]:.2f} {H} L{xs[0]:.2f} {H} Z',
+                'avg_y': round(top + (hi - avg) / (hi - lo) * (H - top - bot), 1),
+                'avg': f'{avg:.1f}' if unit in _LG_DECIMAL else f'{avg:.0f}',
+                'points': [{
+                    'x': round(x, 2), 'y': round(y, 1), 'v': fmt(unit, v),
+                    'opp': ('@' if gm.get('home_away') == 'away' else '') + (team_abbrevs.get(gm.get('opponent')) or (gm.get('opponent') or '')[:4].upper()),
+                    'res': gm['result'][:1], 'current': i == n - 1, 'game_id': gm.get('game_id'),
+                } for i, (x, y, v, gm) in enumerate(zip(xs, ys, vals, last5))],
+            }
+
+    colors, fc = {}, None
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT name, color FROM teams WHERE name = ANY(%s)', ([g.get('team'), g.get('opponent')],))
+        colors = {n: team_hex(c, '#556070') for n, c in cur.fetchall()}
+        if g.get('game_id'):
+            fc = get_frozen_forecasts(cur, [g['game_id']]).get(g['game_id'])
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+
+    def short(name):
+        # A long school name would be clipped beside the score; its
+        # abbreviation reads cleaner than "North Dakota S…".
+        return (team_abbrevs.get(name) or name) if name and len(name) > 14 else name
+
+    us = {'name': short(g.get('team')), 'logo': team_logo, 'pts': g.get('us'), 'won': g.get('won'),
+          'color': colors.get(g.get('team'), '#556070')}
+    them = {'name': short(g.get('opponent')), 'logo': g.get('opp_logo'), 'pts': g.get('them'),
+            'won': not g.get('won') and (g.get('result') or '')[:1] != 'T',
+            'color': colors.get(g.get('opponent'), '#556070')}
+    away, home = (us, them) if g.get('home_away') == 'away' else (them, us)
+    chip = None
+    if fc:
+        fav = fc['favorite']
+        chip = {'fav': team_abbrevs.get(fav) or fav, 'pct': round(fc['fav_prob'] * 100),
+                'upset': fc['is_upset']}
+    return {'away': away, 'home': home, 'stats': stats, 'trend': trend, 'forecast': chip,
+            'game_id': g.get('game_id'), 'label': g.get('game_label'), 'week': g.get('week')}
+
+
 # Rates that some pools store as a fraction (0.44) and others as a percent.
 _PCT_RATE_KEYS = {'PCT', 'air_share', 'deep_pct', 'overall', 'sr', 'stuff'}
 
@@ -9862,12 +10016,16 @@ def _player_detail_cached(player_id, season):
             release_db(_conn)
 
     last_game = _last_game(game_log)
+    lg_panel = _last_game_panel(
+        last_game, game_log, player.get('position'), team_abbrevs,
+        (transfer_team_logos.get(last_game.get('team')) or (player.get('logo_dark') if last_game.get('team') == player.get('team') else None))
+        if last_game else None)
     glossary = _player_glossary(percentile_rows, (player.get('position') or '').upper() == 'QB',
                                 bool(usage) and (player.get('position') or '').upper() != 'QB',
                                 len(transfer_path) > 1, bool(player_awards), is_line=bool(line))
 
     return render_template('player.html',
-        last_game=last_game, glossary=glossary, transfer_path=transfer_path,
+        last_game=last_game, lgc=lg_panel, glossary=glossary, transfer_path=transfer_path,
         player=player, stats=stats, ppa=ppa, games_played=games_played,
         season=season, is_current_season=(season == CURRENT_SEASON),
         available_seasons=player_seasons,

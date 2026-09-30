@@ -10884,3 +10884,111 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
     .pp-dir-ypc b { font-size: 1.375rem; }
     .pp-dir dl { grid-template-columns: minmax(0, 1fr); gap: 6px; }
 }
+
+/* ── Player page: last game card ─────────────────────────────────────────
+   A slice of the game page: both teams, the score, the forecast verdict,
+   then the player's line and his last five games. Team colour stays in the
+   logo glows and name underlines (--tc) so it never fights the header. */
+.pp-card.pp-lg { padding: 0; overflow: hidden; }
+.pp-lg-band {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px;
+    padding: 16px 22px 14px; border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.pp-lg-match { display: flex; align-items: center; justify-content: center; gap: 16px; min-width: 0; }
+.pp-lg-team { display: flex; flex-direction: row-reverse; align-items: center; gap: 10px; min-width: 0; }
+.pp-lg-team.is-home { flex-direction: row; }
+.pp-lg-logo { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
+.pp-lg-logo::before {
+    content: ""; position: absolute; inset: -12px; border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in srgb, var(--tc) 32%, transparent) 0%, transparent 70%);
+}
+.pp-lg-logo img { position: relative; width: 100%; height: 100%; object-fit: contain; }
+.pp-lg-name {
+    max-width: 150px; padding-bottom: 3px; border-bottom: 2px solid var(--tc);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--text-primary); font-family: var(--font-display); font-stretch: var(--display-stretch);
+    font-size: 1rem; font-weight: 700; line-height: 1.1;
+}
+.pp-lg-team.is-lost .pp-lg-name { color: #aab1b7; }
+.pp-lg-score { display: flex; align-items: center; font-family: var(--font-display); font-stretch: var(--display-stretch); white-space: nowrap; }
+.pp-lg-score b { font-size: 2.625rem; line-height: 1; font-weight: 600; color: #8b9196; font-variant-numeric: proportional-nums; }
+.pp-lg-score b.is-win { color: var(--accent); font-weight: 800; }
+.pp-lg-score i { margin: 0 6px; font-style: normal; font-size: 1.25rem; font-weight: 200; color: #6e7378; }
+.pp-lg-chips { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.pp-lg-chip {
+    display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 1px 9px;
+    border-radius: var(--r-pill); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14);
+    color: #c4ccd4; font-size: 0.6875rem; white-space: nowrap;
+}
+.pp-lg-chip.is-state { color: #fff; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 0.625rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; }
+.pp-lg-chip b.is-miss { color: #ff8a90; }
+.pp-lg-chip b.is-hit { color: #3ddc97; }
+.pp-lg-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; padding: 14px 22px; }
+.pp-lg-body.no-trend { grid-template-columns: minmax(0, 1fr); }
+.pp-lg-line-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pp-lg-k { color: var(--text-secondary); font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.pp-lg-link { font-size: 0.8125rem; }
+.pp-lg-stats { display: flex; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.pp-lg-stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pp-lg-stat b { color: #fff; font-family: var(--font-display); font-stretch: 80%; font-size: 2rem; font-weight: 800; line-height: 1; white-space: nowrap; font-variant-numeric: proportional-nums; }
+.pp-lg-stat span { color: var(--text-secondary); font-size: 0.6875rem; white-space: nowrap; }
+.pp-lg-stat.is-td b { color: #7cc4f7; }
+.pp-lg-stat.is-int b { color: #ff8a90; }
+.pp-lg-trend { display: flex; flex-direction: column; min-width: 0; padding-left: 18px; border-left: 1px solid rgba(255,255,255,0.08); }
+.pp-lg-avg { color: var(--text-secondary); font-size: 0.625rem; }
+.pp-lg-chart { position: relative; margin-top: 4px; }
+.pp-lg-chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.pp-lg-avgline { stroke: rgba(255,255,255,0.16); stroke-width: 1; stroke-dasharray: 3 4; }
+.pp-lg-path { fill: none; stroke: var(--accent); stroke-width: 2; }
+.pp-lg-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); }
+.pp-lg-dot.is-now { width: 11px; height: 11px; box-sizing: border-box; background: #111215; border: 2.5px solid #fff; }
+.pp-lg-v { position: absolute; transform: translate(-50%, -20px); color: #c4ccd4; font-size: 0.625rem; white-space: nowrap; }
+.pp-lg-v.is-now { transform: translate(-50%, -22px); color: #fff; font-size: 0.6875rem; font-weight: 800; }
+.pp-lg-opps { position: relative; height: 26px; margin-top: 2px; color: var(--text-secondary); font-size: 0.625rem; }
+.pp-lg-opps span { position: absolute; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; white-space: nowrap; }
+.pp-lg-opps span.is-now { color: #fff; font-weight: 700; }
+.pp-lg-opps b.is-w { color: #3ddc97; }
+.pp-lg-opps b.is-l { color: #ff8a90; }
+.pp-lg-foot { display: none; }
+
+/* ── Player page: percentiles fill the column beside them ────────────────
+   On a two-column layout the panel runs to the bottom of the season stats
+   card instead of stopping short, and spends that room on taller rows and
+   larger type. Any row count works: rows share the height, within limits. */
+@media (min-width: 1101px) {
+    /* Both columns share one height: the percentile panel stretches down to
+       the season stats card, and when the panel is the taller of the two
+       (a kicker's short stat line) the season stats card grows to meet it. */
+    .pp-grid { align-items: stretch; }
+    .pp-col > .pp-card:last-child { flex: 1; }
+    .pp-card.pp-pct { align-self: stretch; display: flex; flex-direction: column; }
+    .pp-pct .pb { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
+    .pp-pct .pb-row:not(.pb-head) { flex: 1 1 0; min-height: 40px; max-height: 60px; }
+    .pp-pct .pb-label { font-size: var(--text-base); }
+    .pp-pct .pb-val { font-size: 1.0625rem; font-weight: 600; }
+    .pp-pct .pb-track { height: 26px; align-self: center; width: auto; }
+    .pp-pct .pb-knob { width: 30px; height: 30px; font-size: 0.8125rem; }
+}
+
+@media (max-width: 700px) {
+    .pp-lg-band { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 8px; padding: 14px 14px 12px; }
+    .pp-lg-match { grid-column: 1 / -1; order: 3; justify-content: space-between; gap: 8px; }
+    .pp-lg-chip:not(.is-state) { display: none; }
+    .pp-lg-logo { width: 30px; height: 30px; }
+    .pp-lg-logo::before { inset: -10px; }
+    .pp-lg-name { max-width: 96px; font-size: 0.9375rem; }
+    .pp-lg-score b { font-size: 2.125rem; }
+    .pp-lg-score i { margin: 0 4px; font-size: 1rem; }
+    .pp-lg-body { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 12px 14px 0; }
+    .pp-lg-trend { padding-left: 0; border-left: 0; }
+    .pp-lg-link { display: none; }
+    .pp-lg-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .pp-lg-stat:nth-child(n+5) { display: none; }
+    .pp-lg-stat b { font-size: 1.5rem; }
+    .pp-lg-foot {
+        display: flex; align-items: center; justify-content: center; min-height: 44px; margin-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.08); color: var(--accent); font-size: 0.875rem; font-weight: 600; text-decoration: none;
+    }
+    .pp-lg-foot:active { background: rgba(28,156,240,0.08); }
+}
+.pp-lg-foot:focus-visible, .pp-lg-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

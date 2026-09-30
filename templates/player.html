@@ -298,32 +298,69 @@
 <div class="pp-grid">
 <div class="pp-col">
 
-    {% if last_game %}
-    {% set g = last_game %}
-    <section class="pp-card">
-        <div class="pp-card-head">
+    {# Last game: a slice of the game page — both teams, the score, the
+       forecast verdict — then his line and his last five games. Team colour
+       stays in the logo glows and name underlines so it never fights the
+       header's colours above. #}
+    {% if lgc %}
+    {% set wk = (lgc.label | game_abbr) if lgc.label and not (lgc.label | string).isdigit() else 'Wk ' ~ lgc.week %}
+    <section class="pp-card pp-lg">
+        <div class="pp-lg-band">
             <h2 class="pp-h2">Last game</h2>
-            {% if g.game_id %}<a class="pp-link" href="/game/{{ g.game_id }}">Game page</a>{% endif %}
+            <div class="pp-lg-match">
+                {% for side in [lgc.away, lgc.home] %}
+                <span class="pp-lg-team{{ ' is-home' if loop.last else '' }}{{ ' is-lost' if not side.won else '' }}" style="--tc:{{ side.color }}">
+                    <span class="pp-lg-logo">{% if side.logo %}<img src="{{ side.logo }}" alt="" aria-hidden="true">{% endif %}</span>
+                    <span class="pp-lg-name">{{ side.name }}</span>
+                </span>
+                {% if loop.first %}
+                <span class="pp-lg-score" aria-label="{{ lgc.away.name }} {{ lgc.away.pts }}, {{ lgc.home.name }} {{ lgc.home.pts }}">
+                    <b class="{{ 'is-win' if lgc.away.won else '' }}">{{ lgc.away.pts }}</b><i aria-hidden="true">–</i><b class="{{ 'is-win' if lgc.home.won else '' }}">{{ lgc.home.pts }}</b>
+                </span>
+                {% endif %}
+                {% endfor %}
+            </div>
+            <div class="pp-lg-chips">
+                <span class="pp-lg-chip is-state">Final · {{ wk }}</span>
+                {% if lgc.forecast %}<span class="pp-lg-chip">{{ lgc.forecast.fav }} {{ lgc.forecast.pct }}% fav<b class="{{ 'is-miss' if lgc.forecast.upset else 'is-hit' }}">{{ 'Upset' if lgc.forecast.upset else 'Hit' }}</b></span>{% endif %}
+            </div>
         </div>
-        {% set team_logo = transfer_team_logos.get(g.team) or (player.logo_dark if g.team == player.team else none) %}
-        <a class="pp-score" {% if g.game_id %}href="/game/{{ g.game_id }}"{% endif %}>
-            <span class="pp-side{{ ' is-win' if g.won else '' }}">
-                {% if team_logo %}<img src="{{ team_logo }}" alt="" aria-hidden="true">{% endif %}
-                <span class="pp-side-name">{{ team_abbrevs.get(g.team, g.team) }}</span>
-                <span class="pp-side-pts">{{ g.us }}</span>
-            </span>
-            <span class="pp-score-mid"><b>Final</b>{{ (g.game_label | game_abbr) if g.game_label and not (g.game_label | string).isdigit() else 'Week ' ~ g.week }}</span>
-            <span class="pp-side is-opp{{ '' if g.won else ' is-win' }}">
-                <span class="pp-side-pts">{{ g.them }}</span>
-                <span class="pp-side-name">{{ g.opponent }}</span>
-                {% if g.opp_logo %}<img src="{{ g.opp_logo }}" alt="" aria-hidden="true">{% endif %}
-            </span>
-        </a>
-        <div class="pp-line">
-            {% for label, key in kept.cols[:6] %}
-            <div><span>{{ label }}</span><b>{{ cell(label, g.stats.get(key)) | striptags }}</b></div>
-            {% endfor %}
+        <div class="pp-lg-body{{ '' if lgc.trend else ' no-trend' }}">
+            <div class="pp-lg-line">
+                <div class="pp-lg-line-head">
+                    <span class="pp-lg-k">{{ 'Offensive line' if line else 'His game' }}</span>
+                    {% if lgc.game_id %}<a class="pp-link pp-lg-link" href="/game/{{ lgc.game_id }}">Game page</a>{% endif %}
+                </div>
+                <div class="pp-lg-stats">
+                    {% for x in lgc.stats %}
+                    <div class="pp-lg-stat{{ ' is-' ~ x.kind if x.kind else '' }}"><b>{{ x.value }}</b><span>{{ x.label }}</span></div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% if lgc.trend %}{% set t = lgc.trend %}
+            <div class="pp-lg-trend">
+                <div class="pp-lg-line-head"><span class="pp-lg-k">Last {{ t.points | length }} · {{ t.unit }}</span><span class="pp-lg-avg">avg {{ t.avg }}</span></div>
+                <div class="pp-lg-chart" style="height:{{ t.height }}px">
+                    <svg viewBox="0 0 100 {{ t.height }}" preserveAspectRatio="none" aria-hidden="true">
+                        <defs><linearGradient id="lgFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c9cf0" stop-opacity="0.24"/><stop offset="1" stop-color="#1c9cf0" stop-opacity="0"/></linearGradient></defs>
+                        <line x1="0" x2="100" y1="{{ t.avg_y }}" y2="{{ t.avg_y }}" class="pp-lg-avgline" vector-effect="non-scaling-stroke"/>
+                        <path d="{{ t.area }}" fill="url(#lgFill)"/>
+                        <path d="{{ t.path }}" class="pp-lg-path" vector-effect="non-scaling-stroke"/>
+                    </svg>
+                    {% for pt in t.points %}
+                    <span class="pp-lg-dot{{ ' is-now' if pt.current else '' }}" style="left:{{ pt.x }}%;top:{{ pt.y }}px"></span>
+                    <span class="pp-lg-v{{ ' is-now' if pt.current else '' }}" style="left:{{ pt.x }}%;top:{{ pt.y }}px">{{ pt.v }}</span>
+                    {% endfor %}
+                </div>
+                <div class="pp-lg-opps">
+                    {% for pt in t.points %}
+                    <span class="{{ 'is-now' if pt.current else '' }}" style="left:{{ pt.x }}%">{{ pt.opp }}<b class="{{ 'is-w' if pt.res == 'W' else 'is-l' if pt.res == 'L' else '' }}">{{ pt.res }}</b></span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
+        {% if lgc.game_id %}<a class="pp-lg-foot" href="/game/{{ lgc.game_id }}">Game page</a>{% endif %}
     </section>
     {% endif %}
 
@@ -369,29 +406,6 @@
         {% elif not stats %}<p class="pp-empty">No {{ season }} season stats yet.</p>{% endif %}
     </section>
 
-    {# Runs by direction, with the lane he blocks for marked. #}
-    {% if line and line.directions %}
-    <section class="pp-card">
-        <div class="pp-card-head">
-            <h2 class="pp-h2">Runs by direction</h2>
-            <span class="pp-note">{{ team_abbrevs.get(line.team, line.team) }} · {{ season }}</span>
-        </div>
-        <div class="pp-dirs">
-            {% for d in line.directions %}
-            <div class="pp-dir{{ ' is-mine' if d.mine else '' }}">
-                <div class="pp-dir-head"><b>{{ d.label }}</b>{% if d.mine %}<span class="pp-dir-tag">His side</span>{% endif %}</div>
-                <div class="pp-dir-ypc"><b>{{ '%.1f' | format(d.ypc) if d.ypc is not none else '—' }}</b><span>yds / carry</span></div>
-                <dl>
-                    <div><dt>Carries</dt><dd>{{ d.carries }}</dd></div>
-                    <div><dt>Success</dt><dd>{{ '%.0f%%' | format(d.sr * 100) if d.sr is not none else '—' }}</dd></div>
-                    <div><dt>Line yds</dt><dd>{{ '%.1f' | format(d.line_yards) if d.line_yards is not none else '—' }}</dd></div>
-                    <div><dt>Stuffed</dt><dd>{{ '%.0f%%' | format(d.stuff * 100) if d.stuff is not none else '—' }}</dd></div>
-                </dl>
-            </div>
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
 
 </div>
 
@@ -418,6 +432,30 @@
     {% endif %}
 </aside>
 </div>
+
+    {# Runs by direction, with the lane he blocks for marked. #}
+{% if line and line.directions %}
+<section class="pp-card">
+    <div class="pp-card-head">
+        <h2 class="pp-h2">Runs by direction</h2>
+        <span class="pp-note">{{ team_abbrevs.get(line.team, line.team) }} · {{ season }}</span>
+    </div>
+    <div class="pp-dirs">
+        {% for d in line.directions %}
+        <div class="pp-dir{{ ' is-mine' if d.mine else '' }}">
+            <div class="pp-dir-head"><b>{{ d.label }}</b>{% if d.mine %}<span class="pp-dir-tag">His side</span>{% endif %}</div>
+            <div class="pp-dir-ypc"><b>{{ '%.1f' | format(d.ypc) if d.ypc is not none else '—' }}</b><span>yds / carry</span></div>
+            <dl>
+                <div><dt>Carries</dt><dd>{{ d.carries }}</dd></div>
+                <div><dt>Success</dt><dd>{{ '%.0f%%' | format(d.sr * 100) if d.sr is not none else '—' }}</dd></div>
+                <div><dt>Line yds</dt><dd>{{ '%.1f' | format(d.line_yards) if d.line_yards is not none else '—' }}</dd></div>
+                <div><dt>Stuffed</dt><dd>{{ '%.0f%%' | format(d.stuff * 100) if d.stuff is not none else '—' }}</dd></div>
+            </dl>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
 
 {# Usage — backs and receivers. The bar is scaled ×3 so a 12% share reads as a
    bar rather than a sliver; the printed figure carries the value. #}
