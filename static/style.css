@@ -10492,6 +10492,42 @@ a.lb-leader:hover { border-color: rgba(28,156,240,0.4); color: var(--text-primar
 }
 .pp-info { grid-area: info; min-width: 0; display: flex; flex-direction: column; }
 .pp-more { grid-area: more; min-width: 0; }
+/* Heisman, transfers, draft and awards: a panel beside the header on wide
+   screens, reserved as a third column so every header is the same height
+   whether the player has none of these or a long list. */
+.pp-top { position: relative; }
+.pp-facts {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(8,9,11,0.62); border: 1px solid rgba(255,255,255,0.12);
+}
+.pp-facts .pp-heisman { margin: 0; }
+.pp-facts .pp-fact, .pp-facts .pp-fact + .pp-fact, .pp-facts .pp-awards { margin: 0; }
+/* In the panel a label sits over its value, so the value gets the full width
+   and a transfer path or a draft line wraps less. */
+.pp-facts .pp-fact { flex-direction: column; gap: 4px; }
+.pp-facts .pp-fact-k { width: auto; }
+.pp-facts .pp-fact-v { font-size: var(--text-sm); }
+.pp-facts .pp-heisman { font-size: var(--text-xs); }
+.pp-facts .pp-awards { gap: 6px; }
+@media (min-width: 1200px) {
+    .page-wrapper.pp-hero-in {
+        grid-template-columns: 240px minmax(0, 1fr) 380px;
+        grid-template-areas: "photo info ." "photo more .";
+        min-height: 330px;
+        box-sizing: border-box;
+    }
+    .page-wrapper.pp-facts-wrap {
+        position: absolute; inset: 0;
+        display: flex; justify-content: flex-end; align-items: center;
+        padding-top: 16px; padding-bottom: 16px; box-sizing: border-box;
+        pointer-events: none;
+    }
+    .pp-facts { width: 380px; box-sizing: border-box; max-height: 100%; overflow-y: auto; pointer-events: auto; }
+}
+@media (max-width: 1199.98px) {
+    .page-wrapper.pp-facts-wrap { padding-top: 14px; }
+}
 .pp-heisman {
     align-self: flex-start;
     display: inline-flex; align-items: center; gap: 8px;
@@ -10502,14 +10538,14 @@ a.lb-leader:hover { border-color: rgba(28,156,240,0.4); color: var(--text-primar
     color: #ffd95a; font-size: var(--text-sm); font-weight: 650; letter-spacing: 0.02em;
 }
 .pp-heisman svg { width: 16px; height: 16px; flex-shrink: 0; }
-.pp-teamline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; color: var(--text-primary); font-size: var(--text-base); font-weight: 600; }
+.pp-teamline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-height: 26px; color: var(--text-primary); font-size: var(--text-base); font-weight: 600; }
 .pp-teamline img { width: 22px; height: 22px; object-fit: contain; }
 .pp-teamline a { color: #fff; text-decoration: none; border-radius: var(--r-sm); }
 .pp-teamline a:hover { color: var(--accent); }
 .pp-teamline a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pp-dot { color: #8a8f94; }
 .pp-status {
-    padding: 3px 10px; border-radius: var(--r-md);
+    padding: 2px 9px; line-height: 1.4; border-radius: var(--r-md);
     background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35);
     color: #ff9aa2; font-size: var(--text-xs); font-weight: 750;
 }
@@ -10633,7 +10669,7 @@ a.pp-score[href]:hover { background: rgba(255,255,255,0.06); }
     color: var(--text-primary); text-decoration: none;
     font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: var(--text-base);
 }
-.pp-log-row { grid-template-columns: 56px minmax(150px, 1.8fr) 90px repeat(var(--n), minmax(44px, 1fr)); min-width: calc(300px + var(--n) * 54px); }
+.pp-log-row { grid-template-columns: 60px minmax(150px, 1.8fr) 90px repeat(var(--n), minmax(44px, 1fr)); min-width: calc(300px + var(--n) * 54px); }
 .pp-career-row { grid-template-columns: 70px minmax(150px, 1.4fr) repeat(var(--n), minmax(52px, 1fr)); min-width: calc(240px + var(--n) * 62px); }
 .pp-log-row > span:nth-child(n+4), .pp-career-row > span:nth-child(n+3) { text-align: right; }
 a.pp-log-row[href]:hover, a.pp-career-row:hover { background: rgba(255,255,255,0.03); }

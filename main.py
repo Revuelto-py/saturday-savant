@@ -8199,6 +8199,29 @@ def shorten_game_label(season_type, week, notes):
     return label
 
 
+def game_abbr(label):
+    """Week-column label for the player game log: the week number, or a short
+    tag for a postseason game (the full name goes in a tooltip). Works on the
+    stored label, since cached logs keep whatever shorten_game_label produced."""
+    label = str(label or '').strip()
+    if label.isdigit():
+        return label
+    if label.endswith(' CCG'):
+        return 'CCG'
+    if label == 'CFP Championship':
+        return 'NCG'
+    for full, short in (('CFP Semifinal', 'CFP SF'), ('CFP Quarterfinal', 'CFP QF'), ('CFP R1', 'CFP R1')):
+        if label == full:
+            return short
+    if label.startswith('CFP'):
+        return 'CFP'
+    if label == 'Postseason':
+        return 'Post'
+    return 'Bowl' if label else '—'
+
+app.jinja_env.filters['game_abbr'] = game_abbr
+
+
 # ── Passing profiles (air yards / location / YAC) ───────────────────────────
 # Built from passing_plays, which pipeline/fetch_passing.py fills from CFBD's play-level
 # passing endpoints. One aggregator serves every surface — a quarterback, a

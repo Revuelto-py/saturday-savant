@@ -64,6 +64,7 @@
 
 <!-- HERO: the team's colours from each corner, the photo seated on the
      bottom edge, and the facts a reader checks first. -->
+<div class="pp-top">
 <header class="pp-hero" style="--c1:{{ c1 | team_hex('#334155') }};--g:linear-gradient(100deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 30%, #121013 55%, {{ shade(c2, 0.78) }} 85%, {{ shade(c2, 0.62) }} 100%);--gm:linear-gradient(160deg, {{ shade(c1, 0.45) }} 0%, {{ shade(c1, 0.72) }} 40%, #121013 68%, {{ shade(c2, 0.72) }} 100%){% if player.logo_dark %};--logo:url('{{ player.logo_dark }}'){% endif %}">
 <div class="page-wrapper pp-hero-in">
 
@@ -76,12 +77,6 @@
     </div>
 
     <div class="pp-info">
-        {% if heisman %}
-        <div class="pp-heisman">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
-            {{ heisman | map(attribute='season') | join(', ') }} Heisman Trophy winner
-        </div>
-        {% endif %}
         <div class="pp-teamline">
             {% if player.logo_dark %}<img src="{{ player.logo_dark }}" alt="" aria-hidden="true">{% endif %}
             <a href="{{ team_url(player.team, season) }}">{{ player.team }}</a>
@@ -100,42 +95,6 @@
     </div>
 
     <div class="pp-more">
-        {% if transfer_path | length > 1 %}
-        <div class="pp-fact">
-            <span class="pp-fact-k">Transfer</span>
-            <span class="pp-fact-v">
-                <span class="pp-hop"><b>{{ transfer_path[0].school }}</b></span>
-                {% for t in transfer_path[1:] %}
-                <span class="pp-hop"><span class="pp-arrow">→</span><b{% if t.portal %} class="is-portal"{% endif %}>{{ t.school }}</b>{% if t.year %}<span class="pp-yr">’{{ (t.year | string)[2:] }}</span>{% endif %}{% if t.stars %}<span class="pp-stars" aria-label="{{ t.stars }}-star transfer">{{ '★' * t.stars }}</span>{% endif %}</span>
-                {% endfor %}
-            </span>
-        </div>
-        {% endif %}
-        {% if player.nfl_status in ('drafted', 'udfa') %}
-        <div class="pp-fact">
-            <span class="pp-fact-k">NFL {{ 'Draft' if player.nfl_status == 'drafted' else '' }}</span>
-            <span class="pp-fact-v">
-                <span class="pp-hop">
-                    {% if player.nfl_team_logo %}<img src="{{ player.nfl_team_logo }}" alt="" aria-hidden="true">{% endif %}
-                    <b>{{ player.nfl_team }}</b>
-                </span>
-                {% if player.nfl_status == 'drafted' %}
-                <span class="pp-hop pp-muted">Round {{ player.draft_round }}, Pick {{ player.draft_pick }}{% if player.draft_round == 1 %} <b>(No. {{ player.draft_pick }} overall)</b>{% endif %}</span>
-                <span class="pp-yr">’{{ (player.draft_year | string)[2:] }}</span>
-                {% else %}
-                <span class="pp-hop pp-muted">Undrafted free agent</span>
-                {% endif %}
-            </span>
-        </div>
-        {% endif %}
-        {% if other_awards %}
-        <div class="pp-awards">
-            {% for aw in other_awards %}
-            <span class="pp-award"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>{{ aw.award }}<span class="pp-yr">{{ aw.season }}</span></span>
-            {% endfor %}
-        </div>
-        {% endif %}
-
         {# ── Headline figures, each with its FBS rank. The card set is the
            position's; field-goal PCT arrives already formatted, YPR falls back
            to AVG, and games played comes from the game log (player_stats holds
@@ -194,6 +153,59 @@
     </div>
 </div>
 </header>
+{# Hardware and history — the Heisman, transfers, the draft, awards — sit in
+   their own panel so they never change the header's height: beside it on a
+   wide screen, just below it on a narrow one. #}
+{% set has_facts = heisman or transfer_path | length > 1 or player.nfl_status in ('drafted', 'udfa') or other_awards %}
+{% if has_facts %}
+<div class="page-wrapper pp-facts-wrap">
+<aside class="pp-facts" aria-label="Awards, transfers and draft">
+    {% if heisman %}
+    <div class="pp-heisman">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>
+        {{ heisman | map(attribute='season') | join(', ') }} Heisman Trophy winner
+    </div>
+    {% endif %}
+    {% if transfer_path | length > 1 %}
+    <div class="pp-fact">
+        <span class="pp-fact-k">Transfer</span>
+        <span class="pp-fact-v">
+        <span class="pp-hop"><b>{{ transfer_path[0].school }}</b></span>
+        {% for t in transfer_path[1:] %}
+        <span class="pp-hop"><span class="pp-arrow">→</span><b{% if t.portal %} class="is-portal"{% endif %}>{{ t.school }}</b>{% if t.year %}<span class="pp-yr">’{{ (t.year | string)[2:] }}</span>{% endif %}{% if t.stars %}<span class="pp-stars" aria-label="{{ t.stars }}-star transfer">{{ '★' * t.stars }}</span>{% endif %}</span>
+        {% endfor %}
+        </span>
+    </div>
+    {% endif %}
+    {% if player.nfl_status in ('drafted', 'udfa') %}
+    <div class="pp-fact">
+        <span class="pp-fact-k">NFL {{ 'Draft' if player.nfl_status == 'drafted' else '' }}</span>
+        <span class="pp-fact-v">
+        <span class="pp-hop">
+            {% if player.nfl_team_logo %}<img src="{{ player.nfl_team_logo }}" alt="" aria-hidden="true">{% endif %}
+            <b>{{ player.nfl_team }}</b>
+        </span>
+        {% if player.nfl_status == 'drafted' %}
+        <span class="pp-hop pp-muted">Round {{ player.draft_round }}, Pick {{ player.draft_pick }}{% if player.draft_round == 1 %} <b>(No. {{ player.draft_pick }} overall)</b>{% endif %}</span>
+        <span class="pp-yr">’{{ (player.draft_year | string)[2:] }}</span>
+        {% else %}
+        <span class="pp-hop pp-muted">Undrafted free agent</span>
+        {% endif %}
+        </span>
+    </div>
+    {% endif %}
+    {% if other_awards %}
+    <div class="pp-awards">
+        {% for aw in other_awards %}
+        <span class="pp-award"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>{{ aw.award }}<span class="pp-yr">{{ aw.season }}</span></span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</aside>
+</div>
+{% endif %}
+</div>
 
 <main class="page-wrapper pp-main">
 
@@ -249,7 +261,7 @@
                 <span class="pp-side-name">{{ team_abbrevs.get(g.team, g.team) }}</span>
                 <span class="pp-side-pts">{{ g.us }}</span>
             </span>
-            <span class="pp-score-mid"><b>Final</b>{{ g.game_label if g.game_label and not g.game_label.isdigit() else 'Week ' ~ g.week }}</span>
+            <span class="pp-score-mid"><b>Final</b>{{ (g.game_label | game_abbr) if g.game_label and not (g.game_label | string).isdigit() else 'Week ' ~ g.week }}</span>
             <span class="pp-side is-opp{{ '' if g.won else ' is-win' }}">
                 <span class="pp-side-pts">{{ g.them }}</span>
                 <span class="pp-side-name">{{ g.opponent }}</span>
@@ -347,7 +359,7 @@
         {% for g in game_log %}
         {% set res = g.result or '' %}
         <a class="pp-log-row{{ ' is-post' if g.season_type == 'SeasonType.POSTSEASON' or g.game_label != g.week | string else '' }}" {% if g.game_id %}href="/game/{{ g.game_id }}"{% endif %}>
-            <span class="pp-log-wk">{{ g.game_label }}</span>
+            <span class="pp-log-wk"{% if not (g.game_label | string).isdigit() %} title="{{ g.game_label }}"{% endif %}>{{ g.game_label | game_abbr }}</span>
             <span class="pp-log-opp"><span class="pp-muted">{{ 'vs' if g.home_away == 'home' else '@' }}</span>{% if g.opp_logo %}<img src="{{ g.opp_logo }}" alt="" aria-hidden="true">{% endif %}<b>{{ g.opponent or '—' }}</b></span>
             <span class="pp-log-res{{ ' is-w' if res.startswith('W') else (' is-l' if res.startswith('L') else '') }}">{{ res or '—' }}</span>
             {% for label, key in kept.cols %}<span class="pp-log-c{{ ' is-m' if loop.index0 < 5 else '' }}" data-k="{{ label }}">{{ cell(label, g.stats.get(key)) }}</span>{% endfor %}
