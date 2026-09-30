@@ -74,7 +74,7 @@ from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory, url_for
+from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory, url_for, g
 from flask_caching import Cache
 # Labels/units for the stored Savant Forecast feature breakdown. The DB holds
 # only the model's numbers; the wording is applied here at render time.
@@ -100,6 +100,23 @@ cache = Cache(app, config={
     # presents as EVERYTHING (even static files) taking seconds.
     'CACHE_THRESHOLD': 250,
 })
+# Season-wide data (stat pools, games-played maps, standings, leaders) lives in
+# its own cache. Sharing the page cache let a crawler sweeping player pages
+# evict these maps, so every page recomputed them — seconds each — and the
+# workers starved. Keys here are bounded by seasons x functions, so a larger
+# threshold is safe.
+data_cache = Cache(app, config={
+    'CACHE_TYPE': 'SimpleCache',
+    'CACHE_DEFAULT_TIMEOUT': 3600,
+    'CACHE_THRESHOLD': 1500,
+})
+# Resized headshots/logos. The boot-time explorer warmup alone writes ~400 of
+# these; in the page cache that evicted every warmed page on each worker start.
+img_cache = Cache(app, config={
+    'CACHE_TYPE': 'SimpleCache',
+    'CACHE_DEFAULT_TIMEOUT': 86400,
+    'CACHE_THRESHOLD': 1200,
+})
 
 configuration = cfbd.Configuration(
     access_token=os.getenv("CFBD_API_KEY")
@@ -121,6 +138,10 @@ def init_db_pool():
         # promptly, instead of discovering it later as 'SSL SYSCALL error: EOF'.
         keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
         connect_timeout=10,
+        # No page query should run this long; one that does (a lock held by the
+        # weekly pipeline, a pathological plan) now fails that request instead
+        # of pinning a worker thread until the gunicorn timeout.
+        options='-c statement_timeout=25000',
     )
     print("Database connection pool initialized")
     print(f"Pool created: min={connection_pool.minconn}, max={connection_pool.maxconn}")
@@ -257,6 +278,70 @@ def _rate_limit():
             _rl_last_prune[0] = now
             for k in [k for k, d in _rl_hits.items() if not d or d[-1] < cutoff]:
                 _rl_hits.pop(k, None)
+
+# ── Crawlers on query-string URLs ────────────────────────────────────────────
+# robots.txt disallows /*? — every ?season= / ?week= variant is a cold,
+# multi-second render, and there are tens of thousands of them. Compliant
+# engines never ask for these, so any self-declared bot that does is ignoring
+# robots; refuse it before any work. Bare URLs stay open to every crawler.
+_BOT_UA = re.compile(r'bot|crawl|spider|slurp|scrap|fetch|python-requests|httpx|aiohttp|go-http|java/|okhttp|headless', re.I)
+
+@app.before_request
+def _shed_bot_variants():
+    if request.query_string and _BOT_UA.search(request.headers.get('User-Agent') or ''):
+        return Response('Query-string URLs are disallowed by robots.txt.\n', status=429,
+                        mimetype='text/plain', headers={'Retry-After': '86400'})
+
+# ── Concurrent render cap ────────────────────────────────────────────────────
+# Each worker has 8 threads (Procfile). Uncached player/team/game pages can hold a thread
+# for seconds, and when all 6 were busy the worker stopped answering anything —
+# /healthz and /static included — so the platform saw a dead site. Page
+# requests now need one of _RENDER_SLOTS permits; the rest of the threads stay
+# free for static files, images and the health check. A waiting request still
+# holds a thread, so the wait is short: past it, a fast 503 instead of queueing
+# behind the backlog until the gunicorn timeout.
+import threading as _threading
+_RENDER_SLOTS = int(os.getenv('RENDER_SLOTS', '4'))
+_render_sem = _threading.BoundedSemaphore(_RENDER_SLOTS)
+_RENDER_WAIT = float(os.getenv('RENDER_WAIT', '1.5'))
+
+# No template, no DB: this is what a reader sees when every slot is taken, and
+# it retries itself.
+_BUSY_HTML = ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+              '<meta http-equiv="refresh" content="4"><title>One moment · Saturday Savant</title>'
+              '<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0e1013;'
+              'color:#e7e9ea;font:16px/1.5 system-ui,sans-serif;text-align:center">'
+              '<p>Lots of readers right now.<br>This page will load in a few seconds.</p>')
+
+def _is_page_request():
+    p = request.path
+    return not (p == '/healthz' or p.startswith('/static') or p == '/img-proxy'
+                or p in ('/robots.txt', '/sitemap.xml', '/favicon.ico'))
+
+# At most two requests wait for a permit; the rest are turned away at once,
+# so waiting can never occupy the threads kept free above.
+_render_waiters = _threading.BoundedSemaphore(2)
+
+@app.before_request
+def _acquire_render_slot():
+    # The boot warmup renders through the test client on its own thread, not a
+    # gunicorn one; it marks itself with an environ key no client can send.
+    if _RENDER_SLOTS <= 0 or not _is_page_request() or request.environ.get('savant.warmup'):
+        return
+    got = _render_sem.acquire(blocking=False)
+    if not got and _render_waiters.acquire(blocking=False):
+        try:
+            got = _render_sem.acquire(timeout=_RENDER_WAIT)
+        finally:
+            _render_waiters.release()
+    if not got:
+        return Response(_BUSY_HTML, status=503, mimetype='text/html', headers={'Retry-After': '5'})
+    g._render_slot = True
+
+@app.teardown_request
+def _release_render_slot(_exc):
+    if g.pop('_render_slot', False):
+        _render_sem.release()
 
 # ── Error pages ─────────────────────────────────────────────────────────────
 # Until now an unhandled exception returned Flask's stock white error page, and
@@ -418,7 +503,7 @@ def _upcoming_season():
 
 UPCOMING_SEASON = _upcoming_season()
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_available_seasons():
     """Seasons that actually have stats loaded, newest first — drives the
     season selector so it only offers years the backfill has populated."""
@@ -452,7 +537,7 @@ def requested_season():
         return s
     return CURRENT_SEASON
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_scheduled_seasons():
     """Seasons that have a schedule loaded, newest first."""
     conn = get_db()
@@ -484,7 +569,7 @@ def forward_season():
     return active if active in get_scheduled_seasons() else CURRENT_SEASON
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_ranking_seasons():
     """Seasons that have an AP poll loaded, newest first.
 
@@ -548,7 +633,7 @@ def get_ap_week_map(cursor, season):
     return regular, final
 
 
-@cache.memoize(timeout=600)
+@data_cache.memoize(timeout=600)
 def _season_last_completed_kickoff(season):
     """Kickoff of the most recent completed game in a season, or None.
 
@@ -742,7 +827,7 @@ def _compute_conference_standings(cursor, season):
         confs[c] = ordered
     return confs
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def conference_standings(season):
     """Memoized {conference: [rows]} — shared by the team page (one conference)
     and the /standings page (all conferences)."""
@@ -855,7 +940,7 @@ def pool_key(kind, positions, season, category=None):
     return f"{kind}:fbs:{cat}{','.join(positions)}:{season}"
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _stats_pool_cached(category, positions_key, season):
     key = pool_key('stats', positions_key, season, category)
     stored = _pool_store_get(key)
@@ -884,7 +969,7 @@ def _fetch_ppa_pool(cursor, positions, season=CURRENT_SEASON):
     """PPA peer pool (one season) — memoized like _fetch_stats_pool; read-only."""
     return _ppa_pool_cached(tuple(positions), season)
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _ppa_pool_cached(positions_key, season):
     key = pool_key('ppa', positions_key, season)
     stored = _pool_store_get(key)
@@ -916,7 +1001,7 @@ def _fetch_usage_pool(cursor, positions, season=CURRENT_SEASON):
     players.id so it lines up with the stats/PPA pools. Read-only."""
     return _usage_pool_cached(tuple(positions), season)
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _usage_pool_cached(positions_key, season):
     key = pool_key('usage', positions_key, season)
     stored = _pool_store_get(key)
@@ -1048,7 +1133,7 @@ QUAL_SOURCE_CATEGORY = {
 FULL_SEASON_GAMES = 12          # team games the minimums above assume
 
 
-@cache.memoize(timeout=3600)
+@data_cache.memoize(timeout=3600)
 def _team_games_played(season):
     """team name -> completed regular-season games.
 
@@ -1077,7 +1162,7 @@ def _team_games_played(season):
         release_db(conn)
 
 
-@cache.memoize(timeout=3600)
+@data_cache.memoize(timeout=3600)
 def _season_games_played(season):
     """How far the league as a whole has got, in team games.
 
@@ -1100,7 +1185,7 @@ def _season_games_played(season):
     return games[len(games) // 2] if games else 0
 
 
-@cache.memoize(timeout=3600)
+@data_cache.memoize(timeout=3600)
 def _fbs_team_names(season):
     """Team names outside the FCS conferences — the pool the median is taken
     over. Conference membership is current rather than historical, which is
@@ -2147,7 +2232,7 @@ def compute_havoc_field_pos_percentiles(all_teams_advanced, team_name):
     return percentiles
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _team_percentiles_all(season):
     """Every team's merged advanced-stat percentiles for a season: the
     team_stats-based metrics (compute_percentiles) plus the havoc/field-position
@@ -2334,7 +2419,7 @@ def _attach_heat(rows, column_defs, lower_better):
     return averages
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _games_played_map(season):
     """{player_id: games played} for one season, from the stored game logs.
 
@@ -2356,6 +2441,28 @@ def _games_played_map(season):
     except Exception:
         conn.rollback()      # table absent, or a row holding invalid JSON
         return {}
+    finally:
+        release_db(conn)
+
+
+def _player_games_played(player_id, season):
+    """One player's entry from _games_played_map, read from his own row.
+
+    The player page used to build the whole season's map for this one number:
+    a json_array_length over every log in the season, ~2.4s cold, and cold
+    again whenever the map was evicted — which under crawler traffic was
+    constantly. Same measure, one indexed row."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT json_array_length(log::json) FROM player_game_logs
+                        WHERE player_id = %s AND season = %s AND log IS NOT NULL""",
+                    (str(player_id), season))
+        row = cur.fetchone()
+        return row[0] if row and row[0] else None
+    except Exception:
+        conn.rollback()
+        return None
     finally:
         release_db(conn)
 
@@ -2805,7 +2912,7 @@ def leaders_query_all(cursor, season=CURRENT_SEASON):
         out.setdefault((cat, st), []).append((name, team, shown, headshot, logo, pid))
     return out
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_cached_season_leaders(season=None):
     """Season-wide leaders are identical no matter which week the home page
     is showing, so this is memoized independently of the /week/<n>/<type>
@@ -2867,7 +2974,7 @@ def current_slate_week(cursor, season):
     row = cursor.fetchone()
     return (row[0], row[1]) if row else (1, 'SeasonType.REGULAR')
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_ticker_data():
     """Sitewide scores ticker under the navbar: the active season's current
     week — the slate being played, not the last one that finished.
@@ -3167,7 +3274,7 @@ def build_game_card(row, ap_weekly, rivalry_map):
 # already on the card. This only decides what goes on top.
 TOP_GAMES_N = 6
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def forecast_record(season):
     """The Savant Forecast's season-to-date record, or None before it has one.
 
@@ -3210,7 +3317,7 @@ _EVENT_POINTS = (
 )
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def game_score_context(season):
     """Team conference and Savant Net Rating maps for game_score.
 
@@ -4308,7 +4415,7 @@ def leaderboards(category='passing'):
 # ── Team leaderboards ───────────────────────────────────────────────────────
 # Categories reconciled to Offense/Defense/SP+ — Havoc and Scoring (formerly
 # standalone categories) are now folded into the Defense/Offense Advanced views.
-@cache.memoize(timeout=86400)
+@data_cache.memoize(timeout=86400)
 def _category_last_season(category):
     """Newest season a borrowed-table category actually covers.
 
@@ -5274,7 +5381,7 @@ def _rp_def_value(tot, tfl, sacks, ints, pd):
     return (tot or 0) + 2 * (tfl or 0) + 3 * (sacks or 0) + 3 * (ints or 0) + (pd or 0)
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _returning_production_ranks(season):
     """Every FBS team's offense/defense/overall returning-production percentage
     for `season` (vs season-1), plus national ranks.
@@ -5670,7 +5777,7 @@ def _projected_record(cursor, team, season, actual_wins, actual_losses):
     }
 
 
-@cache.memoize(timeout=86400)
+@data_cache.memoize(timeout=86400)
 def _hero_rank_maps(season):
     """National per-game maps (PF/PA, pass/rush yards) across the FBS field for a
     season — the inputs to the team-hero rank ordinals. Identical for every team,
@@ -6741,7 +6848,7 @@ def _game_weather(game_id):
     return {'parts': parts, 'indoors': False}
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _savant_movers(season, n=5):
     """Biggest week-over-week Net Savant Rating changes for `season`: the two
     latest regular-season snapshots in savant_weekly (week 20 is the postseason
@@ -6775,7 +6882,7 @@ def _savant_movers(season, n=5):
             'down': [r for r in rows[:n] if r['delta'] < 0]}
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _savant_paths(season):
     """Savant ranks/ratings plus schedule strength for every rated team in
     `season`: {'ranks', 'net', 'played', 'remaining'}. `played` and `remaining`
@@ -8375,7 +8482,7 @@ def _heat_counts(cursor, where, params):
     return {(d, b): n for d, b, n in cursor.fetchall()}
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def _league_heat(season):
     """FBS-wide baseline for a season, as shares. Memoized — every heatmap on
     the site subtracts this same grid."""
@@ -8473,7 +8580,7 @@ def get_team_passing_profile(team, season):
         release_db(conn)
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_season_passer_metrics(season):
     """Every quarterback's air-yard metrics for a season, in one pass, keyed by
     player id — the leaderboard needs 100+ of these and a per-player query would
@@ -8528,7 +8635,7 @@ def get_season_passer_metrics(season):
 # UI prints it next to the numbers rather than implying a full season.
 MIN_RUSH_ATTEMPTS = 20
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_season_rusher_metrics(season):
     """Every rusher's enriched metrics for a season, keyed by player id — the
     leaderboard needs hundreds of these and a per-player query would be hundreds
@@ -8570,7 +8677,7 @@ def get_season_rusher_metrics(season):
         release_db(conn)
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def get_season_receiving_metrics(season):
     """Every receiver's target metrics for a season, keyed by player id.
 
@@ -8620,7 +8727,7 @@ def get_season_receiving_metrics(season):
         release_db(conn)
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def passing_coverage_note(season, category):
     """How many qualifying players actually have enough measured attempts for
     the air-yard columns, so the leaderboard can explain its own blanks.
@@ -8653,7 +8760,7 @@ def passing_coverage_note(season, category):
         release_db(conn)
 
 
-@cache.memoize(timeout=21600)
+@data_cache.memoize(timeout=21600)
 def season_has_passing(season):
     """Whether a season carries enough air-yard data to be worth showing columns
     for. 2016-2024 have none at all, so the columns are dropped rather than
@@ -9405,7 +9512,7 @@ def _player_detail_cached(player_id, season):
 
     # Games played, from the same stored-log measure the leaderboards use, so
     # the hero and the boards can never disagree about it.
-    games_played = _games_played_map(season).get(str(player_id))
+    games_played = _player_games_played(player_id, season)
 
     # The phone game log prints opponents by abbreviation; the lookup above
     # only covered the player's own teams.
@@ -10384,7 +10491,7 @@ def _circle_crop(im, size):
     return im
 
 
-@cache.memoize(timeout=604800)
+@img_cache.memoize(timeout=604800)
 def _img_variant(url, width, webp, circle=False):
     """Downscaled (bytes, content-type) for an allowlisted image, or None.
 
@@ -11842,7 +11949,7 @@ def _persist_finals(board):
     return n
 
 
-@cache.memoize(timeout=LIVE_TTL)
+@data_cache.memoize(timeout=LIVE_TTL)
 def _live_board():
     """The live scoreboard, keyed by game id: CFBD first, ESPN for its gaps.
     Memoized so at most one call to each is made per LIVE_TTL regardless of how
@@ -11895,7 +12002,7 @@ def _live_board():
     return out
 
 
-@cache.memoize(timeout=LIVE_TTL)
+@data_cache.memoize(timeout=LIVE_TTL)
 def _slate_state():
     """Every game of the current slate that has a score, straight from the rows
     the score cron writes. Memoized on the same TTL as the board so a page full
@@ -12043,6 +12150,7 @@ def _purge_local(scope=None):
     cannot affect (leaderboards, team precompute, player pages)."""
     if scope != 'scores':
         cache.clear()
+        data_cache.clear()
         return
     try:
         cache.delete('view/%s' % url_for('home'))
@@ -12062,6 +12170,7 @@ def _purge_local(scope=None):
         # failed — fall back to the blunt clear.
         print(f'scoped purge failed ({exc}) — clearing everything', flush=True)
         cache.clear()
+        data_cache.clear()
 
 
 def _epoch_read():
@@ -12219,7 +12328,7 @@ def _warm_cache():
             with app.test_client() as c:
                 for p in paths:
                     try:
-                        c.get(p)
+                        c.get(p, environ_base={'savant.warmup': True})
                     except Exception:
                         pass
             print('cache warmup complete', flush=True)
