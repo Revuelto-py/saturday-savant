@@ -147,7 +147,7 @@
             <div class="pp-tile">
                 <span class="pp-tile-k">{{ label }}</span>
                 <span class="pp-tile-v{{ ' is-top' if rk and rk <= 10 else '' }}">{{ val }}</span>
-                <span class="pp-tile-r{{ ' is-top' if rk and rk <= 10 else '' }}">{% if rk %}{{ ordinal(rk) }} in FBS{% else %}No FBS rank{% endif %}</span>
+                <span class="pp-tile-r">{% if rk %}{{ ordinal(rk) }} in FBS{% else %}No FBS rank{% endif %}</span>
             </div>
             {% endfor %}
         </div>
