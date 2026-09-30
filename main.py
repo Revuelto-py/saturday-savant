@@ -5190,8 +5190,38 @@ POSITION_NAMES = {
     'ATH': 'Athlete',
 }
 
+def hero_pair(away_hex, home_hex):
+    """The game hero's two accent colours: each team's primary lifted until it
+    reads on the near-black hero (luminance 0.16, about 3:1), then kept apart
+    from each other by forecast_pair. Used for the win-probability fills, the
+    forecast bar and the leader team tags."""
+    def up(h):
+        c = _to_rgb(team_hex(h, '#64748b'))
+        for _ in range(20):
+            if _srgb_lum(c) >= 0.16:
+                break
+            c = _lift(c, 0.05)
+        return '#%02x%02x%02x' % c
+    return forecast_pair(up(away_hex), up(home_hex))
+
+
 app.jinja_env.globals.update(shade=shade, pct_fill=pct_fill, pct_knob=pct_knob, hex_rgba=hex_rgba,
-                             white_knob=white_knob, poster_ink=poster_ink, POSITION_NAMES=POSITION_NAMES)
+                             white_knob=white_knob, poster_ink=poster_ink, POSITION_NAMES=POSITION_NAMES,
+                             hero_pair=hero_pair)
+
+
+def _hero_wp_paths(win_prob, h=70):
+    """SVG paths for the hero's win-probability line, viewBox 0 0 100 h.
+
+    Away winning sits above the midline, home below, so the fill clipped to
+    each half reads as that team's share of the game. x is game minutes."""
+    if not win_prob or len(win_prob) < 2:
+        return None
+    end = max(60.0, max(p['x'] for p in win_prob))   # overtime runs past 60
+    pts = ' L'.join(f"{p['x'] / end * 100:.2f} {p['home'] * h:.2f}" for p in win_prob)
+    last = win_prob[-1]['x'] / end * 100
+    return {'line': 'M' + pts, 'area': f"M{win_prob[0]['x'] / end * 100:.2f} {h / 2} L{pts} L{last:.2f} {h / 2} Z",
+            'mid': h / 2, 'h': h, 'ot': end > 60}
 
 
 def _hex_to_rgba(hex_color, alpha):
@@ -8745,6 +8775,7 @@ def game_detail(game_id):
         # to full team names where the layout wants WIS / ALA.
         team_abbr=_team_abbrs(away_team, home_team),
         win_prob=win_prob,
+        hero_wp=_hero_wp_paths(win_prob),
         top_wpa=top_wpa,
         records=records,
         game_date=game_date, game_iso_date=game_iso_date,
