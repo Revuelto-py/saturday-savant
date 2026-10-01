@@ -6884,6 +6884,62 @@ def team(team_ref):
         # Transfers in and out for the viewed season (portal class feeding it).
         transfers = _team_transfers(team_name, season)
 
+        # Top arrivals for the Overview, each with this season's line for this
+        # team. Matched on player_id: the portal row and the stat feed spell
+        # names differently often enough ("D'Antre" / "D'Ante") to miss.
+        _name_by_pid = {str(r[1]): r[0] for r in _player_rows}
+        def _season_line(pid, pos):
+            nm = _name_by_pid.get(str(pid))
+            if not nm:
+                return None
+            g = lambda cat, k: (all_stats.get(cat, {}).get(nm) or {}).get(k)
+            n = lambda v: int(float(v or 0))
+            if pos == 'QB' and g('passing', 'YDS') is not None:
+                return f"{n(g('passing', 'YDS')):,} yds · {n(g('passing', 'TD'))} TD"
+            if pos in ('RB', 'HB', 'FB') and g('rushing', 'YDS') is not None:
+                return f"{n(g('rushing', 'YDS')):,} yds · {n(g('rushing', 'TD'))} TD"
+            if g('receiving', 'YDS') is not None:
+                return f"{n(g('receiving', 'REC'))} rec · {n(g('receiving', 'YDS')):,} yds"
+            if g('rushing', 'YDS') is not None:
+                return f"{n(g('rushing', 'YDS')):,} rush yds"
+            if g('defensive', 'TOT') is not None:
+                extra = (f" · {n(g('interceptions', 'INT'))} INT" if n(g('interceptions', 'INT'))
+                         else f" · {g('defensive', 'SACKS'):g} sacks" if float(g('defensive', 'SACKS') or 0)
+                         else f" · {g('defensive', 'TFL'):g} TFL" if float(g('defensive', 'TFL') or 0) else '')
+                return f"{n(g('defensive', 'TOT'))} tkl{extra}"
+            return None
+        top_transfers = [dict(a, line=_season_line(a['player_id'], a['pos']))
+                         for a in transfers['arrivals'][:4]]
+
+        # The next game on the schedule, for the Overview's matchup card: the
+        # opponent's record and colour, and this team's record at that site.
+        next_game = None
+        _ng = next((g for g in schedule if not g[10]), None) if is_current else None
+        if _ng:
+            cursor.execute('''
+                SELECT t.color,
+                    COUNT(*) FILTER (WHERE (g.home_team = t.name AND g.home_points > g.away_points)
+                                        OR (g.away_team = t.name AND g.away_points > g.home_points)),
+                    COUNT(*) FILTER (WHERE (g.home_team = t.name AND g.home_points < g.away_points)
+                                        OR (g.away_team = t.name AND g.away_points < g.home_points))
+                FROM teams t
+                LEFT JOIN games g ON (g.home_team = t.name OR g.away_team = t.name)
+                                 AND g.season = %s AND g.completed = 1
+                WHERE t.name = %s GROUP BY t.color''', (season, _ng[2]))
+            _o = cursor.fetchone()
+            _site = 'neutral' if _ng[15] else _ng[1]
+            _at = [g for g in schedule if g[10] and g[4] is not None
+                   and ('neutral' if g[15] else g[1]) == _site]
+            next_game = {
+                'id': _ng[0], 'site': _site, 'opp': _ng[2], 'opp_logo': _ng[9] or _ng[3],
+                'opp_color': team_hex(_o[0] if _o else None, '#3a3f47'),
+                'opp_rank': ap_rankings.get(_ng[2]),
+                'opp_record': (_o[1], _o[2]) if _o and (_o[1] or _o[2]) else None,
+                'site_record': (sum(1 for g in _at if g[4] > g[5]), sum(1 for g in _at if g[4] < g[5])),
+                'week': _ng[6], 'post': 'POSTSEASON' in (_ng[7] or ''),
+                'date': _ng[11], 'time': _ng[12], 'prob': _ng[14],
+            }
+
         # Discipline (turnovers, penalties, possession) and the season's record
         # against the closing spread. Both are season-scoped; the box-score half
         # is empty for the current season because the table stops at 2025.
@@ -6893,6 +6949,7 @@ def team(team_ref):
                 team=team_info, record=record, projected_record=projected_record,
                 season_stats=season_stats,
                 returning=returning, nfl_talent=nfl_talent, transfers=transfers,
+                top_transfers=top_transfers, next_game=next_game,
                 situational=situational,
                 hero_ranks=hero_ranks,
                 season=season, is_current_season=is_current,

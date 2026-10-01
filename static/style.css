@@ -1271,91 +1271,16 @@ a.leader-row:hover .leader-name { color: var(--gold); }
     .nfl-status-badge { padding: 7px 11px; }
 }
 
-/* Team hero — phone: the five stat cards become one dense hairline strip,
-   matching the player hero. The 2x2 grid they used before cost ~310px for
-   five numbers and left the headline card marooned on its own full row. */
+/* Team hero — phone framing. */
 @media (max-width: 767.98px) {
     /* 40px of hero lead-in is desktop framing; on a phone it is dead space */
     .team-hero { padding-top: 18px !important; }
-    .team-hero-logo { height: 84px !important; }
     /* the tab strip always overflows at this width, so fade the trailing edge
        to show there is more to scroll to */
     .tabs-bar .nav-tabs {
         -webkit-mask-image: linear-gradient(to right, #000 90%, transparent 100%);
         mask-image: linear-gradient(to right, #000 90%, transparent 100%);
     }
-
-    .team-hero-stats {
-        display: flex !important;
-        flex-wrap: nowrap !important;
-        gap: 0 !important;
-        /* width:100% would pin this to the parent's content box and leave the
-           negative right margin with nothing to extend into, stopping the
-           strip 28px short of the edge */
-        width: calc(100% + 28px);
-        margin: 2px -14px 0;
-        padding: 12px 14px 0 !important;
-        border-top: 1px solid var(--border);
-        position: relative;
-        overflow-x: auto;
-        overflow-y: hidden;
-        scrollbar-width: none;
-        -webkit-overflow-scrolling: touch;
-    }
-    .team-hero-stats::-webkit-scrollbar { display: none; }
-    /* accent rule bleeding from the left edge, same device as the player hero */
-    .team-hero-stats::before {
-        content: "";
-        position: absolute;
-        top: -1px; left: 0;
-        width: 45%; height: 1px;
-        background: linear-gradient(90deg, var(--accent), transparent);
-    }
-    .team-hero-stats .stat-card {
-        flex: 1 1 auto;
-        min-width: 58px !important;
-        background: none !important;
-        border: 0 !important;
-        border-left: 1px solid var(--border) !important;
-        border-radius: 0 !important;
-        box-shadow: none !important;
-        backdrop-filter: none !important;
-        padding: 0 9px !important;
-        text-align: left !important;
-        justify-content: flex-start !important;
-    }
-    .team-hero-stats .stat-card:first-child {
-        border-left: 0 !important;
-        padding-left: 0 !important;
-    }
-    /* the cards render value-then-label; the strip reads label-first */
-    .team-hero-stats .sc-label {
-        order: -1;
-        font-size: var(--text-xs) !important;
-        letter-spacing: 0.04em !important;
-        color: var(--text-dim) !important;
-        margin: 0 0 4px !important;
-        /* "PTS AGAINST/G" needs two lines; reserve them on every column so the
-           values stay on one baseline instead of stepping down by a line */
-        white-space: normal;
-        line-height: 1.15;
-        min-height: 2.3em;
-    }
-    .team-hero-stats .sc-value {
-        font-size: 1.3rem !important;
-        font-variant-numeric: tabular-nums;
-        text-shadow: none !important;
-    }
-    .team-hero-stats .sc-rank {
-        font-size: var(--text-xs) !important;
-        font-weight: 700 !important;
-        opacity: 1 !important;
-        color: var(--accent) !important;
-        margin-top: 4px !important;
-    }
-    /* one column carrying an extra line would break the strip's baseline;
-       the season is already named by the selector below */
-    .team-hero-stats .sc-week { display: none !important; }
 
     /* Awards and the season selector shared the hero's bottom line, with the
        selector floating right against dead space. Stack them on the same left
@@ -1369,15 +1294,6 @@ a.leader-row:hover .leader-name { color: var(--gold); }
         margin: 14px 0 0 !important;
     }
     .tabs-bar .nav-tabs { margin-top: 14px !important; }
-}
-
-/* Small phones: "PTS AGAINST/G" is the widest label on the page and at 320px
-   it would collide with its neighbour, so the team strip tightens further.
-   This has to sit after the block above — same specificity, source order wins. */
-@media (max-width: 360px) {
-    .team-hero-stats .stat-card { min-width: 0 !important; padding: 0 5px !important; }
-    .team-hero-stats .sc-value { font-size: 1.05rem !important; }
-    .team-hero-stats .sc-label { font-size: var(--text-xs) !important; letter-spacing: 0 !important; }
 }
 
 .transfer-badge {
@@ -3202,27 +3118,6 @@ tr.player-row,
     cursor: pointer;
 }
 
-/* Team hero row: keep the stat cards beside the logo, not beneath it.
-
-   The row is identity on the left, stat cards on the right, and it wraps as a
-   whole the moment the two halves exceed it — dropping all five cards under the
-   logo. Trimming the cards bought room, but the left half keeps growing: a long
-   programme name, a long conference, a long coach, and a third record item once
-   a team has a conference record. Chasing that with card padding is a losing
-   game, because the text has no upper bound.
-
-   So above 1400px the row is not allowed to wrap and the identity block is
-   allowed to shrink instead. Pressure now lands on the text, which wraps a long
-   name onto a second line — a far better failure than ejecting the whole stat
-   row. Below 1400px the old wrap stands: there genuinely isn't room for both,
-   and the cards sitting underneath is the honest narrow layout. */
-@media (min-width: 1400px) {
-    .team-hero-row   { flex-wrap: nowrap !important; }
-    .team-hero-id    { min-width: 0; }
-    .team-hero-id > div { min-width: 0; }
-    .team-hero-stats { flex: 0 0 auto; }
-}
-
 /* Team cards (/teams page) — box styling; the team-colour tint + border are set
    inline per team, at an alpha the template scales by the colour's luminance so
    136 cards read as one calm grid rather than 136 competing blocks. */
@@ -4262,7 +4157,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
    leader values never need column alignment. Standings records and
    leaderboard stats are centred, so they drop tabular alignment too; other
    tables keep it. */
-.ticker-score, .gc-score, .gh-score, .score, .leader-val, .team-hero-stats .sc-value,
+.ticker-score, .gc-score, .gh-score, .score, .leader-val,
 .bk-pts, .rvh-row-pts, .sf-score, .mu-score, .data-table td.t-value,
 .standings-row td, .lb-td-stat, .lb-cell-v, .lb-cell-p, .lb-avgrow td, .lb-avgrow td * {
     font-variant-numeric: proportional-nums;
@@ -6894,7 +6789,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .bk-board-wrap,
 .game-tabs,
 .ph-statcards,
-.team-hero-stats,
 .nav-tabs,
 [style*="overflow-x:auto"],
 [style*="overflow-x: auto"],
@@ -10969,3 +10863,190 @@ a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offse
 @media (prefers-reduced-motion:reduce){.gx-dot{animation:none}}
 .gx-cap-aside{text-transform:none;letter-spacing:0;font-weight:500}
 @media (max-width:760px){.gx-hide-sm{display:none}}
+
+
+/* ── Team page: hero ─────────────────────────────────────────────────────
+   Identity left, stats right. Net Savant is the one big tile, spanning both
+   rows; the four per-game stats sit beside it at half its weight. */
+.th { position: relative; overflow: hidden; padding: 44px 0 0; border-bottom: 1px solid var(--border); }
+.th-shade { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 60% 90% at 18% 40%, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.4) 100%); }
+.th-wrap { position: relative; z-index: 1; padding-bottom: 0; }
+.th-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 36px; }
+.th-logo { width: 190px; height: 190px; object-fit: contain; filter: drop-shadow(0 18px 40px rgba(0,0,0,0.45)); }
+.th-id { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.th-rank { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 22px; font-weight: 800; letter-spacing: 0.04em; line-height: 1; }
+.th-name { margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: clamp(2.6rem, 4.6vw, 4.6rem); font-weight: 800; line-height: 0.92; letter-spacing: -0.02em; color: #fff; overflow-wrap: anywhere; }
+.th-record { font-size: 1.35rem; font-weight: 700; color: #fff; }
+.th-sub { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.5; }
+.th-proj { cursor: help; border-bottom: 1px dashed rgba(192,169,255,0.7); }
+.th-stats { display: grid; grid-template-columns: 220px repeat(2, 160px); grid-auto-rows: 104px; gap: 12px; }
+.th-stats--solo { grid-template-columns: 220px; }
+.th-net { grid-row: span 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; border-radius: 14px;
+    background: linear-gradient(180deg, rgba(28,156,240,0.26) 0%, rgba(10,24,40,0.72) 100%);
+    border: 1px solid rgba(92,186,248,0.7);
+    box-shadow: 0 0 0 4px rgba(28,156,240,0.1), 0 20px 48px rgba(28,156,240,0.22); }
+.th-stats--solo .th-net { grid-row: auto; min-height: 220px; }
+.th-net-k { font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: #9fd6fb; }
+.th-net-v { font-family: var(--font-display); font-stretch: 80%; font-size: 4.4rem; font-weight: 850; line-height: 0.9; color: #fff; font-variant-numeric: tabular-nums; }
+.th-net-r { font-size: var(--text-sm); font-weight: 700; color: #fff; }
+.th-net-w { font-size: var(--text-xs); color: #9fd6fb; }
+.th-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; border-radius: 12px; background: rgba(8,10,12,0.5); border: 1px solid rgba(255,255,255,0.12); }
+.th-tile-k { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-secondary); }
+.th-tile-v { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 1.75rem; font-weight: 700; line-height: 1.05; color: #fff; font-variant-numeric: tabular-nums; }
+.th-tile-r { font-size: var(--text-xs); color: var(--text-secondary); }
+@media (max-width: 1199.98px) {
+    .th-row { grid-template-columns: auto minmax(0, 1fr); }
+    .th-stats { grid-column: 1 / -1; grid-template-columns: 1.3fr repeat(2, minmax(0, 1fr)); }
+    .th-logo { width: 150px; height: 150px; }
+}
+@media (max-width: 767.98px) {
+    .th-row { gap: 16px 18px; }
+    .th-logo { width: 92px; height: 92px; }
+    .th-rank { font-size: 16px; }
+    .th-name { font-size: 2.6rem; }
+    .th-record { font-size: 1.05rem; }
+    .th-sub { font-size: var(--text-xs); }
+    .th-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; gap: 8px; }
+    .th-net { grid-row: auto; grid-column: 1 / -1; flex-direction: row; justify-content: space-between; padding: 14px 18px; text-align: left; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; column-gap: 12px; row-gap: 2px; }
+    .th-net-v { grid-column: 2; grid-row: 1 / 4; align-self: center; font-size: 3.6rem; }
+    .th-net-k, .th-net-r, .th-net-w { grid-column: 1; }
+    .th-stats--solo { grid-template-columns: minmax(0, 1fr); }
+    .th-stats--solo .th-net { min-height: 0; }
+    .th-tile { padding: 12px 6px; }
+    .th-tile-v { font-size: 1.45rem; }
+}
+
+/* ── Team page: overview ──────────────────────────────────────────────── */
+.tov-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 12px; position: relative; }
+.tov-h { margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text-primary); }
+.tov-meta { margin-left: auto; font-size: var(--text-sm); color: var(--text-secondary); }
+.tov-link { margin-left: auto; font-size: var(--text-xs); font-weight: 700; color: var(--accent); text-decoration: none; }
+.tov-link:hover { color: #6cc0ff; }
+.tov-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.tov-side { display: flex; flex-direction: column; gap: 32px; }
+.tov-resume { margin-top: 40px; }
+
+/* Schedule rows */
+.tsr-list { padding: 4px 0; overflow: hidden; }
+.tsr { display: grid; grid-template-columns: 48px 92px 26px minmax(0, 1fr) 64px 30px; align-items: center; gap: 10px; min-height: 54px; padding: 6px 18px; color: inherit; text-decoration: none; border-top: 1px solid var(--border); background: var(--tsr-tint, transparent); transition: background-color 0.12s; }
+.tsr:first-child { border-top: 0; }
+.tsr:hover { background: rgba(255,255,255,0.04); }
+.tsr.is-next:hover { background: var(--tsr-tint); }
+.tsr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tsr:active { background: rgba(255,255,255,0.07); }
+.tsr.is-next { box-shadow: inset 3px 0 0 var(--accent); }
+.tsr-wk { font-size: var(--text-xs); font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.tsr-date, .tsr-site { font-size: var(--text-xs); color: var(--text-dim); }
+.tsr-site { text-align: center; }
+.tsr-opp { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tsr-opp img { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
+.tsr-opp b { font-weight: 600; font-size: var(--text-base); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsr-note { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsr-score { text-align: right; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tsr-pct { font-weight: 700; }
+.tsr-pct.is-w { color: var(--green); } .tsr-pct.is-l { color: var(--red); }
+.tsr-time { color: var(--text-dim); font-weight: 500; font-size: var(--text-xs); }
+.tsr-chip { justify-self: end; display: flex; align-items: center; justify-content: center; width: 28px; height: 24px; border-radius: var(--r-sm); font-size: var(--text-xs); font-weight: 900; }
+.tsr-chip.is-w { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.tsr-chip.is-l { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.tsr-chip.is-proj { background: transparent; border: 1.5px dashed currentColor; cursor: help; }
+.tsr-sep { padding: 12px 18px 6px; border-top: 1px solid var(--border); font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
+.tsr-empty { padding: 16px 18px; font-size: var(--text-sm); color: var(--text-dim); }
+@media (max-width: 575.98px) {
+    .tsr { grid-template-columns: 40px 22px minmax(0, 1fr) auto 28px; gap: 8px; padding: 6px 12px; }
+    .tsr-date { display: none; }
+    .tsr-note { display: none; }
+}
+
+/* Résumé inside the overview: the SOS cards sit side by side, the ladder folds. */
+.tov-resume .rs-head { gap: 4px; }
+.tov-resume .rs-headline { margin: 0; font-size: var(--text-lg); }
+.rs-sos-row { flex-direction: row; height: auto; }
+.rs-sos-row > * { flex: 1 1 0; min-width: 0; }
+.rs-ladder-fold { border-top: 1px solid var(--border); padding-top: 12px; }
+.rs-ladder-sum { cursor: pointer; font-size: var(--text-sm); font-weight: 700; color: var(--accent); list-style: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.rs-ladder-sum::-webkit-details-marker { display: none; }
+.rs-ladder-sum::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; }
+.rs-ladder-fold[open] .rs-ladder-sum::before { transform: rotate(45deg); }
+.rs-ladder-sum:hover { color: #6cc0ff; }
+.rs-ladder-sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+/* Next-game card */
+.tmu { overflow: hidden; padding: 0; }
+.tmu-row { display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid var(--border); }
+.tmu-block { display: flex; align-items: center; justify-content: center; height: 96px; }
+.tmu-block img { width: 58px; height: 58px; object-fit: contain; }
+.tmu-team { display: flex; flex-direction: column; gap: 4px; padding: 0 18px; min-width: 0; }
+.tmu-name { font-size: 1.15rem; font-weight: 600; color: var(--text-primary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmu-name:hover { color: var(--accent); }
+.tmu-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.tmu-rec { font-size: var(--text-sm); color: var(--text-dim); }
+.tmu-pct { padding-right: 22px; font-family: var(--font-display); font-stretch: 80%; font-size: 2.4rem; line-height: 1; font-weight: 600; color: #6b7177; font-variant-numeric: tabular-nums; }
+.tmu-pct small { font-size: 0.55em; }
+.tmu-pct.is-fav { font-weight: 850; color: #fff; }
+.tmu-foot { display: flex; flex-direction: column; gap: 10px; padding: 14px 22px 16px; }
+.tmu-bar { display: flex; gap: 3px; height: 6px; }
+.tmu-bar span { border-radius: 3px; }
+.tmu-cap { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: var(--text-xs); color: var(--text-secondary); }
+.tmu-cap a { font-weight: 700; color: var(--accent); text-decoration: none; min-height: 24px; }
+.tmu-cap a:hover { color: #6cc0ff; }
+.tmu-cap a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+@media (max-width: 575.98px) {
+    .tmu-row { grid-template-columns: 72px minmax(0, 1fr) auto; }
+    .tmu-block { height: 72px; }
+    .tmu-block img { width: 44px; height: 44px; }
+    .tmu-team { padding: 0 12px; }
+    .tmu-name { font-size: 1rem; }
+    .tmu-pct { font-size: 1.9rem; padding-right: 14px; }
+    .tmu-foot { padding: 12px 14px 14px; }
+}
+
+/* Top transfers */
+.ttx { overflow: hidden; padding: 0; }
+.ttx-row { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.ttx-face { display: flex; align-items: flex-end; justify-content: center; width: 64px; height: 50px; flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.08); background: radial-gradient(ellipse 60% 70% at 50% 100%, var(--glow) 0%, transparent 70%); }
+.ttx-face img { width: 64px; height: 47px; object-fit: contain; object-position: bottom; }
+.ttx-init { padding-bottom: 10px; font-weight: 700; color: var(--text-secondary); }
+.ttx-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.ttx-name { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.ttx-name:hover { color: var(--accent); }
+a.ttx-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.ttx-from { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--text-dim); }
+.ttx-from img { width: 16px; height: 16px; object-fit: contain; }
+.ttx-pos { font-weight: 700; color: var(--text-secondary); }
+.ttx-stars { color: #f0c66a; letter-spacing: 0.04em; }
+.ttx-line { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.ttx-line.is-none { color: var(--text-dim); font-weight: 500; }
+.ttx-in { color: var(--green); } .ttx-out { color: var(--red); }
+.ttx-all { display: flex; align-items: center; min-height: 44px; padding: 0 18px; font-size: var(--text-sm); font-weight: 700; color: var(--accent); text-decoration: none; }
+.ttx-all:hover { color: #6cc0ff; background: rgba(255,255,255,0.03); }
+.ttx-all:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 575.98px) {
+    .ttx-row { gap: 10px; padding: 10px 14px; }
+    .ttx-face { width: 52px; height: 42px; }
+    .ttx-face img { width: 52px; height: 38px; }
+    .ttx-line { font-size: var(--text-xs); }
+}
+
+/* Recruiting, compact */
+.trc { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 16px 8px; text-align: center; }
+.trc-cell { display: flex; flex-direction: column; gap: 2px; border-left: 1px solid var(--border); }
+.trc-cell:first-child { border-left: 0; }
+.trc-v { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 1.6rem; font-weight: 800; color: var(--text-primary); }
+.trc-v.is-top { color: var(--gold); }
+.trc-k { font-size: var(--text-xs); color: var(--text-secondary); }
+.trc-pts { font-size: 0.6875rem; color: var(--text-dim); }
+/* Below the two-column break the side column's sections become row items of
+   their own, so the next-game card can lead the page (it is the most
+   time-sensitive thing on it) while standings and transfers follow the résumé. */
+@media (max-width: 991.98px) {
+    .tov-side { display: contents; }
+    .tov-side > .tov-sec { width: 100%; padding-inline: calc(var(--bs-gutter-x) * 0.5); margin-top: var(--bs-gutter-y); }
+    .tov-side > .tov-next { order: -1; margin-top: 0; }
+}
+/* Phone: six columns don't fit beside a full team name; points for/against go
+   (they are on the standings page) so the records and names stay readable. */
+@media (max-width: 575.98px) {
+    .tov-side .data-table th:nth-child(n+5),
+    .tov-side .data-table td:nth-child(n+5) { display: none; }
+}
