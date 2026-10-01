@@ -100,7 +100,7 @@
         {% if heisman or transfer_path | length > 1 %}
         <div class="pp-pills">
         {% if heisman %}<span class="pp-hchip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12v2h4v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.66V18h4v2H7v-2h4v-2.34A6 6 0 0 1 7.42 12H7a5 5 0 0 1-5-5V4h4V2zm0 4H4v1a3 3 0 0 0 2.35 2.93A6 6 0 0 1 6 8V6zm12 2a6 6 0 0 1-.35 1.93A3 3 0 0 0 20 7V6h-2v2z"/></svg>Heisman ’{{ (heisman[-1].season | string)[2:] }}</span>{% endif %}
-        {% if transfer_path | length > 1 %}{% set dest = transfer_path[-1] %}<span class="pp-pill">Transfer from {{ transfer_path[-2].school }}{% if dest.stars %} <span class="pp-pill-stars" aria-label="{{ dest.stars }}-star transfer">{{ '★' * dest.stars }}</span>{% endif %}</span>{% endif %}
+        {% if transfer_path | length > 1 %}{% set dest = transfer_path[-1] %}<span class="pp-pill pp-pill--transfer">Transfer from {{ transfer_path[-2].school }}{% if dest.stars %} <span class="pp-pill-stars" aria-label="{{ dest.stars }}-star transfer">{{ '★' * dest.stars }}</span>{% endif %}</span>{% endif %}
         </div>
         {% endif %}
         <dl class="pp-bio">
@@ -132,7 +132,7 @@
             {% set cards = [('Tackles', stats.get('defensive', {}).get('TOT'), 'tackles_rank'), ('Sacks', stats.get('defensive', {}).get('SACKS'), 'sacks_rank'),
                             ('TFL', stats.get('defensive', {}).get('TFL'), ''), ('PD', stats.get('defensive', {}).get('PD'), '')] %}
         {% elif is_def_db %}
-            {% set cards = [('Tackles', stats.get('defensive', {}).get('TOT'), 'tackles_rank'), ('INT', stats.get('interceptions', {}).get('INT'), ''),
+            {% set cards = [('Tackles', stats.get('defensive', {}).get('TOT'), 'tackles_rank'), ('INT', stats.get('interceptions', {}).get('INT'), 'def_int_rank'),
                             ('PD', stats.get('defensive', {}).get('PD'), ''), ('Sacks', stats.get('defensive', {}).get('SACKS'), 'sacks_rank')] %}
         {% elif is_kicker %}
             {% set cards = [('FG made', stats.get('kicking', {}).get('FGM'), 'fgm_rank'), ('FG att', stats.get('kicking', {}).get('FGA'), 'fga_rank'),
@@ -145,10 +145,14 @@
             {% set cards = [] %}
         {% endif %}
         {% set tiles = namespace(list=[]) %}
-        {% for label, val, rk in cards %}{% if val is not none %}{% set tiles.list = tiles.list + [(label, num(val), national_ranks.get(rk) if rk else none)] %}{% endif %}{% endfor %}
-        {% if ppa and ppa.avg_all is not none %}{% set tiles.list = tiles.list + [('EPA / play', ppa.avg_all, national_ranks.get('epa_rank'))] %}{% endif %}
+        {# Each tile: (label, value, rank, rank text). Season totals rank per
+           game played (see _build_percentiles), and a shared rank reads "T-". #}
+        {% set _pg = national_ranks.get('_per_game') or [] %}{% set _tied = national_ranks.get('_tied') or [] %}
+        {% for label, val, rk in cards %}{% if val is not none %}{% set r = national_ranks.get(rk) if rk else none %}
+            {% set tiles.list = tiles.list + [(label, num(val), r, (('T-' if rk in _tied else '') ~ ordinal(r) ~ (' per game' if rk in _pg else ' in FBS')) if r else 'No FBS rank')] %}{% endif %}{% endfor %}
+        {% if ppa and ppa.avg_all is not none %}{% set r = national_ranks.get('epa_rank') %}{% set tiles.list = tiles.list + [('EPA / play', ppa.avg_all, r, (ordinal(r) ~ ' in FBS') if r else 'No FBS rank')] %}{% endif %}
         {# A lineman's figures are his line's, ranked against every FBS line. #}
-        {% if line %}{% set tiles.list = line.tiles %}{% endif %}
+        {% if line %}{% set tiles.list = [] %}{% for label, val, r in line.tiles %}{% set tiles.list = tiles.list + [(label, val, r, (ordinal(r) ~ ' in FBS') if r else 'No FBS rank')] %}{% endfor %}{% endif %}
 
         <div class="pp-season">
             <span class="pp-season-k">{{ season }} season
@@ -162,11 +166,11 @@
         </div>
         {% if tiles.list %}
         <div class="pp-tiles" data-n="{{ tiles.list | length }}">
-            {% for label, val, rk in tiles.list %}
+            {% for label, val, rk, rtxt in tiles.list %}
             <div class="pp-tile">
                 <span class="pp-tile-k">{{ label }}</span>
-                <span class="pp-tile-v{{ ' is-top' if rk and rk <= 10 else '' }}">{{ val }}</span>
-                <span class="pp-tile-r">{% if rk %}{{ ordinal(rk) }} in FBS{% else %}No FBS rank{% endif %}</span>
+                <span class="pp-tile-v{{ ' is-top' if rk and rk <= 10 and not rtxt.startswith('T-') else '' }}">{{ val }}</span>
+                <span class="pp-tile-r">{{ rtxt }}</span>
             </div>
             {% endfor %}
         </div>
@@ -288,7 +292,7 @@
 {%- set n = val | float if val is not none else none -%}
 {%- if n is none %}<span class="is-none">—</span>
 {%- elif 'TD' in label and n > 0 %}<b class="is-td">{{ n | int }}</b>
-{%- elif label == 'INT' and n > 0 %}<b class="is-int">{{ n | int }}</b>
+{%- elif label == 'INT' and n > 0 %}<b class="{{ 'is-td' if is_defense else 'is-int' }}">{{ n | int }}</b>
 {%- elif label == 'Rtg' %}{{ '%.1f' | format(n) }}
 {%- elif label in ('Cmp%', 'Pct') %}{{ '%.1f' | format(n * 100 if n <= 1 else n) }}%
 {%- elif label == 'Yds' %}<b>{{ n | int }}</b>
@@ -547,7 +551,7 @@
             <span class="pp-log-opp">{% if row.logo %}<img src="{{ row.logo }}" alt="" aria-hidden="true">{% endif %}{{ row.team or '—' }}</span>
             {% for v in row.stat_values %}
             {% set label = career_cols[loop.index0][0] %}
-            <span class="{{ 'is-m' if loop.index0 < 3 or label == 'EPA' else '' }}{{ ' is-epa' if label == 'EPA' else '' }}{{ ' is-neg' if label == 'EPA' and (v | string).startswith('-') else '' }}{{ ' is-none' if v == '—' else '' }}">{{ v }}</span>
+            <span class="{{ 'is-m' if loop.index0 < 3 or label == 'EPA' else '' }}{{ ' is-epa' if label == 'EPA' else '' }}{{ ' is-neg' if label == 'EPA' and (v | string).startswith('-') else '' }}{{ ' is-none' if v == '—' else '' }}">{{ v if label == 'EPA' else num(v) }}</span>
             {% endfor %}
         </a>
         {% endfor %}
