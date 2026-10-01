@@ -1482,9 +1482,6 @@ _RANK_SPECS = {
            ('plong_rank','punting','LONG',True)],
 }
 _RANK_SPECS['TE'] = _RANK_SPECS['WR']
-# Season totals that rank per game played (see _build_percentiles).
-_PER_GAME_RANK_STATS = {'YDS', 'TD', 'REC', 'CAR', 'TOT', 'SACKS', 'INT',
-                        'FGM', 'FGA', 'XPM', 'PTS', 'NO', 'In 20'}
 _RANK_SPECS['LB'] = _RANK_SPECS['DL']
 
 # Peer positions pooled for each qualification group (the "vs FBS <group>s" set).
@@ -1878,24 +1875,11 @@ def _build_percentiles(cursor, player_id, pos, season=CURRENT_SEASON):
             pool = {pid: {stat_key: (d.get(stat_key) or 0)} for pid, d in pool.items()}
         return _rank_pct(player_id, pool, stat_key, hb)
 
-    # Counting stats rank per game played, not as season totals. A QB who
-    # missed two of four games ranked 132nd in passing yards beside a 99th
-    # percentile EPA: the total measured attendance, not how he played. Rates
-    # (Cmp %, YPA, YPC, EPA) already are per-play and rank as they are.
-    gp = None
     national = {}
     for key, src, stat_key, hb in rank_specs:
         entry = sources.get(src)
-        if stat_key in _PER_GAME_RANK_STATS and entry and src not in ('ppa', 'usage', 'air', 'rush'):
-            if gp is None:
-                gp = {str(k): v for k, v in _games_played_map(season).items()}
-            pool = {pid: {stat_key: (d.get(stat_key) or 0) / gp[pid]}
-                    for pid, d in entry[0].items() if gp.get(pid)}
-            r, _, _ = _rank_pct(player_id, pool, stat_key, hb)
-            national.setdefault('_per_game', set()).add(key)
-        else:
-            pool = None
-            r, _, _ = rank_one(src, stat_key, hb)
+        pool = None
+        r, _, _ = rank_one(src, stat_key, hb)
         if r is not None:
             national[key] = r
             # A shared rank says so: "1st" in interceptions thrown, held by
