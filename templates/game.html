@@ -96,28 +96,7 @@
 {% set home_q = quarters.home %}
 {% set away_q = quarters.away %}
 
-{# stat_bar macro — used in right-column team stats (away | label | home) #}
-{% macro stat_bar(label, aval, hval, flip=false) %}
-{% set hf = hval | float(0) if hval and ':' not in hval and '/' not in hval and '-' not in hval else 0 %}
-{% set af = aval | float(0) if aval and ':' not in aval and '/' not in aval and '-' not in aval else 0 %}
-{% set total = hf + af %}
-{% set home_pct  = (hf / total * 100) | int if total > 0 else 50 %}
-{% set away_pct  = 100 - home_pct %}
-{% set away_better = (away_pct > home_pct and not flip) or (away_pct < home_pct and flip) %}
-<div style="padding:8px 0;border-bottom: 1px solid var(--border)">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <span style="font-weight:700;font-size: var(--text-sm);min-width:40px;color:{% if away_better %}var(--text-primary){% else %}var(--text-dim){% endif %}">{{ aval or '—' }}</span>
-        <span class="t-support" style="font-size: var(--text-xs);letter-spacing:0.09em;text-transform:uppercase;text-align:center;flex:1;padding:0 4px">{{ label }}</span>
-        <span style="font-weight:700;font-size: var(--text-sm);min-width:40px;text-align:right;color:{% if not away_better %}var(--text-primary){% else %}var(--text-dim){% endif %}">{{ hval or '—' }}</span>
-    </div>
-    {% if total > 0 %}
-    <div style="height:3px;border-radius: 2px;background:rgba(255,255,255,0.05);overflow:hidden;display:flex">
-        <div style="width:{{ away_pct }}%;background:{{ away_color }};transition:width 0.4s"></div>
-        <div style="width:{{ home_pct }}%;background:{{ home_color }};transition:width 0.4s"></div>
-    </div>
-    {% endif %}
-</div>
-{% endmacro %}
+
 
 {% block jsonld %}
 {# A completed game is a SportsEvent with two competitors and a result. This is
@@ -194,15 +173,16 @@
             </span>
         </div>
 
+        {# Upcoming games carry no records dict; the preview's own W-L fills it. #}
         {% set fc_away = ((1 - forecast.home_prob) * 100) | round | int if forecast else none %}
         {% set fc_home = 100 - fc_away if forecast else none %}
         <div class="gx-teams">
-            {% call gx_side('away', away_team, game[10], away_is_fbs, away_rank, records.away, home_won_final) %}
+            {% call gx_side('away', away_team, game[10], away_is_fbs, away_rank, (records.away or ((preview.away.wins, preview.away.losses) if preview and preview.away.games else none)), home_won_final) %}
                 {% if is_live %}<b class="gx-num" data-live-away>{{ game[4] if game[4] is not none else '0' }}</b>
                 {% elif is_scheduled %}{% if forecast %}<span class="gx-chance"><span class="gx-chance-k">Win chance</span><b class="gx-num gx-num--pct{{ ' is-dog' if fc_away < fc_home }}">{{ fc_away }}<small>%</small></b></span>{% endif %}
                 {% else %}<b class="gx-num">{{ game[4] }}</b>{% endif %}
             {% endcall %}
-            {% call gx_side('home', home_team, game[9], home_is_fbs, home_rank, records.home, away_won_final) %}
+            {% call gx_side('home', home_team, game[9], home_is_fbs, home_rank, (records.home or ((preview.home.wins, preview.home.losses) if preview and preview.home.games else none)), away_won_final) %}
                 {% if is_live %}<b class="gx-num" data-live-home>{{ game[3] if game[3] is not none else '0' }}</b>
                 {% elif is_scheduled %}{% if forecast %}<span class="gx-chance"><b class="gx-num gx-num--pct{{ ' is-dog' if fc_home < fc_away }}">{{ fc_home }}<small>%</small></b><span class="gx-chance-k">Win chance</span></span>{% endif %}
                 {% else %}<b class="gx-num">{{ game[3] }}</b>{% endif %}
@@ -341,32 +321,17 @@
 
         {# ── The verdict: model first, market beside it ── #}
         <div class="gpv-verdict">
-            <section class="dark-card gpv-fc" aria-label="Savant Forecast">
+            <section class="dark-card gpv-fc" aria-label="Savant Forecast" style="grid-column: 1 / -1">
                 {% if forecast %}
                 <div class="gpv-k-head">Savant Forecast</div>
-                <div class="gpv-fc-line">
-                    <span class="gpv-fc-side"><b>{{ away_team }}</b> {{ '%.0f' % ((1 - forecast.home_prob) * 100) }}%</span>
-                    <span class="gpv-fc-side gpv-fc-side-h">{{ '%.0f' % (forecast.home_prob * 100) }}% <b>{{ home_team }}</b></span>
-                </div>
-                {% set v_pair = forecast_pair(away_color | team_hex('#5a2b2b'), home_color | team_hex('#2b3a55')) %}
-                {% set v_split = '%.1f' % ((1 - forecast.home_prob) * 100) %}
-                <div class="fc-bar" role="img"
-                     aria-label="{{ fav_team }} win probability {{ '%.0f' % (fav_prob * 100) }} percent">
-                    <span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                        {{ v_pair[0] }} 0%, {{ v_pair[0] }} calc({{ v_split }}% - 1px),
-                        transparent calc({{ v_split }}% - 1px), transparent calc({{ v_split }}% + 1px),
-                        {{ v_pair[1] }} calc({{ v_split }}% + 1px), {{ v_pair[1] }} 100%)"></span>
-                    <span class="fc-bar-tick fc-bar-even" style="left: 50%"></span>
-                </div>
-                {% if forecast.margin is not none %}
-                <div class="gpv-fc-exp">
-                    {% if forecast.margin|abs >= 1.5 %}Savant expects <b>{{ fav_team }}</b> by ~{{ '%.0f' % (forecast.margin|abs) }}
-                    {% else %}Savant calls it even{% endif %}
-                </div>
-                {% endif %}
+                {# The split, the expected margin and the Vegas line are all in the
+                   hero band directly above; this card keeps what only it says:
+                   what the number is, and why the model leans the way it does. #}
                 <p class="gpv-basis">
                     Model estimate from team strength, roster continuity, and results so far.
-                    A probability, not a prediction — locked before kickoff.
+                    A probability, not a prediction — locked before kickoff. The Vegas line
+                    beside it in the header is the closing consensus spread; where the two
+                    disagree, the gap is the thing worth reading.
                     <a class="howitworks" href="/savant-forecast">How it works &rarr;</a>
                 </p>
                 {% if forecast.contrib %}
@@ -378,23 +343,6 @@
                 {% endif %}
             </section>
 
-            <section class="dark-card gpv-vegas" aria-label="Betting market">
-                <div class="gpv-k-head">Vegas line</div>
-                {% if market %}
-                {% set m = market.home_margin %}
-                <div class="gpv-vegas-v">
-                    {%- if m|abs < 0.5 -%}Pick&rsquo;em
-                    {%- else -%}<b>{{ home_team if m > 0 else away_team }}</b> &minus;{{ '%g' % (m|abs) }}{%- endif -%}
-                </div>
-                {% if market.total %}<div class="gpv-vegas-sub">Total {{ '%g' % market.total }}</div>{% endif %}
-                <p class="gpv-basis">
-                    The closing consensus spread. Where it and the forecast disagree,
-                    the gap is the thing worth reading.
-                </p>
-                {% else %}
-                <p class="gpv-basis">No betting line is posted for this game yet.</p>
-                {% endif %}
-            </section>
         </div>
 
         {# ── The evidence ── #}
@@ -566,10 +514,10 @@
 {% if home_q or away_q %}
 {% set num_periods = [home_q|length, away_q|length]|max %}
 <div class="dark-card mb-4" style="overflow-x:auto;padding:20px 24px">
-    <table class="data-table" style="font-size: var(--text-sm);min-width:280px;width:100%">
+    <table class="data-table qs-table" style="font-size: var(--text-sm);width:100%">
         <thead>
             <tr style="background:rgba(255,255,255,0.04)">
-                <th style="padding:8px 12px;text-align:left;min-width:160px"></th>
+                <th class="qs-team-h" style="padding:8px 12px;text-align:left"></th>
                 {% for i in range(num_periods) %}
                 <th class="t-meta" style="text-align:center">
                     {% if i < 4 %}Q{{ i+1 }}{% elif i == 4 %}OT{% else %}OT{{ i-3 }}{% endif %}
@@ -583,7 +531,7 @@
                 <td style="padding:8px 12px;vertical-align:middle">
                     <div style="display:flex;align-items:center;gap:10px">
                         {% if game[10] %}<img src="{{ game[10] }}" alt="{{ away_team }} logo" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
-                        <span class="t-label" style="white-space:nowrap">{{ away_team }}</span>
+                        <span class="t-label qs-full" style="white-space:nowrap">{{ away_team }}</span><span class="t-label qs-abbr">{{ (team_abbr or {}).get('away') or away_team }}</span>
                     </div>
                 </td>
                 {% for i in range(num_periods) %}
@@ -595,7 +543,7 @@
                 <td style="padding:8px 12px;vertical-align:middle">
                     <div style="display:flex;align-items:center;gap:10px">
                         {% if game[9] %}<img src="{{ game[9] }}" alt="{{ home_team }} logo" style="height:22px;object-fit:contain;flex-shrink:0">{% endif %}
-                        <span class="t-label" style="white-space:nowrap">{{ home_team }}</span>
+                        <span class="t-label qs-full" style="white-space:nowrap">{{ home_team }}</span><span class="t-label qs-abbr">{{ (team_abbr or {}).get('home') or home_team }}</span>
                     </div>
                 </td>
                 {% for i in range(num_periods) %}
@@ -609,25 +557,12 @@
 {% endif %}
 
 {# ── TAB NAV ──────────────────────────────────────────────────────────────── #}
-<div class="game-tabs" style="display:flex;border-bottom: 1px solid var(--border);margin-bottom:24px">
-    <button id="tab-btn-overview" class="tab-btn" onclick="switchTab('overview')"
-        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid white;color: var(--text-primary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
-        Overview
-    </button>
-    <button id="tab-btn-boxscore" class="tab-btn" onclick="switchTab('boxscore')"
-        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
-        Box Score
-    </button>
-    <button id="tab-btn-drives" class="tab-btn" onclick="switchTab('drives')"
-        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
-        Drives
-    </button>
-    {% if game_passing %}
-    <button id="tab-btn-passing" class="tab-btn" onclick="switchTab('passing')"
-        style="padding:10px 20px;background:transparent;border:none;border-bottom:2px solid transparent;color: var(--text-secondary);font-weight:700;font-size: var(--text-base);cursor:pointer;letter-spacing:0.04em;margin-bottom:-1px">
-        Passing
-    </button>
-    {% endif %}
+<div class="game-tabs" role="tablist" aria-label="Game sections">
+    {% for key, label in [('overview', 'Overview'), ('boxscore', 'Box Score'), ('drives', 'Drives')] + ([('passing', 'Passing')] if game_passing else []) %}
+    <button id="tab-btn-{{ key }}" class="tab-btn" type="button" role="tab" aria-controls="tab-content-{{ key }}"
+            aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}"
+            onclick="switchTab('{{ key }}')">{{ label }}</button>
+    {% endfor %}
 </div>
 
 {# ── OVERVIEW TAB ─────────────────────────────────────────────────────────── #}
@@ -797,23 +732,21 @@
 
 {# ── TEAM STATS ────────────────────────────────────────────────────────────── #}
 {% if home_stats or away_stats %}
-{% macro team_stat_row(label, away_val, home_val) %}
+{% macro team_stat_row(label, away_val, home_val, kind='num', lower=false) %}
 {% if away_val or home_val %}
-{% set away_num = away_val | replace(':','') | replace('/','') | replace('-','') | float(default=0) %}
-{% set home_num = home_val | replace(':','') | replace('/','') | replace('-','') | float(default=0) %}
-{% set total = away_num + home_num %}
-{% set away_pct = ((away_num / total) * 100) | round(1) if total > 0 else 50 %}
-{% set home_pct = 100 - away_pct %}
+{% set away_pct = stat_share(away_val, home_val, kind, lower) %}
 <div style="margin-bottom:20px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
         <span class="t-value" style="font-size: var(--text-lg);min-width:60px">{{ away_val or '—' }}</span>
-        <span class="t-support" style="font-size: var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;text-align:center;flex:1">{{ label }}</span>
+        <span class="t-support" style="font-size: var(--text-xs);text-transform:uppercase;letter-spacing:0.06em;text-align:center;flex:1">{{ label }}{% if lower %} <span class="tstat-note">(fewer is better)</span>{% endif %}</span>
         <span class="t-value" style="font-size: var(--text-lg);min-width:60px;text-align:right">{{ home_val or '—' }}</span>
     </div>
+    {% if away_pct is not none %}
     <div style="display:flex;height:8px;border-radius: var(--r-sm);overflow:hidden;gap:2px">
         <div style="flex:{{ away_pct }};background:{{ away_color }};border-radius: var(--r-sm) 0 0 4px;min-width:4px"></div>
-        <div style="flex:{{ home_pct }};background:{{ home_color }};border-radius:0 4px 4px 0;min-width:4px"></div>
+        <div style="flex:{{ 100 - away_pct }};background:{{ home_color }};border-radius:0 4px 4px 0;min-width:4px"></div>
     </div>
+    {% endif %}
 </div>
 {% endif %}
 {% endmacro %}
@@ -837,11 +770,11 @@
     {{ team_stat_row('Passing Yards', away_stats.get('netPassingYards',''),     home_stats.get('netPassingYards','')) }}
     {{ team_stat_row('Rushing Yards', away_stats.get('rushingYards',''),        home_stats.get('rushingYards','')) }}
     {{ team_stat_row('1st Downs',     away_stats.get('firstDowns',''),          home_stats.get('firstDowns','')) }}
-    {{ team_stat_row('3rd Down',      away_stats.get('thirdDownEff',''),        home_stats.get('thirdDownEff','')) }}
-    {{ team_stat_row('4th Down',      away_stats.get('fourthDownEff',''),       home_stats.get('fourthDownEff','')) }}
-    {{ team_stat_row('Turnovers',     away_stats.get('turnovers',''),           home_stats.get('turnovers','')) }}
-    {{ team_stat_row('Penalties',     away_stats.get('totalPenaltiesYards',''), home_stats.get('totalPenaltiesYards','')) }}
-    {{ team_stat_row('Possession',    away_stats.get('possessionTime',''),      home_stats.get('possessionTime','')) }}
+    {{ team_stat_row('3rd Down',      away_stats.get('thirdDownEff',''),        home_stats.get('thirdDownEff',''), 'eff') }}
+    {{ team_stat_row('4th Down',      away_stats.get('fourthDownEff',''),       home_stats.get('fourthDownEff',''), 'eff') }}
+    {{ team_stat_row('Turnovers',     away_stats.get('turnovers',''),           home_stats.get('turnovers',''), 'num', true) }}
+    {{ team_stat_row('Penalties',     away_stats.get('totalPenaltiesYards',''), home_stats.get('totalPenaltiesYards',''), 'pen', true) }}
+    {{ team_stat_row('Possession',    away_stats.get('possessionTime',''),      home_stats.get('possessionTime',''), 'time') }}
     {{ team_stat_row('Sacks',         away_stats.get('sacks',''),               home_stats.get('sacks','')) }}
     {% if stored_stats %}
     {# These came from the stored box-score table rather than the live ESPN
@@ -1443,7 +1376,7 @@ if (typeof Plotly !== 'undefined') {
                                               width: 46, height: 46, preserveAspectRatio: 'xMidYMid meet', opacity: 0.95 }));
 
         // Numbers below the field: goal line, 20s and the 50, as a field is marked.
-        [['G', 0], ['20', 30], ['50', 50], ['20', 70], ['G', 100]].forEach(function (n) {
+        [['G', 0], ['20', 20], ['50', 50], ['20', 80], ['G', 100]].forEach(function (n) {
             var t = el('text', { x: yardX(n[1]), y: FH + 40, 'text-anchor': 'middle',
                 'font-size': 21, 'font-weight': 700, 'letter-spacing': '0.06em',
                 fill: 'rgba(255,255,255,0.52)' });
@@ -1637,17 +1570,39 @@ if (typeof Plotly !== 'undefined') {
 {% block scripts %}
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script>
-function switchTab(name) {
+function switchTab(name, keepHash) {
     ['overview', 'boxscore', 'drives', 'passing'].forEach(function(t) {
         var el = document.getElementById('tab-content-' + t);
         if (el) el.style.display = t === name ? 'block' : 'none';
         var btn = document.getElementById('tab-btn-' + t);
         if (btn) {
-            btn.style.color        = t === name ? 'var(--text-primary)' : 'var(--text-secondary)';
-            btn.style.borderBottom = t === name ? '2px solid white' : '2px solid transparent';
+            btn.setAttribute('aria-selected', t === name ? 'true' : 'false');
+            btn.tabIndex = t === name ? 0 : -1;
         }
     });
+    // The tab lives in the URL, so a shared "#drives" link and back/refresh
+    // land where the reader was.
+    if (!keepHash) history.replaceState(null, '', name === 'overview' ? location.pathname + location.search : '#' + name);
 }
+(function () {
+    var list = document.querySelector('.game-tabs');
+    if (!list) return;
+    ['overview', 'boxscore', 'drives', 'passing'].forEach(function (t) {
+        var el = document.getElementById('tab-content-' + t);
+        if (el) { el.setAttribute('role', 'tabpanel'); el.setAttribute('aria-labelledby', 'tab-btn-' + t); }
+    });
+    var want = location.hash.slice(1);
+    if (want && document.getElementById('tab-btn-' + want)) switchTab(want, true);
+    // Arrow keys move between tabs, as a tablist does.
+    list.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        var tabs = Array.prototype.slice.call(list.querySelectorAll('[role="tab"]'));
+        var i = tabs.indexOf(document.activeElement);
+        if (i < 0) return;
+        var next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        next.focus(); next.click(); e.preventDefault();
+    });
+})();
 
 function showDriveTooltip(e, text) {
     var tip = document.getElementById('drive-tip');

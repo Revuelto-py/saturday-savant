@@ -6549,9 +6549,16 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     -webkit-overflow-scrolling: touch;
 }
 .game-tabs::-webkit-scrollbar { display: none; }
-.game-tabs .tab-btn { flex-shrink: 0; }
+.game-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.game-tabs .tab-btn { flex-shrink: 0; min-height: 44px; padding: 10px 20px; margin-bottom: -1px; background: transparent; border: 0; border-bottom: 2px solid transparent;
+    color: var(--text-secondary); font-weight: 700; font-size: var(--text-base); letter-spacing: 0.04em; cursor: pointer; transition: color 0.15s, border-color 0.15s; }
+.game-tabs .tab-btn:hover { color: var(--text-primary); filter: none; }
+.game-tabs .tab-btn[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); }
+.game-tabs .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: var(--r-sm); }
+.game-tabs .tab-btn:active { color: #fff; }
+.tstat-note { text-transform: none; letter-spacing: 0; color: var(--text-dim); }
 @media (max-width: 480px) {
-    .game-tabs .tab-btn { padding-left: 13px !important; padding-right: 13px !important; }
+    .game-tabs .tab-btn { padding-left: 13px; padding-right: 13px; }
 }
 
 /* Explains why a season's air-yard columns are mostly blank — a partially
@@ -10817,7 +10824,7 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 a.gx-name:hover{opacity:.85}
 a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:2px}
 .gx-num{margin-top:6px;font-size:128px;line-height:.82;font-weight:850;font-stretch:78%;color:#fff}
-.gx-side.is-lost .gx-num{font-weight:600;color:#7d7477}
+.gx-side.is-lost .gx-num{font-weight:600;color:#8c8487}
 .gx-side.is-lost .gx-name{color:#a99ea0}
 .gx-side.is-lost .gx-logo{opacity:.75}
 .gx-chance{display:flex;align-items:baseline;gap:10px;margin-top:10px}
@@ -11094,4 +11101,23 @@ a.ttx-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px
 @media (min-width: 768px) {
     .pp-tiles[data-n="5"] { flex-wrap: nowrap; }
     .pp-tiles[data-n="5"] .pp-tile { flex: 1 1 0; min-width: 0; padding-inline: 12px; }
+}
+
+/* Game page: phone targets and legibility (critique fixes). */
+@media (max-width: 760px) {
+    a.gx-name { padding-block: 9px; margin-block: -7px; }
+    .gx-cap a { display: inline-flex; align-items: center; min-height: 44px; }
+    .gx-bar { display: none; }
+    .gl2-name { padding-block: 12px; margin-block: -10px; }
+}
+.gpv-sum-a, .gpv-sum-h { font-variant-numeric: proportional-nums; }
+/* Quarter table: full names where they fit; on a phone the abbreviation, so
+   the final-score column stays in view instead of scrolling off. */
+.qs-abbr { display: none; }
+.qs-team-h { min-width: 160px; }
+@media (max-width: 575.98px) {
+    .qs-full { display: none; }
+    .qs-abbr { display: inline; white-space: nowrap; }
+    .qs-team-h { min-width: 0; }
+    .qs-table th, .qs-table td { padding-left: 8px !important; padding-right: 8px !important; }
 }

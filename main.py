@@ -5203,13 +5203,13 @@ POSITION_NAMES = {
 
 def hero_pair(away_hex, home_hex):
     """The game hero's two accent colours: each team's primary lifted until it
-    reads on the near-black hero (luminance 0.16, about 3:1), then kept apart
+    reads on the near-black hero (luminance 0.21, about 4.5:1), then kept apart
     from each other by forecast_pair. Used for the win-probability fills, the
     forecast bar and the leader team tags."""
     def up(h):
         c = _to_rgb(team_hex(h, '#64748b'))
         for _ in range(20):
-            if _srgb_lum(c) >= 0.16:
+            if _srgb_lum(c) >= 0.21:   # ~4.5:1 on the dark card, so 11px tags read
                 break
             c = _lift(c, 0.05)
         return '#%02x%02x%02x' % c
@@ -5219,6 +5219,39 @@ def hero_pair(away_hex, home_hex):
 app.jinja_env.globals.update(shade=shade, pct_fill=pct_fill, pct_knob=pct_knob, hex_rgba=hex_rgba,
                              white_knob=white_knob, poster_ink=poster_ink, POSITION_NAMES=POSITION_NAMES,
                              hero_pair=hero_pair)
+
+
+def stat_share(away, home, kind='num', lower_better=False):
+    """The away side's share (0-100) of a team-stats comparison bar.
+
+    Box-score values arrive as display strings, and joining their digits drew
+    penalties "5-50" vs "6-44" as 550:644 and 3rd down "6-12" as 612. Each kind
+    is parsed for what it is: 'eff' a made-attempted rate, 'pen' penalty yards,
+    'time' a possession clock. lower_better (turnovers, penalties) gives the
+    longer bar to the side with fewer, so the bar always favours the better.
+    None when there is nothing to compare."""
+    def val(v):
+        v = str(v or '').strip()
+        try:
+            if kind == 'eff':
+                made, att = v.split('-')
+                return float(made) / float(att) if float(att) else 0.0
+            if kind == 'pen':
+                return float(v.split('-')[-1])
+            if kind == 'time':
+                m, sec = v.split(':')
+                return int(m) * 60 + int(sec)
+            return float(v)
+        except (ValueError, ZeroDivisionError):
+            return None
+    a, h = val(away), val(home)
+    if a is None or h is None or a + h <= 0:
+        return 50.0 if a is not None and h is not None else None
+    share = a / (a + h) * 100
+    return round(100 - share if lower_better else share, 1)
+
+
+app.jinja_env.globals['stat_share'] = stat_share
 
 
 def _hero_wp_paths(win_prob, h=70):
