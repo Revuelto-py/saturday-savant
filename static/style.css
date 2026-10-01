@@ -10832,7 +10832,7 @@ a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offse
 .gx-num--pct{font-size:80px;margin-top:0}
 .gx-num--pct small{font-size:.5em}
 .gx-num--pct.is-dog{font-weight:600;color:#9a94a8}
-.gx-band{margin:20px -40px 0;padding:0 40px;background:linear-gradient(180deg,transparent 0%,rgba(6,6,7,.6) 45%)}
+.gx-band{margin:20px -40px 0;padding:0 40px}
 .gx-verdict{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px 16px;margin:0;text-align:center}
 .gx-grade{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
 .gx-grade.is-miss{color:#ff8a90}.gx-grade.is-hit{color:#6fdc9a}
