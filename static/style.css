@@ -512,7 +512,7 @@ html {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 10px 12px 14px;
+    padding: 10px 12px 17px;
     border-radius: var(--r-md);
     overflow: hidden;           /* clips the edge bar to the corners */
     text-decoration: none;
@@ -657,11 +657,11 @@ html {
 .gc-edge {
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    height: 3px;
+    height: 6px;
     background: linear-gradient(90deg,
         var(--ac) 0 var(--split),
-        var(--bg-card) var(--split) calc(var(--split) + 2px),
-        var(--hc) calc(var(--split) + 2px) 100%);
+        var(--bg-card) var(--split) calc(var(--split) + 3px),
+        var(--hc) calc(var(--split) + 3px) 100%);
 }
 
 /* ── /games hub ─────────────────────────────────────────────────────────────
