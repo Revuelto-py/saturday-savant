@@ -145,11 +145,13 @@
             {% set cards = [] %}
         {% endif %}
         {% set tiles = namespace(list=[]) %}
-        {# Each tile: (label, value, rank, rank text). Season totals rank per
-           game played (see _build_percentiles), and a shared rank reads "T-". #}
-        {% set _pg = national_ranks.get('_per_game') or [] %}{% set _tied = national_ranks.get('_tied') or [] %}
+        {# Each tile: (label, value, rank, rank text). Season totals are ranked
+           per game played (see _build_percentiles) but the line just says "in
+           FBS": "per game" under a season total read as his per-game figure.
+           A shared rank reads "T-". #}
+        {% set _tied = national_ranks.get('_tied') or [] %}
         {% for label, val, rk in cards %}{% if val is not none %}{% set r = national_ranks.get(rk) if rk else none %}
-            {% set tiles.list = tiles.list + [(label, num(val), r, (('T-' if rk in _tied else '') ~ ordinal(r) ~ (' per game' if rk in _pg else ' in FBS')) if r else 'No FBS rank')] %}{% endif %}{% endfor %}
+            {% set tiles.list = tiles.list + [(label, num(val), r, (('T-' if rk in _tied else '') ~ ordinal(r) ~ ' in FBS') if r else 'No FBS rank')] %}{% endif %}{% endfor %}
         {% if ppa and ppa.avg_all is not none %}{% set r = national_ranks.get('epa_rank') %}{% set tiles.list = tiles.list + [('EPA / play', ppa.avg_all, r, (ordinal(r) ~ ' in FBS') if r else 'No FBS rank')] %}{% endif %}
         {# A lineman's figures are his line's, ranked against every FBS line. #}
         {% if line %}{% set tiles.list = [] %}{% for label, val, r in line.tiles %}{% set tiles.list = tiles.list + [(label, val, r, (ordinal(r) ~ ' in FBS') if r else 'No FBS rank')] %}{% endfor %}{% endif %}
