@@ -10692,7 +10692,13 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
    A slice of the game page: both teams, the score, the forecast verdict,
    then the player's line and his last five games. Team colour stays in the
    logo glows and name underlines (--tc) so it never fights the header. */
-.pp-card.pp-lg { padding: 0; overflow: hidden; }
+.pp-card.pp-lg { position: relative; padding: 0; overflow: hidden; }
+.pp-lg-hit { position: absolute; inset: 0; z-index: 1; }
+.pp-lg.is-link > *:not(.pp-lg-hit) { position: relative; pointer-events: none; }
+.pp-lg.is-link a:not(.pp-lg-hit) { pointer-events: auto; position: relative; z-index: 2; }
+.pp-lg.is-link { cursor: pointer; transition: border-color 0.15s, background-color 0.15s; }
+.pp-lg.is-link:hover { border-color: rgba(255,255,255,0.22); background-color: rgba(255,255,255,0.025); }
+.pp-lg.is-link:active { background-color: rgba(255,255,255,0.05); }
 .pp-lg-band {
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px;
     padding: 16px 22px 14px; border-bottom: 1px solid rgba(255,255,255,0.07);
@@ -10701,10 +10707,6 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 .pp-lg-team { display: flex; flex-direction: row-reverse; align-items: center; gap: 10px; min-width: 0; }
 .pp-lg-team.is-home { flex-direction: row; }
 .pp-lg-logo { position: relative; width: 36px; height: 36px; flex-shrink: 0; }
-.pp-lg-logo::before {
-    content: ""; position: absolute; inset: -12px; border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in srgb, var(--tc) 32%, transparent) 0%, transparent 70%);
-}
 .pp-lg-logo img { position: relative; width: 100%; height: 100%; object-fit: contain; }
 .pp-lg-name {
     max-width: 150px; padding-bottom: 3px; border-bottom: 2px solid var(--tc);
@@ -10778,7 +10780,6 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
     .pp-lg-match { grid-column: 1 / -1; order: 3; justify-content: space-between; gap: 8px; }
     .pp-lg-chip:not(.is-state) { display: none; }
     .pp-lg-logo { width: 30px; height: 30px; }
-    .pp-lg-logo::before { inset: -10px; }
     .pp-lg-name { max-width: 96px; font-size: 0.9375rem; }
     .pp-lg-score b { font-size: 2.125rem; }
     .pp-lg-score i { margin: 0 4px; font-size: 1rem; }

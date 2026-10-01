@@ -310,7 +310,11 @@
        header's colours above. #}
     {% if lgc %}
     {% set wk = (lgc.label | game_abbr) if lgc.label and not (lgc.label | string).isdigit() else 'Wk ' ~ lgc.week %}
-    <section class="pp-card pp-lg">
+    <section class="pp-card pp-lg{{ ' is-link' if lgc.game_id else '' }}">
+        {# The whole card opens the game. One stretched link under the content,
+           out of the tab order (the "Game page" links below are the keyboard
+           and screen-reader way in), so the card is a single target. #}
+        {% if lgc.game_id %}<a class="pp-lg-hit" href="/game/{{ lgc.game_id }}" tabindex="-1" aria-hidden="true"></a>{% endif %}
         <div class="pp-lg-band">
             <h2 class="pp-h2">Last game</h2>
             <div class="pp-lg-match">
