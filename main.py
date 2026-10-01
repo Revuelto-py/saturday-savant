@@ -5254,20 +5254,6 @@ def stat_share(away, home, kind='num', lower_better=False):
 app.jinja_env.globals['stat_share'] = stat_share
 
 
-def _hero_wp_paths(win_prob, h=70):
-    """SVG paths for the hero's win-probability line, viewBox 0 0 100 h.
-
-    Away winning sits above the midline, home below, so the fill clipped to
-    each half reads as that team's share of the game. x is game minutes."""
-    if not win_prob or len(win_prob) < 2:
-        return None
-    end = max(60.0, max(p['x'] for p in win_prob))   # overtime runs past 60
-    pts = ' L'.join(f"{p['x'] / end * 100:.2f} {p['home'] * h:.2f}" for p in win_prob)
-    last = win_prob[-1]['x'] / end * 100
-    return {'line': 'M' + pts, 'area': f"M{win_prob[0]['x'] / end * 100:.2f} {h / 2} L{pts} L{last:.2f} {h / 2} Z",
-            'mid': h / 2, 'h': h, 'ot': end > 60}
-
-
 def _hex_to_rgba(hex_color, alpha):
     if not hex_color:
         return None
@@ -8876,7 +8862,6 @@ def game_detail(game_id):
         # to full team names where the layout wants WIS / ALA.
         team_abbr=_team_abbrs(away_team, home_team),
         win_prob=win_prob,
-        hero_wp=_hero_wp_paths(win_prob),
         top_wpa=top_wpa,
         records=records,
         game_date=game_date, game_iso_date=game_iso_date,
