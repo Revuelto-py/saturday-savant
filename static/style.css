@@ -10980,7 +10980,7 @@ a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offse
 .tmu { overflow: hidden; padding: 0; }
 .tmu-row { position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid var(--border); }
 .tmu-block { display: flex; align-items: center; justify-content: center; height: 96px; }
-.tmu-block img { width: 66px; height: 66px; padding: 8px; object-fit: contain; border-radius: 50%; background: rgba(10,11,13,0.55); }
+.tmu-block img { width: 58px; height: 58px; object-fit: contain; }
 .tmu-team { display: flex; flex-direction: column; gap: 4px; padding: 0 18px; min-width: 0; }
 .tmu-name { font-size: 1.15rem; font-weight: 600; color: var(--text-primary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tmu-name:hover { color: var(--accent); }
@@ -11001,7 +11001,7 @@ a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offse
 @media (max-width: 575.98px) {
     .tmu-row { grid-template-columns: 72px minmax(0, 1fr) auto; }
     .tmu-block { height: 72px; }
-    .tmu-block img { width: 50px; height: 50px; padding: 6px; }
+    .tmu-block img { width: 44px; height: 44px; }
     .tmu-team { padding: 0 12px; }
     .tmu-name { font-size: 1rem; }
     .tmu-pct { font-size: 1.9rem; padding-right: 14px; }

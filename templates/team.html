@@ -372,7 +372,10 @@
                its Savant Forecast win chance; the split bar underneath. #}
             {% macro tmu_row(color, logo, name, rank, rec, pct, fav, href) -%}
             <div class="tmu-row">
-                <span class="tmu-block" style="background: {{ color }}">{% if logo %}<img src="{{ logo }}" alt="" width="58" height="58">{% endif %}</span>
+                {# The team colour, darkened: ESPN's dark-variant logos are drawn for a dark
+                   ground, and a logo in its own primary (Texas State's maroon
+                   bobcat) disappears on the full-strength colour. #}
+                <span class="tmu-block" style="background: linear-gradient(135deg, {{ shade(color, 0.42) }} 0%, {{ shade(color, 0.78) }} 100%)">{% if logo %}<img src="{{ logo }}" alt="" width="58" height="58">{% endif %}</span>
                 <span class="tmu-team">
                     <a class="tmu-name" href="{{ href }}">{% if rank %}No. {{ rank }} {% endif %}{{ name }}</a>
                     {% if rec %}<span class="tmu-rec">{{ rec }}</span>{% endif %}
