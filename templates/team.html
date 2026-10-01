@@ -72,12 +72,14 @@
             {% if svr or has_games %}
             <div class="th-stats{{ ' th-stats--solo' if not has_games }}">
                 {% if svr %}
-                <div class="th-net">
+                {# A link: the hero's biggest number is the site's own model, so it
+                   leads to the page that explains it. #}
+                <a class="th-net" href="/savant-rating" aria-label="Net Savant {{ '%+.1f'|format(svr.net_rating) }}{% if svr.net_ranking %}, {{ ordinal(svr.net_ranking) }} nationally{% endif %}. What is Savant Rating?">
                     <span class="th-net-k">Net Savant</span>
                     <b class="th-net-v">{{ '%+.1f'|format(svr.net_rating) }}</b>
                     {% if svr.net_ranking %}<span class="th-net-r">{{ ordinal(svr.net_ranking) }} nationally</span>{% endif %}
                     {% if svr_week %}<span class="th-net-w">through week {{ svr_week }}</span>{% endif %}
-                </div>
+                </a>
                 {% endif %}
                 {% if has_games %}
                 {% for label, val, rk in [
@@ -155,7 +157,7 @@
                 <a href="/game/{{ game[0] }}" class="tsr{{ ' is-next' if next_game and game[0] == next_game.id }}"{% if next_game and game[0] == next_game.id %} style="--tsr-tint: {{ hex_rgba(c1, 0.22) }}"{% endif %}>
                     <span class="tsr-wk">{% if is_post %}Post{% else %}Wk {{ game[6] }}{% endif %}</span>
                     <span class="tsr-date">{{ game[11] }}</span>
-                    <span class="tsr-site">{{ 'N' if game[15] else ('vs' if game[1] == 'home' else '@') }}</span>
+                    <span class="tsr-site" title="{{ 'Neutral site' if game[15] else ('Home' if game[1] == 'home' else 'Away') }}">{{ 'N' if game[15] else ('vs' if game[1] == 'home' else '@') }}</span>
                     <span class="tsr-opp">
                         {% if game[9] %}<img src="{{ game[9] }}" alt="" loading="lazy" width="30" height="30">{% endif %}
                         <b>{{ game[2] }}</b>
@@ -257,8 +259,9 @@
         {% if x.logo %}<img class="rs-hl-logo" src="{{ x.logo }}" alt="" width="52" height="52" loading="lazy">{% endif %}
         <span class="rs-hl-body">
             <span class="rs-hl-kicker">{{ kind }}</span>
-            <span class="rs-hl-title">{{ x.site }} {{ ('#' ~ x.rank ~ ' ') if x.rank }}{{ x.opp }}{{ ' (FCS)' if not x.rank }}</span>
-            <span class="rs-hl-sub">{{ 'Postseason' if x.post else 'Week ' ~ x.week }}{% if x.net is not none %} · Opp Net {{ signed(x.net) }}{% endif %}</span>
+            {# Words, not the ladder's site symbols: "N #1 Ohio State" read as nonsense. #}
+            <span class="rs-hl-title">{{ 'at' if x.site == '@' else 'vs' }} {{ ('#' ~ x.rank ~ ' ') if x.rank }}{{ x.opp }}{{ ' (FCS)' if not x.rank }}</span>
+            <span class="rs-hl-sub">{{ 'Postseason' if x.post else 'Week ' ~ x.week }}{{ ' · neutral site' if x.site == 'N' }}{% if x.net is not none %} · Opp Net {{ signed(x.net) }}{% endif %}</span>
         </span>
         <span class="rs-hl-score">{{ 'W' if x.won else 'L' }} {{ x.pf }}–{{ x.pa }}</span>
     </a>
@@ -314,7 +317,7 @@
         {% endif %}
         <div class="col-12">
             <div class="rs-sos-stack rs-sos-row">
-                {% if played_path and resume %}{{ sos_card('Schedule so far', played_path) }}{% endif %}
+                {% if played_path and resume %}{{ sos_card('Schedule so far' if is_current_season else 'Schedule', played_path) }}{% endif %}
                 {% if remaining_path %}{{ sos_card('Still to play', remaining_path) }}{% endif %}
             </div>
         </div>
@@ -359,7 +362,7 @@
     </details>
     {% endif %}
 
-    <p class="rs-note">Ranks and Net Ratings are each opponent&rsquo;s current Savant Rating. Schedule strength averages the Net Rating of rated opponents and ignores home and away; FCS opponents have no rating and are not counted{% if played_path and played_path.unrated %} ({{ played_path.unrated }} so far){% endif %}. Site: vs = home, @ = away, N = neutral.</p>
+    <p class="rs-note">Ranks and Net Ratings are each opponent&rsquo;s current Savant Rating. Schedule strength averages the Net Rating of rated opponents and ignores home and away; FCS opponents have no rating and are not counted{% if played_path and played_path.unrated %} ({{ played_path.unrated }}{{ ' so far' if is_current_season }}){% endif %}. Site: vs = home, @ = away, N = neutral.</p>
             </section>
             {% endif %}
         </div>
@@ -503,7 +506,7 @@
                 <div class="dark-card trc">
                     {% for r in recruiting %}
                     <div class="trc-cell">
-                        <b class="trc-v{{ ' is-top' if r.rank and r.rank <= 10 }}">{{ ('#' ~ r.rank) if r.rank else '—' }}</b>
+                        <b class="trc-v">{{ ('#' ~ r.rank) if r.rank else '—' }}</b>
                         <span class="trc-k">{{ r.year }} class</span>
                         {% if r.points %}<span class="trc-pts">{{ r.points }} pts</span>{% endif %}
                     </div>
