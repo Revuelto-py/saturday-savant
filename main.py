@@ -414,7 +414,10 @@ def ensure_indexes():
         conn.commit()
     except Exception as e:
         print(f"Index setup skipped/failed (non-fatal): {e}")
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass   # a timed-out statement can leave the connection closed
     finally:
         release_db(conn)
 
@@ -429,6 +432,20 @@ def ensure_search_indexes():
     conn = get_db()
     try:
         cur = conn.cursor()
+        # Already set up: say so from the catalog and touch nothing. The DDL
+        # below takes an exclusive lock on players even when every IF NOT
+        # EXISTS is a no-op, so on a busy database a worker's startup queued
+        # behind live player queries, hit the statement timeout and crashed
+        # the import (the rollback then met a closed connection).
+        cur.execute("""SELECT
+                (SELECT count(*) FROM information_schema.columns
+                  WHERE table_name = 'players' AND column_name IN
+                        ('search_name', 'search_first', 'search_last', 'search_team')),
+                (SELECT count(*) FROM pg_indexes WHERE tablename = 'players' AND indexname IN
+                        ('idx_players_search_name_trgm', 'idx_players_search_last', 'idx_players_search_first'))""")
+        cols, idx = cur.fetchone()
+        if cols == 4 and idx == 3:
+            return True
         cur.execute('CREATE EXTENSION IF NOT EXISTS pg_trgm')
         cur.execute('CREATE EXTENSION IF NOT EXISTS unaccent')
         # "D.J." -> "dj", "O'Brien" -> "obrien", "José" -> "jose",
@@ -461,7 +478,10 @@ def ensure_search_indexes():
         return True
     except Exception as e:
         print(f'Search index setup skipped (non-fatal): {e}')
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass   # a timed-out statement can leave the connection closed
         return False
     finally:
         release_db(conn)
