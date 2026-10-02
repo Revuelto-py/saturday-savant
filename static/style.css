@@ -11119,3 +11119,93 @@ a.ttx-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px
     .qs-team-h { min-width: 0; }
     .qs-table th, .qs-table td { padding-left: 8px !important; padding-right: 8px !important; }
 }
+
+/* ── CFP bracket: the rounds rail ─────────────────────────────────────────
+   Rounds left to right, then the champion. Columns share one height and each
+   game sits in an equal slot, so a later game lands exactly midway between
+   the two that feed it and the connector lines need no hand-placed offsets. */
+.bkr-header .bkr-title { letter-spacing: -0.02em; }
+.bkr-scroll { overflow-x: auto; margin: 8px -4px 0; padding: 0 4px 12px; overscroll-behavior-x: contain; }
+.bkr { --cw: 248px; --pw: 224px; --gap: 36px; --row: 40px; --cap: 26px; --logo: 22px; --name: 14px; --score: 17px; --small: 11px; --pad: 12px;
+    position: relative; display: grid; grid-template-columns: repeat(var(--cols, 4), var(--cw)) var(--pw); column-gap: var(--gap);
+    justify-content: center; height: 760px; min-width: max-content; }
+.bkr { --cols: 4; }
+.bkr--four { --cols: 2; --cw: 360px; --pw: 300px; --gap: 56px; --row: 60px; --cap: 36px; --logo: 34px; --name: 20px; --score: 28px; --small: 13px; --pad: 18px; height: 680px; }
+.bkr-lines { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.bkr-col { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.bkr-head { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-secondary); }
+.bkr-head.is-champ { color: #f0c66a; }
+.bkr-slots { flex: 1; display: flex; flex-direction: column; margin-top: 12px; }
+.bkr-slot { flex: 1; display: flex; align-items: center; }
+.bkr-slot > * { width: 100%; }
+
+.bkr-card { position: relative; z-index: 1; display: flex; flex-direction: column; overflow: hidden; border-radius: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); box-shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 20px rgba(0,0,0,0.3);
+    transition: background-color 0.15s, transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.bkr-card.is-final { border-color: rgba(240,198,106,0.55); }
+.bkr-card.is-link { cursor: pointer; }
+.bkr-card.is-link:hover { background-color: #1a1b1f; }
+.bkr-card.is-link:active { transform: translateY(1px); }
+.bkr-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.bkr-cap { display: flex; align-items: center; gap: 8px; height: var(--cap); padding: 0 var(--pad); box-sizing: border-box;
+    font-size: var(--small); font-weight: 600; letter-spacing: 0.04em; color: var(--text-secondary); }
+.bkr-card.is-final .bkr-cap { color: #f0c66a; }
+.bkr-live { margin-left: auto; padding: 1px 7px; border-radius: 999px; background: rgba(244,33,46,0.18); color: #ff8a90; font-size: 10.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.bkr-row { display: flex; align-items: center; gap: 8px; height: var(--row); padding: 0 var(--pad); border-top: 1px solid rgba(255,255,255,0.07); }
+.bkr--four .bkr-row { gap: 12px; }
+.bkr-row.is-won { background: linear-gradient(90deg, color-mix(in srgb, var(--tc) 40%, transparent) 0%, transparent 85%); }
+.bkr-seed { width: 18px; flex-shrink: 0; text-align: center; font-size: var(--small); font-weight: 700; color: #c9ced3; }
+.bkr-logo { width: var(--logo); height: var(--logo); flex-shrink: 0; object-fit: contain; }
+.bkr-logo--empty { display: inline-block; border-radius: 50%; border: 1px dashed rgba(255,255,255,0.22); box-sizing: border-box; }
+.bkr-name { flex: 1; min-width: 0; font-size: var(--name); font-weight: 500; color: #fff; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.bkr-name { position: relative; z-index: 1; }
+a.bkr-name:hover { color: var(--accent); }
+a.bkr-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.bkr-row.is-won .bkr-name { font-weight: 700; }
+.bkr-name--tbd { font-size: calc(var(--name) - 1px); font-style: italic; color: var(--text-secondary); }
+.bkr-tag { font-size: var(--small); font-weight: 600; color: var(--text-secondary); }
+.bkr-pts { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: var(--score); font-weight: 500; color: #fff; font-variant-numeric: proportional-nums; }
+.bkr-row.is-won .bkr-pts { font-weight: 800; }
+/* a loser keeps 4.5:1: dimmed, not greyed out */
+.bkr-row.is-lost .bkr-seed, .bkr-row.is-lost .bkr-name, .bkr-row.is-lost .bkr-pts { color: #949a9f; }
+.bkr-row.is-lost .bkr-logo { opacity: 0.45; }
+
+.bkr-panel { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; box-sizing: border-box;
+    padding: 22px 20px 14px; border-radius: 16px; border: 1px solid var(--edge, var(--border));
+    background: radial-gradient(ellipse 120% 70% at 50% -10%, var(--tc, transparent) 0%, transparent 100%), var(--bg-card); }
+.bkr-panel.is-open { border-style: dashed; border-color: rgba(255,255,255,0.22); }
+.bkr-panel-k { padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); font-size: 11px; font-weight: 800; letter-spacing: 0.22em; text-transform: uppercase; color: #d6dade; }
+.bkr-panel-k.is-champ { background: rgba(11,12,14,0.55); color: #f0c66a; }
+.bkr-panel-logo { width: 92px; height: 92px; object-fit: contain; margin-top: 16px; }
+.bkr--four .bkr-panel-logo { width: 124px; height: 124px; }
+.bkr-panel-name { margin-top: 12px; font-family: var(--font-display); font-stretch: 78%; font-size: 38px; line-height: 0.95; font-weight: 850; text-transform: uppercase; color: #fff; text-decoration: none; }
+.bkr--four .bkr-panel-name { font-size: 48px; }
+a.bkr-panel-name:hover { color: #e3e6e8; text-decoration: underline; text-underline-offset: 4px; }
+a.bkr-panel-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.bkr-panel-sub { margin-top: 8px; font-size: 14px; line-height: 1.4; color: #e3e6e8; }
+.bkr-run { width: 100%; margin: 16px 0 0; padding: 0; list-style: none; }
+.bkr-run-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px; min-height: 44px; padding: 9px 0; box-sizing: border-box;
+    border-top: 1px solid rgba(255,255,255,0.14); text-align: left; text-decoration: none; color: #e3e6e8; font-size: 13px; }
+.bkr-run-row:hover .bkr-run-where { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.bkr-run-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bkr-run-res { font-size: 14px; font-weight: 800; color: #6fdc9a; font-variant-numeric: proportional-nums; }
+.bkr-run-opp { grid-column: 1 / -1; font-size: 12px; color: #d6dade; }
+
+/* phone: the rail becomes a list; each card says where its winner goes */
+.bkr-phone { display: none; }
+@media (max-width: 767.98px) {
+    .bkr-scroll { display: none; }
+    .bkr-phone { display: flex; flex-direction: column; gap: 24px; margin-top: 12px; }
+    .bkr-phone .bkr-panel { align-items: stretch; text-align: left; padding: 16px; }
+    .bkr-phone .bkr-panel-k { align-self: flex-start; }
+    .bkr-phone .bkr-panel-logo { width: 56px; height: 56px; margin-top: 12px; }
+    .bkr-phone .bkr-panel-name { font-size: 26px; margin-top: 8px; }
+    .bkr-phone .bkr-panel-sub { font-size: 12px; }
+    .bkr-phone-round { display: flex; flex-direction: column; gap: 10px; }
+    .bkr-phone .bkr-card { --row: 44px; --cap: 30px; --pad: 12px; --logo: 22px; --name: 15px; --score: 18px; --small: 11px; }
+    .bkr-next { display: flex; align-items: center; gap: 8px; margin: -6px 0 4px; padding: 0 4px; font-size: 12px; color: #c9ced3; }
+    .bkr-next-dot { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: rgba(255,255,255,0.3); }
+    .bkr-next-dot.is-set { background: var(--line); }
+}
+@media (min-width: 768px) { .bkr-next { display: none; } }
+@media (prefers-reduced-motion: reduce) { .bkr-card { transition: none; } }

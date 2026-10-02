@@ -5241,6 +5241,26 @@ app.jinja_env.globals.update(shade=shade, pct_fill=pct_fill, pct_knob=pct_knob, 
                              hero_pair=hero_pair)
 
 
+def rail_line(hex_color):
+    """A team colour lifted until it reads as a 3px line on the near-black
+    bracket board (the bracket's winner connectors)."""
+    r, g, b = _to_rgb(team_hex(hex_color, '#64748b'))
+    while (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.38:
+        r, g, b = (c + (255 - c) * 0.12 for c in (r, g, b))
+    return '#%02x%02x%02x' % (round(r), round(g), round(b))
+
+
+def rail_sink(hex_color):
+    """A team colour darkened until white type clears 4.5:1 on it."""
+    r, g, b = _to_rgb(team_hex(hex_color, '#334155'))
+    while (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.16:
+        r, g, b = (c * 0.9 for c in (r, g, b))
+    return '#%02x%02x%02x' % (round(r), round(g), round(b))
+
+
+app.jinja_env.globals.update(rail_line=rail_line, rail_sink=rail_sink)
+
+
 def stat_share(away, home, kind='num', lower_better=False):
     """The away side's share (0-100) of a team-stats comparison bar.
 

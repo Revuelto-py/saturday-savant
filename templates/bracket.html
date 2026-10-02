@@ -3,100 +3,61 @@
 {% block og_description %}The College Football Playoff bracket — seeding, matchups, and results for every round, with each game's full breakdown a click away.{% endblock %}
 
 {% block content %}
-{# ── Matchup card macro ─────────────────────────────────────────────── #}
-{# Seeds 1-4 are the only tier the accent marks: they are the byes, which is
-   the one thing the seed number changes about the bracket. Every other seed
-   is a plain chip, so the blue on this board means something. #}
-{% macro seed_class(seed) -%}
-  {%- if seed and seed <= 4 %}bk-seed-bye{% else %}bk-seed-plain{% endif -%}
+{# ── The rounds rail ──────────────────────────────────────────────────────
+   One direction, left to right: the rounds in order, then the champion. Each
+   decided game sends a line in the winner's colour into the row that team
+   fills next; an undecided one sends a quiet grey line, so the shape of the
+   bracket reads before a ball is kicked. Four-team seasons (2016-23) use the
+   same rail with two rounds, drawn bigger because there are only three games. #}
+
+{# What an empty slot is waiting for. A quarterfinal's bottom slot carries the
+   pairing from main.py ("Winner of 8/9"); later rounds name the game. #}
+{% macro awaiting(feeder, fallback) -%}
+  {%- if feeder and feeder.top and feeder.bottom -%}Winner of {{ feeder.top.seed }}/{{ feeder.bottom.seed }}
+  {%- elif feeder and (feeder.top or feeder.bottom) -%}Winner of the {{ (feeder.top or feeder.bottom).name }} game
+  {%- else -%}{{ fallback or 'To be decided' }}{%- endif -%}
 {%- endmacro %}
 
-{% macro team_row(side, m, show_bye=False, awaiting=None) %}
+{% macro cap_of(m, default) -%}
+  {{- (m.venue.split(' · ')[0]) if m and m.venue else default -}}
+{%- endmacro %}
+
+{% macro row(side, m, wait='To be decided', bye_ok=False) %}
   {% if side %}
-  <div class="bk-team{{ ' bk-won' if side.is_winner }}{{ ' bk-lost' if side.is_loser }}">
-    <a class="bk-team-link" href="{{ team_url(side.name, season) }}" title="{{ side.name }}">
-      <span class="bk-seed {{ seed_class(side.seed) }}">{{ side.seed or '–' }}</span>
-      {% if side.logo %}
-        <img class="bk-logo" src="{{ side.logo }}" alt="" loading="lazy" width="22" height="22">
-      {% else %}
-        <span class="bk-logo bk-logo-empty"></span>
-      {% endif %}
-      {# Conference and bye live on the sub-line rather than in a chip beside the
-         name: a right-hand chip costs the name 40-50px on a 200px card, which is
-         what was clipping "Notre Dame" to "Notr…". #}
-      <span class="bk-id">
-        <span class="bk-name">{{ side.name }}</span>
-        {% set bye_now = show_bye and side.is_bye and not m.completed %}
-        {% if side.conference or bye_now %}
-        <span class="bk-sub">
-          {%- if side.conference %}{{ side.conference }}{% endif -%}
-          {%- if bye_now %}{% if side.conference %} · {% endif %}Bye{% endif -%}
-        </span>
-        {% endif %}
-      </span>
-    </a>
-    {% if side.points is not none and m.completed %}
-      <span class="bk-pts{{ ' bk-pts-won' if side.is_winner }}">{{ side.points }}</span>
-    {% endif %}
+  {% set bye = bye_ok and side.is_bye and not four_team %}
+  <div class="bkr-row{{ ' is-won' if side.is_winner }}{{ ' is-lost' if side.is_loser }}"
+       style="--tc: {{ side.color | team_hex('#1c9cf0') }}; --line: {{ rail_line(side.color) }}">
+    <span class="bkr-seed">{{ side.seed or '–' }}</span>
+    {% if side.logo %}<img class="bkr-logo" src="{{ side.logo }}" alt="" loading="lazy" width="22" height="22">{% else %}<span class="bkr-logo bkr-logo--empty" aria-hidden="true"></span>{% endif %}
+    <a class="bkr-name" href="{{ team_url(side.name, season) }}" title="{{ side.name }}">{{ side.name }}</a>
+    {% if bye %}<span class="bkr-tag">Bye</span>{% endif %}
+    {% if side.points is not none and m.completed %}<b class="bkr-pts">{{ side.points }}</b>{% endif %}
   </div>
   {% else %}
-  {# An open slot says what it is waiting for where the bracket knows: a
-     quarterfinal is waiting on a named first-round pairing, so it says so
-     instead of nine identical "TBD"s down the board. #}
-  <div class="bk-team bk-tbd">
-    <span class="bk-seed bk-seed-open" aria-hidden="true"></span>
-    <span class="bk-logo bk-logo-empty"></span>
-    <span class="bk-id"><span class="bk-name bk-name-tbd">{{ awaiting or 'To be decided' }}</span></span>
+  <div class="bkr-row is-tbd">
+    <span class="bkr-seed"></span>
+    <span class="bkr-logo bkr-logo--empty" aria-hidden="true"></span>
+    <span class="bkr-name bkr-name--tbd">{{ wait }}</span>
   </div>
   {% endif %}
 {% endmacro %}
 
-{% macro match_card(m, size, dom_id=None, venue=None, show_bye=False, final=False) %}
-<div class="bk-slot bk-slot-{{ size }}">
-  <div class="bk-match{{ ' bk-match-final' if final }}{{ ' bk-match-link' if m.game_id }}"
-       {% if dom_id %}id="{{ dom_id }}"{% endif %}
-       data-completed="{{ 1 if m.completed else 0 }}"
-       data-winner="{{ m.winner or '' }}"
-       {% if m.game_id %}data-game="/game/{{ m.game_id }}" role="link" tabindex="0"
-       aria-label="{% if m.top and m.bottom %}{{ m.top.name }} vs {{ m.bottom.name }} — open the full game breakdown{% else %}Open game page{% endif %}"{% endif %}>
-    {% if m.live %}<span class="bk-live">Live</span>{% endif %}
-    {{ team_row(m.top, m, show_bye=show_bye) }}
-    {{ team_row(m.bottom, m, awaiting=m.feed) }}
-  </div>
-  {% set venue_line = venue or m.venue %}
-  {% if venue_line %}<div class="bk-venue">{{ venue_line }}</div>{% endif %}
-</div>
-{% endmacro %}
-
-{% macro champion_block(champion) %}
-<div class="bk-champ">
-  <a class="bk-champ-link" href="{{ team_url(champion.name, season) }}">
-    {% if champion.logo %}<img class="bk-champ-logo" src="{{ champion.logo }}" alt="" width="44" height="44">{% endif %}
-    <span class="bk-champ-name">{{ champion.name }}</span>
-  </a>
-  <span class="bk-champ-label">{{ season }} National Champion</span>
-</div>
-{% endmacro %}
-
-{% macro trophy(decided) %}
-<div class="bk-trophy{{ ' bk-trophy-won' if decided }}" aria-hidden="true">
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none"
-       stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M6 3h12v5a6 6 0 0 1-12 0V3z" class="bk-trophy-cup"/>
-    <path d="M6 5H4a2 2 0 0 0 0 4h2M18 5h2a2 2 0 0 1 0 4h-2"/>
-    <path d="M12 14v3"/>
-    <path d="M8 21h8M9 21c0-2 1.2-3 3-3s3 1 3 3"/>
-  </svg>
+{% macro card(m, cap, dom_id=None, wait_top='To be decided', wait_bottom='To be decided', bye_ok=False, final=False) %}
+<div class="bkr-card{{ ' is-final' if final }}{{ ' is-link' if m.game_id }}"
+     {% if dom_id %}id="{{ dom_id }}"{% endif %}
+     {% if m.game_id %}data-game="/game/{{ m.game_id }}" role="link" tabindex="0"
+     aria-label="{{ cap }}: {% if m.top and m.bottom %}{{ m.top.name }}{% if m.completed %} {{ m.top.points }}{% endif %}, {{ m.bottom.name }}{% if m.completed %} {{ m.bottom.points }}{% endif %}{% else %}teams to be decided{% endif %}{% if m.winner %}, final, {{ m.winner }} won{% elif m.live %}, in progress{% endif %}. Open game."{% endif %}>
+  <div class="bkr-cap">{{ cap }}{% if m.live %}<span class="bkr-live">Live</span>{% endif %}</div>
+  {{ row(m.top, m, wait_top, bye_ok) }}
+  {{ row(m.bottom, m, m.feed or wait_bottom) }}
 </div>
 {% endmacro %}
 
 <div class="page-wrapper bracket-page">
 
-  <header class="bk-header">
-    <h1 class="bk-title">College Football Playoff</h1>
-    <p class="bk-meta">
-      {{ season }} season · {{ '4-team' if four_team else '12-team' }} bracket
-    </p>
+  <header class="bk-header bkr-header">
+    <h1 class="bk-title bkr-title">{{ season }} {{ 'Playoff projection' if projection else 'College Football Playoff' }}</h1>
+    <p class="bk-meta">{{ '4-team' if four_team else '12-team' }} bracket</p>
 
     <div class="bk-controls">
       {% if bracket_seasons and bracket_seasons|length > 1 %}
@@ -105,7 +66,7 @@
         <select class="lb-select bk-season-select season-select" aria-label="Season"
                 onchange="location='?season='+this.value">
             {% for s in bracket_seasons %}
-            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}{{ ' projection' if s == season and projection }}</option>
             {% endfor %}
         </select>
       </label>
@@ -113,15 +74,8 @@
     </div>
 
     {% if projection %}
-    {# What the projection rests on. A disclosure rather than a hover tooltip:
-       the answer stays out of the way of the bracket, but it opens on a click,
-       stays open, and lays out in flow instead of floating over the board —
-       which is the only version that works on a phone.
-
-       Dashed purple is already this site's mark for a number that is an
-       estimate rather than a fact (the team hero uses it for a projected
-       record). Same device here, and the word is spelled out: a colour alone
-       should never be what tells you a bracket has not happened. #}
+    {# What the projection rests on: a disclosure, so it opens on a tap and
+       lays out in flow — the only version that works on a phone. #}
     <details class="bk-proj">
       <summary class="bk-projected">
         <svg class="bk-proj-chev" viewBox="0 0 16 16" width="11" height="11" fill="none"
@@ -158,7 +112,6 @@
     {% endif %}
   </header>
 
-
   {% if unsupported_season %}
   <div class="bk-empty">
       <h2 class="bk-empty-head">No bracket data for {{ unsupported_season }}</h2>
@@ -168,141 +121,125 @@
       <a class="bk-empty-link" href="/games?season={{ unsupported_season }}&week=1&stype=postseason">
           View the {{ unsupported_season }} postseason results →</a>
   </div>
-  {% elif four_team %}
-
-  {# ── 4-team era (2016-23): semifinals flanking the championship ────── #}
-  <div class="bk-board-wrap">
-    <div class="bk-board bk-board-four" id="bkBoard" data-champion="{{ champion.name if champion else '' }}">
-      <svg class="bk-lines" id="bkLines" aria-hidden="true"></svg>
-
-      <div class="bk-col">
-        <h2 class="bk-col-head">Semifinal</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.semifinals[0], 'sf', dom_id='m-sf-1') }}
-        </div>
-      </div>
-
-      <div class="bk-col bk-col-center">
-        <h2 class="bk-col-head bk-col-head-final">Championship</h2>
-        <div class="bk-col-body">
-          {{ trophy(champion) }}
-          {{ match_card(bracket.championship, 'nc', dom_id='m-nc', final=True) }}
-          {% if champion %}{{ champion_block(champion) }}{% endif %}
-        </div>
-      </div>
-
-      <div class="bk-col">
-        <h2 class="bk-col-head">Semifinal</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.semifinals[1], 'sf', dom_id='m-sf-2') }}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {# Mobile: stacked #}
-  <div class="bk-mobile">
-    <section class="bk-m-round">
-      <h2 class="bk-m-head">Semifinals</h2>
-      {% for m in bracket.semifinals %}
-        {{ match_card(m, 'm') }}
-      {% endfor %}
-    </section>
-    <section class="bk-m-round">
-      <h2 class="bk-m-head bk-m-head-final">National Championship</h2>
-      {{ match_card(bracket.championship, 'm', final=True) }}
-      {% if champion %}{{ champion_block(champion) }}{% endif %}
-    </section>
-  </div>
   {% else %}
 
-  {# ── Desktop / tablet: horizontal bracket ─────────────────────────── #}
-  <div class="bk-board-wrap">
-    <div class="bk-board" id="bkBoard" data-champion="{{ champion.name if champion else '' }}">
-      <svg class="bk-lines" id="bkLines" aria-hidden="true"></svg>
+  {% set sf = bracket.semifinals %}{% set nc = bracket.championship %}
+  {% if four_team %}
+    {% set rounds = [
+        ('Semifinals', [(sf[0], cap_of(sf[0], 'Semifinal'), 'm-sf1', None, None, False), (sf[1], cap_of(sf[1], 'Semifinal'), 'm-sf2', None, None, False)]),
+        ('Final', [(nc, 'National Championship', 'm-nc', awaiting(sf[0], 'First semifinal winner'), awaiting(sf[1], 'Second semifinal winner'), False)]) ] %}
+    {% set links = [('m-sf1', 'm-nc', 0), ('m-sf2', 'm-nc', 1)] %}
+    {# where each game's winner goes next, for the phone's notes #}
+    {% set nexts = {'m-sf1': (nc, 0, 'National Championship'), 'm-sf2': (nc, 1, 'National Championship')} %}
+  {% else %}
+    {% set r1 = bracket.round1 %}{% set qf = bracket.quarterfinals %}
+    {% set rounds = [
+        ('First round', [(r1[0], 'On campus', 'm-a', None, None, False), (r1[1], 'On campus', 'm-b', None, None, False),
+                         (r1[3], 'On campus', 'm-d', None, None, False), (r1[2], 'On campus', 'm-c', None, None, False)]),
+        ('Quarterfinals', [(qf[0], cap_of(qf[0], 'Quarterfinal'), 'm-qf1', None, None, True), (qf[1], cap_of(qf[1], 'Quarterfinal'), 'm-qf2', None, None, True),
+                           (qf[2], cap_of(qf[2], 'Quarterfinal'), 'm-qf3', None, None, True), (qf[3], cap_of(qf[3], 'Quarterfinal'), 'm-qf4', None, None, True)]),
+        ('Semifinals', [(sf[0], cap_of(sf[0], 'Semifinal'), 'm-sf1', awaiting(qf[0]), awaiting(qf[1]), False),
+                        (sf[1], cap_of(sf[1], 'Semifinal'), 'm-sf2', awaiting(qf[2]), awaiting(qf[3]), False)]),
+        ('Final', [(nc, 'National Championship', 'm-nc', awaiting(sf[0], 'First semifinal winner'), awaiting(sf[1], 'Second semifinal winner'), False)]) ] %}
+    {% set links = [('m-a', 'm-qf1', 1), ('m-b', 'm-qf2', 1), ('m-d', 'm-qf3', 1), ('m-c', 'm-qf4', 1),
+                    ('m-qf1', 'm-sf1', 0), ('m-qf2', 'm-sf1', 1), ('m-qf3', 'm-sf2', 0), ('m-qf4', 'm-sf2', 1),
+                    ('m-sf1', 'm-nc', 0), ('m-sf2', 'm-nc', 1)] %}
+    {% set nexts = {'m-a': (qf[0], 1, cap_of(qf[0], 'quarterfinal')), 'm-b': (qf[1], 1, cap_of(qf[1], 'quarterfinal')),
+                    'm-d': (qf[2], 1, cap_of(qf[2], 'quarterfinal')), 'm-c': (qf[3], 1, cap_of(qf[3], 'quarterfinal')),
+                    'm-qf1': (sf[0], 0, cap_of(sf[0], 'semifinal')), 'm-qf2': (sf[0], 1, cap_of(sf[0], 'semifinal')),
+                    'm-qf3': (sf[1], 0, cap_of(sf[1], 'semifinal')), 'm-qf4': (sf[1], 1, cap_of(sf[1], 'semifinal')),
+                    'm-sf1': (nc, 0, 'National Championship'), 'm-sf2': (nc, 1, 'National Championship')} %}
+  {% endif %}
 
-      <div class="bk-col">
-        <h2 class="bk-col-head">First Round</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.round1[0], 'r1', dom_id='m-r1-a', venue='On campus') }}
-          {{ match_card(bracket.round1[1], 'r1', dom_id='m-r1-b', venue='On campus') }}
-        </div>
-      </div>
+  {# ── Side panel: the champion's run, or what is still open ── #}
+  {% macro side_panel() %}
+  {% if champion %}
+    {% set run = namespace(rows=[]) %}
+    {% for label, games in rounds %}{% for m, cap, gid, wt, wb, bo in games %}
+      {% if m.completed and m.top and m.bottom and champion.name in (m.top.name, m.bottom.name) %}
+        {% set me = m.top if m.top.name == champion.name else m.bottom %}{% set op = m.bottom if me is sameas m.top else m.top %}
+        {% set run.rows = run.rows + [(cap, op, me.points, op.points, m.game_id)] %}
+      {% endif %}
+    {% endfor %}{% endfor %}
+    <section class="bkr-panel" id="bkPanel" aria-label="{{ season }} national champion"
+             style="--tc: {{ rail_sink(champion.color) }}; --edge: {{ rail_line(champion.color) }}80">
+      <span class="bkr-panel-k is-champ">National champion</span>
+      {% if champion.logo %}<img class="bkr-panel-logo" src="{{ champion.logo }}" alt="" width="92" height="92">{% endif %}
+      <a class="bkr-panel-name" href="{{ team_url(champion.name, season) }}">{{ champion.name }}</a>
+      <span class="bkr-panel-sub">No. {{ champion.seed }} seed{% if four_team %} · four-team playoff{% elif champion.seed and champion.seed <= 4 %} · first-round bye{% endif %}</span>
+      <ol class="bkr-run">
+        {% for cap, op, pf, pa, gid in run.rows %}
+        <li><a href="/game/{{ gid }}" class="bkr-run-row">
+          <span class="bkr-run-where">{{ cap }}</span><b class="bkr-run-res">W {{ pf }}–{{ pa }}</b>
+          <span class="bkr-run-opp">vs No. {{ op.seed }} {{ op.name }}</span>
+        </a></li>
+        {% endfor %}
+      </ol>
+    </section>
+  {% else %}
+    <section class="bkr-panel is-open" id="bkPanel" aria-label="{{ 'Projected field' if projection else 'Title still to be decided' }}">
+      <span class="bkr-panel-k">{{ 'Projected field' if projection else 'Still to be decided' }}</span>
+      <span class="bkr-panel-name">Title TBD</span>
+      <span class="bkr-panel-sub">{% if projection %}Seeded from the current AP poll.{% endif %}{% if not four_team %} Seeds 1–4 skip the first round.{% endif %}</span>
+      {% if not four_team %}
+      <ol class="bkr-run">
+        {% for t in (cfp_teams or [])|selectattr('seed', 'le', 4) %}
+        <li><a href="{{ team_url(t.name, season) }}" class="bkr-run-row">
+          <span class="bkr-run-where">No. {{ t.seed }} {{ t.name }}</span>
+          <span class="bkr-run-opp">Bye into the quarterfinals</span>
+        </a></li>
+        {% endfor %}
+      </ol>
+      {% endif %}
+    </section>
+  {% endif %}
+  {% endmacro %}
 
-      <div class="bk-col">
-        <h2 class="bk-col-head">Quarterfinals</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.quarterfinals[0], 'qf', dom_id='m-qf-1', show_bye=True) }}
-          {{ match_card(bracket.quarterfinals[1], 'qf', dom_id='m-qf-2', show_bye=True) }}
+  {# ── Desktop and tablet: the rail ── #}
+  <div class="bkr-scroll">
+    <div class="bkr{{ ' bkr--four' if four_team }}" id="bkBoard"
+         data-links="{{ links | tojson | forceescape }}">
+      <svg class="bkr-lines" id="bkLines" aria-hidden="true"></svg>
+      {% for label, games in rounds %}
+      <section class="bkr-col" aria-label="{{ label }}">
+        <h2 class="bkr-head">{{ label }}</h2>
+        <div class="bkr-slots">
+          {% for m, cap, gid, wt, wb, bo in games %}
+          <div class="bkr-slot">{{ card(m, cap, gid, wt or 'To be decided', wb or 'To be decided', bo, gid == 'm-nc') }}</div>
+          {% endfor %}
         </div>
-      </div>
-
-      <div class="bk-col">
-        <h2 class="bk-col-head">Semifinals</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.semifinals[0], 'sf', dom_id='m-sf-1') }}
-        </div>
-      </div>
-
-      <div class="bk-col bk-col-center">
-        <h2 class="bk-col-head bk-col-head-final">Championship</h2>
-        <div class="bk-col-body">
-          {{ trophy(champion) }}
-          {{ match_card(bracket.championship, 'nc', dom_id='m-nc', final=True) }}
-          {% if champion %}{{ champion_block(champion) }}{% endif %}
-        </div>
-      </div>
-
-      <div class="bk-col">
-        <h2 class="bk-col-head">Semifinals</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.semifinals[1], 'sf', dom_id='m-sf-2') }}
-        </div>
-      </div>
-
-      <div class="bk-col">
-        <h2 class="bk-col-head">Quarterfinals</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.quarterfinals[2], 'qf', dom_id='m-qf-3', show_bye=True) }}
-          {{ match_card(bracket.quarterfinals[3], 'qf', dom_id='m-qf-4', show_bye=True) }}
-        </div>
-      </div>
-
-      <div class="bk-col">
-        <h2 class="bk-col-head">First Round</h2>
-        <div class="bk-col-body">
-          {{ match_card(bracket.round1[3], 'r1', dom_id='m-r1-d', venue='On campus') }}
-          {{ match_card(bracket.round1[2], 'r1', dom_id='m-r1-c', venue='On campus') }}
-        </div>
-      </div>
+      </section>
+      {% endfor %}
+      <section class="bkr-col bkr-col--side">
+        <h2 class="bkr-head{{ ' is-champ' if champion }}">{{ 'Champion' if champion else 'Title' }}</h2>
+        <div class="bkr-slots"><div class="bkr-slot">{{ side_panel() }}</div></div>
+      </section>
     </div>
   </div>
 
-  {# ── Mobile: rounds stacked vertically ────────────────────────────── #}
-  <div class="bk-mobile">
-    <section class="bk-m-round">
-      <h2 class="bk-m-head">First Round</h2>
-      {% for m in bracket.round1 %}
-        {{ match_card(m, 'm', venue='On campus') }}
+  {# ── Phone: rounds stacked, each card saying where its winner goes ── #}
+  <div class="bkr-phone">
+    <div class="bkr-phone-panel">{{ side_panel() }}</div>
+    {% for label, games in rounds %}
+    <section class="bkr-phone-round">
+      <h2 class="bkr-head">{{ label }}</h2>
+      {% for m, cap, gid, wt, wb, bo in games %}
+      {{ card(m, cap, None, wt or 'To be decided', wb or 'To be decided', bo, gid == 'm-nc') }}
+      {% set nx = nexts.get(gid) %}
+      {% if nx %}
+        {% set tgt, trow, tcap = nx %}{% set opp = tgt.bottom if trow == 0 else tgt.top %}
+        {% set wside = m.top if (m.top and m.top.is_winner) else (m.bottom if (m.bottom and m.bottom.is_winner) else None) %}
+        <p class="bkr-next" {% if wside %}style="--line: {{ rail_line(wside.color) }}"{% endif %}>
+          <span class="bkr-next-dot{{ ' is-set' if wside }}" aria-hidden="true"></span>
+          {% if wside %}{{ wside.name }} advances to the {{ tcap }}{% if opp %} vs No. {{ opp.seed }} {{ opp.name }}{% endif %}
+          {% else %}Winner plays {% if opp %}No. {{ opp.seed }} {{ opp.name }}{% else %}the other {{ 'semifinal' if tcap == 'National Championship' else 'side' }}'s winner{% endif %} in the {{ tcap }}{% endif %}
+        </p>
+      {% elif gid == 'm-nc' and champion %}
+        <p class="bkr-next" style="--line: {{ rail_line(champion.color) }}"><span class="bkr-next-dot is-set" aria-hidden="true"></span>{{ champion.name }} wins the national title</p>
+      {% endif %}
       {% endfor %}
     </section>
-    <section class="bk-m-round">
-      <h2 class="bk-m-head">Quarterfinals</h2>
-      {% for m in bracket.quarterfinals %}
-        {{ match_card(m, 'm', show_bye=True) }}
-      {% endfor %}
-    </section>
-    <section class="bk-m-round">
-      <h2 class="bk-m-head">Semifinals</h2>
-      {% for m in bracket.semifinals %}
-        {{ match_card(m, 'm') }}
-      {% endfor %}
-    </section>
-    <section class="bk-m-round">
-      <h2 class="bk-m-head bk-m-head-final">National Championship</h2>
-      {{ match_card(bracket.championship, 'm', final=True) }}
-      {% if champion %}{{ champion_block(champion) }}{% endif %}
-    </section>
+    {% endfor %}
   </div>
   {% endif %}{# /unsupported_season #}
 
@@ -312,90 +249,69 @@
 {% block scripts %}
 <script>
 (function () {
-  // Whole-card click → game page (team rows inside stay normal links)
-  document.querySelectorAll('.bk-match[data-game]').forEach(function (card) {
+  // Whole-card click opens the game; the team names inside stay their own links.
+  document.querySelectorAll('.bkr-card[data-game]').forEach(function (card) {
     card.addEventListener('click', function (e) {
       if (e.target.closest('a')) return;
       window.location.href = card.dataset.game;
     });
     card.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && e.target === card) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === card) {
+        e.preventDefault();
         window.location.href = card.dataset.game;
       }
     });
   });
 
-  // SVG connector lines between rounds
   var board = document.getElementById('bkBoard');
   var svg = document.getElementById('bkLines');
   if (!board || !svg) return;
+  var links = JSON.parse(board.dataset.links || '[]');
+  var NEUTRAL = 'rgba(255,255,255,0.16)';
 
-  // [from, to, side] — side 'L' exits the card's right edge, 'R' its left
-  var LINKS = [
-    ['m-r1-a', 'm-qf-1', 'L'], ['m-r1-b', 'm-qf-2', 'L'],
-    ['m-qf-1', 'm-sf-1', 'L'], ['m-qf-2', 'm-sf-1', 'L'],
-    ['m-sf-1', 'm-nc',   'L'],
-    ['m-r1-d', 'm-qf-3', 'R'], ['m-r1-c', 'm-qf-4', 'R'],
-    ['m-qf-3', 'm-sf-2', 'R'], ['m-qf-4', 'm-sf-2', 'R'],
-    ['m-sf-2', 'm-nc',   'R']
-  ];
+  function mid(el, b) { var r = el.getBoundingClientRect(); return r.top + r.height / 2 - b.top; }
 
-  var champion = board.dataset.champion || '';
-  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var drawnOnce = false;
-
+  // Each line leaves the winner's row (or the card's middle while undecided)
+  // and enters the row that winner fills in the next game.
   function draw() {
+    if (!board.offsetWidth) return;   // hidden on phones
     var b = board.getBoundingClientRect();
     svg.setAttribute('viewBox', '0 0 ' + b.width + ' ' + b.height);
+    svg.setAttribute('width', b.width); svg.setAttribute('height', b.height);
     svg.innerHTML = '';
-    var champPaths = [];
-    LINKS.forEach(function (link) {
-      var from = document.getElementById(link[0]);
-      var to = document.getElementById(link[1]);
+    var paths = [];
+    function line(x1, y1, x2, y2, col, w) {
+      var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      var xm = (x1 + x2) / 2;
+      p.setAttribute('d', 'M' + x1 + ' ' + y1 + ' H' + xm + ' V' + y2 + ' H' + x2);
+      p.setAttribute('stroke', col); p.setAttribute('stroke-width', w);
+      p.setAttribute('fill', 'none'); p.setAttribute('stroke-linejoin', 'round');
+      (w > 2 ? paths : []).push(p);
+      // quiet lines first, coloured ones on top
+      if (w > 2) svg.appendChild(p); else svg.insertBefore(p, svg.firstChild);
+    }
+    links.forEach(function (l) {
+      var from = document.getElementById(l[0]), to = document.getElementById(l[1]);
       if (!from || !to) return;
-      var f = from.getBoundingClientRect();
-      var t = to.getBoundingClientRect();
-      var y1 = f.top + f.height / 2 - b.top;
-      var y2 = t.top + t.height / 2 - b.top;
-      var x1, x2;
-      if (link[2] === 'L') { x1 = f.right - b.left; x2 = t.left - b.left; }
-      else                 { x1 = f.left - b.left;  x2 = t.right - b.left; }
-      var mx = (x1 + x2) / 2;
-      var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d',
-        'M' + x1 + ' ' + y1 + ' H' + mx + ' V' + y2 + ' H' + x2);
-      // One signal on this board: the run the champion actually took. Every
-      // other connector stays a neutral hairline, so the lit path means
-      // something instead of "this game has been played".
-      var isChamp = champion && from.dataset.winner === champion;
-      path.setAttribute('class', isChamp ? 'bk-line bk-line-champ' : 'bk-line');
-      svg.appendChild(path);
-      if (isChamp) champPaths.push(path);
+      var won = from.querySelector('.bkr-row.is-won');
+      var target = to.querySelectorAll('.bkr-row')[l[2]];
+      var f = from.getBoundingClientRect(), t = to.getBoundingClientRect();
+      var col = won ? getComputedStyle(won).getPropertyValue('--line').trim() : NEUTRAL;
+      line(f.right - b.left, won ? mid(won, b) : mid(from, b), t.left - b.left,
+           target ? mid(target, b) : mid(to, b), col, won ? 3 : 2);
     });
-
-    // The page's one authored moment: the champion's route draws itself in,
-    // once, on the first paint. Redraws after a resize are instant — the
-    // animation is a greeting, not a loop.
-    if (champPaths.length && !reduced && !drawnOnce) {
-      champPaths.forEach(function (p, i) {
-        var len = p.getTotalLength();
-        p.style.strokeDasharray = len;
-        p.style.strokeDashoffset = len;
-        p.style.transition = 'stroke-dashoffset 700ms cubic-bezier(0.22, 1, 0.36, 1) ' + (120 + i * 90) + 'ms';
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () { p.style.strokeDashoffset = '0'; });
-        });
-      });
-      drawnOnce = true;
+    // the champion's line runs on into the panel
+    var nc = document.getElementById('m-nc'), panel = document.getElementById('bkPanel');
+    if (nc && panel) {
+      var w = nc.querySelector('.bkr-row.is-won'), n = nc.getBoundingClientRect(), pr = panel.getBoundingClientRect();
+      var y = w ? mid(w, b) : mid(nc, b);
+      line(n.right - b.left, y, pr.left - b.left, y, w ? getComputedStyle(w).getPropertyValue('--line').trim() : NEUTRAL, w ? 3 : 2);
     }
   }
 
   draw();
   var t;
-  window.addEventListener('resize', function () {
-    clearTimeout(t); t = setTimeout(draw, 100);
-  });
-  // Redraw once fonts/images settle card heights
+  window.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(draw, 100); });
   window.addEventListener('load', draw);
 })();
 </script>
