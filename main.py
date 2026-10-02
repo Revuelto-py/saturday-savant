@@ -7886,7 +7886,12 @@ def game_detail(game_id):
                        'WHERE game_id = %s AND scored = 0', (game_id,))
             fr = c2.fetchone()
             if fr and fr[0] is not None:
+                # favorite/fav_prob match the completed-game shape; the live
+                # verdict line ("had X at N% before kickoff") reads them.
+                _home_fav = fr[0] >= 0.5
                 forecast = {'home_prob': fr[0], 'margin': fr[1],
+                            'favorite': home_team if _home_fav else away_team,
+                            'fav_prob': fr[0] if _home_fav else 1 - fr[0],
                             'contrib': describe_contrib(fr[2]) or None}
         except Exception:
             conn2.rollback()   # table absent on a fresh DB — degrade to no block
