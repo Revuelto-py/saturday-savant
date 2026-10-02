@@ -85,10 +85,12 @@
       </summary>
       <div class="bk-proj-note">
         <p class="bk-proj-lede">
-            Nobody has been seeded yet. This is the bracket the current AP poll would produce
-            under the College Football Playoff's {{ season }} rules — twelve teams, straight
-            seeding, byes to the top four. No games are simulated, so the first round is filled
-            in and every round after it stays open.
+            Nobody has been seeded yet. This is the field the current AP poll and results would
+            produce under the College Football Playoff's 12-team rules: the five highest-ranked
+            conference champions get automatic bids, the next seven highest-ranked teams get the
+            at-large places, and seeding is straight by ranking, so the top four ranked teams get
+            the byes. No games are simulated, so the first round is filled in and every round
+            after it stays open.
         </p>
         <h2 class="bk-proj-head">Automatic bids</h2>
         <ul class="bk-proj-bids">
@@ -97,15 +99,16 @@
                 <span class="bk-proj-seed">{{ e.seed }}</span>
                 <span class="bk-proj-why">
                     <a class="bk-proj-team" href="{{ team_url(e.team, season) }}">{{ e.team }}</a>
-                    <span class="bk-proj-basis">{{ e.basis }}{% if not e.ranked %} · unranked, taken on SP+{% endif %}</span>
+                    <span class="bk-proj-basis">{{ e.basis }} · {{ e.record }}{% if e.ranked %} · AP No. {{ e.ap_rank }}{% else %} · unranked{% endif %}</span>
                 </span>
             </li>
             {% endfor %}
         </ul>
         <p class="bk-proj-caveat">
-            A conference champion is assumed to be that conference's highest-ranked team, which
-            is all a poll can tell you in {{ 'September' if season >= 2026 else 'season' }}. The
-            remaining places go to the highest-ranked teams left over.
+            Until a title game is played, a conference's projected champion is the best-ranked
+            team among those with the fewest conference losses. The AP poll stands in for the
+            committee's ranking, which only starts in November; unranked teams are ordered by
+            record, then SP+, then the Savant rating.
         </p>
       </div>
     </details>

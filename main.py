@@ -11578,39 +11578,45 @@ CFP_POWER_CONFS = ('ACC', 'Big 12', 'Big Ten', 'SEC')
 CFP_GROUP_OF_SIX = ('American Athletic', 'Conference USA', 'Mid-American',
                     'Mountain West', 'Pac-12', 'Sun Belt')
 CFP_FIELD_SIZE = 12
+CFP_AUTO_BIDS = 5     # the five highest-ranked conference champions
 
 
 def _project_cfp_field(cursor, season):
-    """The bracket this season's AP poll would produce, under the 2026 rules.
+    """The field this season's AP poll and results would produce under the
+    12-team rules, and how each team got there.
 
-    A projection, not a forecast: it reads the poll as it stands and applies the
-    selection rules to it. No games are simulated and nothing is predicted about
-    who wins — the first round is filled and every later round is left open,
-    because that is genuinely all the poll can tell you.
+    A projection, not a forecast: nothing is simulated. It applies the
+    selection rules to the poll and the standings as they stand:
 
-    Conference champions are taken to be each conference's highest-ranked team,
-    which is the assumption the request specifies and the only one the AP poll
-    supports. Where a conference has nobody ranked at all — true of all six
-    Group of Six leagues in September — the site's own Savant rating breaks the
-    tie rather than the slot going empty; those picks are marked so the page can
-    say which ones rest on the poll and which don't.
+      • Automatic bids go to the FIVE highest-ranked conference champions,
+        whatever their conference. A power-league champion is not guaranteed
+        a place; a strong Group of Six champion can take a second slot.
+      • A conference's projected champion is its actual title-game winner once
+        there is one; before that, the best-ranked team among those with the
+        fewest conference losses. "Highest-ranked team" alone handed the
+        Big 12 to a team that had already lost two league games.
+      • The other seven places go to the highest-ranked teams left. There is
+        no independent's bid: Notre Dame gets in on its ranking like anyone.
+      • Seeding is straight by ranking, so the top four ranked teams get the
+        byes; an automatic qualifier ranked outside the twelve takes 12th.
+
+    The AP poll stands in for the committee's ranking (which only exists from
+    November). Unranked teams are ordered by resume: fewer losses first, then
+    SP+, then the site's Savant rating.
 
     Returns (seeds, entries): seeds is {team: seed} in the shape the bracket
-    builder already consumes, entries carries the reasoning per team.
+    builder consumes; entries carries the reasoning per team.
     """
     ap = get_ap_rankings(cursor, season)
     if not ap:
         return {}, []
 
-    fcs = set(FCS_CONFS)
-    cursor.execute('SELECT name, conference FROM teams WHERE conference IS NOT NULL')
-    conf_of = {n: c for n, c in cursor.fetchall() if c not in fcs}
+    standings = _compute_conference_standings(cursor, season)
+    fbs_confs = set(CFP_POWER_CONFS) | set(CFP_GROUP_OF_SIX)
+    # every FBS team's record, independents included (Notre Dame's resume
+    # counts like anyone's even though it can't be a conference champion)
+    rows = {r['name']: r for c, rs in standings.items() if c not in FCS_CONFS for r in rs}
 
-    # The tie-break for unranked teams, in order of how much it can be trusted
-    # this early: SP+ first, because it is a full-season rating carrying
-    # preseason priors, then the site's own Savant rating. Savant alone would
-    # have handed the Group of Six slot to a 1-0 Massachusetts on the strength
-    # of a single game — the same one-game-sample trap the leaderboard bar had.
     sp = {}
     try:
         cursor.execute('SELECT team, rating FROM sp_ratings WHERE season = %s', (season,))
@@ -11626,47 +11632,52 @@ def _project_cfp_field(cursor, season):
         cursor.connection.rollback()
 
     def rank_of(team):
-        """Poll position. Unranked teams sort after every ranked one, ordered
-        among themselves by SP+ and then by Savant."""
+        """Ranked teams by poll position; unranked after them, by resume."""
         if team in ap:
-            return (0, ap[team])
-        if team in sp:
-            return (1, -sp[team])
-        return (2, -savant.get(team, -99))
+            return (0, ap[team], 0, 0)
+        r = rows.get(team, {})
+        return (1, r.get('losses', 99), -sp.get(team, -99), -savant.get(team, -99))
 
-    def best_in(conferences):
-        pool = [t for t, c in conf_of.items() if c in conferences]
-        return min(pool, key=rank_of) if pool else None
+    def projected_champion(conf):
+        rs = standings.get(conf) or []
+        if not rs:
+            return None, None
+        actual = next((r for r in rs if r.get('is_champion')), None)
+        if actual:
+            return actual['name'], 'won the title game'
+        fewest = min(r['conf_losses'] for r in rs)
+        leaders = [r for r in rs if r['conf_losses'] == fewest]
+        best = min(leaders, key=lambda r: rank_of(r['name']))
+        return best['name'], f"{best['conf_wins']}-{best['conf_losses']} in conference"
+
+    champs = []
+    for conf in fbs_confs:
+        team, why = projected_champion(conf)
+        if team:
+            champs.append((team, conf, why))
+    champs.sort(key=lambda c: rank_of(c[0]))
 
     entries, taken = [], set()
 
-    def claim(team, basis, auto=True):
+    def claim(team, basis, auto):
         if not team or team in taken:
             return
         taken.add(team)
-        entries.append({'team': team, 'conference': conf_of.get(team),
+        r = rows.get(team, {})
+        entries.append({'team': team, 'conference': r.get('conf'),
                         'ap_rank': ap.get(team), 'basis': basis, 'auto': auto,
-                        'ranked': team in ap})
+                        'ranked': team in ap,
+                        'record': f"{r.get('wins', 0)}-{r.get('losses', 0)}"})
 
-    for conf in CFP_POWER_CONFS:
-        champ = best_in((conf,))
-        claim(champ, f'Projected {conf} champion')
-
-    claim(best_in(CFP_GROUP_OF_SIX), 'Highest-ranked Group of Six team')
-
-    # Notre Dame's independent bid. Top twelve only, and it is the poll that
-    # decides — an unranked independent has no claim.
-    nd_rank = ap.get('Notre Dame')
-    if nd_rank and nd_rank <= CFP_FIELD_SIZE:
-        claim('Notre Dame', 'Independent, ranked in the top twelve')
+    for team, conf, why in champs[:CFP_AUTO_BIDS]:
+        claim(team, f'Projected {conf} champion · {why}', True)
 
     for team in sorted(ap, key=ap.get):
         if len(entries) >= CFP_FIELD_SIZE:
             break
-        claim(team, 'At-large', auto=False)
+        claim(team, 'At-large', False)
 
     entries.sort(key=lambda e: rank_of(e['team']))
-    entries = entries[:CFP_FIELD_SIZE]
     for i, e in enumerate(entries, start=1):
         e['seed'] = i
     return {e['team']: e['seed'] for e in entries}, entries
