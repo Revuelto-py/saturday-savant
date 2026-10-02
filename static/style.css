@@ -10798,7 +10798,7 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 .pp-lg-foot:focus-visible, .pp-lg-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* ── Game hero: split halves ─────────────────────────────────────────── */
-.gx{position:relative;overflow:hidden;background:#060607;border-bottom:1px solid var(--border);color:#fff}
+.gx{--gx-h:450px;position:relative;overflow:hidden;background:#060607;border-bottom:1px solid var(--border);color:#fff}
 .gx-half{position:absolute;top:0;bottom:0;overflow:hidden}
 .gx-half--away{left:0;right:50%;background:radial-gradient(ellipse 110% 130% at 0% 45%,var(--c0) 0%,var(--c1) 38%,var(--c2) 78%,#060607 100%)}
 .gx-half--home{left:50%;right:0;background:radial-gradient(ellipse 110% 130% at 100% 45%,var(--c0) 0%,var(--c1) 38%,var(--c2) 78%,#060607 100%)}
@@ -10807,7 +10807,7 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 .gx-half--away .gx-mark{left:-90px}.gx-half--home .gx-mark{right:-90px}
 .gx-half.is-muted .gx-mark{opacity:.06}
 .gx-rule{position:absolute;left:50%;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent 0%,rgba(255,255,255,.18) 20%,rgba(255,255,255,.18) 62%,transparent 72%)}
-.gx-inner{position:relative;max-width:1280px;margin:0 auto;padding:20px 40px 22px}
+.gx-inner{position:relative;max-width:1280px;margin:0 auto;padding:20px 40px 22px;display:flex;flex-direction:column;min-height:var(--gx-h,0)}
 .gx-top{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
 .gx-state{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:800;letter-spacing:.3em;text-transform:uppercase}
 .gx-state::before,.gx-state::after{content:"";width:28px;height:1px;background:rgba(255,255,255,.4)}
@@ -10815,11 +10815,11 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 @keyframes gxPulse{0%{box-shadow:0 0 0 0 rgba(255,77,77,.6)}70%{box-shadow:0 0 0 10px rgba(255,77,77,0)}100%{box-shadow:0 0 0 0 rgba(255,77,77,0)}}
 .gx-sub{font-size:13px;color:#aab1b7}
 .gx--live .gx-sub{color:#fff;font-weight:600}
-.gx-teams{display:grid;grid-template-columns:1fr 1fr;column-gap:112px;margin-top:18px}
+.gx-teams{display:grid;grid-template-columns:1fr 1fr;column-gap:112px;margin-top:auto;padding-top:18px}
 .gx-side{display:flex;flex-direction:column;min-width:0}
 .gx-side--away{align-items:flex-end;text-align:right}
 .gx-side--home{align-items:flex-start}
-.gx-logo{width:60px;height:60px;object-fit:contain;display:block}
+.gx-logo{width:92px;height:92px;object-fit:contain;display:block}
 .gx-meta{margin-top:8px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.72)}
 .gx-name{margin-top:2px;font-size:48px;line-height:.92;font-weight:800;font-stretch:78%;text-transform:uppercase;letter-spacing:-.01em;color:#fff;text-decoration:none;overflow-wrap:anywhere}
 a.gx-name:hover{opacity:.85}
@@ -10833,7 +10833,7 @@ a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offse
 .gx-num--pct{font-size:80px;margin-top:0}
 .gx-num--pct small{font-size:.5em}
 .gx-num--pct.is-dog{font-weight:600;color:#9a94a8}
-.gx-band{margin:20px -40px 0;padding:0 40px}
+.gx-band{margin:auto -40px 0;padding:20px 40px 0}
 .gx-verdict{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px 16px;margin:0;text-align:center}
 .gx-grade{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
 .gx-grade.is-miss{color:#ff8a90}.gx-grade.is-hit{color:#6fdc9a}
@@ -10849,12 +10849,13 @@ a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offse
 .gx-facts{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 44px;margin-top:18px;padding-bottom:10px;font-size:15px;color:#c4ccd4}
 .gx-facts b{color:#fff}
 @media (max-width:760px){
+  .gx{--gx-h:416px}
   .gx-inner{padding:18px 16px 12px}
-  .gx-band{margin:16px -16px 0;padding:0 16px}
+  .gx-band{margin:auto -16px 0;padding:16px 16px 0}
   .gx-state{font-size:11px;letter-spacing:.24em;gap:8px}
   .gx-state::before,.gx-state::after{width:16px}
-  .gx-teams{column-gap:36px;margin-top:16px}
-  .gx-logo{width:48px;height:48px}
+  .gx-teams{column-gap:36px;padding-top:16px}
+  .gx-logo{width:64px;height:64px}
   .gx-meta{margin-top:10px;font-size:10px;letter-spacing:.12em}
   .gx-name{font-size:28px}
   .gx-num{font-size:78px}
