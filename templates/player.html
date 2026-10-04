@@ -170,7 +170,7 @@
             {% for label, val, rk, rtxt in tiles.list %}
             <div class="pp-tile">
                 <span class="pp-tile-k">{{ label }}</span>
-                <span class="pp-tile-v{{ ' is-top' if rk and rk <= 10 and not rtxt.startswith('T-') else '' }}">{{ val }}</span>
+                <span class="pp-tile-v{{ ' is-top' if rk and rk <= 10 else '' }}">{{ val }}</span>
                 <span class="pp-tile-r">{{ rtxt }}</span>
             </div>
             {% endfor %}
