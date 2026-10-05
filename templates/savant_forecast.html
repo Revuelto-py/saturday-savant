@@ -22,8 +22,7 @@
         </span>
         <span class="sf-vs">{{ 'vs' if g.neutral else 'at' }}</span>
         {# Not mirrored: each score follows its own team, so the line reads the
-           way a score is written — "Miami (OH) 25 at Northern Illinois 14".
-           Mirroring put both numbers either side of "at" and read as "25 at 14". #}
+           way a score is written — "Miami (OH) 25 at Northern Illinois 14". #}
         <span class="sf-side sf-side-home">
             {% if g.home_logo %}<img src="{{ g.home_logo }}" alt="" loading="lazy">{% endif %}
             <span class="sf-team{{ ' is-won' if g.winner == g.home else '' }}">{{ g.home }}</span>
@@ -44,317 +43,329 @@
         <span class="sf-called">Forecast <b>{{ fav }}</b> {{ '%.1f' % fav_pct }}%</span>
         {# Text carries the verdict, not the colour alone. #}
         <span class="sf-verdict {{ 'sf-hit' if g.correct else 'sf-miss' }}">{{ 'Hit' if g.correct else 'Miss' }}</span>
-        <span class="sf-when">{{ g.season }} · {{ 'Week %s' % g.week if g.week else 'Postseason' }}</span>
+        <span class="sf-when">{{ g.season }}, {{ 'week %s' % g.week if g.week else 'postseason' }}</span>
     </div>
 </a>
 {% endmacro %}
 {% set top_fam = families[0] %}
+{% set acc = fbs.acc or 0 %}
 {% set stations = [
-    {'id': 'fc-model',    'name': 'The model',      'kind': 'in',
-     'fig': '2017–23', 'cap': 'trained, then tested on an unseen 2025'},
-    {'id': 'fc-inputs',   'name': 'Before kickoff', 'kind': '',
-     'fig': '16', 'cap': 'inputs, every one known before the snap'},
-    {'id': 'fc-families', 'name': 'Four families',  'kind': '',
-     'fig': '%.0f%%'|format(top_fam[1]), 'cap': 'of the weight is %s'|format(top_fam[0]|lower)},
-    {'id': 'fc-fcs',      'name': 'Two models',     'kind': '',
-     'fig': fcs.n|string, 'cap': 'FCS games that skip it for a four-input model'},
-    {'id': 'fc-frozen',   'name': 'Frozen',         'kind': '',
-     'fig': '{:,}'.format(fbs.n + fcs.n), 'cap': 'forecasts frozen at kickoff, graded as issued'},
-    {'id': 'fc-graded',   'name': 'Graded',         'kind': 'out',
-     'fig': '%.1f%%'|format(fbs.acc), 'cap': 'straight up, %s FBS games'|format('{:,}'.format(fbs.n))},
+    {'id': 'fc-model',    'name': 'The model',      'fig': '2025', 'cap': 'the unseen season it was tested on'},
+    {'id': 'fc-inputs',   'name': 'Before kickoff', 'fig': '16', 'cap': 'inputs, every one known before the snap'},
+    {'id': 'fc-families', 'name': 'Four families',  'fig': '%.0f%%'|format(top_fam[1]), 'cap': 'of the weight is %s'|format(top_fam[0]|lower)},
+    {'id': 'fc-fcs',      'name': 'Two models',     'fig': fcs.n|string, 'cap': 'FCS games sent to a four-input model'},
+    {'id': 'fc-frozen',   'name': 'Frozen',         'fig': '{:,}'.format(fbs.n + fcs.n), 'cap': 'forecasts frozen at kickoff, graded as issued'},
+    {'id': 'fc-graded',   'name': 'Graded',         'fig': '%.1f%%'|format(acc), 'cap': 'straight up, %s FBS games'|format('{:,}'.format(fbs.n))},
 ] %}
 
-<div class="page-wrapper sf-page pl-page">
+<div class="page-wrapper svr-page sf-page">
 
-    <header class="pl-hero">
-        <h1 class="pl-title">Savant Forecast<span class="pl-tag">FC</span></h1>
-        <p class="pl-thesis">A win probability for every game, set before kickoff and never touched
-        again — then graded against what actually happened. This page is the whole record: how the
-        number is built, how often it has been right, and the games where it was most confident and
-        most wrong.</p>
+    <header class="svr-hero sf-hero">
+        <div class="svr-hero-text">
+            <h1 class="svr-h1">Savant Forecast</h1>
+            <p class="svr-thesis">A win probability for every game, set before kickoff and never touched again, then graded against what happened.</p>
+            <p class="svr-hero-sub">This page is the whole record: how the number is built, how often it has been right, and the games where it was most confident and most wrong.</p>
+        </div>
+        {% if swarm %}
+        <figure class="sf-swarm-fig">
+            <svg class="sf-swarm" viewBox="0 0 {{ swarm.w }} {{ swarm.h }}" role="img"
+                 aria-label="Every one of {{ '{:,}'.format(swarm.n) }} graded FBS forecasts as a dot, placed by how confident the forecast was. Correct calls stack above the axis and misses hang below it. Near 50 percent the two sides are close to even; above 90 percent there are almost no misses.">
+                <g class="sf-sw-hits" fill="#1c9cf0">
+                    {% for x, y in swarm.hits %}<circle cx="{{ x }}" cy="{{ y }}" r="4.2"></circle>{% endfor %}
+                </g>
+                <g class="sf-sw-miss" fill="none" stroke="#f0a868" stroke-width="1.6">
+                    {% for x, y in swarm.misses %}<circle cx="{{ x }}" cy="{{ y }}" r="3.6"></circle>{% endfor %}
+                </g>
+                <g class="sf-sw-exp" stroke="#e7e9ea" stroke-width="1.5" stroke-dasharray="3 3" stroke-linecap="round">
+                    {% for e in swarm.expect %}<line x1="{{ e.x1 }}" x2="{{ e.x2 }}" y1="{{ e.y }}" y2="{{ e.y }}"></line>{% endfor %}
+                </g>
+                <rect x="{{ swarm.left }}" y="{{ swarm.axis_top }}" width="{{ swarm.right - swarm.left }}" height="{{ swarm.axis_bot - swarm.axis_top }}" rx="8" fill="rgba(255,255,255,.04)"></rect>
+                <g class="sf-sw-text" font-size="12" fill="#9aa0a6" text-anchor="middle">
+                    {% for t in swarm.ticks %}<text x="{{ t.x }}" y="{{ swarm.axis_mid + 4 }}">{{ t.label }}</text>{% endfor %}
+                </g>
+                <g class="sf-sw-text" font-size="13" font-weight="650" stroke="#000" stroke-width="4" paint-order="stroke">
+                    <text x="{{ swarm.left }}" y="14" fill="#1c9cf0">Called right</text>
+                    <text x="{{ swarm.left }}" y="{{ swarm.h - 2 }}" fill="#f0a868">Called wrong</text>
+                </g>
+            </svg>
+            <div class="sf-swarm-key" aria-hidden="true">
+                <div class="sf-swarm-axis"><span>50%</span><span>75%</span><span>100%</span></div>
+                <div class="sf-swarm-legend"><span><i class="is-hit"></i>Called right, above</span><span><i class="is-miss"></i>Called wrong, below</span></div>
+            </div>
+            <figcaption class="svr-note">Every graded FBS forecast, placed by the favourite's probability. The dashed marks show where each column's misses would stop if the forecast were perfectly honest.</figcaption>
+        </figure>
+        {% endif %}
     </header>
 
-    <section class="pl-map" data-pl-map aria-labelledby="fc-map-title" style="--pl-n: {{ stations|length }}">
-        <h2 class="sr-only" id="fc-map-title">How a Savant Forecast is made, from pre-kickoff inputs to a graded result</h2>
-        <div class="pl-track">
-            <span class="pl-run" aria-hidden="true"></span>
-            <ol class="pl-rail">
-                {% for st in stations %}
-                <li class="pl-node{{ ' pl-node--' ~ st.kind if st.kind }}">
-                    <a class="pl-link" href="#{{ st.id }}">
-                        <span class="pl-port" aria-hidden="true"></span>
-                        <span class="pl-name">{{ st.name }}</span>
-                        <span class="pl-fig">{{ st.fig }}</span>
-                        <span class="pl-cap">{{ st.cap }}</span>
-                    </a>
-                </li>
-                {% endfor %}
-            </ol>
-        </div>
-    </section>
+    <nav class="svr-field" aria-label="How a Savant Forecast is made, from pre-kickoff inputs to a graded result">
+        {% for st in stations %}
+        <a class="svr-stn{{ ' svr-stn-end' if loop.last }}" href="#{{ st.id }}">
+            <span class="svr-stn-name">{{ st.name }}</span>
+            <span class="svr-stn-fig">{{ st.fig }}</span>
+            <span class="svr-stn-cap">{{ st.cap }}</span>
+        </a>
+        {% endfor %}
+    </nav>
+    <p class="svr-note svr-field-note">Six steps, from the question to the grade. Select one to jump to it.</p>
 
-    <section class="pl-path" aria-labelledby="fc-path-title">
-        <h2 class="pl-h2" id="fc-path-title">Station by station</h2>
-        <div class="pl-path-grid">
-            <nav class="pl-spy" aria-hidden="true">
-                <ol>
-                    {% for st in stations %}
-                    <li><span class="pl-port"></span><span class="pl-spy-name">{{ st.name }}</span></li>
+    <div class="svr-rows">
+
+        <section class="svr-row" id="fc-model" aria-labelledby="fc-model-h">
+            <div class="svr-row-text">
+                <span class="svr-step" aria-hidden="true">1</span>
+                <h2 class="svr-h2" id="fc-model-h">One question, asked before kickoff</h2>
+                <p class="svr-row-fig"><span>2017–23</span> training seasons; tuned on 2024, tested on 2025</p>
+                <div class="svr-prose">
+                    <p>The forecast answers a single thing: <em>what are the odds each team wins this game?</em> It is a logistic regression, the plainest model that does this job, trained on 2017 through 2023, tuned on 2024, and tested on a 2025 season it had never seen.</p>
+                    <p>A second output turns the same inputs into an expected margin, which is where the "by about 10" line on a game page comes from.</p>
+                </div>
+            </div>
+            <figure class="svr-art">
+                <ol class="sf-seasons" aria-label="How each season is used">
+                    {% for use, y0, y1, cls in [('Elo warm-up', 2016, 2016, 'is-burn'), ('Trained', 2017, 2023, 'is-train'), ('Tuned', 2024, 2024, 'is-tune'), ('Tested', 2025, 2025, 'is-test'), ('Live', 2026, 2026, 'is-live')] %}
+                    <li>
+                        <span class="sf-use">{{ use }}</span>
+                        <span class="sf-gantt"><span class="sf-gantt-bar {{ cls }}" style="left: {{ ((y0 - 2016) / 11 * 100)|round(2) }}%; width: {{ ((y1 - y0 + 1) / 11 * 100)|round(2) }}%"></span></span>
+                        <span class="sf-yr">{{ y0 }}{{ '–%d'|format(y1) if y1 != y0 }}</span>
+                    </li>
                     {% endfor %}
                 </ol>
-            </nav>
+                <figcaption class="svr-note svr-art-cap">The test season never touched training, so its accuracy is a fair read of a season the model has not seen.</figcaption>
+            </figure>
+        </section>
 
-            <div class="pl-stations">
-
-                <article class="pl-station" id="fc-model">
-                    <header class="pl-station-head">
-                        <h3 class="pl-station-name">One question, asked before kickoff</h3>
-                        <p class="pl-station-fig"><span class="pl-num">2017–23</span>
-                            <span class="pl-unit">training seasons; tuned on 2024, tested on 2025</span></p>
-                    </header>
-                    <div class="pl-prose">
-                        <p>The forecast answers a single thing: <em>what are the odds each team wins this
-                        game?</em> It is a logistic regression — the plainest model that does this job —
-                        trained on 2017 through 2023, tuned on 2024, and tested on a 2025 season it had
-                        never seen.</p>
-                        <p>A second output converts the same inputs into an expected margin, which is where
-                        the "by about 10" line on a game page comes from.</p>
-                    </div>
-                </article>
-
-                <article class="pl-station" id="fc-inputs">
-                    <header class="pl-station-head">
-                        <h3 class="pl-station-name">It is only allowed to know what you knew</h3>
-                        <p class="pl-station-fig"><span class="pl-num">16</span>
-                            <span class="pl-unit">inputs, every one available before kickoff</span></p>
-                    </header>
-                    <div class="pl-prose">
-                        <p>This is the constraint the whole thing is built around. Every input has to have
-                        been available <strong>before the game kicked off</strong>. That sounds obvious and
-                        is easy to get wrong: a team's final Savant Rating or end-of-season SP+ is an
-                        average that already contains the result of this game, so a model fed those numbers
-                        looks brilliant and predicts nothing.</p>
-                        <p>Same-season ratings and AP polls are excluded for exactly that reason. The features
-                        are rebuilt week by week by replaying the season forward, and the same code path
-                        produces them for training and for live forecasting, so the two can't drift apart.</p>
-                    </div>
-                </article>
-
-                <article class="pl-station" id="fc-families">
-                    <header class="pl-station-head">
-                        <h3 class="pl-station-name">What actually moves the number</h3>
-                        <p class="pl-station-fig"><span class="pl-num">{{ '%.0f'|format(top_fam[1]) }}%</span>
-                            <span class="pl-unit">of the model's weight is {{ top_fam[0]|lower }}</span></p>
-                    </header>
-                    <div class="pl-prose">
-                        <p>Sixteen inputs, in four families. The bars are each family's share of the
-                        model's total weight once every input is put on the same scale:</p>
-
-                        <ul class="sf-fam" role="list">
-                            {% for name, share, detail, colour in families %}
-                            <li class="sf-fam-row">
-                                <div class="sf-fam-head">
-                                    <span class="sf-fam-name">{{ name }}</span>
-                                    <span class="sf-fam-share">{{ '%.0f' % share }}%</span>
-                                </div>
-                                <div class="sf-fam-track">
-                                    <div class="sf-fam-bar" style="width: {{ share }}%; background: {{ colour }}"></div>
-                                </div>
-                                <p class="sf-fam-detail">{{ detail }}</p>
-                            </li>
-                            {% endfor %}
+        <section class="svr-row" id="fc-inputs" aria-labelledby="fc-inputs-h">
+            <div class="svr-row-text">
+                <span class="svr-step" aria-hidden="true">2</span>
+                <h2 class="svr-h2" id="fc-inputs-h">It is only allowed to know what you knew</h2>
+                <p class="svr-row-fig"><span>16</span> inputs, every one available before kickoff</p>
+                <div class="svr-prose">
+                    <p>Every input has to have been available <strong>before the game kicked off</strong>. That sounds obvious and is easy to get wrong: a team's final Savant Rating or end-of-season SP+ is an average that already contains the result of this game, so a model fed those numbers looks brilliant and predicts nothing.</p>
+                    <p>The features are rebuilt week by week by replaying the season forward, and the same code produces them for training and for live forecasting, so the two can't drift apart.</p>
+                </div>
+            </div>
+            <figure class="svr-art">
+                <div class="sf-kick">
+                    <div class="sf-kick-side">
+                        <p class="sf-kick-h">Known before kickoff</p>
+                        <ul>
+                            <li>Elo, updated after every game since 2016</li>
+                            <li>Points scored and allowed so far</li>
+                            <li>Record and games played</li>
+                            <li>Last season's SP+ and Savant Net</li>
+                            <li>Recruiting, returning production, transfers</li>
+                            <li>Venue, rest and week of the season</li>
                         </ul>
-
-                        <p>The single biggest lever is Elo — a running strength number updated game by game
-                        all the way back to 2016, which is how the model knows a 4-1 team beat nobody. In
-                        week 1 there is no in-season evidence at all, so recruiting and returning production
-                        carry the forecast almost by themselves; from week 2 on, what teams have actually
-                        done takes over and the preseason signal fades.</p>
                     </div>
-                </article>
-
-                <article class="pl-station" id="fc-fcs">
-                    <header class="pl-station-head">
-                        <h3 class="pl-station-name">Two models, because one can't see FCS</h3>
-                        <p class="pl-station-fig"><span class="pl-num">{{ fcs.n }}</span>
-                            <span class="pl-unit">FCS games that skip it for a four-input model</span></p>
-                    </header>
-                    <div class="pl-prose">
-                        <p>The main model compares two FBS teams by difference — their Elo gap, their
-                        recruiting gap — and an FCS opponent has none of those numbers. Rather than invent
-                        them, non-FBS games go to a separate four-input model that reads only the FBS side's
-                        strength.</p>
-                        <p>It is right about 96% of the time, which sounds impressive and mostly isn't; it is
-                        judged on whether it can tell a genuine 99% from a weak FBS team on the road, and it
-                        can.</p>
+                    <div class="sf-kick-line" aria-hidden="true"><span>Kickoff</span></div>
+                    <div class="sf-kick-side is-out">
+                        <p class="sf-kick-h">Never used</p>
+                        <ul>
+                            <li>This season's Savant Rating</li>
+                            <li>This season's SP+</li>
+                            <li>AP poll ranks</li>
+                        </ul>
+                        <p class="svr-note">Each one already contains results the forecast is meant to predict.</p>
                     </div>
-                </article>
+                </div>
+            </figure>
+        </section>
 
-                <article class="pl-station" id="fc-frozen">
-                    <header class="pl-station-head">
-                        <h3 class="pl-station-name">Nothing gets rewritten after the fact</h3>
-                        <p class="pl-station-fig"><span class="pl-num">{{ '{:,}'.format(fbs.n + fcs.n) }}</span>
-                            <span class="pl-unit">forecasts frozen at kickoff, graded as issued</span></p>
-                    </header>
-                    <div class="pl-prose">
-                        <p>Once a game kicks off its forecast is frozen. Later weeks re-forecast everything
-                        still unplayed — a team that fires its coach in October changes every remaining game
-                        on its schedule — but a graded prediction is never revised.</p>
-                        <p>The accuracy on this page is what the site actually said at the time, not a number
-                        reconstructed afterwards with the benefit of knowing how the season went.</p>
-                    </div>
-                </article>
+        <section class="svr-row" id="fc-families" aria-labelledby="fc-families-h">
+            <div class="svr-row-text">
+                <span class="svr-step" aria-hidden="true">3</span>
+                <h2 class="svr-h2" id="fc-families-h">What actually moves the number</h2>
+                <p class="svr-row-fig"><span>{{ '%.0f'|format(top_fam[1]) }}%</span> of the model's weight is {{ top_fam[0]|lower }}</p>
+                <div class="svr-prose">
+                    <p>Sixteen inputs, in four families. The bars are each family's share of the model's total weight once every input is put on the same scale.</p>
+                    <p>The single biggest lever is Elo, which is how the model knows a 4-1 team beat nobody. In week 1 there is no in-season evidence, so recruiting and returning production carry the forecast almost alone; from week 2 on, what teams have actually done takes over and the preseason signal fades.</p>
+                </div>
+            </div>
+            <figure class="svr-art">
+                <ul class="sf-fam" role="list">
+                    {% for name, share, detail, colour in families %}
+                    <li>
+                        <div class="sf-fam-head"><span class="sf-fam-name">{{ name }}</span><span class="sf-fam-share">{{ '%.0f' % share }}%</span></div>
+                        <div class="sf-fam-track"><div class="sf-fam-bar" style="width: {{ share }}%; background: {{ colour }}"></div></div>
+                        <p class="sf-fam-detail">{{ detail }}</p>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </figure>
+        </section>
 
-                <article class="pl-station" id="fc-graded">
-                    <header class="pl-station-head">
-                        <h3 class="pl-station-name">What comes out the end</h3>
-                        <p class="pl-station-fig"><span class="pl-num">{{ '%.1f' % fbs.acc }}%</span>
-                            <span class="pl-unit">straight up across {{ '{:,}'.format(fbs.n) }} graded FBS games</span></p>
-                    </header>
-                    <div class="pl-prose">
-                        <dl class="pl-defs">
-                            <dt>Straight up</dt>
-                            <dd>{{ '%.1f' % fbs.acc }}% of {{ '{:,}'.format(fbs.n) }} graded FBS games called
-                            correctly. Picking the home team every week gets you about 59%.</dd>
-                            <dt>Brier score</dt>
-                            <dd>{{ '%.3f' % fbs.brier }}. Average squared error of the probability itself.
-                            Lower is better; 0.25 is what you'd score by saying 50% every time.</dd>
-                            <dt>Against FCS</dt>
-                            <dd>{{ '%.1f' % fcs.acc }}%. On {{ fcs.n }} games against non-FBS opponents, handled
-                            by a separate model. Kept out of the headline number on purpose.</dd>
+        <section class="svr-row" id="fc-fcs" aria-labelledby="fc-fcs-h">
+            <div class="svr-row-text">
+                <span class="svr-step" aria-hidden="true">4</span>
+                <h2 class="svr-h2" id="fc-fcs-h">Two models, because one can't see FCS</h2>
+                <p class="svr-row-fig"><span>{{ fcs.n }}</span> FCS games sent to a four-input model</p>
+                <div class="svr-prose">
+                    <p>The main model compares two FBS teams by difference, their Elo gap and their recruiting gap, and an FCS opponent has none of those numbers. Rather than invent them, those games go to a separate four-input model that reads only the FBS side's strength.</p>
+                    <p>Its hit rate sounds impressive and mostly isn't, since FBS teams win these games about nine times in ten. It is judged on whether it can tell a genuine 99% from a weak FBS team on the road, and it can.</p>
+                </div>
+            </div>
+            <figure class="svr-art">
+                <div class="sf-models">
+                    <div class="sf-model">
+                        <p class="sf-model-h">FBS vs FBS</p>
+                        <p class="sf-model-fig">16 <span>inputs</span></p>
+                        <dl>
+                            <div><dt>Straight up</dt><dd>{{ '%.1f'|format(acc) }}%</dd></div>
+                            <div><dt>Brier score</dt><dd>{{ '%.3f'|format(fbs.brier or 0) }}</dd></div>
+                            <div><dt>Games graded</dt><dd>{{ '{:,}'.format(fbs.n) }}</dd></div>
                         </dl>
-                        <p>Those two groups are never averaged together. An FBS team beats an FCS team something
-                        like nine times in ten, so folding those games in would lift the headline accuracy by
-                        four points without the model having said anything difficult. Every figure on this page
-                        is FBS-vs-FBS unless it says otherwise. Grading covers {{ span[0] }}–{{ span[1] }}.</p>
                     </div>
-                </article>
+                    <div class="sf-model is-fcs">
+                        <p class="sf-model-h">FBS vs FCS</p>
+                        <p class="sf-model-fig">4 <span>inputs</span></p>
+                        <dl>
+                            <div><dt>Straight up</dt><dd>{{ '%.1f'|format(fcs.acc or 0) }}%</dd></div>
+                            <div><dt>Brier score</dt><dd>{{ '%.3f'|format(fcs.brier or 0) }}</dd></div>
+                            <div><dt>Games graded</dt><dd>{{ '{:,}'.format(fcs.n) }}</dd></div>
+                        </dl>
+                    </div>
+                </div>
+                <figcaption class="svr-note svr-art-cap">Never averaged together. Every other figure on this page is FBS vs FBS.</figcaption>
+            </figure>
+        </section>
 
+        <section class="svr-row" id="fc-frozen" aria-labelledby="fc-frozen-h">
+            <div class="svr-row-text">
+                <span class="svr-step" aria-hidden="true">5</span>
+                <h2 class="svr-h2" id="fc-frozen-h">Nothing gets rewritten after the fact</h2>
+                <p class="svr-row-fig"><span>{{ '{:,}'.format(fbs.n + fcs.n) }}</span> forecasts frozen and graded</p>
+                <div class="svr-prose">
+                    <p>Once a game kicks off its forecast is frozen. Later weeks re-forecast everything still unplayed, since a team that fires its coach in October changes every remaining game on its schedule, but a graded prediction is never revised.</p>
+                    <p>The 2025 forecasts are the test season: the finished model run as of each week, using only what was known then. From 2026 every forecast was published on the site before its game kicked off.</p>
+                </div>
+            </div>
+            <figure class="svr-art">
+                {% set smax = by_season|map(attribute=1)|max if by_season else 1 %}
+                <ul class="sf-seas" role="list">
+                    {% for season, n in by_season %}
+                    <li>
+                        <span class="sf-seas-yr">{{ season }}</span>
+                        <span class="sf-seas-track"><span class="sf-seas-bar{{ ' is-live' if season >= 2026 }}" style="width: {{ (n / smax * 100)|round(1) }}%"></span></span>
+                        <span class="sf-seas-n">{{ '{:,}'.format(n) }}</span>
+                        <span class="sf-seas-kind">{{ 'Issued live, before kickoff' if season >= 2026 else 'Test season, as of each week' }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </figure>
+        </section>
+
+        <section class="svr-row" id="fc-graded" aria-labelledby="fc-graded-h">
+            <div class="svr-row-text">
+                <span class="svr-step is-end" aria-hidden="true">6</span>
+                <h2 class="svr-h2" id="fc-graded-h">What comes out the end</h2>
+                <div class="svr-prose">
+                    <dl class="svr-defs">
+                        <div><dt>Straight up</dt><dd>{{ '%.1f'|format(acc) }}% of {{ '{:,}'.format(fbs.n) }} graded FBS games called correctly.</dd></div>
+                        <div><dt>Brier score</dt><dd>{{ '%.3f'|format(fbs.brier or 0) }}, the average squared error of the probability itself. Lower is better; saying 50% every time scores 0.250.</dd></div>
+                        <div><dt>Against FCS</dt><dd>{{ '%.1f'|format(fcs.acc or 0) }}% on {{ fcs.n }} games, from the separate model. Kept out of the headline on purpose.</dd></div>
+                    </dl>
+                    <p>Folding FCS games in would lift the headline by several points without the model having said anything difficult. Grading covers {{ span[0] }}–{{ span[1] }}.</p>
+                </div>
+            </div>
+            <figure class="svr-art">
+                <div class="sf-cmp" role="img" aria-label="Savant Forecast {{ '%.1f'|format(acc) }} percent straight up, against {{ '%.1f'|format(fbs.home or 0) }} percent for always picking the home team and 50 percent for a coin flip.">
+                    {% for label, v, cls in [('Savant Forecast', acc, 'is-us'), ('Always pick the home team', fbs.home or 0, ''), ('Flip a coin', 50, 'is-coin')] %}
+                    <div class="sf-cmp-row">
+                        <span class="sf-cmp-l">{{ label }}</span>
+                        <span class="sf-cmp-t"><span class="sf-cmp-f {{ cls }}" style="width: {{ v }}%"></span></span>
+                        <span class="sf-cmp-v">{{ '%.1f'|format(v) }}%</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <figcaption class="svr-note svr-art-cap">Straight-up accuracy on the same {{ '{:,}'.format(fbs.n) }} FBS games.</figcaption>
+            </figure>
+        </section>
+
+    </div>
+
+    {% if calib %}
+    <section class="svr-row sf-evidence" id="fc-calibration" aria-labelledby="fc-cal-h">
+        <div class="svr-row-text">
+            <h2 class="svr-h2" id="fc-cal-h">Does 70% mean 70%?</h2>
+            <div class="svr-prose">
+                <p>Being right often is not the same as being <em>honest</em>. A model that says 90% should be wrong one game in ten; if it is never wrong, it was too timid. Each point groups the games the model gave roughly the same confidence and compares what it claimed with what happened.</p>
+                {% if cal_gap %}<p>Points on the diagonal are honest. The widest gap is {{ '%.1f'|format((cal_gap.pred - cal_gap.act)|abs) }} points, in the {{ cal_gap.label }} group: it claimed {{ '%.1f'|format(cal_gap.pred) }}% and its favourites won {{ '%.1f'|format(cal_gap.act) }}%.</p>{% endif %}
             </div>
         </div>
+        <figure class="svr-art">
+            {% set nmax = calib|map(attribute='n')|max %}
+            <svg viewBox="0 0 560 380" class="svr-chart" role="img" aria-label="Calibration: forecast probability against how often the favourite won, for {{ calib|length }} groups of games. {% for c in calib %}{{ c.label }}: said {{ '%.0f'|format(c.pred) }}, won {{ '%.0f'|format(c.act) }}. {% endfor %}">
+                {% for v in range(50, 101, 10) %}
+                {% set gx = 44 + (v - 50) / 50 * 500 %}
+                {% set gy = 16 + (100 - v) / 50 * 324 %}
+                <line x1="{{ gx }}" x2="{{ gx }}" y1="16" y2="340" stroke="rgba(255,255,255,.06)"></line>
+                <line x1="44" x2="544" y1="{{ gy }}" y2="{{ gy }}" stroke="rgba(255,255,255,.06)"></line>
+                <text x="{{ gx }}" y="362" fill="#949a9f" font-size="12" text-anchor="middle">{{ v }}%</text>
+                <text x="36" y="{{ gy + 4 }}" fill="#949a9f" font-size="12" text-anchor="end">{{ v }}%</text>
+                {% endfor %}
+                <line x1="44" y1="340" x2="544" y2="16" stroke="rgba(231,233,234,.45)" stroke-dasharray="4 5"></line>
+                <text x="104" y="328" fill="#9aa0a6" font-size="12">Dashed line: perfectly honest</text>
+                <polyline fill="none" stroke="#1c9cf0" stroke-width="2" stroke-opacity=".6" points="{% for c in calib %}{{ 44 + (c.pred - 50) / 50 * 500 }},{{ 16 + (100 - [c.act, 50]|max) / 50 * 324 }} {% endfor %}"></polyline>
+                {% for c in calib %}
+                {% set cx = 44 + (c.pred - 50) / 50 * 500 %}
+                {% set cy = 16 + (100 - [c.act, 50]|max) / 50 * 324 %}
+                <circle cx="{{ cx }}" cy="{{ cy }}" r="{{ 6 + 10 * (c.n / nmax) ** 0.5 }}" fill="rgba(28,156,240,.25)" stroke="#1c9cf0" stroke-width="2"></circle>
+                <text x="{{ cx }}" y="{{ cy - 22 }}" fill="#e7e9ea" font-size="12" font-weight="650" text-anchor="middle" stroke="#0a0b0d" stroke-width="4" paint-order="stroke">{{ '%.0f'|format(c.act) }}%</text>
+                {% endfor %}
+                <text x="544" y="378" fill="#9aa0a6" font-size="12" text-anchor="end">Forecast for the favourite</text>
+                <text x="52" y="30" fill="#9aa0a6" font-size="12">How often it won</text>
+            </svg>
+            <figcaption class="svr-note svr-art-cap">Circle size is the number of games in each group.</figcaption>
+        </figure>
     </section>
+    {% endif %}
 
-    <section class="pl-evidence" aria-labelledby="fc-cal-title">
-    <header class="pl-evidence-head">
-        <h2 class="pl-h2" id="fc-cal-title">Does 70% Mean 70%?</h2>
-        <span class="pl-note">{{ '{:,}'.format(fbs.n) }} games</span>
-    </header>
-
-    <div class="dark-card sf-panel">
-        <p class="sf-lede">Being right often is not the same as being <em>honest</em>. A model that
-        says 90% should be wrong one game in ten — if it is never wrong, it was too timid. Each
-        row groups every game the model gave roughly the same confidence, and compares what it
-        claimed against what happened.</p>
-
-        <div class="sf-legend">
-            <span class="sf-legend-item"><span class="sf-key sf-key-pred"></span>Model said</span>
-            <span class="sf-legend-item"><span class="sf-key sf-key-act"></span>Actually won</span>
+    {% if bands %}
+    <section class="svr-row sf-evidence" id="fc-margin" aria-labelledby="fc-margin-h">
+        <div class="svr-row-text">
+            <h2 class="svr-h2" id="fc-margin-h">Where it earns its keep</h2>
+            <div class="svr-prose">
+                <p>Split every graded game by how it finished. The pattern is the most useful thing on this page, and the least flattering.</p>
+                <p>On blowouts it is right almost every time; on one-possession games it is <strong>barely better than a coin flip</strong>. That is less a flaw than a description of college football: a fourth-quarter two-point try is not predictable from recruiting and Elo. It is why the forecast is published as a probability instead of a pick.</p>
+            </div>
         </div>
-
-        <ul class="sf-cal" role="list">
-            {% for c in calib %}
-            <li class="sf-cal-row">
-                <div class="sf-cal-label">
-                    <span class="sf-cal-band">{{ c.label }}</span>
-                    <span class="sf-cal-n">{{ c.n }} games</span>
-                </div>
-                <div class="sf-cal-bars" role="img"
-                     aria-label="Forecast {{ '%.0f' % c.pred }} percent, won {{ '%.0f' % c.act }} percent of {{ c.n }} games">
-                    <div class="sf-cal-line">
-                        <div class="sf-cal-track"><div class="sf-cal-bar sf-cal-pred" style="width: {{ c.pred }}%"></div></div>
-                        <span class="sf-cal-val">{{ '%.1f' % c.pred }}%</span>
+        <figure class="svr-art">
+            <ul class="sf-band" role="list">
+                {% for b in bands %}
+                <li>
+                    <div class="sf-band-head"><span class="sf-band-name">{{ b.label }}</span><span class="sf-band-val{{ ' is-weak' if b.acc < 60 }}">{{ '%.1f' % b.acc }}%</span></div>
+                    <div class="sf-band-track" role="img" aria-label="{{ b.label }}: called correctly {{ '%.0f' % b.acc }} percent of the time">
+                        <div class="sf-band-bar{{ ' is-weak' if b.acc < 60 }}" style="width: {{ b.acc }}%"></div>
+                        <div class="sf-band-ref" aria-hidden="true"></div>
                     </div>
-                    <div class="sf-cal-line">
-                        <div class="sf-cal-track"><div class="sf-cal-bar sf-cal-act" style="width: {{ c.act }}%"></div></div>
-                        <span class="sf-cal-val sf-cal-val-act">{{ '%.1f' % c.act }}%</span>
-                    </div>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
+                    <p class="sf-band-sub">Decided by {{ b.sub }}{{ ' points' if 'points' not in b.sub }}, {{ b.n }} games</p>
+                </li>
+                {% endfor %}
+            </ul>
+            <figcaption class="svr-note svr-art-cap">The dashed line is 50%, a coin flip. Bars under 60% are marked in orange.</figcaption>
+        </figure>
+    </section>
+    {% endif %}
 
-        <p class="sf-foot">The two bars land on top of each other, which is the result you want.
-        Where they part it is by two or three points, and not in one direction: the forecast
-        slightly <em>over</em>states its narrowest favourites — it called 55.3% and got 53.4% —
-        and <em>under</em>states the ones it had pegged between 70 and 90%, which won more often
-        than it claimed they would.</p>
-    </div>
-
+    <section class="sf-games-sec" aria-labelledby="fc-coin-h">
+        <div class="svr-top-head">
+            <h2 class="svr-h2" id="fc-coin-h">The games it wouldn't call</h2>
+            <p class="svr-note">The forecasts nearest a dead heat. Half had to be wrong, and roughly half were.</p>
+        </div>
+        <div class="sf-games">{% for g in coin %}{{ sf_game_row(g) }}{% endfor %}</div>
     </section>
 
-    <section class="pl-evidence" aria-labelledby="fc-keep-title">
-    <header class="pl-evidence-head">
-        <h2 class="pl-h2" id="fc-keep-title">Where It Earns Its Keep</h2>
-    </header>
-
-    <div class="dark-card sf-panel">
-        <p class="sf-lede">Split every graded game by how it finished. The pattern is the most
-        useful thing on this page, and the least flattering.</p>
-
-        <ul class="sf-band" role="list">
-            {% for b in bands %}
-            <li class="sf-band-row">
-                <div class="sf-band-label">
-                    <span class="sf-band-name">{{ b.label }}</span>
-                    <span class="sf-band-sub">{{ b.sub }} · {{ b.n }} games</span>
-                </div>
-                <div class="sf-band-track" role="img"
-                     aria-label="{{ b.label }}: called correctly {{ '%.0f' % b.acc }} percent of the time">
-                    <div class="sf-band-bar{{ ' is-weak' if b.acc < 60 else '' }}" style="width: {{ b.acc }}%"></div>
-                    <div class="sf-band-ref" aria-hidden="true"></div>
-                </div>
-                <span class="sf-band-val{{ ' is-weak' if b.acc < 60 else '' }}">{{ '%.1f' % b.acc }}%</span>
-            </li>
-            {% endfor %}
-        </ul>
-        <p class="sf-band-key" aria-hidden="true">The dashed line is 50% — a coin flip.</p>
-
-        <p class="sf-foot">On games decided by four scores or more it is right almost nine times in
-        ten, and on one-possession games it is <strong>barely better than a coin flip</strong>. That is not
-        a flaw to be fixed so much as a description of college football: a two-point conversion in
-        the fourth quarter is not predictable from recruiting rankings and Elo. It is the reason
-        the forecast is published as a probability instead of a pick.</p>
-    </div>
-
+    <section class="sf-games-sec" aria-labelledby="fc-miss-h">
+        <div class="svr-top-head">
+            <h2 class="svr-h2" id="fc-miss-h">When it was most wrong</h2>
+            <p class="svr-note">Confident and beaten. A model with no entries here would be one that never committed to anything.</p>
+        </div>
+        <div class="sf-games">{% for g in upsets %}{{ sf_game_row(g) }}{% endfor %}</div>
     </section>
 
-    <section class="pl-evidence" aria-labelledby="fc-coin-title">
-    <header class="pl-evidence-head">
-        <h2 class="pl-h2" id="fc-coin-title">The Games It Wouldn't Call</h2>
-        <span class="pl-note">closest to 50/50</span>
-    </header>
-
-    <p class="sf-lede sf-lede-loose">The forecasts that came out nearest a dead heat — games where
-    every input cancelled out. Half of them had to be wrong, and roughly half were.</p>
-
-    <div class="sf-games">
-        {% for g in coin %}{{ sf_game_row(g) }}{% endfor %}
-    </div>
-
-    </section>
-
-    <section class="pl-evidence" aria-labelledby="fc-miss-title">
-    <header class="pl-evidence-head">
-        <h2 class="pl-h2" id="fc-miss-title">When It Was Most Wrong</h2>
-        <span class="pl-note">confident and beaten</span>
-    </header>
-
-    <p class="sf-lede sf-lede-loose">The other end: games the model was sure about and lost. These
-    are kept on the page for the same reason the calibration chart is — a model with no entries
-    here would be one that never committed to anything.</p>
-
-    <div class="sf-games">
-        {% for g in upsets %}{{ sf_game_row(g) }}{% endfor %}
-    </div>
-    </section>
-
-    <div class="pl-close">
-        <a href="/games" class="btn-primary" style="display:inline-block;text-decoration:none;padding:10px 24px">See this week's forecasts →</a>
+    <div class="svr-close sf-close">
+        <a class="svr-cta" href="/games">See this week's forecasts</a>
     </div>
 
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='methodology.js') }}" defer></script>
 {% endblock %}

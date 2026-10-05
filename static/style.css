@@ -7538,158 +7538,15 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SAVANT FORECAST — methodology page (/savant-forecast)
-   Shares the rhythm of the Savant Rating page: a 1000px column, section labels
-   with a rule, and dark-card panels. Everything specific to this page is
-   prefixed .sf- so it can't leak into the forecast controls (.fc-*) it reuses.
+   Built on the Savant Rating page's svr- layout (hero, field strip, step
+   rows). What lives here is only what this page adds: the graded-call swarm,
+   the step charts, and the graded game cards. Prefixed .sf- so it can't leak
+   into the forecast controls (.fc-*) the game cards reuse.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* --text-xs clamps down to 11px, and this page leans on small text for the
-   figures beside every bar. Same curve, floored at 12px so nothing here drops
-   under it on a phone. Local on purpose: moving the global token would reflow
-   every page on the site. */
+/* --text-xs clamps down to 11px; the game cards lean on small text, so this
+   page floors it at 12px. Local on purpose: the global token reflows every page. */
 .sf-page { --sf-xs: clamp(0.75rem, 0.6rem + 0.2vw, 0.78rem); }
-
-/* ── Headline stats ───────────────────────────────────────────────────────── */
-.sf-stat { height: 100%; }
-.sf-stat-key {
-    font-size: var(--sf-xs); font-weight: 800; letter-spacing: 0.15em;
-    text-transform: uppercase; margin-bottom: var(--s2);
-}
-.sf-stat-val {
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800; line-height: 1;
-    font-size: var(--text-xl); color: var(--text-primary);
-    font-variant-numeric: tabular-nums; margin-bottom: var(--s2);
-}
-.sf-stat-unit { font-size: 0.55em; font-weight: 800; margin-left: 2px; color: var(--text-secondary); }
-.sf-stat-note { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; }
-
-.sf-caveat {
-    color: var(--text-dim); font-size: var(--text-sm); line-height: 1.7;
-    max-width: 55ch; margin: 0 0 28px;
-}
-
-/* ── Section rule (matches the Savant Rating page) ────────────────────────── */
-.sf-rule { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.sf-rule-head { margin: 0; font-size: var(--text-sm); }
-.sf-rule-line { flex: 1; height: 1px; background: var(--border); }
-.sf-rule-note { color: var(--text-dim); font-size: var(--sf-xs); }
-
-/* ── Prose ─────────────────────────────────────────────────────────────────
-   Measured, not guessed: `ch` is the width of the digit zero, which in Mona
-   Sans is much wider than the average letter, so a ch cap renders far more
-   characters than its number. Caps here are set to land in the 60-75 band a
-   reader can track at desktop width. */
-.sf-prose { padding: 28px 32px; margin-bottom: 28px; }
-.sf-prose > div {
-    /* Centred, not flush left: at a readable measure the column is narrower
-       than the card, and splitting the slack evenly reads as margin instead of
-       a paragraph that ran out. */
-    max-width: 52ch; margin: 0 auto; color: var(--text-secondary);
-    font-size: var(--text-base); line-height: 1.8;
-}
-.sf-prose p { margin: 0 0 var(--s4); }
-.sf-prose p:last-child { margin-bottom: 0; }
-.sf-step {
-    color: var(--text-primary); font-weight: 700; font-size: var(--text-base);
-    margin: 18px 0 6px; line-height: 1.5;
-}
-.sf-prose > div > .sf-step:first-child { margin-top: 0; }
-
-.sf-panel { padding: 24px 28px; margin-bottom: 28px; }
-.sf-lede {
-    color: var(--text-secondary); font-size: var(--text-base);
-    line-height: 1.75; max-width: 52ch; margin: 0 0 var(--s5);
-}
-.sf-lede-loose { margin-bottom: var(--s4); }
-.sf-foot {
-    color: var(--text-dim); font-size: var(--text-sm); line-height: 1.7;
-    max-width: 53ch; margin: var(--s5) 0 0;
-    padding-top: var(--s4); border-top: 1px solid var(--border);
-}
-
-/* ── Input families ───────────────────────────────────────────────────────── */
-.sf-fam { list-style: none; padding: 0; margin: 0 0 var(--s5); }
-.sf-fam-row + .sf-fam-row { margin-top: var(--s4); }
-.sf-fam-head { display: flex; align-items: baseline; gap: var(--s3); margin-bottom: 6px; }
-.sf-fam-name { color: var(--text-primary); font-weight: 700; font-size: var(--text-sm); }
-.sf-fam-share {
-    margin-left: auto; color: var(--text-primary); font-weight: 800;
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: var(--text-md);
-    font-variant-numeric: tabular-nums;
-}
-.sf-fam-track {
-    height: 8px; border-radius: var(--r-pill);
-    background: var(--bg-subtle); overflow: hidden;
-}
-.sf-fam-bar { height: 100%; border-radius: var(--r-pill); }
-.sf-fam-detail {
-    color: var(--text-dim); font-size: var(--text-sm);
-    line-height: 1.6; margin: 6px 0 0;
-}
-
-/* ── Calibration ──────────────────────────────────────────────────────────── */
-.sf-legend { display: flex; gap: var(--s5); margin-bottom: var(--s5); flex-wrap: wrap; }
-.sf-legend-item {
-    display: flex; align-items: center; gap: var(--s2);
-    color: var(--text-secondary); font-size: var(--sf-xs);
-    font-weight: 700; letter-spacing: 0.04em;
-}
-.sf-key { width: 14px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-.sf-key-pred { background: var(--border-strong); }
-.sf-key-act { background: var(--accent); }
-
-.sf-cal { list-style: none; padding: 0; margin: 0; }
-.sf-cal-row {
-    display: grid; grid-template-columns: 128px minmax(0, 1fr);
-    gap: var(--s4); align-items: center;
-}
-.sf-cal-row + .sf-cal-row { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--border); }
-.sf-cal-band { display: block; color: var(--text-primary); font-weight: 700; font-size: var(--text-sm); }
-.sf-cal-n { display: block; color: var(--text-dim); font-size: var(--sf-xs); margin-top: 2px; }
-.sf-cal-bars { display: flex; flex-direction: column; gap: 5px; }
-.sf-cal-line { display: flex; align-items: center; gap: var(--s3); }
-.sf-cal-track {
-    flex: 1; height: 10px; border-radius: var(--r-pill);
-    background: var(--bg-subtle); overflow: hidden;
-}
-.sf-cal-bar { height: 100%; border-radius: var(--r-pill); }
-.sf-cal-pred { background: var(--border-strong); }
-.sf-cal-act { background: var(--accent); }
-.sf-cal-val {
-    width: 52px; text-align: right; flex-shrink: 0;
-    color: var(--text-secondary); font-size: var(--sf-xs);
-    font-weight: 700; font-variant-numeric: tabular-nums;
-}
-.sf-cal-val-act { color: var(--text-primary); }
-
-/* ── Accuracy by final margin ─────────────────────────────────────────────── */
-.sf-band { list-style: none; padding: 0; margin: 0; }
-.sf-band-row {
-    display: grid; grid-template-columns: 168px minmax(0, 1fr) 56px;
-    gap: var(--s4); align-items: center;
-}
-.sf-band-row + .sf-band-row { margin-top: var(--s4); }
-.sf-band-name { display: block; color: var(--text-primary); font-weight: 700; font-size: var(--text-sm); }
-.sf-band-sub { display: block; color: var(--text-dim); font-size: var(--sf-xs); margin-top: 2px; }
-.sf-band-track {
-    position: relative; height: 14px; border-radius: var(--r-pill);
-    background: var(--bg-subtle); overflow: hidden;
-}
-.sf-band-bar { height: 100%; border-radius: var(--r-pill); background: var(--accent); }
-/* A band barely clearing the coin-flip line is the page's headline finding, so
-   it gets its own colour AND its own copy — never the colour alone. */
-.sf-band-bar.is-weak { background: #f0a868; }
-.sf-band-ref {
-    position: absolute; top: 0; bottom: 0; left: 50%; width: 0;
-    border-left: 2px dashed rgba(255,255,255,0.45);
-}
-.sf-band-val {
-    text-align: right; color: var(--text-primary); font-weight: 800;
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: var(--text-md);
-    font-variant-numeric: tabular-nums;
-}
-.sf-band-val.is-weak { color: #f0a868; }
-.sf-band-key { color: var(--text-dim); font-size: var(--sf-xs); margin: var(--s3) 0 0; }
 
 /* ── Graded game rows ─────────────────────────────────────────────────────── */
 .sf-games {
@@ -7742,16 +7599,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .sf-miss { color: #f0a868; background: rgba(240,168,104,0.14); }
 .sf-when { margin-left: auto; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
-/* ── Narrow screens ───────────────────────────────────────────────────────── */
 @media (max-width: 575.98px) {
-    .sf-prose { padding: 20px 18px; }
-    .sf-panel { padding: 18px 16px; }
-    /* The label column stops being a column: at this width 128px of it is
-       wrapped text and the bars have nothing left to say. */
-    .sf-cal-row, .sf-band-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
-    .sf-cal-row + .sf-cal-row { margin-top: var(--s5); padding-top: var(--s5); }
-    .sf-band-row + .sf-band-row { margin-top: var(--s5); }
-    .sf-band-val { text-align: left; }
     .sf-games { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -8285,205 +8133,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .dv-field-btn, .dv-cta, .dv-scrim, .dv-dialog { transition-duration: 1ms; }
     .dv-field-btn:hover { transform: none; }
     .dv-dialog { transform: none; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   METHODOLOGY PIPELINE — /savant-rating and /savant-forecast
-   Each model is drawn as the machine it is: a wire of stations from the data
-   that goes in to the number that comes out, every station carrying a real
-   figure. Below it the same stations become a vertical rail beside the prose,
-   and reading down the page lights them in turn.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.pl-page { max-width: 1160px; }
-
-.pl-hero { padding-block: var(--s6) var(--s5); }
-.pl-title {
-    margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800;
-    font-size: clamp(2.6rem, 1.9rem + 2.6vw, 4.4rem); line-height: 0.95;
-    letter-spacing: -0.02em; color: var(--text-primary);
-}
-.pl-tag {
-    margin-left: 0.3em; vertical-align: 0.95em;
-    font-size: 0.36em; letter-spacing: 0.08em; color: var(--accent);
-}
-.pl-thesis {
-    margin: var(--s4) 0 0; max-width: 56ch;
-    color: var(--text-secondary); font-size: var(--text-md); line-height: 1.65;
-}
-
-.pl-h2 {
-    margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800;
-    font-size: var(--text-xl); line-height: 1.05; letter-spacing: -0.01em;
-    color: var(--text-primary);
-}
-
-/* ── The map ──────────────────────────────────────────────────────────────── */
-.pl-map {
-    margin: 0 0 72px; padding: 36px 30px 32px;
-    background: #0f1013; border: 1px solid var(--border); border-radius: var(--r-lg);
-}
-.pl-track { position: relative; }
-/* The wire. A run of accent laid over it traces from the input to whichever
-   station is under the pointer or the keyboard. */
-.pl-track::before,
-.pl-run {
-    content: ''; position: absolute; left: 9px; right: 0; top: 8px; height: 2px;
-}
-.pl-track::before { background: var(--border-strong); }
-.pl-run {
-    background: var(--accent); opacity: 0.6;
-    transform-origin: left center; transform: scaleX(var(--pl-run, 1));
-    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out;
-    animation: pl-trace 1100ms cubic-bezier(0.22, 1, 0.36, 1) 180ms backwards;
-}
-.pl-map.is-tracing .pl-run { opacity: 1; }
-@keyframes pl-trace { from { transform: scaleX(0); } }
-
-.pl-rail {
-    position: relative; list-style: none; margin: 0; padding: 0;
-    display: grid; grid-template-columns: repeat(var(--pl-n, 6), minmax(0, 1fr));
-}
-.pl-node { position: relative; min-width: 0; padding-right: 18px; }
-.pl-link {
-    display: block; padding-top: 32px; color: inherit; text-decoration: none;
-    border-radius: var(--r-sm);
-}
-.pl-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; }
-.pl-port {
-    position: absolute; left: 0; top: 0; width: 18px; height: 18px;
-    border-radius: 50%; background: #0f1013; border: 2px solid var(--border-strong);
-    transition: background-color 180ms ease-out, border-color 180ms ease-out,
-                transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.pl-node--in .pl-port { border-radius: 4px; }
-.pl-node--out .pl-port,
-.pl-node.is-lit .pl-port,
-.pl-node.is-current .pl-port { background: var(--accent); border-color: var(--accent); }
-.pl-link:hover .pl-port,
-.pl-link:focus-visible .pl-port { transform: scale(1.15); }
-.pl-link:active .pl-port { transform: scale(0.92); }
-
-.pl-name {
-    display: block; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700;
-    font-size: var(--text-md); line-height: 1.1; color: var(--text-primary);
-}
-.pl-fig {
-    display: block; margin-top: 10px; white-space: nowrap;
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800; line-height: 1;
-    font-size: clamp(1.55rem, 1.1rem + 1.2vw, 2.3rem); letter-spacing: -0.01em;
-    color: var(--text-primary); font-variant-numeric: tabular-nums;
-    transition: color 180ms ease-out;
-}
-.pl-node--out .pl-fig,
-.pl-link:hover .pl-fig,
-.pl-link:focus-visible .pl-fig { color: var(--accent); }
-.pl-cap {
-    display: block; margin-top: 8px; max-width: 19ch; text-wrap: balance;
-    color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.45;
-}
-
-/* ── Station by station ───────────────────────────────────────────────────── */
-.pl-path { margin-bottom: 72px; }
-.pl-path > .pl-h2 { margin-bottom: 36px; }
-.pl-path-grid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 64px; }
-
-/* The same wire, stood upright beside the reading. Decorative duplicate of the
-   map, so it is hidden from assistive tech; the map is the navigable one. */
-.pl-spy { position: sticky; top: var(--pl-top, 88px); align-self: start; }
-.pl-spy ol { position: relative; list-style: none; margin: 0; padding: 0; }
-.pl-spy ol::before,
-.pl-spy ol::after {
-    content: ''; position: absolute; left: 8px; top: 9px; bottom: 9px; width: 2px;
-}
-.pl-spy ol::before { background: var(--border-strong); }
-.pl-spy ol::after {
-    background: var(--accent); transform-origin: center top;
-    transform: scaleY(var(--pl-spy, 0));
-    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.pl-spy li { position: relative; padding: 0 0 26px 32px; }
-.pl-spy li:last-child { padding-bottom: 0; }
-.pl-spy .pl-port { background: var(--bg-base, #0a0b0d); }
-.pl-spy li.is-done .pl-port { border-color: var(--accent); }
-.pl-spy li.is-current .pl-port { background: var(--accent); border-color: var(--accent); }
-.pl-spy-name {
-    display: block; padding-top: 1px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700;
-    font-size: var(--text-base); line-height: 1.15; color: var(--text-dim);
-    transition: color 180ms ease-out;
-}
-.pl-spy li.is-current .pl-spy-name { color: var(--text-primary); }
-
-.pl-station {
-    scroll-margin-top: var(--pl-top, 88px);
-    padding-bottom: 56px; margin-bottom: 56px; border-bottom: 1px solid var(--border);
-}
-.pl-station:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
-/* Heading, then its figure directly beneath: pushed to the far edge the figure
-   was stranded from the prose it belongs to. */
-.pl-station-head { display: grid; gap: 12px; margin-bottom: 20px; }
-.pl-station-name {
-    margin: 0; max-width: 32ch; font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700;
-    font-size: var(--text-lg); line-height: 1.15; color: var(--text-primary);
-}
-.pl-station-fig { margin: 0; display: flex; align-items: baseline; gap: 12px; }
-.pl-num {
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800; font-size: var(--text-xl);
-    line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-.pl-unit { max-width: 34ch; text-wrap: balance; color: var(--text-secondary); font-size: 0.8125rem; line-height: 1.4; }
-
-/* In Mona Sans 1ch is wider than an average letter: 52ch measures 61-63
-   rendered characters per line, inside the readable band, where 70ch would not. */
-.pl-prose { max-width: 52ch; color: var(--text-secondary); font-size: var(--text-base); line-height: 1.8; }
-.pl-prose p { margin: 0 0 1em; }
-.pl-prose p:last-child { margin-bottom: 0; }
-.pl-prose strong, .pl-prose em { color: var(--text-primary); }
-
-.pl-defs {
-    display: grid; grid-template-columns: max-content minmax(0, 1fr);
-    gap: 14px 24px; max-width: 62ch; margin: 0 0 1.6em;
-}
-.pl-defs dt {
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 700; font-size: var(--text-md);
-    line-height: 1.5; color: var(--text-primary);
-}
-.pl-defs dd { margin: 0; color: var(--text-secondary); line-height: 1.7; }
-
-/* ── The evidence ─────────────────────────────────────────────────────────── */
-.pl-evidence { margin-bottom: 72px; }
-.pl-evidence-head {
-    display: flex; align-items: baseline; justify-content: space-between;
-    flex-wrap: wrap; gap: 8px 24px; margin-bottom: 20px;
-}
-.pl-note { color: var(--text-dim); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
-.pl-close { text-align: center; margin: 8px 0 24px; }
-
-/* ── Narrow: the map turns upright, the side rail steps aside ─────────────── */
-@media (max-width: 860px) {
-    .pl-map { padding: 26px 18px; margin-bottom: 56px; }
-    .pl-rail { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
-    .pl-track::before,
-    .pl-run { left: 8px; right: auto; top: 9px; bottom: 9px; width: 2px; height: auto; }
-    .pl-run { transform-origin: center top; transform: scaleY(var(--pl-run, 1)); animation-name: pl-trace-y; }
-    .pl-node { padding: 0 0 0 36px; }
-    .pl-link {
-        padding-top: 0; min-height: 44px;
-        display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline;
-    }
-    .pl-fig { grid-column: 2; grid-row: 1; margin-top: 0; font-size: 1.6rem; }
-    .pl-cap { grid-column: 1 / -1; max-width: none; margin-top: 4px; }
-    .pl-path-grid { grid-template-columns: minmax(0, 1fr); }
-    .pl-spy { display: none; }
-    .pl-station { padding-bottom: 40px; margin-bottom: 40px; }
-    .pl-defs { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-    .pl-defs dd { margin-bottom: 12px; }
-}
-@keyframes pl-trace-y { from { transform: scaleY(0); } }
-
-@media (prefers-reduced-motion: reduce) {
-    .pl-run, .pl-spy ol::after, .pl-port, .pl-fig, .pl-spy-name { transition: none; animation: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -11456,4 +11105,127 @@ a.bkr-panel-name:focus-visible { outline: 2px solid var(--accent); outline-offse
     .svr-db-track { grid-column: 1 / -1; grid-row: 2; }
     .svr-db-conf { display: block; }
     .svr-defs div { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* ── /savant-forecast: hero swarm and step charts (layout comes from svr-) ── */
+.sf-hero { grid-template-columns: minmax(0,5fr) minmax(0,7fr); }
+.sf-swarm-fig { margin: 0; }
+.sf-swarm { display: block; width: 100%; height: auto; overflow: visible; }
+.sf-swarm-fig .svr-note { max-width: 60ch; margin: 10px auto 0; text-align: center; font-size: 0.875rem; color: var(--text-secondary); }
+@keyframes sf-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes sf-sink { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+.sf-sw-hits { animation: sf-rise 1s cubic-bezier(.22,1,.36,1) .1s both; }
+.sf-sw-miss { animation: sf-sink 1s cubic-bezier(.22,1,.36,1) .45s both; }
+.sf-sw-exp  { animation: svr-in .8s ease 1.1s both; }
+.sf-swarm-key { display: none; margin-top: 8px; font-size: 0.8125rem; color: var(--text-secondary); }
+.sf-swarm-axis { display: flex; justify-content: space-between; padding-inline: 5.8% 2.1%; font-variant-numeric: tabular-nums; }
+.sf-swarm-legend { display: flex; justify-content: center; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+.sf-swarm-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sf-swarm-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.sf-swarm-legend .is-hit { background: var(--accent); }
+.sf-swarm-legend .is-miss { box-shadow: inset 0 0 0 1.6px #f0a868; }
+
+/* Step 1: how each season is used, on one 2016-2026 axis. */
+.sf-seasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.sf-seasons li { display: grid; grid-template-columns: 96px minmax(0,1fr) 84px; align-items: center; gap: 14px; }
+.sf-use { font-size: 0.9375rem; font-weight: 650; }
+.sf-gantt { position: relative; height: 26px; border-radius: 8px; background: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 calc(100% / 11 - 3px), transparent 0 calc(100% / 11)); }
+.sf-gantt-bar { position: absolute; top: 0; bottom: 0; border-radius: 8px; }
+.sf-gantt-bar.is-burn  { background: rgba(231,233,234,.25); }
+.sf-gantt-bar.is-train { background: var(--accent); }
+.sf-gantt-bar.is-tune  { background: rgba(28,156,240,.25); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sf-gantt-bar.is-test  { background: #f0a868; }
+.sf-gantt-bar.is-live  { background: var(--text-primary); }
+.sf-yr { text-align: right; font-stretch: 82%; font-weight: 700; font-size: 0.9375rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* Step 2: either side of kickoff. */
+.sf-kick { display: grid; grid-template-columns: minmax(0,1.3fr) auto minmax(0,1fr); gap: 24px; }
+.sf-kick-h { margin: 0 0 12px; font-weight: 700; font-size: 0.9375rem; color: var(--text-primary); }
+.sf-kick ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sf-kick li { position: relative; padding-left: 18px; font-size: 0.9375rem; line-height: 1.45; color: #c4c8cc; }
+.sf-kick li::before { content: ''; position: absolute; left: 0; top: .5em; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.sf-kick-side.is-out li { color: var(--text-secondary); text-decoration: line-through; text-decoration-color: rgba(240,168,104,.7); }
+.sf-kick-side.is-out li::before { background: transparent; box-shadow: inset 0 0 0 1.5px #f0a868; }
+.sf-kick-side.is-out .svr-note { margin-top: 14px; }
+.sf-kick-line { position: relative; width: 2px; background: linear-gradient(180deg, transparent, var(--text-primary) 15%, var(--text-primary) 85%, transparent); }
+.sf-kick-line span {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) rotate(-90deg); white-space: nowrap;
+    padding: 4px 10px; border-radius: 999px; background: var(--text-primary); color: #000; font-size: 0.75rem; font-weight: 800;
+}
+
+/* Step 3: input families. */
+.sf-fam { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+.sf-fam-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.sf-fam-name { font-weight: 700; font-size: 0.9375rem; }
+.sf-fam-share { margin-left: auto; font-stretch: 82%; font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.sf-fam-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,.05); overflow: hidden; }
+.sf-fam-bar { height: 100%; border-radius: 999px; }
+.sf-fam-detail { margin: 8px 0 0; font-size: 0.875rem; line-height: 1.55; color: var(--text-secondary); }
+
+/* Step 4: the two models side by side. */
+.sf-models { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+.sf-model { padding: 22px; border-radius: 16px; background: rgba(28,156,240,.08); box-shadow: inset 0 0 0 1px rgba(28,156,240,.35); }
+.sf-model.is-fcs { background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.sf-model-h { margin: 0; font-weight: 700; font-size: 0.9375rem; }
+.sf-model-fig { margin: 10px 0 18px; font-stretch: 82%; font-weight: 800; font-size: 3rem; line-height: 1; letter-spacing: -.03em; }
+.sf-model-fig span { font-size: 0.9375rem; font-weight: 600; letter-spacing: 0; color: var(--text-secondary); }
+.sf-model dl { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.sf-model dl div { display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.sf-model dt { font-size: 0.875rem; color: var(--text-secondary); }
+.sf-model dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Step 5: graded forecasts by season. */
+.sf-seas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+.sf-seas li { display: grid; grid-template-columns: 52px minmax(0,1fr) 64px; grid-template-rows: auto auto; column-gap: 14px; row-gap: 6px; align-items: center; }
+.sf-seas-yr { font-stretch: 82%; font-weight: 800; font-size: 1.25rem; }
+.sf-seas-track { height: 28px; border-radius: 8px; background: rgba(255,255,255,.04); overflow: hidden; }
+.sf-seas-bar { display: block; height: 100%; border-radius: 8px; background: linear-gradient(90deg, rgba(240,168,104,.35), #f0a868); }
+.sf-seas-bar.is-live { background: linear-gradient(90deg, rgba(28,156,240,.35), var(--accent)); }
+.sf-seas-n { text-align: right; font-stretch: 82%; font-weight: 800; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.sf-seas-kind { grid-column: 2 / -1; font-size: 0.8125rem; color: var(--text-secondary); }
+
+/* Step 6 and the margin panel: accuracy bars. */
+.sf-cmp { display: flex; flex-direction: column; gap: 20px; }
+.sf-cmp-row { display: grid; grid-template-columns: 196px minmax(0,1fr) 72px; align-items: center; gap: 16px; }
+.sf-cmp-l { font-size: 0.875rem; color: var(--text-secondary); }
+.sf-cmp-t { position: relative; height: 16px; border-radius: 999px; background: rgba(255,255,255,.05); overflow: hidden; }
+.sf-cmp-f { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: rgba(231,233,234,.45); }
+.sf-cmp-f.is-us { background: var(--accent); box-shadow: 0 0 18px rgba(28,156,240,.55); }
+.sf-cmp-f.is-coin { background: transparent; border: 1.5px dashed rgba(231,233,234,.5); }
+.sf-cmp-v { text-align: right; font-stretch: 82%; font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.sf-band { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+.sf-band-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.sf-band-name { font-weight: 700; font-size: 0.9375rem; }
+.sf-band-val { font-stretch: 82%; font-weight: 800; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.sf-band-track { position: relative; height: 16px; border-radius: 999px; background: rgba(255,255,255,.05); overflow: hidden; }
+.sf-band-bar { height: 100%; border-radius: 999px; background: var(--accent); }
+/* A band barely clearing the coin-flip line is the page's headline finding, so
+   it gets its own colour AND its own copy — never the colour alone. */
+.sf-band-bar.is-weak { background: #f0a868; }
+.sf-band-val.is-weak { color: #f0a868; }
+.sf-band-ref { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 2px dashed rgba(255,255,255,.5); }
+.sf-band-sub { margin: 6px 0 0; font-size: 0.8125rem; color: var(--text-dim); }
+
+.sf-evidence { padding-block: 72px; }
+.sf-games-sec { padding-top: 72px; border-top: 1px solid var(--border); }
+.sf-games-sec .svr-note { max-width: 60ch; }
+.sf-games-sec + .sf-games-sec { margin-top: 24px; }
+.sf-close { margin-block: 32px 120px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .sf-sw-hits, .sf-sw-miss, .sf-sw-exp { animation: none; }
+}
+@media (max-width: 1000px) {
+    .sf-hero { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+    .sf-seasons li { grid-template-columns: 80px minmax(0,1fr) 70px; gap: 10px; }
+    .sf-kick { grid-template-columns: 1fr; }
+    .sf-kick-line { width: auto; height: 2px; margin: 8px 0; background: linear-gradient(90deg, transparent, var(--text-primary) 15%, var(--text-primary) 85%, transparent); }
+    .sf-kick-line span { transform: translate(-50%,-50%); }
+    .sf-models { grid-template-columns: 1fr; }
+    .sf-sw-text { display: none; }
+    .sf-swarm-key { display: block; }
+    .sf-cmp-row { grid-template-columns: minmax(0,1fr) 64px; row-gap: 6px; }
+    .sf-cmp-t { grid-column: 1 / -1; grid-row: 2; }
 }

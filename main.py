@@ -5973,19 +5973,33 @@ def savant_forecast_methodology():
         cursor.execute(f'''
             SELECT (hf.t IS NOT NULL AND af.t IS NOT NULL) AS both_fbs,
                    COUNT(*), AVG(gp.correct::float),
-                   AVG(POWER(gp.home_prob - gp.home_won, 2))
+                   AVG(POWER(gp.home_prob - gp.home_won, 2)), AVG(gp.home_won::float)
             FROM game_predictions gp
             LEFT JOIN {_FBS_SET} hf ON hf.t = gp.home_team AND hf.s = gp.season
             LEFT JOIN {_FBS_SET} af ON af.t = gp.away_team AND af.s = gp.season
             WHERE gp.scored = 1
             GROUP BY 1
         ''')
-        fbs = {'n': 0, 'acc': None, 'brier': None}
-        fcs = {'n': 0, 'acc': None, 'brier': None}
-        for both, n, acc, brier in cursor.fetchall():
+        fbs = {'n': 0, 'acc': None, 'brier': None, 'home': None}
+        fcs = {'n': 0, 'acc': None, 'brier': None, 'home': None}
+        for both, n, acc, brier, home in cursor.fetchall():
             (fbs if both else fcs).update(
                 n=n, acc=None if acc is None else float(acc) * 100,
-                brier=None if brier is None else float(brier))
+                brier=None if brier is None else float(brier),
+                home=None if home is None else float(home) * 100)
+
+        # Every graded FBS call, for the hero: the favourite's probability and
+        # whether it won. Graded counts per season, for the frozen-record chart.
+        cursor.execute(f'''
+            SELECT GREATEST(gp.home_prob, 1 - gp.home_prob), gp.correct
+            FROM game_predictions gp
+            JOIN {_FBS_SET} hf ON hf.t = gp.home_team AND hf.s = gp.season
+            JOIN {_FBS_SET} af ON af.t = gp.away_team AND af.s = gp.season
+            WHERE gp.scored = 1''')
+        swarm = _fc_swarm(cursor.fetchall())
+        cursor.execute('''SELECT season, COUNT(*) FROM game_predictions
+                          WHERE scored = 1 GROUP BY 1 ORDER BY 1''')
+        by_season = cursor.fetchall()
 
         cursor.execute('''SELECT MIN(season), MAX(season)
                           FROM game_predictions WHERE scored = 1''')
@@ -6040,7 +6054,51 @@ def savant_forecast_methodology():
     return render_template('savant_forecast.html',
                            fbs=fbs, fcs=fcs, span=span, calib=calib,
                            bands=bands, coin=coin, upsets=upsets,
-                           families=FORECAST_FAMILIES)
+                           families=FORECAST_FAMILIES, swarm=swarm,
+                           by_season=by_season,
+                           cal_gap=max(calib, key=lambda c: abs(c['pred'] - c['act']), default=None))
+
+
+def _fc_swarm(rows):
+    """Dot geometry for the /savant-forecast hero: one dot per graded call.
+
+    rows: (favourite's probability, correct) pairs. Calls are binned 2 points
+    wide from 50% to 100%; hits stack up from the axis, misses hang below it,
+    two dots per row. `expect` is how deep each column's misses would reach
+    if every probability in it were exactly right.
+    """
+    if not rows:
+        return None
+    bins = [[0, 0, 0.0] for _ in range(25)]          # hits, misses, sum of p
+    for p, correct in rows:
+        b = bins[min(int((float(p) - 0.5) * 50), 24)]
+        b[0 if correct else 1] += 1
+        b[2] += float(p)
+    pitch, left, width = 11, 44, 760
+    cw = (width - left - 16) / 25
+    up = max(math.ceil(b[0] / 2) for b in bins)
+    down = max(max(math.ceil(b[1] / 2) for b in bins),
+               max(math.ceil((b[0] + b[1]) * (1 - b[2] / max(b[0] + b[1], 1)) / 2) for b in bins))
+    top = 24
+    axis_top = top + up * pitch + 4
+    axis_bot = axis_top + 30
+    hits, misses, expect = [], [], []
+    for i, (h, m, ps) in enumerate(bins):
+        cx = left + cw * (i + 0.5)
+        for k in range(h):
+            hits.append((round(cx + (k % 2 - 0.5) * pitch, 1), round(axis_top - 4 - pitch * (k // 2) - pitch / 2, 1)))
+        for k in range(m):
+            misses.append((round(cx + (k % 2 - 0.5) * pitch, 1), round(axis_bot + 4 + pitch * (k // 2) + pitch / 2, 1)))
+        n = h + m
+        if n:
+            rows_ = n * (1 - ps / n) / 2
+            expect.append({'x1': round(cx - cw / 2 + 2, 1), 'x2': round(cx + cw / 2 - 2, 1),
+                           'y': round(axis_bot + 4 + rows_ * pitch, 1)})
+    return {'w': width, 'h': round(axis_bot + 4 + down * pitch + 12),
+            'hits': hits, 'misses': misses, 'expect': expect,
+            'axis_top': axis_top, 'axis_mid': axis_top + 19, 'axis_bot': axis_bot,
+            'ticks': [{'x': round(left + cw * (v - 50) / 2, 1), 'label': f'{v}%'} for v in range(50, 101, 10)],
+            'left': left, 'right': width - 16, 'n': len(rows)}
 
 
 # ── Returning Production ────────────────────────────────────────────────────
