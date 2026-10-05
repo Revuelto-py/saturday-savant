@@ -5779,11 +5779,122 @@ def savant_rating_methodology():
                                  AVG(off_rating), AVG(def_rating)
                           FROM savant_ratings WHERE season = %s''', (CURRENT_SEASON,))
         n_teams, n_drives, n_games, avg_off, avg_def = cursor.fetchone()
+        # The whole field and every completed FBS-vs-FBS game, for the hero's
+        # schedule web and the offense/defense scatter.
+        cursor.execute('''SELECT sr.team, t.conference, sr.off_rating, sr.def_rating, sr.net_ranking
+                          FROM savant_ratings sr JOIN teams t ON t.name = sr.team
+                          WHERE sr.season = %s AND sr.net_ranking IS NOT NULL
+                          ORDER BY sr.net_ranking''', (CURRENT_SEASON,))
+        field = cursor.fetchall()
+        cursor.execute('SELECT home_team, away_team FROM games '
+                       'WHERE season = %s AND home_points IS NOT NULL', (CURRENT_SEASON,))
+        rated = {r[0] for r in field}
+        games = [g for g in cursor.fetchall() if g[0] in rated and g[1] in rated]
     finally:
         release_db(conn)
+    svr = _svr_constants()
+    dpg = n_drives / (2 * n_games) if n_games else 10.0
     return render_template('savant_rating.html', top10=top10, season=CURRENT_SEASON,
                            n_teams=n_teams, n_drives=n_drives, n_games=n_games,
-                           avg_off=avg_off, avg_def=avg_def, svr=_svr_constants())
+                           avg_off=avg_off, avg_def=avg_def, svr=svr,
+                           fig=_svr_figures(field, games, top10, avg_off, svr, dpg))
+
+
+def _svr_figures(field, games, top10, avg_off, svr, dpg):
+    """SVG geometry for the /savant-rating charts, in each chart's own viewBox units.
+
+    field: (team, conference, off, def, rank) for every rated team, best first.
+    The template only draws what this returns, so a season with no ratings yet
+    gets None for the data charts and the page renders its prose without them.
+    """
+    out = {'dpg': dpg, 'n_games_drawn': len(games)}
+    # Prior share after g games: the anchor is worth PRIOR_DRIVES drives, each
+    # game adds about dpg counted drives.
+    pd_ = svr['prior_drives']
+    share = lambda g: pd_ / (pd_ + dpg * g)
+    W, H, L, R, T, B = 560, 260, 40, 16, 18, 38
+    px = lambda g: L + g / 12 * (W - L - R)
+    py = lambda s: T + (1 - s) * (H - T - B)
+    pts = [(px(i / 4), py(share(i / 4))) for i in range(49)]
+    out['prior'] = {
+        'line': ' '.join(f'{x:.1f},{y:.1f}' for x, y in pts),
+        'area': f'M{px(0):.1f},{py(0):.1f} L' + ' L'.join(f'{x:.1f},{y:.1f}' for x, y in pts)
+                + f' L{px(12):.1f},{py(0):.1f} Z',
+        'grid': [{'y': round(py(s), 1), 'label': f'{int(s * 100)}%'} for s in (0, .25, .5, .75, 1)],
+        'xticks': [{'x': round(px(g), 1), 'label': g} for g in range(0, 13, 3)],
+        'marks': [{'x': round(px(g), 1), 'y': round(py(share(g)), 1), 'g': g,
+                   'pct': round(share(g) * 100)} for g in (3, 8)],
+        'after3': round(share(3) * 100), 'after12': round(share(12) * 100),
+    }
+    if not field:
+        out['orbit'] = out['scatter'] = None
+        return out
+    lead = field[0][0]
+    top_names = {t['team'] for t in top10}
+
+    # Scatter: offense across, defense down (fewest allowed at the top).
+    W, H, L, R, T, B = 560, 380, 44, 16, 44, 40
+    sx = lambda v: L + (v - 5) / 45 * (W - L - R)
+    sy = lambda v: T + (v - 5) / 35 * (H - T - B)
+    avg = avg_off or 0
+    out['scatter'] = {
+        'xticks': [{'x': round(sx(v), 1), 'label': v} for v in range(10, 51, 10)],
+        'yticks': [{'y': round(sy(v), 1), 'label': v} for v in range(10, 41, 10)],
+        'avg_x': round(sx(avg), 1), 'avg_y': round(sy(avg), 1),
+        'dots': [{'x': round(sx(o), 1), 'y': round(sy(d), 1), 'top': rk <= 10}
+                 for _, _, o, d, rk in reversed(field)],
+        'lead': {'x': round(sx(field[0][2]), 1), 'y': round(sy(field[0][3]), 1)},
+        'top': T, 'bottom': H - B, 'left': L, 'right': W - R,
+    }
+
+    # Orbit: conferences around the circle (largest first, from twelve o'clock),
+    # rank outward from the centre on a square-root scale so the top ten get room.
+    size = 720
+    c, r0, r1 = size / 2, 26, size / 2 - 80
+    n = len(field)
+    rad = lambda rk: r0 + math.sqrt((rk - 1) / max(n - 1, 1)) * (r1 - r0)
+    by = defaultdict(list)
+    for row in field:
+        by['Independent' if row[1] == 'FBS Independents' else (row[1] or 'Other')].append(row)
+    confs = sorted(by, key=lambda k: (-len(by[k]), k))
+    gap = 0.07
+    span = 2 * math.pi - gap * len(confs)
+    pos, labels, a = {}, [], -math.pi / 2
+    short = {'American Athletic': 'American', 'Conference USA': 'C-USA',
+             'Mid-American': 'MAC', 'Mountain West': 'MWC'}
+    for k in confs:
+        seg = span * len(by[k]) / n
+        for i, row in enumerate(by[k]):
+            th = a + seg * (i + .5) / len(by[k])
+            pos[row[0]] = (c + rad(row[4]) * math.cos(th), c + rad(row[4]) * math.sin(th), row[4])
+        if len(by[k]) >= 4:
+            th = a + seg / 2
+            cos = math.cos(th)
+            labels.append({'x': round(c + (r1 + 34) * cos, 1),
+                           'y': round(c + (r1 + 34) * math.sin(th) + 4, 1),
+                           'anchor': 'middle' if abs(cos) < .3 else ('start' if cos > 0 else 'end'),
+                           'name': short.get(k, k)})
+        a += seg + gap
+    edges = {'cold': [], 'warm': [], 'hot': []}
+    for h, w in games:
+        (x1, y1, _), (x2, y2, _) = pos[h], pos[w]
+        qx, qy = c + ((x1 + x2) / 2 - c) * .55, c + ((y1 + y2) / 2 - c) * .55
+        d = f'M{x1:.1f} {y1:.1f} Q{qx:.1f} {qy:.1f} {x2:.1f} {y2:.1f}'
+        kind = 'hot' if lead in (h, w) else 'warm' if (h in top_names or w in top_names) else 'cold'
+        edges[kind].append(d)
+    th = -math.pi / 2 - gap / 2  # rank labels sit in the empty wedge at twelve o'clock
+    lx, ly, _ = pos[lead]
+    out['orbit'] = {
+        'size': size, 'c': c, 'outer': round(r1 + 14, 1), 'edges': edges,
+        'rings': [{'r': round(rad(rk), 1), 'label': 'Top 10' if rk == 10 else rk,
+                   'lx': round(c + rad(rk) * math.cos(th), 1),
+                   'ly': round(c + rad(rk) * math.sin(th) + 4, 1)}
+                  for rk in (10, 25, 50, 100) if rk <= n],
+        'dots': [{'x': round(x, 1), 'y': round(y, 1), 'top': rk <= 10}
+                 for x, y, rk in sorted(pos.values(), key=lambda p: -p[2])],
+        'labels': labels, 'lead': {'team': lead, 'x': round(lx, 1), 'y': round(ly, 1)},
+    }
+    return out
 
 
 # ── Savant Forecast methodology ─────────────────────────────────────────────
