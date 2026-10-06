@@ -246,17 +246,20 @@ def _client_ip():
         return xff.split(',')[0].strip()
     return request.remote_addr or 'unknown'
 
+def _is_asset_path(p):
+    """Asset routes, not pages: exempt from the rate limit and the page gate.
+    The image proxies are host-allowlisted and memory-cached, and one Stat
+    Explorer view asks them for ~150 headshots — through a page budget that
+    half-draws the chart and locks the visitor out for a minute."""
+    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith('/img/c/')
+
+
 @app.before_request
 def _rate_limit():
     if _RL_MAX <= 0:
         return
     path = request.path
-    # /img-proxy is an asset route, not a page: one Stat Explorer view asks it
-    # for ~150 headshots, which blew straight through a 100-per-minute budget
-    # and left the chart half-drawn AND the visitor locked out of the site for
-    # the next minute. It is host-allowlisted and memory-cached, so it belongs
-    # with /static rather than with the pages the limiter exists to protect.
-    if path == '/healthz' or path.startswith('/static') or path == '/img-proxy':
+    if _is_asset_path(path):
         return
     ip = _client_ip()
     now = _time.monotonic()
@@ -316,8 +319,7 @@ _BUSY_HTML = ('<!doctype html><meta charset="utf-8"><meta name="viewport" conten
 
 def _is_page_request():
     p = request.path
-    return not (p == '/healthz' or p.startswith('/static') or p == '/img-proxy'
-                or p in ('/robots.txt', '/sitemap.xml', '/favicon.ico'))
+    return not (_is_asset_path(p) or p in ('/robots.txt', '/sitemap.xml', '/favicon.ico'))
 
 # At most two requests wait for a permit; the rest are turned away at once,
 # so waiting can never occupy the threads kept free above.
@@ -1056,7 +1058,7 @@ def _ppa_pool_cached(positions_key, season):
     key = pool_key('ppa', positions_key, season)
     stored = _pool_store_get(key)
     if stored is not None:
-        return stored
+        return _ppa_drop_tiny(stored)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -1074,7 +1076,25 @@ def _ppa_pool_cached(positions_key, season):
     finally:
         release_db(conn)
     _pool_store_put(key, season, pool)
-    return pool
+    return _ppa_drop_tiny(pool)
+
+
+# player_ppa has no play count, but total / average is one, and some rows are
+# a single play: a QB with 900 passing yards carried avg_ppa_all 5.419 = his
+# total, which stretched the explorer's EPA axis to 5.5 and would top any EPA
+# percentile. Applied on the way OUT of the pool (stored pools included), so
+# every caller — explorer, percentiles, compare — drops the same rows.
+PPA_MIN_PLAYS = 20
+
+
+def _ppa_drop_tiny(pool):
+    out = {}
+    for pid, d in pool.items():
+        avg, tot = d.get('avg_ppa_all'), d.get('total_ppa')
+        if avg is not None and tot is not None and abs(avg) > 1e-6 and tot / avg < PPA_MIN_PLAYS:
+            continue
+        out[pid] = d
+    return out
 
 def _fetch_usage_pool(cursor, positions, season=CURRENT_SEASON):
     """Usage-rate peer pool (player_usage.overall = share of team plays the
@@ -11384,6 +11404,44 @@ def img_proxy():
     return Response(body, content_type=ctype, headers=headers)
 
 
+def explorer_face_url(src, width=128):
+    """Cacheable URL for a circular, downscaled headshot (see explorer_face)."""
+    from base64 import urlsafe_b64encode
+    key = urlsafe_b64encode(src.encode()).decode().rstrip('=')
+    return f'/img/c/{width}/{key}.webp'
+
+
+@app.route('/img/c/<int:width>/<key>.webp')
+def explorer_face(width, key):
+    """The Stat Explorer's headshots, at a URL Cloudflare will cache.
+
+    /img-proxy?url=... is extensionless, and Cloudflare only edge-caches paths
+    that look like static files, so every one of a chart's ~150 faces went to
+    origin (cf-cache-status: DYNAMIC). Each worker's own memo starts empty after
+    a deploy, so a cold face cost an R2 fetch plus a resize — 1-2s apiece, 150 of
+    them through 12 threads. Here the source URL rides in the path and the
+    format is fixed (WebP, which carries the alpha the mask needs), so there is
+    no Accept negotiation for a shared cache to get wrong and the edge serves
+    every repeat. The source is a ?v= hashed URL, so the response never changes.
+    """
+    from base64 import urlsafe_b64decode
+    from urllib.parse import urlparse
+    try:
+        url = urlsafe_b64decode(key + '=' * (-len(key) % 4)).decode()
+    except Exception:
+        return 'Bad key', 400
+    netloc = urlparse(url).netloc.lower()
+    if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
+        return 'Forbidden', 403
+    hit = _img_variant(url, min(max(width, 16), IMG_MAX_WIDTH), True, True)
+    if hit is None:
+        return '', 502
+    body, ctype = hit
+    return Response(body, content_type=ctype, headers={
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Access-Control-Allow-Origin': '*'})
+
+
 @app.route('/compare')
 @cache.cached(timeout=21600, query_string=True)  # players/teams + season are all in the query string
 def compare():
@@ -12218,7 +12276,6 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, top_n=150
     ''', (int_pids,))
     meta = {str(r[0]): r for r in cursor.fetchall()}
 
-    from urllib.parse import quote
     out = []
     for pid in ranked:
         m = meta.get(str(pid))
@@ -12234,11 +12291,12 @@ def _explorer_player_scope(cursor, group, season, qualified_only=True, top_n=150
         # for canvas export whether or not the page ever exports — and the R2
         # bucket sends no CORS headers, so loading them directly fails outright
         # with ERR_FAILED and the chart draws with no faces at all. Tried it;
-        # that is what happens. The proxy is cached both ways (see img_proxy).
+        # that is what happens. It goes through explorer_face (/img/c/...webp),
+        # not /img-proxy, so Cloudflare caches it at the edge.
         # 128px: the markers draw at ~30 CSS px and the hover copy at roughly
         # double that, so this still has headroom on a 2x display while cutting
-        # a 275KB source to about 12KB (3KB as WebP).
-        headshot = (f'/img-proxy?url={quote(m[4], safe="")}&w=128&mask=circle') if m[4] else None
+        # a 275KB source to about 3KB as WebP.
+        headshot = explorer_face_url(m[4]) if m[4] else None
         out.append({
             'id': int(pid), 'name': f'{m[1] or ""} {m[2] or ""}'.strip(),
             'team': m[3] or '', 'headshot': headshot, 'logo': m[5],
@@ -12683,6 +12741,7 @@ def robots():
         "Disallow: /admin/\n"
         "Disallow: /*?\n"
         "Disallow: /img-proxy\n"
+        "Disallow: /img/\n"
         "Disallow: /api/\n"
         "Disallow: /search\n"
         "Crawl-delay: 5\n"
@@ -13163,12 +13222,11 @@ def _warm_explorer_headshots(limit=200):
 
     done = 0
     for url in urls:
-        for webp in (True, False):      # both halves of the Accept negotiation
-            try:
-                if _img_variant(url, 128, webp, True):
-                    done += 1
-            except Exception:
-                pass
+        try:
+            if _img_variant(url, 128, True, True):   # the explorer's /img/c/ faces are always WebP
+                done += 1
+        except Exception:
+            pass
     print(f'headshot warmup: {done} variants ready ({len(urls)} players)', flush=True)
 
 
