@@ -717,25 +717,6 @@ def team_trends(T, coaches, post_games, team, season, in_progress, tc, light):
         if net[i] is not None and w[i] is not None and all(abs(i - j) > 1 for j, _ in marks):
             marks.append((i, f'Year one: {w[i]}-{l[i]}'))
 
-    first_i, last_i = rated[0], rated[-1]
-    best_i = max(rated, key=lambda i: net[i])
-    worst_i = min(rated, key=lambda i: net[i])
-    coaches_n = len([e for e in eras if e['coach']])
-    confs_n = len({c for c in conf if c})
-    bits = []
-    if coaches_n > 1:
-        bits.append(f'{coaches_n} head coaches')
-    if confs_n > 1:
-        bits.append(f'{confs_n} conferences')
-    if rank[first_i] and rank[last_i]:
-        headline = f'From {_ordinal(rank[first_i])} to {_ordinal(rank[last_i])}'
-    else:
-        headline = f'{team}, {yrs[first_i]}–{yrs[last_i]}'
-    lede = (f'The Savant Rating of every {team} season since {yrs[first_i]}: how many points better than an average FBS team, on a neutral field. '
-            + (f'{" and ".join(bits).capitalize()}. ' if bits else '')
-            + f'Best: <b>{net[best_i]:+.1f}{", " + _ordinal(rank[best_i]) if rank[best_i] else ""}</b> in {yrs[best_i]}. '
-            + f'Lowest: <b>{net[worst_i]:+.1f}</b> in {yrs[worst_i]}.')
-
     def first_last(vals):
         v = [(i, x) for i, x in enumerate(vals) if x is not None]
         return (v[0], v[-1]) if v else (None, None)
@@ -789,7 +770,7 @@ def team_trends(T, coaches, post_games, team, season, in_progress, tc, light):
                    if v1 >= v0 else f'with the offense at {wk["off"][-1]:+.1f} and the defense allowing {wk["def"][-1]:.1f}.'))
         weekly = dict(big=f'{v1:+.1f}', text=text, svg=_trend_weekly(wk, light))
 
-    return dict(headline=headline, lede=lede, hero=_trend_hero(T, eras, conf_moves, marks, tc, light),
+    return dict(hero=_trend_hero(T, eras, conf_moves, marks, tc, light),
                 cards=cards, weekly=weekly, in_progress=in_progress, first=yrs[0], last=cur)
 
 
