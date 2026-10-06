@@ -560,10 +560,11 @@
 {% if not tv %}
     <div class="pending-panel">Trends need at least two rated seasons of {{ team[0] }} football. They will appear here once there is more history to compare.</div>
 {% else %}
-    <div class="trd-head">
-        <div class="trd-kick">{{ team[0] }}, {{ tv.first }}–{{ tv.last }}</div>
-    </div>
-    <figure class="trd-card trd-hero">
+    <figure class="trd-card trd-hero" aria-labelledby="trd-hero-h">
+        <div class="trd-hero-h">
+            <h3 id="trd-hero-h">Savant Rating, {{ tv.first }}–{{ tv.last }}</h3>
+            <span>Points better than an average FBS team on a neutral field. <a href="/savant-rating">How it works</a></span>
+        </div>
         {{ tv.hero|safe }}
         <figcaption>The number above each point is that season&#39;s national rank; the record is underneath.{% if tv.in_progress %} {{ tv.last }} is still being played.{% endif %}</figcaption>
     </figure>
