@@ -68,6 +68,7 @@ import json
 import math
 import os
 import re
+import bisect
 import datetime
 import hmac
 import unicodedata
@@ -4372,6 +4373,115 @@ def _search_players(cursor, q, n=None, limit=50, positions=None):
              'active': r[9], 'year': r[10], 'rank': r[11], 'fuzzy': fuzzy} for r in rows]
 
 
+
+# The figures a search result leads with, per position group: the first is the
+# headline (and the one ranked), the rest fill out the line. Offensive linemen
+# have no individual stats, so their cards fall back to height and weight.
+SEARCH_LEAD = {
+    'QB': [('passing', 'YDS', 'pass yds'), ('passing', 'TD', 'TD'), ('passing', 'INT', 'INT')],
+    'RB': [('rushing', 'YDS', 'rush yds'), ('rushing', 'TD', 'TD'), ('rushing', 'YPC', 'YPC')],
+    'REC': [('receiving', 'YDS', 'rec yds'), ('receiving', 'REC', 'rec'), ('receiving', 'TD', 'TD')],
+    'FRONT': [('defensive', 'TOT', 'tackles'), ('defensive', 'SACKS', 'sacks'), ('defensive', 'TFL', 'TFL')],
+    'DB': [('defensive', 'TOT', 'tackles'), ('interceptions', 'INT', 'INT'), ('defensive', 'PD', 'PD')],
+    'K': [('kicking', 'FGM', 'FG made'), ('kicking', 'PCT', 'FG %'), ('kicking', 'LONG', 'long')],
+    'P': [('punting', 'YPP', 'yds/punt'), ('punting', 'NO', 'punts'), ('punting', 'LONG', 'long')],
+}
+_SEARCH_POS_GROUP = {'QB': 'QB', 'RB': 'RB', 'FB': 'RB', 'WR': 'REC', 'TE': 'REC', 'K': 'K', 'PK': 'K', 'P': 'P',
+                     'CB': 'DB', 'S': 'DB', 'DB': 'DB', 'FS': 'DB', 'SS': 'DB'}
+_SEARCH_NO_STATS = {'OL', 'OT', 'OG', 'C', 'G', 'T', 'LS', None, ''}
+_SEARCH_CLASS = {'1': 'Freshman', '2': 'Sophomore', '3': 'Junior', '4': 'Senior', '5': 'Senior'}
+
+
+def _search_fmt(v):
+    v = float(v)
+    return f'{v:,.0f}' if v == int(v) else f'{v:.1f}'
+
+
+@data_cache.memoize(timeout=21600)
+def _search_rank_pools(season):
+    """{(category, stat_type): every FBS player's figure, ascending} for the
+    stats SEARCH_LEAD ranks, one query per season, so a result's FBS rank is a
+    bisect. Counting live per result cost ~1s for a page of 50 (the defensive
+    pools run to ~5,000 players each)."""
+    keys = sorted({(c, t) for lead in SEARCH_LEAD.values() for c, t, _ in lead[:1]})
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('''SELECT category, stat_type, MAX(stat) FROM player_stats
+                        WHERE season = %s AND (category, stat_type) IN %s
+                          AND conference <> ALL(%s) AND stat IS NOT NULL
+                        GROUP BY category, stat_type, player_id''',
+                    (season, tuple(keys), list(FCS_CONFS)))
+        pools = {}
+        for c, t, v in cur.fetchall():
+            pools.setdefault((c, t), []).append(float(v))
+        return {k: sorted(v) for k, v in pools.items()}
+    finally:
+        release_db(conn)
+
+
+def _search_enrich_players(cursor, players, ranks=True):
+    """Add what a rich result card shows: team colour, height/weight, class or
+    the years a former player played, the position's headline figures from the
+    player's latest season, and that headline's FBS rank (ranks=True; only
+    worth showing inside the top 100, so `rank` is None beyond that).
+
+    Batched: two queries for the whole result list, plus the cached rank
+    pools of each season involved (_search_rank_pools)."""
+    if not players:
+        return players
+    ids = [p['id'] for p in players]
+    sids = [str(i) for i in ids]
+    cursor.execute('''SELECT p.id, p.height, p.weight, t.color FROM players p
+                      LEFT JOIN teams t ON t.name = p.team WHERE p.id = ANY(%s)''', (ids,))
+    bio = {r[0]: r[1:] for r in cursor.fetchall()}
+    cursor.execute('''
+        SELECT ps.player_id, m.lo, m.hi, ps.category, ps.stat_type, ps.stat
+          FROM (SELECT player_id, MIN(season) lo, MAX(season) hi FROM player_stats
+                 WHERE player_id = ANY(%s) GROUP BY player_id) m
+          JOIN player_stats ps ON ps.player_id = m.player_id AND ps.season = m.hi
+    ''', (sids,))
+    span, stats = {}, {}
+    for pid, lo, hi, cat, st, v in cursor.fetchall():
+        span[pid] = (lo, hi)
+        stats[(pid, cat, st)] = v
+    want = []
+    for p in players:
+        h, w, c = bio.get(p['id'], (None, None, None))
+        lo, hi = span.get(str(p['id']), (None, None))
+        p.update(height=h, weight=w, color=team_hex(c, '#5d6268'), first_season=lo, season=hi,
+                 klass=_SEARCH_CLASS.get(str(p.get('year') or '')), lead=[], rank=None)
+        group = _SEARCH_POS_GROUP.get(p['pos']) or (None if p['pos'] in _SEARCH_NO_STATS else 'FRONT')
+        for cat, st, label in SEARCH_LEAD.get(group, []):
+            v = stats.get((str(p['id']), cat, st))
+            if v is not None:
+                p['lead'].append({'value': _search_fmt(v), 'label': label})
+                if len(p['lead']) == 1 and ranks:
+                    want.append((hi, cat, st, float(v), p))
+    for season, cat, st, v, p in want:
+        pool = _search_rank_pools(season).get((cat, st), [])
+        r = len(pool) - bisect.bisect_right(pool, v) + 1     # players strictly ahead, plus one
+        p['rank'] = r if r <= 100 else None
+    return players
+
+
+def _search_enrich_teams(cursor, teams, season):
+    """Record, AP rank and Savant ranks for team results."""
+    if not teams:
+        return teams
+    rows = {r['name']: r for rs in conference_standings(season).values() for r in rs}
+    ap = get_ap_rankings(cursor, season)
+    cursor.execute('SELECT team, net_ranking, off_ranking, def_ranking FROM savant_ratings WHERE season = %s',
+                   (season,))
+    sv = {r[0]: r[1:] for r in cursor.fetchall()}
+    for t in teams:
+        r = rows.get(t['name'], {})
+        net, off, dfn = sv.get(t['name'], (None, None, None))
+        t.update(wins=r.get('wins'), losses=r.get('losses'), conf_wins=r.get('conf_wins'),
+                 conf_losses=r.get('conf_losses'), ap=ap.get(t['name']),
+                 svr=net, svr_off=off, svr_def=dfn, hex=team_hex(t.get('color'), '#5d6268'))
+    return teams
+
 def _search_rivalries(cursor, q, n, teams, limit=6):
     """Named rivalries matching the query, or belonging to a matched team —
     searching "Iron Bowl" should find it, and so should searching "Auburn"."""
@@ -4425,7 +4535,7 @@ def _search_games(cursor, team, season):
 
 @app.route('/search')
 def search():
-    q = request.args.get('q', '').strip()
+    q = request.args.get('q', '').strip()[:80]
     team_results, player_results, rivalry_results, game_results = [], [], [], []
     if q:
         raw, norm = _search_terms(q)
@@ -4440,11 +4550,18 @@ def search():
             # Games only when one school clearly answers the query.
             top = team_results[0] if team_results and team_results[0]['rank'] <= 1 else None
             game_results = _search_games(cursor, top['name'] if top else None, CURRENT_SEASON)
+            _search_enrich_players(cursor, player_results)
+            _search_enrich_teams(cursor, team_results, CURRENT_SEASON)
         finally:
             release_db(conn)
+    # The tab that opens first is the one that answers the query: a school
+    # searched by name ("texas", "bama") opens on teams, anything else on players.
+    first_tab = 'teams' if team_results and (team_results[0]['rank'] <= 1 or not player_results) else (
+        'players' if player_results else 'teams' if team_results else 'rivalries' if rivalry_results else 'players')
     return render_template('search.html', player_results=player_results,
                            team_results=team_results, rivalry_results=rivalry_results,
-                           game_results=game_results, query=q)
+                           game_results=game_results, query=q, first_tab=first_tab,
+                           season=CURRENT_SEASON)
 
 
 @app.route('/leaderboards')
@@ -7332,7 +7449,7 @@ def api_players():
     pos_cols = POSITION_GROUPS.get(pos)
     # Every visitor typing "ma" asks the same question; answers are cached for
     # ten minutes per worker and for five in the browser.
-    key = f'apiq:{pos if pos_cols else ""}:{_snorm(q)}'
+    key = f'apiq2:{pos if pos_cols else ""}:{_snorm(q)}'
     results = data_cache.get(key)
     if results is None:
         conn = get_db()
@@ -7340,6 +7457,7 @@ def api_players():
             cursor = conn.cursor()
             raw, norm = _search_terms(q)
             player_dicts = _search_players(cursor, raw, norm, limit=6, positions=pos_cols)
+            _search_enrich_players(cursor, player_dicts, ranks=False)
             # The same team ranking the /search page uses, so the dropdown and
             # the results page agree about what "lsu" means.
             team_dicts = [] if pos_cols else _search_teams(cursor, raw, norm, limit=4)
@@ -7358,6 +7476,8 @@ def api_players():
             results.append({'type': 'player', 'id': pl['id'], 'first': pl['first'], 'last': pl['last'],
                             'team': pl['team'], 'pos': pl['pos'], 'jersey': pl['jersey'],
                             'headshot': pl['headshot'], 'logo': pl['logo'], 'fuzzy': pl['fuzzy'],
+                            'stat': (f"{pl['lead'][0]['value']} {pl['lead'][0]['label']}" if pl['lead'] else None),
+                            'season': pl['season'], 'active': pl['active'],
                             'url': f"/player/{pl['id']}"})
         data_cache.set(key, results, timeout=600)
     resp = jsonify(results)
@@ -13383,6 +13503,14 @@ def _warm_cache():
             print('cache warmup complete', flush=True)
         except Exception as e:
             print(f'cache warmup skipped: {e}', flush=True)
+        # Search results rank each player's headline figure against his season;
+        # building those pools on the first search would cost that visitor ~0.5s
+        # per season involved.
+        for yr in get_available_seasons():
+            try:
+                _search_rank_pools(yr)
+            except Exception:
+                pass
         _warm_explorer_headshots()
     threading.Thread(target=run, daemon=True).start()
 

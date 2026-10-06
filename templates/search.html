@@ -1,141 +1,242 @@
 {% extends "base.html" %}
 {% block title %}{% if query %}“{{ query }}” · Search · Saturday Savant{% else %}Search · Saturday Savant{% endif %}{% endblock %}
-{% block og_description %}Search FBS players and teams on Saturday Savant.{% endblock %}
+{% block og_description %}Search every FBS player, team and rivalry on Saturday Savant, with each player's headline numbers and each team's record and ratings.{% endblock %}
+
+{% macro ordinal(n) -%}{{ n }}{{ 'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }}{%- endmacro %}
+
+{% macro height(h) -%}{% if h %}{{ h // 12 }}′{{ h % 12 }}″{% endif %}{%- endmacro %}
+
+{% macro sub_line(p) -%}
+{{ p.pos }}{% if p.jersey is not none %}, No. {{ p.jersey }}{% endif %}
+{%- if p.active %}{% if p.klass %}, {{ p.klass }}{% endif %}
+{%- elif p.first_season %}, former, {{ p.first_season }}–{{ (p.season|string)[2:] }}{% else %}, former{% endif %}
+{%- endmacro %}
+
+{% set chev %}<svg class="srch-chev" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>{% endset %}
 
 {% block content %}
-<div class="page-wrapper" style="padding-top:40px">
+<div class="page-wrapper srch-page">
+    <h1 class="sr-only">{% if query %}Search results for “{{ query }}”{% else %}Search{% endif %}</h1>
 
-    <!-- Header: same eyebrow + display-type convention as the leaderboards -->
-    <div style="margin-bottom:20px">
-        <h1 style="font-weight:800;font-size: var(--text-2xl);margin:0">
-            {% if query %}“{{ query }}”
-                <span style="color: var(--text-dim);font-weight:400;font-size:1.4rem">
-                    · {{ team_results|length }} team{{ '' if team_results|length == 1 else 's' }},
-                    {{ player_results|length }} player{{ '' if player_results|length == 1 else 's' }}{% if rivalry_results %},
-                    {{ rivalry_results|length }} rivalr{{ 'y' if rivalry_results|length == 1 else 'ies' }}{% endif %}</span>
-            {% else %}Players &amp; Teams{% endif %}
-        </h1>
-    </div>
-
-    <!-- On-page search — refine without going back to the navbar -->
-    <form method="GET" action="/search" class="sp-form" role="search">
-        <input type="search" name="q" value="{{ query }}" class="sp-input"
-               placeholder="Search players or teams…" autocomplete="off"
-               {% if not query %}autofocus{% endif %} aria-label="Search players and teams">
-        <button type="submit" class="sp-submit">Search</button>
+    <form class="srch-field" method="GET" action="/search" role="search">
+        <label class="sr-only" for="srch-q">Search players, teams and rivalries</label>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+        <input type="search" id="srch-q" name="q" value="{{ query }}" placeholder="Players, teams or rivalries" autocomplete="off" spellcheck="false" {% if not query %}autofocus{% endif %}>
+        <span class="srch-kbd" aria-hidden="true">Press / to search</span>
     </form>
 
+    {% set examples = [('Arch Manning', 'arch manning'), ('Ohio State', 'ohio state'), ('Iron Bowl', 'iron bowl'), ('Jeremiah Smith', 'jeremiah smith')] %}
     {% if not query %}
-    <div class="sp-empty">
-        <div class="sp-empty-title">Find any player or team</div>
-        <div class="sp-empty-sub">Ten seasons of FBS football — search by first name, last name, or school.</div>
+    <div class="srch-empty">
+        <h2>Find any player, team or rivalry</h2>
+        <p>Ten seasons of FBS football. Search a first or last name, a school, or a rivalry's name.</p>
+        <div class="srch-try">{% for label, q in examples %}<a href="/search?q={{ q|urlencode }}">{{ label }}</a>{% endfor %}</div>
     </div>
 
     {% elif not team_results and not player_results and not rivalry_results %}
-    <div class="sp-empty">
-        <div class="sp-empty-title">No results for “{{ query }}”</div>
-        <div class="sp-empty-sub">Try a different spelling or a partial name.</div>
+    <div class="srch-empty">
+        <h2>Nothing matches “{{ query }}”</h2>
+        <p>Check the spelling, or search part of a name: a last name alone usually finds the player.</p>
+        <div class="srch-try">{% for label, q in examples %}<a href="/search?q={{ q|urlencode }}">{{ label }}</a>{% endfor %}</div>
     </div>
 
     {% else %}
+    {% set tabs = [('players', 'Players', player_results|length), ('teams', 'Teams', team_results|length),
+                   ('rivalries', 'Rivalries', rivalry_results|length), ('games', 'Games', game_results|length)] %}
+    <div class="srch-split">
+        <section class="srch-list" aria-label="Results">
+            <div class="srch-tabs" role="tablist" aria-label="Result type">
+                {% for key, label, n in tabs if n %}
+                <button type="button" class="srch-tab" role="tab" id="srch-tab-{{ key }}" aria-controls="srch-p-{{ key }}"
+                        aria-selected="{{ 'true' if key == first_tab else 'false' }}" tabindex="{{ 0 if key == first_tab else -1 }}">{{ label }}<span>{{ n }}</span></button>
+                {% endfor %}
+            </div>
 
-    {% if team_results %}
-    <div style="margin:32px 0 36px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0">Teams</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ team_results|length }} found</span>
-        </div>
-        <div class="sp-team-grid">
-            {% for t in team_results %}
-            {% set tc = ('#' + t.color.lstrip('#')) if t.color else 'var(--accent)' %}
-            <a href="/team/{{ t.name | team_slug }}" class="sp-team-card" style="--tc: {{ tc }}">
-                {% if t.logo %}<img src="{{ t.logo }}" alt="{{ t.name }} logo" loading="lazy">{% else %}
-                <div class="sp-team-fallback">{{ t.name[0] }}</div>{% endif %}
-                <div class="sp-team-name">{{ t.name }}</div>
-                <div class="sp-team-conf">{{ t.conference }}</div>
-            </a>
-            {% endfor %}
-        </div>
+            {% if player_results %}
+            <div class="srch-rows" role="tabpanel" id="srch-p-players" aria-labelledby="srch-tab-players" {{ 'hidden' if first_tab != 'players' }}>
+                {% if player_results[0].fuzzy %}<p class="srch-note">No exact match. Closest names:</p>{% endif %}
+                {% for p in player_results %}
+                {% set pv = {'kind': 'player', 'name': p.first ~ ' ' ~ p.last, 'url': '/player/' ~ p.id, 'face': p.headshot, 'logo': p.logo,
+                             'color': p.color, 'sub': p.pos ~ ', ' ~ p.team, 'team_url': team_url(p.team),
+                             'bio': [('Class', p.klass if p.active else 'Former'), ('Height', height(p.height)), ('Weight', p.weight ~ ' lbs' if p.weight else '')],
+                             'stats': p.lead, 'season': p.season, 'rank': ordinal(p.rank) ~ ' in FBS, ' ~ p.lead[0].label if p.rank else ''} %}
+                <a class="srch-row" href="/player/{{ p.id }}" style="--tc: {{ p.color }}" data-pv="{{ pv|tojson|forceescape }}">
+                    <span class="srch-face">{% if p.headshot %}<img src="{{ p.headshot }}" alt="" width="56" height="56" loading="lazy">{% endif %}</span>
+                    <span class="srch-name"><b>{{ p.first }} {{ p.last }}</b><span>{{ sub_line(p) }}</span></span>
+                    <span class="srch-team">{% if p.logo %}<img src="{{ p.logo }}" alt="" width="20" height="20" loading="lazy">{% endif %}<span>{{ p.team }}</span></span>
+                    <span class="srch-stat">
+                        {%- if p.lead %}{% for s in p.lead %}{{ ' · ' if not loop.first }}<b>{{ s.value }}</b> {{ s.label }}{% endfor %}{% if p.season != season %} <span class="srch-yr">{{ p.season }}</span>{% endif %}
+                        {%- elif p.height %}{{ height(p.height) }}, {{ p.weight }} lbs{% endif %}
+                        {%- if p.rank %}<span class="srch-pill">{{ ordinal(p.rank) }} in FBS, {{ p.lead[0].label }}</span>{% endif -%}
+                    </span>
+                    {{ chev }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if team_results %}
+            <div class="srch-rows" role="tabpanel" id="srch-p-teams" aria-labelledby="srch-tab-teams" {{ 'hidden' if first_tab != 'teams' }}>
+                {% for t in team_results %}
+                {% set conf = {'American Athletic': 'American', 'FBS Independents': 'Independent'}.get(t.conference, t.conference) %}
+                {% set rec = (t.wins ~ '-' ~ t.losses) if t.wins is not none else '' %}
+                {% set figs = [] %}
+                {% if rec %}{% set _ = figs.append((rec, 'Record, ' ~ t.conf_wins ~ '-' ~ t.conf_losses ~ ' in conference')) %}{% endif %}
+                {% if t.ap %}{% set _ = figs.append(('No. ' ~ t.ap, 'AP poll')) %}{% endif %}
+                {% if t.svr %}{% set _ = figs.append((ordinal(t.svr), 'Savant Rating')) %}{% endif %}
+                {% if t.svr_off %}{% set _ = figs.append((ordinal(t.svr_off), 'Savant offense')) %}{% endif %}
+                {% if t.svr_def %}{% set _ = figs.append((ordinal(t.svr_def), 'Savant defense')) %}{% endif %}
+                {% set games = [] %}
+                {% if loop.first and t.rank <= 1 %}{% for g in game_results %}{% set _ = games.append({'kind': g.kind, 'url': '/game/' ~ g.id, 'text': g.away ~ ' at ' ~ g.home, 'score': (g.ap ~ '-' ~ g.hp) if g.hp is not none else 'Week ' ~ g.week}) %}{% endfor %}{% endif %}
+                {% set pv = {'kind': 'team', 'name': t.name, 'url': team_url(t.name), 'logo': t.logo, 'color': t.hex,
+                             'sub': conf ~ (', ' ~ season ~ ' season' if rec else ''), 'figs': figs, 'games': games} %}
+                <a class="srch-row is-team" href="{{ team_url(t.name) }}" style="--tc: {{ t.hex }}" data-pv="{{ pv|tojson|forceescape }}">
+                    <span class="srch-crest">{% if t.logo %}<img src="{{ t.logo }}" alt="" width="40" height="40" loading="lazy">{% endif %}</span>
+                    <span class="srch-name"><b>{{ t.name }}</b><span>{{ conf }}</span></span>
+                    <span class="srch-team">{% if rec %}{{ rec }}{% if t.conf_wins is not none %}, {{ t.conf_wins }}-{{ t.conf_losses }} conf{% endif %}{% endif %}</span>
+                    <span class="srch-stat">{% if t.ap %}<span class="srch-pill">AP No. {{ t.ap }}</span>{% endif %}{% if t.svr %} Savant <b>{{ ordinal(t.svr) }}</b>{% endif %}</span>
+                    {{ chev }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if rivalry_results %}
+            <div class="srch-rows" role="tabpanel" id="srch-p-rivalries" aria-labelledby="srch-tab-rivalries" {{ 'hidden' if first_tab != 'rivalries' }}>
+                {% for r in rivalry_results %}
+                {% set url = '/rivalry/' ~ (r.team_a|team_slug) ~ '/' ~ (r.team_b|team_slug) %}
+                {% set pv = {'kind': 'rivalry', 'name': r.name, 'url': url, 'logo': r.logo_a, 'logo_b': r.logo_b, 'sub': r.team_a ~ ' vs ' ~ r.team_b} %}
+                <a class="srch-row is-rv" href="{{ url }}" data-pv="{{ pv|tojson|forceescape }}">
+                    <span class="srch-pair">{% if r.logo_a %}<img src="{{ r.logo_a }}" alt="" width="30" height="30" loading="lazy">{% endif %}{% if r.logo_b %}<img src="{{ r.logo_b }}" alt="" width="30" height="30" loading="lazy">{% endif %}</span>
+                    <span class="srch-name"><b>{{ r.name }}</b><span>{{ r.team_a }} vs {{ r.team_b }}</span></span>
+                    <span class="srch-team"></span><span class="srch-stat">Series history</span>
+                    {{ chev }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if game_results %}
+            <div class="srch-rows" role="tabpanel" id="srch-p-games" aria-labelledby="srch-tab-games" {{ 'hidden' if first_tab != 'games' }}>
+                {% for g in game_results %}
+                <a class="srch-row is-game" href="/game/{{ g.id }}">
+                    <span class="srch-kind">{{ g.kind }}</span>
+                    <span class="srch-name"><b>{{ g.away }} at {{ g.home }}</b><span>Week {{ g.week }}, {{ g.season }}</span></span>
+                    <span class="srch-team"></span>
+                    <span class="srch-stat">{% if g.hp is not none %}<b>{{ g.ap }}-{{ g.hp }}</b> final{% else %}Upcoming{% endif %}</span>
+                    {{ chev }}
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <p class="srch-hint">Use ↑ and ↓ to move through results; Enter opens the one selected.</p>
+        </section>
+
+        <aside class="srch-prev" aria-label="Selected result" aria-live="polite">
+            <div class="srch-pv" id="srch-pv"></div>
+        </aside>
     </div>
-    {% endif %}
-
-    {% if game_results %}
-    <div style="margin:32px 0 36px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0">Games</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-        </div>
-        <div class="sp-line-list">
-            {% for g in game_results %}
-            <a href="/game/{{ g.id }}" class="sp-line">
-                <span class="sp-line-kind">{{ g.kind }}</span>
-                <span class="sp-line-main">{{ g.away }} at {{ g.home }}</span>
-                <span class="sp-line-meta">
-                    {% if g.hp is not none %}{{ g.away_pts if g.away_pts is defined else g.ap }}–{{ g.hp }}{% else %}Week {{ g.week }}{% endif %}
-                </span>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-
-    {% if rivalry_results %}
-    <div style="margin:32px 0 36px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0">Rivalries</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ rivalry_results|length }} found</span>
-        </div>
-        <div class="sp-line-list">
-            {% for r in rivalry_results %}
-            <a href="/rivalry/{{ r.team_a | team_slug }}/{{ r.team_b | team_slug }}" class="sp-line">
-                <span class="sp-line-logos">
-                    {% if r.logo_a %}<img src="{{ r.logo_a }}" alt="" loading="lazy">{% endif %}
-                    {% if r.logo_b %}<img src="{{ r.logo_b }}" alt="" loading="lazy">{% endif %}
-                </span>
-                <span class="sp-line-main">{{ r.name }}</span>
-                <span class="sp-line-meta">{{ r.team_a }} &middot; {{ r.team_b }}</span>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-
-    {% if player_results %}
-    <div style="margin-top:32px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-            <h2 class="section-label" style="margin:0">{{ 'Did you mean' if player_results[0].fuzzy else 'Players' }}</h2>
-            <div style="flex:1;height:1px;background: var(--border)"></div>
-            <span style="color: var(--text-dim);font-size: var(--text-xs)">{{ player_results|length }} found</span>
-        </div>
-        <div class="dark-card" style="overflow:hidden">
-            {% for p in player_results %}
-            <a href="/player/{{ p.id }}" class="sp-player-row">
-                {% if p.headshot %}
-                    <img src="{{ p.headshot }}" alt="{{ p.first }} {{ p.last }} headshot" class="sp-headshot" loading="lazy">
-                {% else %}
-                    <div class="sp-headshot sp-headshot-fallback">{{ p.first[0] if p.first else '' }}{{ p.last[0] if p.last else '' }}</div>
-                {% endif %}
-                <div style="flex:1;min-width:0">
-                    <div class="sp-player-name">{{ p.first }} {{ p.last }}
-                        {% if not p.active %}<span class="sp-departed">Former</span>{% endif %}
-                    </div>
-                    <div class="sp-player-meta">
-                        {% if p.logo %}<img src="{{ p.logo }}" alt="{{ p.team }} logo" loading="lazy">{% endif %}
-                        <span>{{ p.team }}</span>
-                        <span class="sp-dot">·</span>
-                        <span>{{ p.conference }}</span>
-                    </div>
-                </div>
-                {% if p.jersey %}<span class="sp-jersey">#{{ p.jersey }}</span>{% endif %}
-                <span class="sp-pos">{{ p.pos or '—' }}</span>
-            </a>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var input = document.getElementById('srch-q');
+    // "/" jumps to the search field from anywhere on the page.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === '/' && document.activeElement !== input && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+            e.preventDefault(); input.focus(); input.select();
+        }
+    });
+    var pv = document.getElementById('srch-pv');
+    if (!pv) return;
+    var tabs = [].slice.call(document.querySelectorAll('.srch-tab'));
+    var sel = null;
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+    var panel = function () { return document.querySelector('.srch-rows:not([hidden])'); };
+    var rowsOf = function () { var p = panel(); return p ? [].slice.call(p.querySelectorAll('.srch-row')) : []; };
+
+    function render(d) {
+        var h = '';
+        if (d.kind === 'player') {
+            h = '<div class="srch-pv-ph" style="--tc:' + esc(d.color) + '">' + (d.logo ? '<img class="lg" src="' + esc(d.logo) + '" alt="">' : '') +
+                (d.face ? '<img class="face" src="' + esc(d.face) + '" alt="">' : '') + '</div>' +
+                '<div class="srch-pv-b"><h2 class="srch-pv-n">' + esc(d.name) + '</h2><div class="srch-pv-s">' + esc(d.sub) + '</div>';
+            var bio = d.bio.filter(function (b) { return b[1]; });
+            if (bio.length) h += '<dl class="srch-bio">' + bio.map(function (b) { return '<div><dt>' + esc(b[0]) + '</dt><dd>' + esc(b[1]) + '</dd></div>'; }).join('') + '</dl>';
+            if (d.stats.length) {
+                h += '<div class="srch-pv-k">' + esc(d.season) + ' season</div><div class="srch-figs">' + d.stats.map(function (s) {
+                    return '<div><b>' + esc(s.value) + '</b><span>' + esc(s.label) + '</span></div>'; }).join('') + '</div>';
+                if (d.rank) h += '<div class="srch-pv-r">' + esc(d.rank) + '</div>';
+            }
+            h += '<div class="srch-pv-a"><a class="srch-btn is-p" href="' + esc(d.url) + '">Player page</a><a class="srch-btn" href="' + esc(d.team_url) + '">Team page</a></div></div>';
+        } else if (d.kind === 'team') {
+            h = '<div class="srch-pv-ph is-team" style="--tc:' + esc(d.color) + '">' + (d.logo ? '<img class="crest" src="' + esc(d.logo) + '" alt="">' : '') + '</div>' +
+                '<div class="srch-pv-b"><h2 class="srch-pv-n">' + esc(d.name) + '</h2><div class="srch-pv-s">' + esc(d.sub) + '</div>';
+            if (d.figs.length) h += '<div class="srch-figs">' + d.figs.map(function (f) { return '<div><b>' + esc(f[0]) + '</b><span>' + esc(f[1]) + '</span></div>'; }).join('') + '</div>';
+            if (d.games.length) h += '<div class="srch-games">' + d.games.map(function (g) {
+                return '<a href="' + esc(g.url) + '"><span>' + esc(g.kind) + '</span><b>' + esc(g.text) + '</b><em>' + esc(g.score) + '</em></a>'; }).join('') + '</div>';
+            h += '<div class="srch-pv-a"><a class="srch-btn is-p" href="' + esc(d.url) + '">Team page</a></div></div>';
+        } else {
+            h = '<div class="srch-pv-ph is-rv">' + (d.logo ? '<img class="crest" src="' + esc(d.logo) + '" alt="">' : '') + (d.logo_b ? '<img class="crest" src="' + esc(d.logo_b) + '" alt="">' : '') + '</div>' +
+                '<div class="srch-pv-b"><h2 class="srch-pv-n">' + esc(d.name) + '</h2><div class="srch-pv-s">' + esc(d.sub) + '</div>' +
+                '<div class="srch-pv-a"><a class="srch-btn is-p" href="' + esc(d.url) + '">Series history</a></div></div>';
+        }
+        pv.innerHTML = h;
+    }
+
+    function select(row, scroll) {
+        if (sel) { sel.classList.remove('is-sel'); sel.removeAttribute('aria-current'); }
+        sel = row || null;
+        if (!sel) { pv.innerHTML = ''; return; }
+        sel.classList.add('is-sel');
+        sel.setAttribute('aria-current', 'true');
+        if (scroll) sel.scrollIntoView({ block: 'nearest' });
+        if (sel.dataset.pv) { try { render(JSON.parse(sel.dataset.pv)); } catch (e) { pv.innerHTML = ''; } }
+        else pv.innerHTML = '';
+    }
+
+    function showTab(tab, focus) {
+        tabs.forEach(function (t) {
+            var on = t === tab;
+            t.setAttribute('aria-selected', on);
+            t.tabIndex = on ? 0 : -1;
+            document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+        });
+        if (focus) tab.focus();
+        select(rowsOf()[0]);
+    }
+    tabs.forEach(function (t, i) {
+        t.addEventListener('click', function () { showTab(t); });
+        t.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                e.preventDefault();
+                showTab(tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
+            }
+        });
+    });
+
+    var list = document.querySelector('.srch-list');
+    list.addEventListener('mouseover', function (e) { var r = e.target.closest('.srch-row'); if (r && r !== sel) select(r); });
+    list.addEventListener('focusin', function (e) { var r = e.target.closest('.srch-row'); if (r) select(r); });
+    function step(e) {
+        var rows = rowsOf();
+        if (!rows.length) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            var i = rows.indexOf(sel);
+            i = e.key === 'ArrowDown' ? Math.min(rows.length - 1, i + 1) : Math.max(0, i - 1);
+            if (document.activeElement.classList.contains('srch-row')) rows[i].focus(); else select(rows[i], true);
+        } else if (e.key === 'Enter' && sel && document.activeElement === input && input.value.trim() === input.defaultValue.trim()) {
+            e.preventDefault(); window.location.href = sel.href;
+        }
+    }
+    list.addEventListener('keydown', function (e) { if (e.target.closest('.srch-row')) step(e); });
+    input.addEventListener('keydown', step);
+    select(rowsOf()[0]);
+})();
+</script>
 {% endblock %}

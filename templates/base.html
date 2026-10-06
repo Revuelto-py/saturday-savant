@@ -256,6 +256,11 @@
         .search-result-item + .search-group { border-top: 1px solid var(--border); }
         .search-result-all { display: block; padding: 12px 14px; color: var(--accent); font-size: var(--text-sm); font-weight: 600; text-decoration: none; border-top: 1px solid var(--border); }
         .search-result-all:hover { background: rgba(28,156,240,0.08); }
+        .search-result-all { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .search-result-all span { color: var(--text-dim); font-size: var(--text-xs); font-weight: 500; }
+        .search-result-name mark { background: none; color: #7cc9fb; }
+        .search-result-stat { margin-left: auto; flex-shrink: 0; text-align: right; color: var(--text-secondary); font-size: var(--text-xs); font-variant-numeric: tabular-nums; line-height: 1.3; }
+        .search-result-stat span { display: block; color: var(--text-dim); }
         .search-result-all:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
         .search-empty { padding: 20px 16px; color: var(--text-dim); font-size: var(--text-sm); text-align: center; }
         .search-loading { padding: 16px; text-align: center; color: var(--text-dim); font-size: var(--text-sm); }
@@ -856,6 +861,14 @@
         let timer, ctrl, items = [], active = -1;
 
         const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        // Highlight where each typed word starts a word of the name ("mann" in Arch Manning).
+        const mark = (text, q) => {
+            const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+            return String(text).split(/(\s+)/).map(w => {
+                const hit = words.find(t => w.toLowerCase().startsWith(t));
+                return hit ? `<mark>${esc(w.slice(0, hit.length))}</mark>${esc(w.slice(hit.length))}` : esc(w);
+            }).join('');
+        };
 
         function open(html) {
             dropdown.innerHTML = html;
@@ -893,7 +906,7 @@
                 for (const r of teams) {
                     html += `<a class="search-result-item" id="sr-${n++}" role="option" href="${esc(r.url)}">
                         ${r.logo ? `<img class="search-result-logo" src="${esc(r.logo)}" alt="" loading="lazy">` : '<span class="search-result-logo"></span>'}
-                        <span class="search-result-text"><span class="search-result-name">${esc(r.name)}</span>
+                        <span class="search-result-text"><span class="search-result-name">${mark(r.name, q)}</span>
                         <span class="search-result-meta">${esc(r.conference || '')}</span></span>
                         <span class="search-result-kind">Team</span></a>`;
                 }
@@ -904,14 +917,19 @@
                     const avatar = r.headshot
                         ? `<img class="search-result-avatar" src="${esc(r.headshot)}" alt="" loading="lazy">`
                         : `<span class="search-avatar-placeholder">${esc((r.first || '')[0] || '')}${esc((r.last || '')[0] || '')}</span>`;
+                    // The headline figure from the player's latest season; a former
+                    // player's year says the number isn't this season's.
+                    const fig = r.stat
+                        ? `<span class="search-result-stat">${esc(r.stat)}${r.active ? '' : `<span>${esc(r.season)}</span>`}</span>`
+                        : (r.pos ? `<span class="search-result-pos">${esc(r.pos)}</span>` : '');
                     html += `<a class="search-result-item" id="sr-${n++}" role="option" href="${esc(r.url)}">
                         ${avatar}
-                        <span class="search-result-text"><span class="search-result-name">${esc(r.first)} ${esc(r.last)}</span>
-                        <span class="search-result-meta">${r.logo ? `<img src="${esc(r.logo)}" alt="" loading="lazy">` : ''}${esc(r.team || '')}</span></span>
-                        ${r.pos ? `<span class="search-result-pos">${esc(r.pos)}</span>` : ''}</a>`;
+                        <span class="search-result-text"><span class="search-result-name">${mark(r.first + ' ' + r.last, q)}</span>
+                        <span class="search-result-meta">${r.logo ? `<img src="${esc(r.logo)}" alt="" loading="lazy">` : ''}${r.pos ? esc(r.pos) + ', ' : ''}${esc(r.team || '')}</span></span>
+                        ${fig}</a>`;
                 }
             }
-            html += `<a class="search-result-all" href="/search?q=${encodeURIComponent(q)}">All results for “${esc(q)}”</a>`;
+            html += `<a class="search-result-all" href="/search?q=${encodeURIComponent(q)}">See all results for “${esc(q)}”<span>Enter to open, ↑↓ to move</span></a>`;
             open(html);
         }
 
