@@ -10399,6 +10399,14 @@ def _player_detail_cached(player_id, season):
     )
 
 
+# ?status= on /transfers. Withdrawn players carry no destination, so "landed"
+# and "uncommitted" both have to rule them out explicitly.
+TRANSFER_STATUS = {
+    'landed':   "COALESCE(t.destination, '') <> '' AND COALESCE(t.eligibility, '') <> 'Withdrawn'",
+    'open':     "COALESCE(t.destination, '') = '' AND COALESCE(t.eligibility, '') <> 'Withdrawn'",
+    'withdrew': "t.eligibility = 'Withdrawn'",
+}
+
 TRANSFER_SORTS = {
     'rating': 't.rating DESC NULLS LAST, t.stars DESC NULLS LAST, t.last_name, t.first_name',
     'date':   't.transfer_date DESC NULLS LAST, t.last_name, t.first_name',
@@ -10523,6 +10531,9 @@ def transfers():
 
         pos_filter  = request.args.get('pos', '')
         conf_filter = request.args.get('conf', '')
+        status      = request.args.get('status', '')
+        if status not in TRANSFER_STATUS:
+            status = ''
         q           = request.args.get('q', '').strip()
         sort        = request.args.get('sort', '')
         if sort not in TRANSFER_SORTS:
@@ -10545,6 +10556,8 @@ def transfers():
         if q:
             where.append("(t.first_name || ' ' || t.last_name) ILIKE %s")
             params.append(f'%{q}%')
+        if status:
+            where.append(TRANSFER_STATUS[status])
         where_sql = 'WHERE ' + ' AND '.join(where)
 
         cursor.execute(f'''
@@ -10578,33 +10591,79 @@ def transfers():
             'name': f"{r[0] or ''} {r[1] or ''}".strip(), 'pos': r[2],
             'origin': r[3], 'destination': r[4], 'date': _fmt_date(r[5]), 'rating': r[6],
             'stars': r[7], 'eligibility': r[8], 'player_id': r[9],
-            'headshot': r[10], 'dest_logo': r[11], 'orig_logo': r[12],
+            # The circular 128px variant, not the 600px original: a page of 50
+            # rows was pulling ~14MB of headshots to paint 36px circles.
+            'headshot': explorer_face_url(r[10]) if r[10] else None,
+            'dest_logo': r[11], 'orig_logo': r[12],
             'initials': f"{(r[0] or '?')[0]}{(r[1] or ' ')[0]}".strip(),
         } for r in cursor.fetchall()]
-
-        # Year-scoped movement summary: biggest gainers / biggest losers
-        cursor.execute('''
-            SELECT t.destination, tm.logo_dark, COUNT(*) AS c
-            FROM transfers t JOIN teams tm ON tm.name = t.destination
-            WHERE t.year = %s
-            GROUP BY 1, 2 ORDER BY c DESC, t.destination LIMIT 5
-        ''', (year,))
-        top_in = cursor.fetchall()
-        cursor.execute('''
-            SELECT t.origin, tm.logo_dark, COUNT(*) AS c
-            FROM transfers t JOIN teams tm ON tm.name = t.origin
-            WHERE t.year = %s
-            GROUP BY 1, 2 ORDER BY c DESC, t.origin LIMIT 5
-        ''', (year,))
-        top_out = cursor.fetchall()
 
         cursor.execute('''
             SELECT COUNT(*),
                    COUNT(*) FILTER (WHERE destination IS NOT NULL AND destination != ''),
-                   COUNT(*) FILTER (WHERE rating IS NOT NULL)
+                   COUNT(*) FILTER (WHERE rating IS NOT NULL),
+                   COUNT(*) FILTER (WHERE eligibility = 'Withdrawn')
             FROM transfers WHERE year = %s
         ''', (year,))
-        year_total, committed_count, rated_count = cursor.fetchone()
+        year_total, committed_count, rated_count, withdrawn_count = cursor.fetchone()
+
+        # Every class's size, for the year rail's bars.
+        cursor.execute('SELECT year, COUNT(*) FROM transfers GROUP BY 1 ORDER BY 1')
+        year_sizes = dict(cursor.fetchall())
+
+        # When the class moved: entries per week. Portal-era classes only —
+        # the reconstructed pre-2021 rows carry no entry date.
+        cursor.execute('''
+            SELECT date_trunc('week', transfer_date::timestamp)::date, COUNT(*)
+            FROM transfers WHERE year = %s AND transfer_date IS NOT NULL
+            GROUP BY 1 ORDER BY 1
+        ''', (year,))
+        window = landscape.portal_weeks(cursor.fetchall(), year, year_total)
+
+        # The biggest moves: the highest-rated players in the class.
+        cursor.execute('''
+            SELECT t.first_name, t.last_name, t.position, t.origin, t.destination,
+                   t.transfer_date, t.rating, t.stars, t.eligibility, t.player_id,
+                   p.headshot, td.logo_dark, tor.logo_dark, td.color
+            FROM transfers t
+            LEFT JOIN players p ON p.id = t.player_id
+            LEFT JOIN teams td ON td.name = t.destination
+            LEFT JOIN teams tor ON tor.name = t.origin
+            WHERE t.year = %s AND t.rating IS NOT NULL
+            ORDER BY t.rating DESC, t.stars DESC NULLS LAST, t.last_name LIMIT 8
+        ''', (year,))
+        moves = [{
+            'name': f"{r[0] or ''} {r[1] or ''}".strip(), 'pos': r[2], 'origin': r[3],
+            'destination': r[4], 'date': _fmt_date(r[5]), 'rating': r[6], 'stars': r[7] or 0,
+            'withdrew': r[8] == 'Withdrawn', 'player_id': r[9],
+            'headshot': explorer_face_url(r[10]) if r[10] else None,
+            'dest_logo': r[11], 'orig_logo': r[12], 'color': r[13] or '#1c9cf0',
+            'initials': f"{(r[0] or '?')[0]}{(r[1] or ' ')[0]}".strip(),
+        } for r in cursor.fetchall()]
+
+        # Who reloaded: 4-star+ transfers added and lost per team. Counting
+        # every transfer would rank volume, not quality; classes without star
+        # data (pre-portal) fall back to plain counts and say so.
+        by_stars = bool(rated_count)
+        hit = "COALESCE(stars, 0) >= 4" if by_stars else "TRUE"
+        cursor.execute(f'''
+            WITH i AS (SELECT destination AS team, COUNT(*) FILTER (WHERE {hit}) AS n
+                       FROM transfers WHERE year = %s AND destination IS NOT NULL GROUP BY 1),
+                 o AS (SELECT origin AS team, COUNT(*) FILTER (WHERE {hit}) AS n
+                       FROM transfers WHERE year = %s AND origin IS NOT NULL GROUP BY 1)
+            SELECT tm.name, tm.logo_dark, COALESCE(i.n, 0), COALESCE(o.n, 0)
+            FROM i FULL JOIN o ON o.team = i.team
+            JOIN teams tm ON tm.name = COALESCE(i.team, o.team)
+            ORDER BY COALESCE(i.n, 0) DESC, COALESCE(i.n, 0) - COALESCE(o.n, 0) DESC, tm.name
+            LIMIT 12
+        ''', (year, year))
+        ledger = [{'team': r[0], 'logo': r[1], 'in': r[2], 'out': r[3], 'net': r[2] - r[3]}
+                  for r in cursor.fetchall() if r[2] or r[3]]
+
+        cursor.execute('''SELECT position, COUNT(*) FROM transfers
+                          WHERE year = %s AND position IS NOT NULL
+                          GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 12''', (year,))
+        pos_mix = cursor.fetchall()
 
         cursor.execute('SELECT DISTINCT conference FROM teams WHERE conference IS NOT NULL ORDER BY conference')
         conferences = [r[0] for r in cursor.fetchall()]
@@ -10616,8 +10675,11 @@ def transfers():
     return render_template('transfers.html', portal=portal, year=year, years=years,
                            derived=derived, conferences=conferences, positions=positions,
                            pos_filter=pos_filter, conf_filter=conf_filter, q=q, sort=sort,
-                           top_in=top_in, top_out=top_out, year_total=year_total,
+                           year_total=year_total,
                            committed_count=committed_count, rated_count=rated_count,
+                           withdrawn_count=withdrawn_count, year_sizes=year_sizes,
+                           window=window, moves=moves, ledger=ledger, by_stars=by_stars,
+                           pos_mix=pos_mix, status=status,
                            page=page, total_pages=total_pages, total_count=total_count,
                            per_page=per_page)
 

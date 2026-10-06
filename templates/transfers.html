@@ -1,210 +1,239 @@
 {% extends "base.html" %}
 {% block title %}{{ year }} {{ 'Transfers' if derived else 'Transfer Portal' }} · Saturday Savant{% endblock %}
 {% block og_description %}{{ year }} college football transfer portal: every player who moved, the programs they left and joined, and what each team gained and lost.{% endblock %}
+
 {% block content %}
-<div class="page-wrapper" style="padding-top:32px">
+{% set arrow %}<svg width="20" height="12" viewBox="0 0 24 12" aria-hidden="true"><path d="M0 6h20m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>{% endset %}
+{% set star %}<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 17.4l-5.9 3.1 1.2-6.5L2.5 9.4l6.6-.9z" fill="currentColor"/></svg>{% endset %}
+{% macro stars(n) %}<span class="tfr-stars" role="img" aria-label="{{ n }} stars">{% for i in range(5) %}<i class="{{ 'on' if i < n }}">{{ star }}</i>{% endfor %}</span>{% endmacro %}
+{# Every filter link keeps the others; only the one being changed moves. #}
+{% macro qs(over) -%}
+/transfers?{% for k, v in {'year': year, 'pos': pos_filter, 'conf': conf_filter, 'status': status, 'q': q, 'sort': sort}.items() %}{% set v2 = over[k] if k in over else v %}{% if v2 %}{{ k }}={{ v2|urlencode }}&{% endif %}{% endfor %}
+{%- endmacro %}
+{% set open_count = year_total - committed_count - withdrawn_count %}
+{% set ymax = year_sizes.values()|max if year_sizes else 1 %}
 
-<div class="tp-head">
-    <h1 class="tp-title">{{ year }} {{ 'Transfers' if derived else 'Transfer Portal' }}</h1>
-    <div class="tp-meta">
-        <span><strong>{{ '{:,}'.format(year_total) }}</strong> transfers</span>
-        {% if not derived %}
-        <span class="tp-meta-dot"></span><span><strong>{{ '{:,}'.format(committed_count) }}</strong> committed</span>
-        <span class="tp-meta-dot"></span><span><strong>{{ '{:,}'.format(rated_count) }}</strong> rated</span>
-        {% endif %}
+<div class="page-wrapper tfr-page">
+
+<header class="tfr-head">
+    <div>
+        <h1 class="tfr-h1">{{ year }} {{ 'Transfers' if derived else 'Transfer Portal' }}</h1>
+        <p class="tfr-lede">Every player who {{ 'changed FBS rosters' if derived else 'entered' }}, where they came from, and where they landed.</p>
     </div>
-</div>
+    <nav class="tfr-years" aria-label="Transfer class">
+        {% for yr in years|reverse %}
+        <a class="tfr-yr{{ ' is-pre' if yr < 2021 }}" href="/transfers?year={{ yr }}" {{ 'aria-current=page' if yr == year }}
+           title="{{ '{:,}'.format(year_sizes.get(yr, 0)) }} transfers">
+            <span class="tfr-yr-bar"><span style="height: {{ (year_sizes.get(yr, 0) / ymax * 100)|round|int }}%"></span></span>
+            <span class="tfr-yr-y">{{ yr }}</span>
+        </a>
+        {% endfor %}
+    </nav>
+</header>
 
-<!-- Season rail -->
-<nav class="tp-years" aria-label="Transfer class">
-    {% for yr in years %}
-    {% if yr == 2020 %}<span class="tp-years-divider" aria-hidden="true">pre-portal</span>{% endif %}
-    <a href="/transfers?year={{ yr }}" class="tp-year{{ ' active' if yr == year }}"
-       {% if yr == year %}aria-current="page"{% endif %}>{{ yr }}</a>
-    {% endfor %}
-</nav>
+<div class="tfr-kp">
+    <div><b>{{ '{:,}'.format(year_total) }}</b><span>{{ 'moved between FBS rosters' if derived else 'entered the portal' }}</span></div>
+    {% if not derived %}
+    <div class="is-blue"><b>{{ '{:,}'.format(committed_count) }}</b><span>found a new school</span></div>
+    <div><b>{{ '{:,}'.format(open_count) }}</b><span>still uncommitted</span></div>
+    <div><b>{{ '{:,}'.format(withdrawn_count) }}</b><span>withdrew</span></div>
+    {% endif %}
+</div>
 
 {% if derived %}
-<div class="tp-era-note">
-    The transfer portal launched in October 2018 — this class predates portal records.
-    Transfers here are reconstructed from year-over-year FBS roster changes, so
-    ratings, entry dates, and FCS/JUCO arrivals aren't available.
-</div>
+<p class="tfr-era">The transfer portal launched in October 2018, so this class predates portal records. These moves are reconstructed from year-over-year FBS roster changes: ratings, entry dates, and FCS or JUCO arrivals aren't available.</p>
 {% endif %}
 
-<!-- Movement summary -->
-{% if top_in or top_out %}
-<div class="tp-flow">
-    <div class="tp-flow-col">
-        <div class="tp-flow-head"><span class="tp-flow-key tp-flow-key--in"></span>Top Destinations</div>
-        {% set max_in = top_in[0][2] if top_in else 1 %}
-        {% for team, logo, c in top_in %}
-        <a class="tp-flow-row" href="{{ team_url(team, year) }}">
-            {% if logo %}<img src="{{ logo }}" alt="" loading="lazy">{% endif %}
-            <span class="tp-flow-team">{{ team }}</span>
-            <span class="tp-flow-bar"><span class="tp-flow-bar-fill tp-flow-bar-fill--in" style="width:{{ (c / max_in * 100) | round(0, 'ceil') }}%"></span></span>
-            <span class="tp-flow-count">{{ c }}</span>
-        </a>
-        {% endfor %}
+{% if window %}
+<section class="tfr-sec" aria-labelledby="tfr-window">
+    <div class="tfr-sec-h">
+        <div>
+            <h2 class="tfr-h2" id="tfr-window">The window</h2>
+            <p class="tfr-sec-n">Entries by week. <b>{{ window.month_pct }}%</b> of the class entered in {{ window.month }}, and {{ '{:,}'.format(window.peak_n) }} of them in the week of {{ window.peak_week }}.</p>
+        </div>
     </div>
-    <div class="tp-flow-col">
-        <div class="tp-flow-head"><span class="tp-flow-key tp-flow-key--out"></span>Most Departures</div>
-        {% set max_out = top_out[0][2] if top_out else 1 %}
-        {% for team, logo, c in top_out %}
-        <a class="tp-flow-row" href="{{ team_url(team, year) }}">
-            {% if logo %}<img src="{{ logo }}" alt="" loading="lazy">{% endif %}
-            <span class="tp-flow-team">{{ team }}</span>
-            <span class="tp-flow-bar"><span class="tp-flow-bar-fill tp-flow-bar-fill--out" style="width:{{ (c / max_out * 100) | round(0, 'ceil') }}%"></span></span>
-            <span class="tp-flow-count">{{ c }}</span>
-        </a>
-        {% endfor %}
-    </div>
-</div>
+    <div class="tfr-card tfr-tl">{{ window.svg|safe }}</div>
+</section>
 {% endif %}
 
-<!-- Filters -->
-<form method="GET" class="lb-filter-section tp-filters">
-    <input type="hidden" name="year" value="{{ year }}">
-    <div class="lb-filter-row">
-        <div class="lb-filter-group tp-filter-search">
-            <label class="lb-filter-label" for="tp-q">Search</label>
-            <input class="lb-select tp-search" type="search" id="tp-q" name="q" value="{{ q }}"
-                   placeholder="Player name…" autocomplete="off">
+{% if moves %}
+<section class="tfr-sec" aria-labelledby="tfr-moves">
+    <div class="tfr-sec-h">
+        <div>
+            <h2 class="tfr-h2" id="tfr-moves">The biggest moves</h2>
+            <p class="tfr-sec-n">The highest-rated players in the class, by composite rating.</p>
         </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="tp-pos">Position</label>
-            <select name="pos" id="tp-pos" class="lb-select" onchange="this.form.submit()">
-                <option value="">All positions</option>
-                {% for pos in positions %}
-                <option value="{{ pos }}" {{ 'selected' if pos_filter == pos }}>{{ pos }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="tp-conf">New conference</label>
-            <select name="conf" id="tp-conf" class="lb-select" onchange="this.form.submit()">
-                <option value="">All conferences</option>
-                {% for conf in conferences %}
-                <option value="{{ conf }}" {{ 'selected' if conf_filter == conf }}>{{ conf }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="lb-filter-group">
-            <label class="lb-filter-label" for="tp-sort">Sort by</label>
-            <select name="sort" id="tp-sort" class="lb-select" onchange="this.form.submit()">
-                {% if not derived %}
-                <option value="rating" {{ 'selected' if sort == 'rating' }}>Rating</option>
-                <option value="date"   {{ 'selected' if sort == 'date' }}>Most recent</option>
-                {% endif %}
-                <option value="name" {{ 'selected' if sort == 'name' }}>Player name</option>
-                <option value="team" {{ 'selected' if sort == 'team' }}>New team</option>
-            </select>
-        </div>
-        <div class="lb-filter-count tp-filter-meta">
-            {% if pos_filter or conf_filter or q %}
-            <a class="tp-reset" href="/transfers?year={{ year }}">Clear filters ✕</a>
-            {% endif %}
-            <span>{{ ((page-1)*per_page)+1 }}–{{ [page*per_page, total_count]|min }} of {{ '{:,}'.format(total_count) }}</span>
-        </div>
+        <a class="tfr-chip" href="#tfr-all">See all {{ '{:,}'.format(year_total) }}</a>
     </div>
-</form>
-
-<!-- Table -->
-<div class="lb-team-table-wrap">
-<div class="tp-table-scroll">
-<table class="data-table tp-table{{ ' tp-table--derived' if derived }}">
-    <thead>
-        <tr>
-            <th class="tp-th-player">Player</th>
-            <th class="tp-th-pos">Pos</th>
-            <th class="tp-th-move">Transfer</th>
-            {% if not derived %}
-            <th class="tp-th-num"><span title="Composite portal rating (0–1 scale)">Rating</span></th>
-            <th class="tp-th-num"><span title="Portal star rating">Stars</span></th>
-            <th class="tp-th-num"><span title="Portal entry date">Entered</span></th>
-            {% endif %}
-        </tr>
-    </thead>
-    <tbody>
-        {% for t in portal %}
-        <tr>
-            <td class="tp-cell-player">
-                {% if t.player_id %}<a href="{{ player_url(t.player_id, year) }}" class="tp-player">{% else %}<span class="tp-player">{% endif %}
-                    {% if t.headshot %}
-                    <img class="tp-headshot" src="{{ t.headshot }}" alt="" loading="lazy">
-                    {% else %}
-                    <span class="tp-headshot tp-headshot--initials">{{ t.initials }}</span>
-                    {% endif %}
-                    <span class="tp-player-name">{{ t.name }}</span>
-                {% if t.player_id %}</a>{% else %}</span>{% endif %}
-            </td>
-            <td class="tp-cell-pos"><span class="tp-pos-chip">{{ t.pos or '—' }}</span></td>
-            <td class="tp-cell-move">
-                <span class="tp-move">
-                    <span class="tp-move-from">
-                        {% if t.orig_logo %}<img src="{{ t.orig_logo }}" alt="" loading="lazy">{% endif %}
-                        {{ t.origin or 'Unknown' }}
-                    </span>
-                    <svg class="tp-move-arrow" viewBox="0 0 24 12" aria-hidden="true"><path d="M0 6h20m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-                    {% if t.eligibility == 'Withdrawn' %}
-                    <span class="tp-move-status tp-move-status--withdrawn">Withdrew</span>
-                    {% elif t.destination %}
-                    <a class="tp-move-to" href="{{ team_url(t.destination, year) }}">
-                        {% if t.dest_logo %}<img src="{{ t.dest_logo }}" alt="" loading="lazy">{% endif %}
-                        {{ t.destination }}
-                    </a>
-                    {% else %}
-                    <span class="tp-move-status">In portal</span>
-                    {% endif %}
+    <div class="tfr-moves">
+        {% for m in moves %}
+        {% if m.player_id %}<a class="tfr-mc" href="{{ player_url(m.player_id, year) }}" style="--dc: {{ m.color|team_hex('#1c9cf0') }}">{% else %}<div class="tfr-mc" style="--dc: {{ m.color|team_hex('#1c9cf0') }}">{% endif %}
+            <span class="tfr-mc-top">
+                {% if m.headshot %}<img class="tfr-mc-head" src="{{ m.headshot }}" alt="" width="72" height="72" loading="lazy">
+                {% else %}<span class="tfr-mc-head tfr-init">{{ m.initials }}</span>{% endif %}
+                <span class="tfr-mc-rate"><b>{{ '%.2f'|format(m.rating) }}</b>{{ stars(m.stars) }}</span>
+            </span>
+            <span class="tfr-mc-name">{{ m.name }}</span>
+            <span class="tfr-mc-meta"><span class="tfr-pos">{{ m.pos or '—' }}</span>{% if m.date %}Entered {{ m.date }}{% endif %}</span>
+            <span class="tfr-mc-move">
+                <span class="tfr-mc-row"><span class="tfr-mc-lbl">From</span><span class="tfr-team is-from">{% if m.orig_logo %}<img src="{{ m.orig_logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}<span>{{ m.origin or 'Unknown' }}</span></span></span>
+                <span class="tfr-mc-row"><span class="tfr-mc-lbl">To</span>
+                    {% if m.withdrew %}<span class="tfr-status is-withdrew">Withdrew</span>
+                    {% elif m.destination %}<span class="tfr-team">{% if m.dest_logo %}<img src="{{ m.dest_logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}<span>{{ m.destination }}</span></span>
+                    {% else %}<span class="tfr-status">Uncommitted</span>{% endif %}
                 </span>
-            </td>
-            {% if not derived %}
-            <td class="tp-cell-num">
-                {% if t.rating %}
-                <span class="tp-rating {{ 'tp-rating--elite' if t.rating >= 0.9 else ('tp-rating--good' if t.rating >= 0.85) }}">{{ '%.4f' | format(t.rating) }}</span>
-                {% else %}<span class="tp-dim">—</span>{% endif %}
-            </td>
-            <td class="tp-cell-num">
-                {% if t.stars %}
-                <span class="tp-stars" aria-label="{{ t.stars }} stars"><span class="tp-stars-fill">{{ '★' * t.stars }}</span>{{ '★' * (5 - t.stars) }}</span>
-                {% else %}<span class="tp-dim">—</span>{% endif %}
-            </td>
-            <td class="tp-cell-num tp-cell-date">{{ t.date or '—' }}</td>
-            {% endif %}
-        </tr>
-        {% else %}
-        <tr><td colspan="{{ 3 if derived else 6 }}" class="tp-empty">
-            No transfers match these filters.
-            <a href="/transfers?year={{ year }}">Clear filters</a>
-        </td></tr>
+            </span>
+        {% if m.player_id %}</a>{% else %}</div>{% endif %}
         {% endfor %}
-    </tbody>
-</table>
-</div>
-</div>
-
-<!-- Pagination -->
-{% if total_pages > 1 %}
-{% set base_url = '/transfers?year=' ~ year ~ '&pos=' ~ pos_filter ~ '&conf=' ~ conf_filter ~ '&q=' ~ q ~ '&sort=' ~ sort ~ '&page=' %}
-<nav class="lb-pagination" aria-label="Pages">
-    {% if page > 1 %}<a class="lb-page-btn" href="{{ base_url ~ (page-1) }}">← Prev</a>{% endif %}
-    {% set win_start = [1, page-3]|max %}
-    {% set win_end   = [total_pages, page+3]|min %}
-    {% if win_start > 1 %}
-    <a class="lb-page-btn" href="{{ base_url ~ 1 }}">1</a>
-    {% if win_start > 2 %}<span class="tp-pg-ellipsis">…</span>{% endif %}
-    {% endif %}
-    {% for p in range(win_start, win_end+1) %}
-    <a class="lb-page-btn{{ ' active' if p == page }}" href="{{ base_url ~ p }}">{{ p }}</a>
-    {% endfor %}
-    {% if win_end < total_pages %}
-    {% if win_end < total_pages-1 %}<span class="tp-pg-ellipsis">…</span>{% endif %}
-    <a class="lb-page-btn" href="{{ base_url ~ total_pages }}">{{ total_pages }}</a>
-    {% endif %}
-    {% if page < total_pages %}<a class="lb-page-btn" href="{{ base_url ~ (page+1) }}">Next →</a>{% endif %}
-</nav>
-<div class="tp-pg-label">Page {{ page }} of {{ total_pages }}</div>
+    </div>
+</section>
 {% endif %}
+
+{% if ledger or pos_mix %}
+<section class="tfr-sec tfr-two" aria-label="Team and position breakdown">
+    {% if ledger %}
+    {% set lmax = [ledger|map(attribute='in')|max, ledger|map(attribute='out')|max, 1]|max %}
+    <div>
+        <div class="tfr-sec-h"><div>
+            <h2 class="tfr-h2">Who reloaded</h2>
+            <p class="tfr-sec-n">{{ '4-star and 5-star transfers' if by_stars else 'Transfers' }} added and lost, by team.</p>
+        </div></div>
+        <div class="tfr-card tfr-lg">
+            <div class="tfr-lg-key" aria-hidden="true"><span>Lost</span><span>Team</span><span>Added</span><span>Net</span></div>
+            {% for r in ledger %}
+            <a class="tfr-lg-row" href="{{ team_url(r.team, year) }}" aria-label="{{ r.team }}: {{ r['in'] }} added, {{ r.out }} lost, net {{ '%+d'|format(r.net) }}">
+                <span class="tfr-lg-out"><span class="tfr-lg-n">{{ r.out or '' }}</span><span class="tfr-lg-bar is-out" style="width: {{ (r.out / lmax * 100)|round|int }}%"></span></span>
+                <span class="tfr-lg-team">{% if r.logo %}<img src="{{ r.logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}<span>{{ r.team }}</span></span>
+                <span class="tfr-lg-in"><span class="tfr-lg-bar is-in" style="width: {{ (r['in'] / lmax * 100)|round|int }}%"></span><span class="tfr-lg-n">{{ r['in'] }}</span></span>
+                <span class="tfr-lg-net{{ ' is-up' if r.net > 0 else (' is-down' if r.net < 0) }}">{{ '%+d'|format(r.net) }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% if pos_mix %}
+    {% set pmax = pos_mix[0][1] %}
+    <div>
+        <div class="tfr-sec-h"><div>
+            <h2 class="tfr-h2">By position</h2>
+            <p class="tfr-sec-n">{{ pos_mix[0][0] }}s move most: {{ '{:,}'.format(pos_mix[0][1]) }} of {{ '{:,}'.format(year_total) }}.</p>
+        </div></div>
+        <div class="tfr-card tfr-ps">
+            {% for p, n in pos_mix %}
+            <a class="tfr-ps-row" href="{{ qs({'pos': p, 'page': ''}) }}#tfr-all">
+                <span class="tfr-ps-pos">{{ p }}</span>
+                <span class="tfr-ps-track"><span style="width: {{ (n / pmax * 100)|round|int }}%"></span></span>
+                <span class="tfr-ps-n">{{ '{:,}'.format(n) }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="tfr-sec" id="tfr-all" aria-labelledby="tfr-all-h">
+    <div class="tfr-sec-h"><div><h2 class="tfr-h2" id="tfr-all-h">Every transfer</h2></div></div>
+
+    <form method="GET" action="/transfers#tfr-all" class="tfr-flt">
+        <input type="hidden" name="year" value="{{ year }}">
+        {% if pos_filter %}<input type="hidden" name="pos" value="{{ pos_filter }}">{% endif %}
+        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+        <label class="tfr-search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.5-4.5"/></svg>
+            <span class="sr-only">Search players</span>
+            <input type="search" name="q" value="{{ q }}" placeholder="Search {{ '{:,}'.format(year_total) }} players" autocomplete="off">
+        </label>
+        <nav class="tfr-chips" aria-label="Position">
+            <a class="tfr-chip tfr-chip-sm" href="{{ qs({'pos': ''}) }}#tfr-all" {{ 'aria-current=page' if not pos_filter }}>All</a>
+            {% for p in positions %}
+            <a class="tfr-chip tfr-chip-sm" href="{{ qs({'pos': p}) }}#tfr-all" {{ 'aria-current=page' if pos_filter == p }}>{{ p }}</a>
+            {% endfor %}
+        </nav>
+        <div class="tfr-flt-row">
+            {% if not derived %}
+            <nav class="tfr-seg" aria-label="Status">
+                {% for v, l in [('', 'All'), ('landed', 'Landed'), ('open', 'Uncommitted'), ('withdrew', 'Withdrew')] %}
+                <a href="{{ qs({'status': v}) }}#tfr-all" {{ 'aria-current=page' if status == v }}>{{ l }}</a>
+                {% endfor %}
+            </nav>
+            {% endif %}
+            <label class="tfr-sel"><span class="sr-only">New conference</span>
+                <select name="conf" onchange="this.form.submit()">
+                    <option value="">Any new conference</option>
+                    {% for c in conferences %}<option value="{{ c }}" {{ 'selected' if conf_filter == c }}>{{ c }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="tfr-sel"><span class="sr-only">Sort</span>
+                <select name="sort" onchange="this.form.submit()">
+                    {% if not derived %}
+                    <option value="rating" {{ 'selected' if sort == 'rating' }}>Highest rated</option>
+                    <option value="date" {{ 'selected' if sort == 'date' }}>Most recent</option>
+                    {% endif %}
+                    <option value="name" {{ 'selected' if sort == 'name' }}>Player name</option>
+                    <option value="team" {{ 'selected' if sort == 'team' }}>New team</option>
+                </select>
+            </label>
+            <span class="tfr-count">
+                {% if pos_filter or conf_filter or q or status %}<a class="tfr-clear" href="/transfers?year={{ year }}#tfr-all">Clear filters</a>{% endif %}
+                {% if total_count %}{{ ((page-1)*per_page)+1 }}–{{ [page*per_page, total_count]|min }} of {{ '{:,}'.format(total_count) }}{% else %}No matches{% endif %}
+            </span>
+        </div>
+    </form>
+
+    <div class="tfr-card tfr-tbl">
+        <table class="tfr-table">
+            <thead><tr>
+                <th>Player</th><th>Pos</th><th>Move</th>
+                {% if not derived %}<th class="num">Rating</th><th>Stars</th><th class="num">Entered</th>{% endif %}
+            </tr></thead>
+            <tbody>
+            {% for t in portal %}
+            <tr>
+                <td>
+                    {% if t.player_id %}<a href="{{ player_url(t.player_id, year) }}" class="tfr-player">{% else %}<span class="tfr-player">{% endif %}
+                        {% if t.headshot %}<img src="{{ t.headshot }}" alt="" width="36" height="36" loading="lazy">{% else %}<span class="tfr-init">{{ t.initials }}</span>{% endif %}
+                        <span>{{ t.name }}</span>
+                    {% if t.player_id %}</a>{% else %}</span>{% endif %}
+                </td>
+                <td><span class="tfr-pos">{{ t.pos or '—' }}</span></td>
+                <td>
+                    <span class="tfr-move">
+                        <span class="tfr-team is-from">{% if t.orig_logo %}<img src="{{ t.orig_logo }}" alt="" width="22" height="22" loading="lazy">{% endif %}{{ t.origin or 'Unknown' }}</span>
+                        <span class="tfr-arrow">{{ arrow }}</span>
+                        {% if t.eligibility == 'Withdrawn' %}<span class="tfr-status is-withdrew">Withdrew</span>
+                        {% elif t.destination %}<a class="tfr-team" href="{{ team_url(t.destination, year) }}">{% if t.dest_logo %}<img src="{{ t.dest_logo }}" alt="" width="22" height="22" loading="lazy">{% endif %}{{ t.destination }}</a>
+                        {% else %}<span class="tfr-status">Uncommitted</span>{% endif %}
+                    </span>
+                </td>
+                {% if not derived %}
+                <td class="num">{% if t.rating %}<b class="tfr-rating">{{ '%.2f'|format(t.rating) }}</b>{% else %}<span class="tfr-dim">—</span>{% endif %}</td>
+                <td>{% if t.stars %}{{ stars(t.stars) }}{% else %}<span class="tfr-dim">—</span>{% endif %}</td>
+                <td class="num tfr-dim">{{ t.date or '—' }}</td>
+                {% endif %}
+            </tr>
+            {% else %}
+            <tr><td colspan="{{ 3 if derived else 6 }}" class="tfr-empty">No transfers match these filters. <a href="/transfers?year={{ year }}#tfr-all">Clear filters</a></td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    {% set base = qs({}) ~ 'page=' %}
+    <nav class="tfr-pages" aria-label="Pages">
+        {% if page > 1 %}<a class="tfr-chip tfr-chip-sm" href="{{ base ~ (page-1) }}#tfr-all">Previous</a>{% endif %}
+        {% set win_start = [1, page-2]|max %}
+        {% set win_end = [total_pages, page+2]|min %}
+        {% if win_start > 1 %}<a class="tfr-chip tfr-chip-sm" href="{{ base ~ 1 }}#tfr-all">1</a>{% if win_start > 2 %}<span class="tfr-dim">…</span>{% endif %}{% endif %}
+        {% for p in range(win_start, win_end+1) %}
+        <a class="tfr-chip tfr-chip-sm" href="{{ base ~ p }}#tfr-all" {{ 'aria-current=page' if p == page }}>{{ p }}</a>
+        {% endfor %}
+        {% if win_end < total_pages %}{% if win_end < total_pages-1 %}<span class="tfr-dim">…</span>{% endif %}<a class="tfr-chip tfr-chip-sm" href="{{ base ~ total_pages }}#tfr-all">{{ total_pages }}</a>{% endif %}
+        {% if page < total_pages %}<a class="tfr-chip tfr-chip-sm" href="{{ base ~ (page+1) }}#tfr-all">Next</a>{% endif %}
+    </nav>
+    {% endif %}
+</section>
 
 </div>
 {% endblock %}

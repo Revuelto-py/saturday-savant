@@ -377,3 +377,51 @@ def build(cursor, season, conf_map):
                       GROUP BY 1, 2''', (season, P4 + G5))
     out['talent'] = talent(cursor.fetchall())
     return out
+
+
+# ── Transfer portal: when the class moved (/transfers) ──────────────────────
+def portal_weeks(rows, year, total):
+    """Entries per week for one transfer class, as an SVG bar chart.
+
+    rows: (week start date, count). Returns None for a class with no entry
+    dates (the pre-portal years are reconstructed from rosters). The finding is
+    the peak week and the share that came in the busiest calendar month.
+    """
+    import datetime as dt
+    wk = [(w, n) for w, n in rows if w is not None]
+    if len(wk) < 3 or not total:
+        return None
+    d0, d1 = wk[0][0], wk[-1][0]
+    span = max((d1 - d0).days, 7)
+    W, H, L, R, T, B = 1180, 300, 48, 20, 24, 40
+    X = lambda d: L + (d - d0).days / span * (W - L - R)
+    mx = max(n for _, n in wk)
+    step = 500 if mx > 1500 else (100 if mx > 300 else 20)
+    top = math.ceil(mx / step) * step
+    Y = lambda n: T + (1 - n / top) * (H - T - B)
+    bw = max(4, (W - L - R) / (span / 7) * .78)
+    peak = max(wk, key=lambda p: p[1])
+    o = [f'<svg class="xl-svg" viewBox="0 0 {W} {H}" role="img" aria-label="Portal entries per week for the {year} class, peaking at {peak[1]:,} in the week of {peak[0].strftime("%B %-d")}.">']
+    for v in range(0, top + 1, step):
+        o.append(f'<line x1="{L}" x2="{W-R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="rgba(255,255,255,{.12 if v == 0 else .05})"></line>'
+                 f'<text x="{L-10}" y="{Y(v)+4:.1f}" fill="#949a9f" font-size="12" text-anchor="end">{v:,}</text>')
+    m = dt.date(d0.year, d0.month, 1)
+    while m <= d1:
+        if m >= d0:
+            o.append(f'<text x="{X(m):.1f}" y="{H-12}" fill="#949a9f" font-size="12" text-anchor="middle">{m.strftime("%b")}</text>')
+        m = dt.date(m.year + (m.month == 12), m.month % 12 + 1, 1)
+    hot = peak[1] * .2
+    for d, n in wk:
+        o.append(f'<rect x="{X(d)-bw/2:.1f}" y="{Y(n):.1f}" width="{bw:.1f}" height="{max(Y(0)-Y(n), 1):.1f}" rx="3" '
+                 f'fill="{BLUE if n >= hot else "rgba(28,156,240,.35)"}"><title>Week of {d.strftime("%b %-d")}: {n:,}</title></rect>')
+    anchor = 'end' if X(peak[0]) > W * .7 else 'start'
+    dx = -(bw / 2 + 10) if anchor == 'end' else bw / 2 + 10
+    o.append(f'<text x="{X(peak[0])+dx:.1f}" y="{Y(peak[1])+14:.1f}" fill="#e7e9ea" font-size="14" font-weight="700" text-anchor="{anchor}">'
+             f'{peak[1]:,} entered the week of {peak[0].strftime("%b %-d")}</text>')
+    o.append('</svg>')
+    months = Counter()
+    for d, n in wk:
+        months[(d + dt.timedelta(days=3)).strftime('%B')] += n   # a week counts toward the month its midpoint falls in
+    month, in_month = months.most_common(1)[0]
+    return {'svg': ''.join(o), 'peak_n': peak[1], 'peak_week': peak[0].strftime('%b %-d'),
+            'month': month, 'month_pct': round(in_month / total * 100)}
