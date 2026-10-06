@@ -469,3 +469,346 @@ def rank_river(polls, by_poll, labels, current):
     labels_out = [{'team': t, 'rank': rk, 'logo': lg, 'top': rk <= 10, 'y': round(Y(rk) / H * 100, 2)}
                   for t, rk, _, lg in sorted(current, key=lambda c: c[1])]
     return {'svg': ''.join(o), 'labels': labels_out, 'left': round((W - R + 12) / W * 100, 2)}
+
+
+# ── Team page: Trends tab ────────────────────────────────────────────────────
+# "The arc": one hero curve of the Savant Rating across every loaded season
+# (coach eras as bands, conference moves and Playoff runs marked), then small
+# multiples for the other measures, then the viewed season week by week.
+# Everything is drawn server-side as SVG; nothing is invented when a season
+# or measure is missing, the line simply breaks there.
+
+def _ordinal(n):
+    return f'{n}' + ('th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th'))
+
+
+def _smooth(pts):
+    """SVG path through points (Catmull-Rom as cubic Beziers)."""
+    if len(pts) < 2:
+        return ''
+    d = f'M{pts[0][0]:.1f},{pts[0][1]:.1f}'
+    for i in range(len(pts) - 1):
+        p0 = pts[i - 1] if i else pts[i]
+        p1, p2 = pts[i], pts[i + 1]
+        p3 = pts[i + 2] if i + 2 < len(pts) else p2
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d += f' C{c1[0]:.1f},{c1[1]:.1f} {c2[0]:.1f},{c2[1]:.1f} {p2[0]:.1f},{p2[1]:.1f}'
+    return d
+
+
+def _runs(vals):
+    """Consecutive non-None stretches as [(index, value), ...] lists, so a
+    missing season breaks the line instead of being bridged."""
+    out, cur = [], []
+    for i, v in enumerate(vals):
+        if v is None:
+            if cur:
+                out.append(cur)
+            cur = []
+        else:
+            cur.append((i, v))
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _post_label(notes):
+    n = notes or ''
+    for key, label in (('National Championship', 'Title game'), ('Semifinal', 'CFP semifinal'),
+                       ('Quarterfinal', 'CFP quarterfinal'), ('First Round', 'CFP first round')):
+        if key in n:
+            return label
+    return None
+
+
+def _trend_hero(T, eras, conf_moves, marks, tc, light):
+    yrs, net, rank = T['seasons'], T['savant']['net'], T['savant']['rank']
+    rec_w, rec_l = T['record']['wins'], T['record']['losses']
+    n = len(yrs)
+    W, H, L, R, Tp, B = 1180, 470, 56, 30, 70, 74
+    X = lambda i: L + i * (W - L - R) / max(n - 1, 1)
+    vals = [v for v in net if v is not None]
+    lo = min(0, (min(vals) // 10) * 10)
+    hi = max(10, -(-max(vals) // 10) * 10)
+    Y = lambda v: Tp + (hi - v) / (hi - lo) * (H - Tp - B)
+    best_i = max((i for i, v in enumerate(net) if v is not None), key=lambda i: net[i])
+    o = [f'<svg class="trd-hero-svg" viewBox="0 0 {W} {H}" role="img" aria-label="Savant Rating each season from {yrs[0]} to {yrs[-1]}; '
+         f'best +{net[best_i]:.1f} in {yrs[best_i]}.">',
+         f'<defs><linearGradient id="trd-ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{tc}" stop-opacity=".5"></stop>'
+         f'<stop offset="1" stop-color="{tc}" stop-opacity="0"></stop></linearGradient></defs>']
+    half = (W - L - R) / max(n - 1, 1) / 2
+    fills = ['rgba(255,255,255,.025)', 'rgba(255,255,255,.05)']
+    for k, e in enumerate(eras):
+        x0 = max(X(e['i0']) - half, L - 18)
+        x1 = min(X(e['i1']) + half, W - R + 14)
+        last = k == len(eras) - 1
+        fill = f'color-mix(in srgb, {tc} 14%, transparent)' if last else fills[k % 2]
+        o.append(f'<rect x="{x0:.1f}" y="{Tp - 40}" width="{x1 - x0:.1f}" height="{H - Tp - B + 40}" rx="14" style="fill: {fill}"></rect>')
+        if e['coach'] and x1 - x0 > 60:
+            # Wide bands get the full name and years; a one- or two-season band
+            # only has room for the surname.
+            wide = x1 - x0 > 190
+            name = e['coach'] if wide else e['coach'].split()[-1]
+            span = (f"{e['start']}–{str(e['end'])[2:]}" if e['end'] != e['start'] else str(e['start'])) if wide else ''
+            o.append(f'<text x="{x0 + 14:.1f}" y="{Tp - 16}" class="trd-era">{name}'
+                     + (f'<tspan class="trd-era-y" dx="8">{span}</tspan>' if span else '') + '</text>')
+    for v in range(int(lo), int(hi) + 1, 10):
+        o.append(f'<line x1="{L}" x2="{W - R}" y1="{Y(v):.1f}" y2="{Y(v):.1f}" stroke="rgba(255,255,255,{.16 if v == 0 else .06})"></line>'
+                 f'<text x="{L - 12}" y="{Y(v) + 5:.1f}" class="trd-ax" text-anchor="end">{"+" if v > 0 else ""}{v}</text>')
+    for i, c in conf_moves:
+        xs = X(i) - half
+        o.append(f'<line x1="{xs:.1f}" x2="{xs:.1f}" y1="{Tp}" y2="{H - B}" stroke="rgba(255,255,255,.35)" stroke-dasharray="3 5"></line>'
+                 f'<text x="{xs + 8:.1f}" y="{H - B - 12}" class="trd-mark">Joins the {c}</text>')
+    for run in _runs(net):
+        pts = [(X(i), Y(v)) for i, v in run]
+        d = _smooth(pts) if len(pts) > 1 else ''
+        if d:
+            o.append(f'<path d="{d} L{pts[-1][0]:.1f},{Y(lo):.1f} L{pts[0][0]:.1f},{Y(lo):.1f} Z" fill="url(#trd-ag)"></path>'
+                     f'<path d="{d}" fill="none" stroke="{light}" stroke-width="4" stroke-linecap="round"></path>')
+    for i, v in enumerate(net):
+        x = X(i)
+        if v is not None:
+            y = Y(v)
+            last = i == n - 1
+            o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{8 if last else 6}" fill="{"#fff" if last else "#0b0c0e"}" stroke="{light}" stroke-width="3"></circle>')
+            if rank[i]:
+                o.append(f'<text x="{x:.1f}" y="{y - 18:.1f}" class="trd-rk" text-anchor="middle">{_ordinal(rank[i])}</text>')
+        o.append(f'<text x="{x:.1f}" y="{H - B + 30}" class="trd-yr" text-anchor="middle">{yrs[i]}</text>')
+        if rec_w[i] is not None:
+            o.append(f'<text x="{x:.1f}" y="{H - B + 50}" class="trd-rec" text-anchor="middle">{rec_w[i]}-{rec_l[i]}</text>')
+    for i, text in marks:
+        if net[i] is None:
+            continue
+        x, y = X(i), Y(net[i])
+        below = y < (Tp + H - B) / 2
+        ty = y + 56 if below else y - 46
+        if not below and ty < Tp + 30:
+            ty = y + 56
+        o.append(f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y + 10:.1f}" y2="{ty - 16:.1f}" stroke="rgba(255,255,255,.3)"></line>'
+                 if ty > y else
+                 f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{y - 28:.1f}" y2="{ty + 6:.1f}" stroke="rgba(255,255,255,.3)"></line>')
+        o.append(f'<text x="{x:.1f}" y="{ty:.1f}" class="trd-note" text-anchor="middle">{text}</text>')
+    o.append('</svg>')
+    return ''.join(o)
+
+
+def _trend_spark(T, vals, invert=False, lo=None, hi=None, second=None, bars=None, light='#e8935f', blue='#7cc9fb'):
+    yrs = T['seasons']
+    n = len(yrs)
+    W, H, L, R, Tp, B = 340, 110, 10, 10, 22, 24
+    X = lambda i: L + i * (W - L - R) / max(n - 1, 1)
+    o = [f'<svg viewBox="0 0 {W} {H}" aria-hidden="true">']
+    if bars:
+        wins, losses = bars
+        bw = (W - L - R) / n * .56
+        mx = max([(w or 0) + (l or 0) for w, l in zip(wins, losses)] + [1])
+        for i, (w, l) in enumerate(zip(wins, losses)):
+            if w is None:
+                continue
+            x, base = X(i) - bw / 2, H - B
+            hw, hl = w / mx * (H - Tp - B), (l or 0) / mx * (H - Tp - B)
+            o.append(f'<rect x="{x:.1f}" y="{base - hw:.1f}" width="{bw:.1f}" height="{hw:.1f}" rx="3" fill="{light}"></rect>'
+                     f'<rect x="{x:.1f}" y="{base - hw - hl - 2:.1f}" width="{bw:.1f}" height="{hl:.1f}" rx="3" fill="rgba(255,255,255,.18)"></rect>')
+    else:
+        allv = [v for v in (vals or []) + (second or []) if v is not None]
+        if not allv:
+            return ''
+        lo = min(allv) if lo is None else min(lo, min(allv))
+        hi = max(allv) if hi is None else max(hi, max(allv))
+        span = (hi - lo) or 1
+        Y = (lambda v: Tp + (v - lo) / span * (H - Tp - B)) if invert else (lambda v: Tp + (hi - v) / span * (H - Tp - B))
+        for series, col in ((vals, light), (second, blue)):
+            if not series:
+                continue
+            for run in _runs(series):
+                pts = [(X(i), Y(v)) for i, v in run]
+                if len(pts) > 1:
+                    o.append(f'<path d="{_smooth(pts)}" fill="none" stroke="{col}" stroke-width="2.6" stroke-linecap="round"></path>')
+                else:
+                    o.append(f'<circle cx="{pts[0][0]:.1f}" cy="{pts[0][1]:.1f}" r="3" fill="{col}"></circle>')
+            last = [(i, v) for i, v in enumerate(series) if v is not None]
+            if last:
+                o.append(f'<circle cx="{X(last[-1][0]):.1f}" cy="{Y(last[-1][1]):.1f}" r="4.5" fill="{col}"></circle>')
+        valid = [(i, v) for i, v in enumerate(vals or []) if v is not None]
+        if valid:
+            bi, bv = (min if invert else max)(valid, key=lambda t: t[1])
+            o.append(f'<circle cx="{X(bi):.1f}" cy="{Y(bv):.1f}" r="7" fill="none" stroke="#fff" stroke-width="1.6"></circle>'
+                     f'<text x="{X(bi):.1f}" y="{max(Y(bv) - 11, 11):.1f}" class="trd-best" text-anchor="middle">{yrs[bi]}</text>')
+    o.append(f'<text x="{L}" y="{H - 4}" class="trd-ax-s">{yrs[0]}</text>'
+             f'<text x="{W - R}" y="{H - 4}" class="trd-ax-s" text-anchor="end">{yrs[-1]}</text></svg>')
+    return ''.join(o)
+
+
+def _trend_weekly(wk, light):
+    weeks, vals, ranks = wk['weeks'], wk['net'], wk['rank']
+    n = len(weeks)
+    W, H, L, R, Tp, B = 720, 220, 44, 30, 30, 40
+    X = lambda i: L + i * (W - L - R) / max(n - 1, 1)
+    good = [v for v in vals if v is not None]
+    lo, hi = (min(good) // 5) * 5 - 1, -(-max(good) // 5) * 5 + 1
+    Y = lambda v: Tp + (hi - v) / ((hi - lo) or 1) * (H - Tp - B)
+    o = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Savant Rating after each week, from {good[0]:+.1f} to {good[-1]:+.1f}">']
+    step = 5 if hi - lo > 6 else 2
+    g = int(-(-lo // step) * step)
+    while g <= hi:
+        o.append(f'<line x1="{L}" x2="{W - R}" y1="{Y(g):.1f}" y2="{Y(g):.1f}" stroke="rgba(255,255,255,.07)"></line>'
+                 f'<text x="{L - 10}" y="{Y(g) + 4:.1f}" class="trd-ax-s" text-anchor="end">{"+" if g > 0 else ""}{g}</text>')
+        g += step
+    for run in _runs(vals):
+        pts = [(X(i), Y(v)) for i, v in run]
+        if len(pts) > 1:
+            o.append(f'<path d="{_smooth(pts)}" fill="none" stroke="{light}" stroke-width="3.5" stroke-linecap="round"></path>')
+    for i, v in enumerate(vals):
+        if v is None:
+            continue
+        x, y = X(i), Y(v)
+        o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6" fill="#0b0c0e" stroke="{light}" stroke-width="3"></circle>')
+        if ranks[i]:
+            o.append(f'<text x="{x:.1f}" y="{y - 14:.1f}" class="trd-rk-s" text-anchor="middle">{_ordinal(ranks[i])}</text>')
+        lab = 'Final' if weeks[i] == 'Post' else f'Week {weeks[i]}'
+        o.append(f'<text x="{x:.1f}" y="{H - 12}" class="trd-wk" text-anchor="middle">{lab}</text>')
+    o.append('</svg>')
+    return ''.join(o)
+
+
+def team_trends(T, coaches, post_games, team, season, in_progress, tc, light):
+    """Everything the Trends tab renders, or None when there is too little
+    history to chart (fewer than two rated seasons).
+
+    T is the team route's `trends` dict; coaches is {season: name};
+    post_games is [(season, notes, team_points, opp_points)] in date order;
+    in_progress says the last season is still being played."""
+    yrs, net, rank = T['seasons'], T['savant']['net'], T['savant']['rank']
+    rated = [i for i, v in enumerate(net) if v is not None]
+    if len(rated) < 2:
+        return None
+    w, l = T['record']['wins'], T['record']['losses']
+    off, dfn = T['savant']['off'], T['savant']['def']
+    sp, rec, ap = T['sp']['rank'], T['recruiting']['rank'], T['ap']
+    eo, ed = T['epa']['off'], T['epa']['def']
+    conf = T['conference']
+    n = len(yrs)
+    cur = yrs[-1]
+
+    eras = []
+    for i, y in enumerate(yrs):
+        c = coaches.get(y) or ''
+        if eras and eras[-1]['coach'] == c:
+            eras[-1].update(end=y, i1=i)
+        else:
+            eras.append(dict(coach=c, start=y, end=y, i0=i, i1=i))
+    conf_moves = [(i, conf[i]) for i in range(1, n) if conf[i] and conf[i - 1] and conf[i] != conf[i - 1]]
+
+    # Playoff runs: the deepest round reached each season.
+    depth = {'Title game': 4, 'CFP semifinal': 3, 'CFP quarterfinal': 2, 'CFP first round': 1}
+    cfp = {}
+    for s, notes, tp, op in post_games:
+        lab = _post_label(notes)
+        if lab and depth[lab] >= depth.get((cfp.get(s) or ('', None))[0], 0):
+            won = tp is not None and op is not None and tp > op
+            cfp[s] = ('National champions' if lab == 'Title game' and won else lab, won)
+    marks = [(yrs.index(s), lab) for s, (lab, _) in cfp.items() if s in yrs]
+    # A new coach's first season, when there is room left for it.
+    for e in eras[1:]:
+        if len(marks) >= 4:
+            break
+        i = e['i0']
+        if net[i] is not None and w[i] is not None and all(abs(i - j) > 1 for j, _ in marks):
+            marks.append((i, f'Year one: {w[i]}-{l[i]}'))
+
+    first_i, last_i = rated[0], rated[-1]
+    best_i = max(rated, key=lambda i: net[i])
+    worst_i = min(rated, key=lambda i: net[i])
+    coaches_n = len([e for e in eras if e['coach']])
+    confs_n = len({c for c in conf if c})
+    bits = []
+    if coaches_n > 1:
+        bits.append(f'{coaches_n} head coaches')
+    if confs_n > 1:
+        bits.append(f'{confs_n} conferences')
+    if rank[first_i] and rank[last_i]:
+        headline = f'From {_ordinal(rank[first_i])} to {_ordinal(rank[last_i])}'
+    else:
+        headline = f'{team}, {yrs[first_i]}–{yrs[last_i]}'
+    lede = (f'The Savant Rating of every {team} season since {yrs[first_i]}: how many points better than an average FBS team, on a neutral field. '
+            + (f'{" and ".join(bits).capitalize()}. ' if bits else '')
+            + f'Best: <b>{net[best_i]:+.1f}{", " + _ordinal(rank[best_i]) if rank[best_i] else ""}</b> in {yrs[best_i]}. '
+            + f'Lowest: <b>{net[worst_i]:+.1f}</b> in {yrs[worst_i]}.')
+
+    def first_last(vals):
+        v = [(i, x) for i, x in enumerate(vals) if x is not None]
+        return (v[0], v[-1]) if v else (None, None)
+
+    cards = []
+    if any(x is not None for x in w):
+        (bi, bw), = [max(((i, x) for i, x in enumerate(w) if x is not None), key=lambda t: (t[1], -(l[t[0]] or 0)))]
+        li = max(i for i, x in enumerate(w) if x is not None)
+        cards.append(dict(k='Record', big=f'{w[li]}-{l[li]}', unit=('so far in ' if in_progress and li == n - 1 else 'in ') + str(yrs[li]),
+                          sub=f'Best: {bw}-{l[bi]} in {yrs[bi]}. {sum(x or 0 for x in w)} wins since {yrs[0]}.',
+                          svg=_trend_spark(T, None, bars=(w, l), light=light), key=[('Wins', light), ('Losses', 'rgba(255,255,255,.3)')]))
+    fd, ld = first_last(dfn)
+    if ld and off[ld[0]] is not None:
+        change = fd[1] - ld[1]
+        sub = (f'Defense allows {abs(change):.1f} {"fewer" if change > 0 else "more"} points than in {yrs[fd[0]]}.'
+               if fd[0] != ld[0] and abs(change) >= .1 else 'Defense: points allowed against an average offense.')
+        cards.append(dict(k='Offense and defense', big=f'{off[ld[0]]:+.1f}', unit=f'offense, {dfn[ld[0]]:.1f} defense', sub=sub,
+                          svg=_trend_spark(T, off, second=dfn, light=light), key=[('Offense rating', light), ('Defense (lower is better)', '#7cc9fb')]))
+    a, b = first_last(sp)
+    if b:
+        top10 = sum(1 for x in sp[-5:] if x and x <= 10)
+        sub = (f'From {_ordinal(a[1])} in {yrs[a[0]]}; top 10 in {top10} of the last five years.' if top10
+               else f'Best: {_ordinal(min(x for x in sp if x))} in {yrs[sp.index(min(x for x in sp if x))]}.')
+        cards.append(dict(k='SP+ rank', big=_ordinal(b[1]), unit='nationally', sub=sub, svg=_trend_spark(T, sp, invert=True, lo=1, light=light)))
+    a, b = first_last(rec)
+    if b:
+        bi = min((i for i, x in enumerate(rec) if x), key=lambda i: rec[i])
+        cards.append(dict(k='Recruiting class', big=_ordinal(b[1]), unit=f'nationally, {yrs[b[0]]} class',
+                          sub=f'Best class: {_ordinal(rec[bi])} in {yrs[bi]}.', svg=_trend_spark(T, rec, invert=True, lo=1, light=light)))
+    ranked = [(i, x) for i, x in enumerate(ap) if x]
+    cards.append(dict(k='AP poll', big=f'No. {ap[-1]}' if ap[-1] else 'Unranked', unit='this week' if in_progress else f'final, {cur}',
+                      sub=f'Ranked at season&#39;s end in {sum(1 for i, _ in ranked if not (in_progress and i == n - 1))} of {n - (1 if in_progress else 0)} seasons.'
+                      + (' This season is the current poll.' if in_progress else ''),
+                      svg=_trend_spark(T, ap, invert=True, lo=1, hi=26, light=light) if ranked else ''))
+    a, b = first_last(eo)
+    if b:
+        cards.append(dict(k='EPA per play', big=f'{eo[b[0]]:+.2f}', unit=f'offense, {ed[b[0]]:+.2f} defense' if ed[b[0]] is not None else 'offense',
+                          sub='Points added per snap, garbage time excluded.', svg=_trend_spark(T, eo, second=ed, light=light),
+                          key=[('Offense', light), ('Defense allowed', '#7cc9fb')]))
+
+    weekly = None
+    wk = T.get('weekly')
+    if wk and len([v for v in wk['net'] if v is not None]) >= 2:
+        v0, v1 = wk['net'][0], wk['net'][-1]
+        do, dd = (wk['off'][-1] - wk['off'][0]), (wk['def'][0] - wk['def'][-1])
+        side = 'defense' if dd > do else 'offense'
+        verb = 'Up' if v1 >= v0 else 'Down'
+        text = (f'{verb} from {v0:+.1f} after week {wk["weeks"][0]}, '
+                + (f'mostly on {side}: ' + (f'{wk["def"][0]:.1f} points allowed then, {wk["def"][-1]:.1f} now.' if side == 'defense'
+                                            else f'{wk["off"][0]:+.1f} on offense then, {wk["off"][-1]:+.1f} now.')
+                   if v1 >= v0 else f'with the offense at {wk["off"][-1]:+.1f} and the defense allowing {wk["def"][-1]:.1f}.'))
+        weekly = dict(big=f'{v1:+.1f}', text=text, svg=_trend_weekly(wk, light))
+
+    return dict(headline=headline, lede=lede, hero=_trend_hero(T, eras, conf_moves, marks, tc, light),
+                cards=cards, weekly=weekly, in_progress=in_progress, first=yrs[0], last=cur)
+
+
+def visible_on_black(hex_color):
+    """The team colour, lightened toward white until a line drawn in it reads
+    on the site's black ground (navy and maroon would otherwise vanish)."""
+    h = (hex_color or '#1c9cf0').lstrip('#')
+    try:
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return '#7cc9fb'
+
+    def lum(c):
+        def ch(v):
+            v /= 255
+            return v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4
+        return .2126 * ch(c[0]) + .7152 * ch(c[1]) + .0722 * ch(c[2])
+    c, t = (r, g, b), 0.0
+    while lum(c) < .3 and t < .9:
+        t += .1
+        c = tuple(round(v + (255 - v) * t) for v in (r, g, b))
+    return '#%02x%02x%02x' % c

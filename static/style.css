@@ -4541,9 +4541,6 @@ tr.career-row-current:hover { background: rgba(28,156,240,0.11); }
 .gh-verdict.is-upset { color: #ff6b74; }
 .gh-verdict svg { flex-shrink: 0; }
 /* ── Team page: Trends tab ──────────────────────────────────────────────── */
-.trend-card { margin-bottom: 28px; }
-.trend-chart { width: 100%; height: 300px; }
-@media (max-width: 575.98px) { .trend-chart { height: 240px; } }
 
 /* ── Shared with the team page's Transfers tab (_team_pane_transfers.html) ─
    The /transfers page itself moved to the .tfr- block at the end of this file. */
@@ -11123,4 +11120,55 @@ a.tps-pl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; 
 }
 @media (prefers-reduced-motion: reduce) {
     .tps-ld, #player-stats .show-all-btn { transition: none; }
+}
+
+/* ── Team page: Trends tab ("the arc") ─────────────────────────────────────── */
+.trd { padding-top: 32px; }
+.trd-kick { font-size: 14px; font-weight: 650; color: color-mix(in srgb, var(--tc) 55%, #fff); }
+.trd-h { margin: 10px 0 0; max-width: 16ch; font-family: var(--font-display); font-stretch: 75%; font-weight: 850; font-size: clamp(44px, 6.4vw, 92px); line-height: .9; letter-spacing: -.04em; color: var(--text-primary); }
+.trd-lede { margin: 18px 0 0; max-width: 64ch; font-size: clamp(16px, 1.3vw, 18px); line-height: 1.6; color: #c4c8cc; }
+.trd-lede b { color: #fff; }
+.trd-card { border-radius: 24px; background: linear-gradient(180deg, #0e1013, var(--bg-surface)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), 0 40px 80px -40px rgba(0,0,0,.9); }
+.trd-hero { margin: 34px 0 0; padding: 22px 22px 14px; }
+.trd-hero svg { display: block; width: 100%; height: auto; }
+.trd-hero figcaption { margin: 8px 4px 0; font-size: 12.5px; color: #949a9f; }
+.trd svg text { font-family: var(--font-body); }
+.trd-era { fill: #e7e9ea; font-size: 15px; font-weight: 700; }
+.trd-era-y { fill: #949a9f; font-size: 13px; font-weight: 500; }
+.trd-ax { fill: #7d8388; font-size: 13px; }
+.trd-ax-s { fill: #7d8388; font-size: 11.5px; }
+.trd-mark { fill: #c4c8cc; font-size: 13px; font-weight: 650; }
+.trd-rk { fill: #fff; font-size: 15px; font-weight: 800; }
+.trd-rk-s { fill: #fff; font-size: 13px; font-weight: 750; }
+.trd-yr { fill: #e7e9ea; font-size: 16px; font-weight: 800; }
+.trd-rec, .trd-wk { fill: #949a9f; font-size: 13px; }
+.trd-wk { fill: #c4c8cc; }
+.trd-note { fill: #c4c8cc; font-size: 13px; }
+.trd-best { fill: #fff; font-size: 12px; font-weight: 700; }
+.trd-sec { margin-top: 60px; }
+.trd-sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.trd-sec-h h3 { margin: 0; font-family: var(--font-display); font-stretch: 80%; font-weight: 800; font-size: clamp(22px, 2.2vw, 30px); letter-spacing: -.02em; color: var(--text-primary); }
+.trd-sec-h span { font-size: 13.5px; color: #949a9f; }
+.trd-mult { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.trd-m { padding: 20px 20px 14px; }
+.trd-m-k { font-size: 13px; font-weight: 650; color: #9aa0a6; }
+.trd-m-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+.trd-m-v b { font-family: var(--font-display); font-stretch: 75%; font-size: 44px; font-weight: 850; line-height: 1; letter-spacing: -.02em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.trd-m-v span { font-size: 13.5px; color: #c4c8cc; }
+.trd-m-s { margin-top: 4px; font-size: 12.5px; line-height: 1.5; color: #949a9f; }
+.trd-m svg { display: block; width: 100%; height: auto; margin-top: 12px; }
+.trd-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 13px; color: #c4c8cc; }
+.trd-key i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; margin-right: 8px; vertical-align: 3px; }
+.trd-wk { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 28px; align-items: center; padding: 26px 28px; }
+.trd-wk-b b { display: block; font-family: var(--font-display); font-stretch: 75%; font-size: 64px; font-weight: 850; line-height: .9; letter-spacing: -.03em; color: var(--text-primary); }
+.trd-wk-b p { margin: 10px 0 0; font-size: 15px; line-height: 1.6; color: #c4c8cc; }
+.trd-wk svg { display: block; width: 100%; height: auto; }
+@media (max-width: 900px) {
+    .trd-mult { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .trd-wk { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+    .trd-mult { grid-template-columns: minmax(0, 1fr); }
+    .trd-hero { padding: 12px 6px 10px; overflow-x: auto; }
+    .trd-hero svg { min-width: 680px; }
 }

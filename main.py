@@ -7263,6 +7263,24 @@ def team(team_ref):
             'conference': confs,
         }
 
+        # The Trends tab's charts and copy (landscape.team_trends): coach eras,
+        # Playoff runs, and whether the newest season is still being played.
+        cursor.execute('SELECT season, coach FROM coaches WHERE team = %s', (team_name,))
+        _coaches = dict(cursor.fetchall())
+        cursor.execute('''
+            SELECT season, notes, CASE WHEN home_team = %s THEN home_points ELSE away_points END,
+                   CASE WHEN home_team = %s THEN away_points ELSE home_points END
+              FROM games WHERE (home_team = %s OR away_team = %s) AND season_type ILIKE '%%post%%'
+             ORDER BY start_date''', (team_name,) * 4)
+        _post = cursor.fetchall()
+        cursor.execute('''SELECT EXISTS (SELECT 1 FROM games WHERE season = %s AND COALESCE(completed, 0) = 0
+                                           AND (home_team = %s OR away_team = %s))''',
+                       (all_seasons[-1], team_name, team_name))
+        _in_progress = bool(cursor.fetchone()[0])
+        _tc = team_hex(team_info[4], '#1c9cf0') if team_info and team_info[4] else '#1c9cf0'
+        trend_view = landscape.team_trends(trends, _coaches, _post, team_name, season, _in_progress,
+                                           _tc, landscape.visible_on_black(_tc))
+
         # Returning production — only when the prior season's data exists
         # (e.g. not computable for 2016, the earliest loaded year).
         returning = None
@@ -7361,7 +7379,7 @@ def team(team_ref):
         # the site had no answer for: the advanced metrics are offense-only.
         passing_profile=get_team_passing_profile(team_name, season),
         available_seasons=_team_seasons,
-                trends=trends,
+                trends=trends, trend_view=trend_view,
                 standings=standings, team_conf_record=team_conf_record,
                 team_season_conf=team_season_conf,
                 schedule=schedule, schedule_next=schedule_next,
