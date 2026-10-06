@@ -11864,27 +11864,28 @@ CFP_POWER_CONFS = ('ACC', 'Big 12', 'Big Ten', 'SEC')
 CFP_GROUP_OF_SIX = ('American Athletic', 'Conference USA', 'Mid-American',
                     'Mountain West', 'Pac-12', 'Sun Belt')
 CFP_FIELD_SIZE = 12
-CFP_AUTO_BIDS = 5     # the five highest-ranked conference champions
 
 
 def _project_cfp_field(cursor, season):
     """The field this season's AP poll and results would produce under the
-    12-team rules, and how each team got there.
+    committee's 2026 protocol, and how each team got there.
 
     A projection, not a forecast: nothing is simulated. It applies the
-    selection rules to the poll and the standings as they stand:
+    protocol's selection and seeding rules to the poll and the standings:
 
-      • Automatic bids go to the FIVE highest-ranked conference champions,
-        whatever their conference. A power-league champion is not guaranteed
-        a place; a strong Group of Six champion can take a second slot.
+      • Automatic bids: the champions of the ACC, Big Ten, Big 12 and SEC,
+        however low they are ranked, plus the single highest-ranked team from
+        the American, C-USA, MAC, Mountain West, Pac-12 and Sun Belt (it does
+        not have to be a champion).
+      • Notre Dame is in if it is ranked in the top 12.
+      • The rest are the next highest-ranked teams, up to twelve.
+      • Seeding follows the ranking, so the top four ranked teams get the
+        byes; an automatic qualifier ranked outside the top 12 drops to the
+        bottom of the seeds in rank order.
       • A conference's projected champion is its actual title-game winner once
         there is one; before that, the best-ranked team among those with the
         fewest conference losses. "Highest-ranked team" alone handed the
         Big 12 to a team that had already lost two league games.
-      • The other seven places go to the highest-ranked teams left. There is
-        no independent's bid: Notre Dame gets in on its ranking like anyone.
-      • Seeding is straight by ranking, so the top four ranked teams get the
-        byes; an automatic qualifier ranked outside the twelve takes 12th.
 
     The AP poll stands in for the committee's ranking (which only exists from
     November). Unranked teams are ordered by resume: fewer losses first, then
@@ -11898,7 +11899,6 @@ def _project_cfp_field(cursor, season):
         return {}, []
 
     standings = _compute_conference_standings(cursor, season)
-    fbs_confs = set(CFP_POWER_CONFS) | set(CFP_GROUP_OF_SIX)
     # every FBS team's record, independents included (Notre Dame's resume
     # counts like anyone's even though it can't be a conference champion)
     rows = {r['name']: r for c, rs in standings.items() if c not in FCS_CONFS for r in rs}
@@ -11936,13 +11936,9 @@ def _project_cfp_field(cursor, season):
         best = min(leaders, key=lambda r: rank_of(r['name']))
         return best['name'], f"{best['conf_wins']}-{best['conf_losses']} in conference"
 
-    champs = []
-    for conf in fbs_confs:
-        team, why = projected_champion(conf)
-        if team:
-            champs.append((team, conf, why))
-    champs.sort(key=lambda c: rank_of(c[0]))
-
+    # The stand-in committee ranking: every FBS team, best first.
+    order = sorted(rows, key=rank_of)
+    pos = {t: i for i, t in enumerate(order, start=1)}
     entries, taken = [], set()
 
     def claim(team, basis, auto):
@@ -11955,15 +11951,22 @@ def _project_cfp_field(cursor, season):
                         'ranked': team in ap,
                         'record': f"{r.get('wins', 0)}-{r.get('losses', 0)}"})
 
-    for team, conf, why in champs[:CFP_AUTO_BIDS]:
+    for conf in CFP_POWER_CONFS:
+        team, why = projected_champion(conf)
         claim(team, f'Projected {conf} champion · {why}', True)
-
-    for team in sorted(ap, key=ap.get):
+    g6 = next((t for t in order if rows[t].get('conf') in CFP_GROUP_OF_SIX), None)
+    if g6:
+        claim(g6, f"Highest-ranked Group of Six team ({rows[g6]['conf']})", True)
+    if pos.get('Notre Dame', 99) <= CFP_FIELD_SIZE:
+        claim('Notre Dame', 'Notre Dame, ranked in the top 12', True)
+    for team in order:
         if len(entries) >= CFP_FIELD_SIZE:
             break
         claim(team, 'At-large', False)
 
-    entries.sort(key=lambda e: rank_of(e['team']))
+    # Seeds follow the ranking; an automatic qualifier ranked outside the top
+    # 12 goes to the bottom of the seeds, still in rank order.
+    entries.sort(key=lambda e: (pos[e['team']] > CFP_FIELD_SIZE and e['auto'], pos[e['team']]))
     for i, e in enumerate(entries, start=1):
         e['seed'] = i
     return {e['team']: e['seed'] for e in entries}, entries
