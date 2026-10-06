@@ -12240,6 +12240,50 @@ def bracket_page():
                            cfp_teams=cfp_teams, champion=champion)
 
 
+
+# ── Season simulator ─────────────────────────────────────────────────────────
+# The numbers come from pipeline/simulate_season.py (weekly, after the Savant
+# Forecast refresh), stored in pool_store; the page only reads them.
+SIM_CONF_SHORT = {'FBS Independents': 'Independent', 'American Athletic': 'American',
+                  'Conference USA': 'C-USA', 'Mid-American': 'MAC'}
+
+
+@app.route('/simulator')
+@cache.cached(timeout=3600)
+def simulator():
+    season = current_cfb_season()
+    sim = _pool_store_get(f'simulator:{season}')
+    teams, field, bids = [], [], []
+    if sim:
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT name, COALESCE(logo_dark, logo), color FROM teams')
+            meta = {n: (lg, c) for n, lg, c in cur.fetchall()}
+        finally:
+            release_db(conn)
+        for r in sim['teams']:
+            lg, c = meta.get(r['team'], (None, None))
+            teams.append(dict(r, logo=lg, color=team_hex(c, '#5d6268'),
+                              conf_short=SIM_CONF_SHORT.get(r['conf'], r['conf']),
+                              independent=r['conf'] == 'FBS Independents'))
+        # The most likely field: the twelve likeliest teams, in their average seed.
+        field = sorted(teams[:12], key=lambda t: t['mean_seed'] or 99)
+        totals = {}
+        for t in teams:
+            totals[t['conf']] = totals.get(t['conf'], 0) + t['cfp']
+        top = max(totals.values()) or 1
+        bids = [dict(conf=SIM_CONF_SHORT.get(c, c), bids=v, pct=v / top * 100)
+                for c, v in sorted(totals.items(), key=lambda kv: -kv[1]) if v >= .05]
+    ran = None
+    if sim and sim.get('ran_at'):
+        d = datetime.datetime.fromisoformat(sim['ran_at'])
+        ran = f"{d:%B} {d.day}"
+    return render_template('simulator.html', season=season, sim=sim, teams=teams,
+                           field=field, bids=bids, ran=ran,
+                           locks=sum(1 for t in teams if t['cfp'] >= .95),
+                           bubble=sum(1 for t in teams if .25 <= t['cfp'] < .95))
+
 # Player Explorer — per position-group scatter axes. Values are raw stats
 # read from the same pools used for percentiles; categories match the hero
 # cards. (key, label, category, stat_type, invert, decimals, unit)
@@ -12765,7 +12809,7 @@ def sitemap():
     paths = ['/', '/teams', '/rankings', '/standings', '/games',
              '/leaderboards', '/leaderboards/teams',
              '/bracket', '/compare', '/transfers', '/draft', '/rivalries',
-             '/savant-rating', '/savant-forecast', '/explorer']
+             '/savant-rating', '/savant-forecast', '/explorer', '/simulator']
     for cat in ('passing', 'rushing', 'receiving', 'defense'):
         paths.append(f'/leaderboards/{cat}')
     lastmod = {}

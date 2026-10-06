@@ -29,6 +29,7 @@ runs the whole weekly chain automatically: fetch → derive → precompute, via
 17. `pipeline/fetch_betting_lines.py` — Vegas lines, active season
 18. `pipeline/predict_games.py` — Savant Forecast: score last week, predict upcoming
 19. `pipeline/apply_week_zero.py` — again, for the tables written since *(non-fatal)*
+20. `pipeline/simulate_season.py` — Season simulator: 10,000 playouts of the rest of the season → `pool_store` `simulator:{season}`, read by `/simulator` *(non-fatal)*
 
 **Week 0 runs twice, and that is deliberate.** College football opens with a
 handful of games the Saturday before the real opening weekend. **No upstream

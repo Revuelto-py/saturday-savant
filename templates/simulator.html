@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Season Simulator: {{ season }} Playoff Odds · Saturday Savant{% endblock %}
+{% block og_description %}Every FBS team's odds of reaching its conference title game, the College Football Playoff and the national title, from {{ '{:,}'.format(sim.n) if sim else 'thousands of' }} simulations of the rest of the {{ season }} season.{% endblock %}
+
+{% macro pct(p) -%}
+{%- if p >= 0.995 %}&gt;99%{% elif p <= 0 %}—{% elif p < 0.005 %}&lt;1%{% else %}{{ (p * 100)|round|int }}%{% endif -%}
+{%- endmacro %}
+
+{% macro heat(p, na=false) -%}
+{%- if na -%}<span class="sim-heat is-na">—</span>
+{%- else -%}<span class="sim-heat{{ ' is-hi' if p >= 0.42 else (' is-lo' if p < 0.05) }}" style="--a: {{ '%.3f'|format([p, 1]|min * 0.78) }}">{{ pct(p) }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro seed_tile(t, n, bye=false) -%}
+<a class="sim-seed{{ ' is-bye' if bye }}" href="{{ team_url(t.team, season) }}" style="--tc: {{ t.color }}">
+    <span class="sim-seed-n">{{ n }}</span>
+    {% if t.logo %}<img src="{{ t.logo }}" alt="" width="{{ 40 if bye else 32 }}" height="{{ 40 if bye else 32 }}" loading="lazy">{% endif %}
+    <span class="sim-seed-t"><b>{{ t.team }}</b><span>{{ t.w }}-{{ t.l }}, {{ t.conf_short }}</span></span>
+    <span class="sim-seed-p">{{ pct(t.bye if bye else t.cfp) }}<small>{{ 'bye' if bye else 'in' }}</small></span>
+</a>
+{%- endmacro %}
+
+{% block content %}
+<div class="page-wrapper sim-page">
+
+<header class="sim-head">
+    <h1 class="sim-h1">Who makes the Playoff</h1>
+    {% if sim %}
+    <p class="sim-lede">The rest of the {{ season }} season played out {{ '{:,}'.format(sim.n) }} times, every remaining game decided by its <a href="/savant-forecast">Savant Forecast</a>. <b>{{ locks }} teams</b> make the field in at least 95% of those seasons. <b>{{ bubble }} more</b> are fighting over what is left.</p>
+    {% if ran %}<p class="sim-when">Updated {{ ran }}, after the week's forecasts.</p>{% endif %}
+    {% endif %}
+</header>
+
+{% if not sim %}
+<div class="sim-card sim-empty">The simulator runs once the season's forecasts are in. Check back after the first week of games.</div>
+{% else %}
+
+<section aria-labelledby="sim-field-h">
+    <div class="sim-rowlab"><h2 class="sim-h3" id="sim-field-h">The most likely field</h2><span>Seeded by average seed across the simulations</span></div>
+    <div class="sim-byes">
+        {% for t in field[:4] %}{{ seed_tile(t, loop.index, true) }}{% endfor %}
+    </div>
+    <div class="sim-pairs">
+        {% for hi, lo, host in [(5, 12, 4), (8, 9, 1), (6, 11, 3), (7, 10, 2)] %}
+        {% if field|length >= lo %}
+        <div class="sim-pair">
+            <span class="sim-pair-k">Winner plays No. {{ host }}</span>
+            {{ seed_tile(field[hi - 1], hi) }}
+            {{ seed_tile(field[lo - 1], lo) }}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</section>
+
+<section class="sim-sec" aria-labelledby="sim-odds-h">
+    <div class="sim-odds-head">
+        <div>
+            <h2 class="sim-h2" id="sim-odds-h">Every team, stage by stage</h2>
+            <p class="sim-sec-n">Share of the {{ '{:,}'.format(sim.n) }} seasons in which each team reaches each stage, ordered by playoff odds. The line marks where the twelve spots run out.</p>
+        </div>
+        <div class="sim-search">
+            <label for="sim-q" class="sr-only">Find a team</label>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+            <input type="search" id="sim-q" placeholder="Find any team" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+    <div class="sim-card sim-tbl">
+        <table>
+            <thead><tr>
+                <th scope="col"><span class="sr-only">Rank by playoff odds</span></th><th scope="col">Team</th><th scope="col">Projected wins</th>
+                <th scope="col">Title game</th><th scope="col">Conference champ</th><th scope="col">Playoff</th>
+                <th scope="col">First-round bye</th><th scope="col">Semifinal</th><th scope="col">National title</th>
+            </tr></thead>
+            <tbody id="sim-rows">
+                {% for t in teams %}
+                <tr class="sim-row{{ ' is-more' if loop.index > 25 }}" data-name="{{ t.team|lower }}">
+                    <td class="sim-rk">{{ loop.index }}</td>
+                    <td><a class="sim-tm" href="{{ team_url(t.team, season) }}">
+                        {% if t.logo %}<img src="{{ t.logo }}" alt="" width="30" height="30" loading="lazy">{% else %}<span class="sim-noimg"></span>{% endif %}
+                        <span><b>{{ t.team }}</b><span>{{ t.w }}-{{ t.l }}, {{ t.conf_short }}</span></span>
+                    </a></td>
+                    <td class="sim-wins">{{ '%.1f'|format(t.proj_wins) }}</td>
+                    <td>{{ heat(t.ccg, t.independent) }}</td>
+                    <td>{{ heat(t.champ, t.independent) }}</td>
+                    <td>{{ heat(t.cfp) }}</td>
+                    <td>{{ heat(t.bye) }}</td>
+                    <td>{{ heat(t.semi) }}</td>
+                    <td>{{ heat(t.title) }}</td>
+                </tr>
+                {% if loop.index == 12 %}<tr class="sim-cut" aria-hidden="true"><td colspan="9"><div class="sim-cut-l">Twelve playoff spots</div></td></tr>{% endif %}
+                {% endfor %}
+                <tr class="sim-none" hidden><td colspan="9">No FBS team matches that search.</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <button type="button" class="sim-more" id="sim-more" aria-expanded="false" aria-controls="sim-rows">Show all {{ teams|length }} teams</button>
+</section>
+
+<section class="sim-sec" aria-labelledby="sim-bids-h">
+    <h2 class="sim-h2" id="sim-bids-h">Expected bids by conference</h2>
+    <p class="sim-sec-n">Average number of playoff teams each conference sends. The ACC, Big Ten, Big 12 and SEC champions are guaranteed a spot, and so is the highest-ranked team from the other six conferences, so those six share exactly one guaranteed bid.</p>
+    <div class="sim-card sim-bids">
+        {% for b in bids %}
+        <div class="sim-bid"><span>{{ b.conf }}</span><span class="sim-bid-b"><span style="width: {{ '%.1f'|format(b.pct) }}%"></span></span><b>{{ '%.1f'|format(b.bids) }}</b></div>
+        {% endfor %}
+    </div>
+</section>
+
+<p class="sim-foot">How it works: completed results are fixed, and every remaining game through selection day is decided by its Savant Forecast win probability. Conference title games pair the top two teams by conference record. Selection and seeding follow the committee&#39;s 2026 protocol: the ACC, Big Ten, Big 12 and SEC champions and the highest-ranked team from the American, C-USA, MAC, Mountain West, Pac-12 and Sun Belt get automatic bids, Notre Dame is in if ranked in the top 12, the next highest-ranked teams fill the field, the top four ranked teams get the byes, and an automatic qualifier ranked outside the top 12 is seeded last. The committee&#39;s ranking itself is a stand-in: <a href="/savant-rating">Savant Rating</a>, plus 3.5 points per game over .500, plus half the strength of schedule, with head-to-head results deciding between near-equal teams. Playoff games use the Savant Rating gap. For the field as the rankings stand today, see the <a href="/bracket">playoff bracket</a>.</p>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if sim %}
+<script>
+(function () {
+    var q = document.getElementById('sim-q'), more = document.getElementById('sim-more');
+    var rows = [].slice.call(document.querySelectorAll('#sim-rows .sim-row'));
+    var cut = document.querySelector('#sim-rows .sim-cut'), none = document.querySelector('#sim-rows .sim-none');
+    var all = false;
+    // Accents and punctuation shouldn't block a match: "san jose" finds San José, "hawaii" Hawai'i.
+    var norm = function (s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ''); };
+    rows.forEach(function (r) { r.dataset.key = norm(r.dataset.name); });
+    function apply() {
+        var term = norm(q.value.trim().toLowerCase()), shown = 0;
+        rows.forEach(function (r) {
+            var on = term ? r.dataset.key.indexOf(term) >= 0 : (all || !r.classList.contains('is-more'));
+            r.hidden = !on;
+            if (on) shown++;
+        });
+        cut.hidden = !!term;
+        none.hidden = shown > 0;
+        more.hidden = !!term;
+    }
+    q.addEventListener('input', apply);
+    more.addEventListener('click', function () {
+        all = !all;
+        more.setAttribute('aria-expanded', all);
+        more.textContent = all ? 'Show the top 25' : 'Show all ' + rows.length + ' teams';
+        apply();
+    });
+    apply();
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -532,7 +532,7 @@
             </a>
 
             {% set path = request.path %}
-            {% set more_active = path.startswith('/standings') or path.startswith('/bracket') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') %}
+            {% set more_active = path.startswith('/standings') or path.startswith('/bracket') or path.startswith('/simulator') or path.startswith('/transfers') or path.startswith('/draft') or path.startswith('/rivalr') or path.startswith('/explorer') %}
             <div class="nav-links" id="navLinks">
                 <a href="/games" {% if path.startswith('/games') or path.startswith('/game/') %}class="active" aria-current="page"{% endif %}>Games</a>
                 <a href="/teams" {% if path.startswith('/teams') or path.startswith('/team/') %}class="active" aria-current="page"{% endif %}>Teams</a>
@@ -553,6 +553,7 @@
                             <span class="nav-more-h" id="navMoreSeason">Season</span>
                             <a href="/standings" {% if path.startswith('/standings') %}class="active"{% endif %}>Standings</a>
                             <a href="/bracket" {% if path.startswith('/bracket') %}class="active"{% endif %}>Playoff bracket</a>
+                            <a href="/simulator" {% if path.startswith('/simulator') %}class="active"{% endif %}>Simulator</a>
                             <a href="/rivalries" {% if path.startswith('/rivalr') %}class="active"{% endif %}>Rivalries</a>
                         </div>
                         <div class="nav-more-group" role="group" aria-labelledby="navMoreMoves">
@@ -657,6 +658,7 @@
                 <a href="/rankings">AP Rankings</a>
                 <a href="/standings">Standings</a>
                 <a href="/bracket">Playoff Bracket</a>
+                <a href="/simulator">Season Simulator</a>
                 <a href="/rivalries">Rivalries</a>
                 <a href="/explorer?scope=matchup">Head-to-Head</a>
             </div>
