@@ -834,8 +834,9 @@ function showSchedule(season) {
     }
     function applyCap(tbl) {
         var expanded = tbl.dataset.expanded === '1';
+        var cap = +(tbl.dataset.cap || 10);
         tbl.querySelectorAll('tbody tr.player-row').forEach(function (r, i) {
-            if (!expanded && i >= 10) r.setAttribute('hidden', ''); else r.removeAttribute('hidden');
+            if (!expanded && i >= cap) r.setAttribute('hidden', ''); else r.removeAttribute('hidden');
         });
     }
     function renumber(tbl) {
@@ -944,16 +945,11 @@ function showSchedule(season) {
 
         // 10-row cap + "Show all" toggle (respects sort order via applyCap).
         if (tbl.querySelectorAll('tbody tr.leader-extra').length) {
-            var card = tbl.closest('.dark-card');
+            var card = tbl.closest('.tps-card, .dark-card');
             var total = tbl.querySelectorAll('tbody tr.player-row').length;
             tbl.dataset.expanded = '0';
             var btn = document.createElement('button');
             btn.type = 'button'; btn.className = 'show-all-btn';
-            btn.style.cssText = 'width:100%;margin-top:8px;padding:9px;background:rgba(255,255,255,0.04);' +
-                'border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-secondary);' +
-                'font-weight:700;font-size:var(--text-sm);cursor:pointer;transition:background 0.15s';
-            btn.onmouseover = function () { btn.style.background = 'rgba(255,255,255,0.08)'; };
-            btn.onmouseout = function () { btn.style.background = 'rgba(255,255,255,0.04)'; };
             btn.textContent = 'Show all ' + total;
             btn.addEventListener('click', function () {
                 tbl.dataset.expanded = tbl.dataset.expanded === '1' ? '0' : '1';

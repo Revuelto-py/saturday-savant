@@ -7079,10 +7079,16 @@ def team(team_ref):
         headshot_map   = {row[0]: row[2] for row in _player_rows}
         player_id_map  = {row[0]: row[1] for row in _player_rows}
 
+        # Position, number and class for the player stats tab's name line, from
+        # this season's roster (a player who has since left keeps his stats
+        # and simply shows no line).
+        roster_meta = {str(r[4]): (r[2], r[3], r[8]) for r in roster}
+
         def add_headshots(players):
             for p in players:
                 p['headshot']   = headshot_map.get(p['name'])
                 p['player_id']  = player_id_map.get(p['name'])
+                p['pos'], p['jersey'], p['cls'] = roster_meta.get(str(p['player_id']), (None, None, None))
             return players
 
         passing_stats     = add_headshots(passing_stats)
