@@ -13185,49 +13185,57 @@ def clear_cache():
     return ('Score caches cleared' if scope else 'Cache cleared'), 200
 
 
-def _warm_explorer_headshots(limit=200):
+def _warm_explorer_headshots():
     """Pre-build the downscaled headshots the Stat Explorer draws.
 
     Warming the PAGE is not enough: the page is HTML, and the 150 faces on it
     are fetched by the browser afterwards. Cold, each one is an R2 round trip
-    plus a resize, and the first visitor after a deploy waits several seconds
-    watching an empty chart. This is the same work, done once, off the request
-    path — it runs in the warmup thread, so a slow bucket delays nothing.
+    plus a resize, and the first visitor after a deploy waits seconds watching
+    an empty chart. Nothing in front of the app caches them either (the site's
+    edge passes every response through, /static included), so this per-worker
+    memo is the only cache they have.
+
+    It warms exactly what the explorer serves — each offensive group's default
+    view, asked of the explorer's own selection function — quarterbacks first,
+    because that is the view /explorer?scope=player opens on. It used to take
+    "SELECT DISTINCT headshot ... LIMIT 200" with no ORDER BY: 200 arbitrary
+    players, few of them on any chart, so the faces stayed cold after every
+    deploy. Runs in the warmup thread, so a slow bucket delays nothing.
     """
+    from base64 import urlsafe_b64decode
+    srcs, seen = [], set()
     try:
         conn = get_db()
     except Exception:
         return
     try:
         cur = conn.cursor()
-        # Whoever the explorer would plot: current-season players with a photo,
-        # busiest first, which is the order the page's own top-N slice uses.
-        # player_stats.player_id is TEXT and players.id is INTEGER, hence the
-        # cast — the same one every other join between these two tables uses.
-        cur.execute("""
-            SELECT DISTINCT p.headshot
-            FROM player_stats ps JOIN players p ON p.id::text = ps.player_id
-            WHERE ps.season = %s AND p.headshot IS NOT NULL
-            LIMIT %s
-        """, (CURRENT_SEASON, limit))
-        urls = [r[0] for r in cur.fetchall()]
+        for group in ('QB', 'RB', 'WR', 'TE'):
+            for p in _explorer_player_scope(cur, group, CURRENT_SEASON, True, 150):
+                face = p.get('headshot') or ''
+                if face.startswith('/img/c/') and face not in seen:
+                    seen.add(face)
+                    key = face.rsplit('/', 1)[1][:-len('.webp')]
+                    srcs.append(urlsafe_b64decode(key + '=' * (-len(key) % 4)).decode())
     except Exception as exc:
         # Loud, not silent: a warmup that quietly finds nothing looks exactly
         # like a warmup that worked, and the pages stay cold either way.
         conn.rollback()
         print(f'headshot warmup query failed: {exc.__class__.__name__}: {exc}', flush=True)
-        urls = []
     finally:
         release_db(conn)
 
     done = 0
-    for url in urls:
+    for url in srcs:
         try:
             if _img_variant(url, 128, True, True):   # the explorer's /img/c/ faces are always WebP
                 done += 1
         except Exception:
             pass
-    print(f'headshot warmup: {done} variants ready ({len(urls)} players)', flush=True)
+    # The 600px originals were only needed to make the 3KB variants, which live
+    # on in img_cache; dropping them returns ~150MB to the worker.
+    _img_fetch.cache_clear()
+    print(f'headshot warmup: {done} of {len(srcs)} explorer faces ready', flush=True)
 
 
 def _warm_cache():
