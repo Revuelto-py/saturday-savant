@@ -1,174 +1,134 @@
 {% extends "base.html" %}
 {% block title %}AP Top 25 Rankings · Saturday Savant{% endblock %}
-{% block og_description %}College football rankings — the AP poll week by week alongside Savant Ratings and SP+, so you can see where the polls and the numbers disagree.{% endblock %}
+{% block og_description %}College football rankings: the AP poll week by week alongside Savant Ratings, so you can see where the polls and the numbers disagree.{% endblock %}
 
-{# Movement badge: ▲/▼ spots since the previous poll, NEW when unranked in it. #}
-{% macro move_badge(t) -%}
-{%- if t.move is none %}<span class="ap-trend ap-trend-new">NEW</span>
-{%- elif t.move == 0 %}<span class="ap-trend ap-trend-flat" aria-label="No change">–</span>
-{%- elif t.move > 0 %}<span class="ap-trend ap-trend-up" aria-label="Up {{ t.move }}">▲{{ t.move }}</span>
-{%- else %}<span class="ap-trend ap-trend-down" aria-label="Down {{ t.move|abs }}">▼{{ t.move|abs }}</span>{% endif -%}
-{%- endmacro %}
-{% macro record(t) %}{% if t.wins is not none %}{{ t.wins }}-{{ t.losses }}{% endif %}{% if t.wins is not none and t.conf %} · {% endif %}{{ t.conf or '' }}{% endmacro %}
-{% macro spark(t) -%}
-{%- if t.spark %}<svg class="rk-spark" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="{{ t.spark_label }}"><polyline points="{{ t.spark }}"></polyline></svg>{% endif -%}
-{%- endmacro %}
+{% macro ordinal(n) -%}{{ n }}{{ 'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }}{%- endmacro %}
 
 {% block content %}
-<div class="page-wrapper rk-page">
+{% set top = teams[0] if teams else none %}
+{% set maxpts = teams|map(attribute='points')|max if teams else 1 %}
+<div class="page-wrapper rkp-page">
 
-<header class="rk-head">
+<header class="rkp-head">
     <div>
-        <div class="rk-kicker">{{ season }} season</div>
-        {# h1: the page's own title (it was once an h2 and left the page with no
-           top-level heading). #}
-        <h1 class="rk-title">
-            AP Top 25
-            {% if sel_label %}<span class="rk-title-week">· {{ sel_label }}</span>{% endif %}
-            {% if sel_is_final %}<span class="ap-final-pill">Final</span>{% endif %}
-        </h1>
+        <h1 class="rkp-h1">AP Top 25{% if sel_is_final %} <span class="rkp-final">Final</span>{% endif %}</h1>
+        {% if top %}
+        <p class="rkp-lede">
+            <b>{{ top.team }}</b>
+            {%- if streak > 1 and streak == n_polls %} has been No. 1 in every poll this season
+            {%- elif streak > 1 %} is No. 1 for the {{ ordinal(streak) }} straight poll
+            {%- elif not prev_opt %} opens the season at No. 1
+            {%- else %} is the new No. 1{% endif %}
+            {%- if top.fpv %}, with {{ top.fpv }} of the first-place votes{% endif %}.
+            {%- if top.svr %} The Savant Rating has them {{ ordinal(top.svr) }}.{% endif %}
+        </p>
+        {% endif %}
     </div>
-    <div class="rk-controls">
+    <div class="rkp-ctl">
         {% if poll_options %}
-        {% if prev_opt %}<a class="rk-step" href="?season={{ season }}&w={{ prev_opt.value }}" aria-label="Previous poll: {{ prev_opt.label }}">
-        {% else %}<span class="rk-step is-off" aria-hidden="true">{% endif %}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-        {% if prev_opt %}</a>{% else %}</span>{% endif %}
-        <select class="lb-select" style="min-width:132px" aria-label="Poll week"
-                onchange="location='?season={{ season }}&w='+this.value">
-            {% for p in poll_options|reverse %}
-            <option value="{{ p.value }}" {{ 'selected' if p.selected else '' }}>{{ p.label }}</option>
+        <nav class="rkp-weeks" aria-label="Poll">
+            {% for p in poll_options %}
+            <a class="rkp-chip" href="?season={{ season }}&w={{ p.value }}" {{ 'aria-current=page' if p.selected }}>{{ p.label }}</a>
             {% endfor %}
-        </select>
-        {% if next_opt %}<a class="rk-step" href="?season={{ season }}&w={{ next_opt.value }}" aria-label="Next poll: {{ next_opt.label }}">
-        {% else %}<span class="rk-step is-off" aria-hidden="true">{% endif %}
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-        {% if next_opt %}</a>{% else %}</span>{% endif %}
+        </nav>
         {% endif %}
         {% if available_seasons and available_seasons|length > 1 %}
-        <select class="lb-select season-select" style="min-width:110px" aria-label="Season"
-                onchange="location='?season='+this.value">
-            {% for s in available_seasons %}
-            <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
-            {% endfor %}
-        </select>
+        <label class="rkp-sel"><span class="sr-only">Season</span>
+            <select onchange="location='?season='+this.value">
+                {% for s in available_seasons %}<option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>{% endfor %}
+            </select>
+        </label>
         {% endif %}
     </div>
 </header>
 
 {% if not teams %}
-<div class="dark-card" style="text-align:center;padding:44px 24px;color:var(--text-secondary)">
-    No AP poll for the {{ season }} season yet.
-</div>
+<div class="rkp-card rkp-empty">No AP poll for {{ season }} yet. The preseason poll arrives in August.</div>
 {% else %}
 
-{# ── Top five: the poll's headline, in the team page hero's colours ─────── #}
-<ol class="rk-top" aria-label="Top five">
-    {% for t in top %}
-    <li>
-    <a class="rk-hero" href="{{ team_url(t.team, season) }}" style="--c1:{{ t.c1 }};--c2:{{ t.c2 }}">
-        <span class="rk-hero-num" aria-hidden="true">{{ t.rank }}</span>
-        <span class="rk-hero-top">
-            {% if t.logo %}<img class="rk-hero-logo" src="{{ t.logo }}" alt="" width="88" height="88">{% else %}<span class="rk-hero-logo"></span>{% endif %}
-            {{ move_badge(t) }}
-        </span>
-        <span class="rk-hero-id">
-            <span class="rk-hero-rank">No. {{ t.rank }}</span>
-            <span class="rk-hero-name">{{ t.team }}</span>
-            <span class="rk-meta">{{ record(t) }}</span>
-        </span>
-        <span class="rk-hero-pts">
-            <span><b>{{ '{:,}'.format(t.points) if t.points else '—' }}</b> pts</span>
-            {% if t.fpv %}<span class="rk-fpv">{{ t.fpv }} first-place</span>{% endif %}
-        </span>
-        {{ spark(t) }}
-    </a>
-    </li>
-    {% endfor %}
-</ol>
-
-{# ── 6 through 25 in two columns ──────────────────────────────────────── #}
-{% if cols[0] %}
-<div class="rk-cols">
-    {% for col in cols %}{% if col %}
-    <ol class="rk-list" start="{{ col[0].rank }}">
-        {% for t in col %}
-        <li>
-        <a class="rk-row" href="{{ team_url(t.team, season) }}" style="--c1:{{ t.c1 }};--c2:{{ t.c2 }}">
-            <span class="rk-row-rank">{{ t.rank }}</span>
-            {{ move_badge(t) }}
-            <span class="rk-row-team">
-                {% if t.logo %}<img src="{{ t.logo }}" alt="" width="32" height="32" loading="lazy">{% endif %}
-                <span class="rk-row-id">
-                    <span class="rk-row-name">{{ t.team }}</span>
-                    <span class="rk-meta">{{ record(t) }}</span>
+<section aria-label="The poll">
+    <div class="rkp-card rkp-poll">
+        <div class="rkp-phead" aria-hidden="true"><span>Rank</span><span></span><span>Team</span><span>Poll points</span><span>Season</span><span>Savant, gap</span></div>
+        <ol class="rkp-list" role="list">
+            {% for t in teams %}
+            {% set gap = (t.rank - t.svr) if t.svr else none %}
+            <li>
+            <a class="rkp-row{{ ' is-one' if t.rank == 1 }}" href="{{ team_url(t.team, season) }}" style="--tc: {{ t.c1|team_hex('#1c9cf0') }}">
+                <span class="rkp-rk">{{ t.rank }}</span>
+                <span class="rkp-mv">
+                    {% if t.move is none %}<span class="rkp-m is-new">New</span>
+                    {% elif t.move > 0 %}<span class="rkp-m is-up" aria-label="Up {{ t.move }}"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9 8H1z" fill="currentColor"/></svg>{{ t.move }}</span>
+                    {% elif t.move < 0 %}<span class="rkp-m is-down" aria-label="Down {{ t.move|abs }}"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 9 1 2h8z" fill="currentColor"/></svg>{{ t.move|abs }}</span>
+                    {% else %}<span class="rkp-m is-same" aria-label="No change">—</span>{% endif %}
                 </span>
-            </span>
-            <span class="rk-row-pts">{{ '{:,}'.format(t.points) if t.points else '—' }}{% if t.fpv %} <span class="rk-fpv">({{ t.fpv }})</span>{% endif %}</span>
-            {{ spark(t) }}
-        </a>
-        </li>
-        {% endfor %}
-    </ol>
-    {% endif %}{% endfor %}
-</div>
-{% endif %}
-
-{# ── Others receiving votes ───────────────────────────────────────────── #}
-{% if others or dropped %}
-<section class="rk-section" aria-labelledby="rk-others-h">
-    <div class="rk-section-top">
-        <h2 class="rk-h2" id="rk-others-h">Others receiving votes</h2>
-        {% if others %}<span class="rk-note">{{ others|length }} team{{ '' if others|length == 1 else 's' }} · poll points</span>{% endif %}
+                <span class="rkp-team">
+                    <span class="rkp-plate">{% if t.logo %}<img src="{{ t.logo }}" alt="" width="30" height="30" loading="lazy">{% endif %}</span>
+                    <span class="rkp-name"><b>{{ t.team }}</b><span>{% if t.wins is not none %}{{ t.wins }}-{{ t.losses }}{% if t.conf %}, {% endif %}{% endif %}{{ {'FBS Independents': 'Independent', 'American Athletic': 'American'}.get(t.conf, t.conf or '') }}</span></span>
+                </span>
+                <span class="rkp-pts">
+                    <span class="rkp-bar"><span style="width: {{ '%.1f'|format(t.points / maxpts * 100 if maxpts else 0) }}%"></span></span>
+                    <span class="rkp-ptn"><b>{{ '{:,}'.format(t.points or 0) }}</b>{% if t.fpv %}<span class="rkp-fpv">{{ t.fpv }} first</span>{% endif %}</span>
+                </span>
+                <span class="rkp-season">{% if t.spark %}<svg class="rkp-spark" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="{{ t.spark_label }}"><polyline points="{{ t.spark }}" vector-effect="non-scaling-stroke"/></svg>{% endif %}</span>
+                <span class="rkp-sv">
+                    <b>{{ t.svr or '—' }}</b>
+                    {% if gap is not none %}<span class="rkp-gap{{ ' is-over' if gap < -8 else (' is-under' if gap > 8) }}" aria-label="Gap {{ gap }}">{{ '%+d'|format(gap) if gap else '0' }}</span>{% endif %}
+                </span>
+            </a>
+            </li>
+            {% endfor %}
+        </ol>
     </div>
-    {% if others %}
-    <ol class="rk-others">
-        {% for o in others %}
-        <li>
-        <a class="rk-other" href="{{ team_url(o.team, season) }}" style="--c1:{{ o.c1 }};--c2:{{ o.c2 }}">
-            {% if o.logo %}<img src="{{ o.logo }}" alt="" width="30" height="30" loading="lazy">{% endif %}
-            <span class="rk-row-id">
-                <span class="rk-row-name">{{ o.team }}</span>
-                <span class="rk-meta">{{ o.conf or '' }}{% if o.was %}{{ ' · ' if o.conf }}<span class="rk-fell">dropped from #{{ o.was }}</span>{% endif %}</span>
-            </span>
-            <span class="rk-other-pts">{{ o.points }}</span>
-        </a>
-        </li>
-        {% endfor %}
-    </ol>
-    {% endif %}
-    {% if dropped %}
-    <p class="rk-note">{{ 'Also dropped' if others else 'Dropped' }} out{% if not others %} of the Top 25{% endif %}:
-        {% for t, rk in dropped %}<a href="{{ team_url(t, season) }}">{{ t }}</a> (#{{ rk }}){{ ', ' if not loop.last }}{% endfor %}</p>
-    {% endif %}
+    <p class="rkp-foot">Savant is each team&#39;s Savant Rating rank as of this poll: ratings through the games the voters had seen. The gap is poll rank minus Savant rank. Orange: the voters are much higher on a team than the numbers. Blue: much lower.</p>
+</section>
+
+{# ── This week's movers ─────────────────────────────────────────────────── #}
+{% set risers = teams|selectattr('move')|selectattr('move', 'gt', 0)|sort(attribute='move', reverse=true)|list %}
+{% set fallers = teams|selectattr('move')|selectattr('move', 'lt', 0)|sort(attribute='move')|list %}
+{# New = unranked in the previous poll; the first poll of a season has nothing to be new against. #}
+{% set newcomers = teams|selectattr('move', 'none')|list if prev_opt else [] %}
+{% if risers or fallers or newcomers or dropped %}
+<section class="rkp-sec" aria-labelledby="rkp-mv-h">
+    <h2 class="rkp-h2" id="rkp-mv-h">This week&#39;s movers</h2>
+    <div class="rkp-mvs">
+        {% for t in risers[:3] %}<a class="rkp-mvc is-up" href="{{ team_url(t.team, season) }}">{% if t.logo %}<img src="{{ t.logo }}" alt="" width="36" height="36" loading="lazy">{% endif %}<span class="rkp-mvt"><b>{{ t.team }}</b><span>{{ t.rank + t.move }} to {{ t.rank }}</span></span><span class="rkp-mvn">+{{ t.move }}</span></a>{% endfor %}
+        {% for t in fallers[:3] %}<a class="rkp-mvc is-down" href="{{ team_url(t.team, season) }}">{% if t.logo %}<img src="{{ t.logo }}" alt="" width="36" height="36" loading="lazy">{% endif %}<span class="rkp-mvt"><b>{{ t.team }}</b><span>{{ t.rank + t.move }} to {{ t.rank }}</span></span><span class="rkp-mvn">−{{ t.move|abs }}</span></a>{% endfor %}
+        {% for t in newcomers %}<a class="rkp-mvc is-new" href="{{ team_url(t.team, season) }}">{% if t.logo %}<img src="{{ t.logo }}" alt="" width="36" height="36" loading="lazy">{% endif %}<span class="rkp-mvt"><b>{{ t.team }}</b><span>In at {{ t.rank }}</span></span><span class="rkp-mvn">New</span></a>{% endfor %}
+        {% for o in others if o.was %}<a class="rkp-mvc is-out" href="{{ team_url(o.team, season) }}">{% if o.logo %}<img src="{{ o.logo }}" alt="" width="36" height="36" loading="lazy">{% endif %}<span class="rkp-mvt"><b>{{ o.team }}</b><span>Was {{ o.was }}</span></span><span class="rkp-mvn">Out</span></a>{% endfor %}
+        {% for t, rk in dropped %}<a class="rkp-mvc is-out" href="{{ team_url(t, season) }}"><span class="rkp-mvt"><b>{{ t }}</b><span>Was {{ rk }}</span></span><span class="rkp-mvn">Out</span></a>{% endfor %}
+    </div>
 </section>
 {% endif %}
 
-{# ── Where the poll and the numbers disagree ──────────────────────────── #}
-{% if gaps %}
-<section class="dark-card rk-gaps" aria-labelledby="rk-gaps-h">
-    <div class="rk-section-top">
-        <h2 class="rk-h2" id="rk-gaps-h">Where the poll and the numbers disagree</h2>
-        <span class="rk-gap-key">
-            <span><span class="rk-dot is-ap"></span>AP rank</span>
-            <span><span class="rk-dot is-svr"></span>Savant rank</span>
-        </span>
+{# ── The season so far ──────────────────────────────────────────────────── #}
+{% if river %}
+<section class="rkp-sec" aria-labelledby="rkp-river-h">
+    <h2 class="rkp-h2" id="rkp-river-h">The season so far</h2>
+    <p class="rkp-sec-n">Every ranked team, poll by poll. The current top 10 are in team colour; lines that drop to the bottom fell out of the poll.</p>
+    <div class="rkp-card rkp-river">
+        <div class="rkp-rv">
+            {{ river.svg|safe }}
+            <div class="rkp-rv-labels" style="left: {{ river.left }}%" aria-hidden="true">
+                {% for l in river.labels %}<span class="rkp-rv-l{{ ' is-top' if l.top }}" style="top: {{ l.y }}%">{% if l.logo %}<img src="{{ l.logo }}" alt="" width="18" height="18" loading="lazy">{% endif %}<b>{{ l.rank }}</b>{{ l.team }}</span>{% endfor %}
+            </div>
+        </div>
     </div>
-    <ul class="rk-gap-list">
-        {% for g in gaps %}
-        <li class="rk-gap">
-            <a class="rk-gap-team" href="{{ team_url(g.team, season) }}">{{ g.team }}</a>
-            <span class="rk-gap-track" aria-hidden="true">
-                <span class="rk-gap-span" style="left: {{ '%.2f'|format([g.ap_x, g.svr_x]|min) }}%; width: {{ '%.2f'|format((g.ap_x - g.svr_x)|abs) }}%"></span>
-                <span class="rk-dot is-ap" style="left: {{ '%.2f'|format(g.ap_x) }}%"></span>
-                <span class="rk-dot is-svr" style="left: {{ '%.2f'|format(g.svr_x) }}%"></span>
-            </span>
-            <span class="rk-gap-txt">AP #{{ g.ap }} · Savant #{{ g.svr }}</span>
-        </li>
+</section>
+{% endif %}
+
+{# ── Others receiving votes ─────────────────────────────────────────────── #}
+{% if others %}
+<section class="rkp-sec" aria-labelledby="rkp-others-h">
+    <h2 class="rkp-h2" id="rkp-others-h">Others receiving votes</h2>
+    <ol class="rkp-others" role="list">
+        {% for o in others %}
+        <li><a class="rkp-other" href="{{ team_url(o.team, season) }}">
+            {% if o.logo %}<img src="{{ o.logo }}" alt="" width="26" height="26" loading="lazy">{% endif %}
+            <span class="rkp-other-n">{{ o.team }}{% if o.was %} <span class="rkp-fell">dropped from {{ o.was }}</span>{% endif %}</span>
+            <span class="rkp-other-p">{{ o.points }}</span>
+        </a></li>
         {% endfor %}
-    </ul>
-    <div class="rk-gap-axis" aria-hidden="true"><span></span><span class="rk-gap-ticks"><span>#1</span>{% for n in range(10, gap_axis + 1, 10) %}<span style="left: {{ '%.2f'|format(100 * (n - 1) / (gap_axis - 1)) }}%">#{{ n }}</span>{% endfor %}</span><span></span></div>
-    <p class="rk-note">Savant Net rank as of this poll: ratings through the games the voters had seen. Only gaps of five spots or more are shown.</p>
+    </ol>
 </section>
 {% endif %}
 

@@ -425,3 +425,47 @@ def portal_weeks(rows, year, total):
     month, in_month = months.most_common(1)[0]
     return {'svg': ''.join(o), 'peak_n': peak[1], 'peak_week': peak[0].strftime('%b %-d'),
             'month': month, 'month_pct': round(in_month / total * 100)}
+
+
+# ── AP poll: the season so far (/rankings) ──────────────────────────────────
+def rank_river(polls, by_poll, labels, current):
+    """Every team ranked in any poll up to the selected one, poll by poll.
+
+    polls: ordered poll keys; by_poll: {poll key: {team: rank}}; labels: one
+    axis label per poll; current: (team, rank, colour, logo) for the selected
+    poll. Returns {'svg', 'labels'} or None with fewer than two polls. The
+    current top 10 draw in team colour; a team out of the poll sits on the
+    "Out" line, so a drop shows as a line falling off the chart.
+    """
+    if len(polls) < 2:
+        return None
+    W, H, L, R, T, B, cap = 1180, 640, 40, 210, 20, 40, 26
+    n = len(polls)
+    X = lambda i: L + i / (n - 1) * (W - L - R)
+    Y = lambda rk: T + (min(rk, cap) - 1) / (cap - 1) * (H - T - B)
+    cur = {t: (rk, col) for t, rk, col, _ in current}
+    teams = {t for p in polls for t in by_poll.get(p, {})}
+    o = [f'<svg class="xl-svg" viewBox="0 0 {W} {H}" role="img" aria-label="AP rank of every ranked team across the season&#39;s polls. Lines fall to the bottom when a team drops out.">']
+    for rk in (1, 5, 10, 15, 20, 25):
+        o.append(f'<line x1="{L}" x2="{W-R}" y1="{Y(rk):.1f}" y2="{Y(rk):.1f}" stroke="rgba(255,255,255,{.12 if rk in (1, 25) else .05})"></line>'
+                 f'<text x="{L-10}" y="{Y(rk)+4:.1f}" fill="#949a9f" font-size="12" text-anchor="end">{rk}</text>')
+    o.append(f'<text x="{L-10}" y="{Y(cap)+4:.1f}" fill="#5d6268" font-size="12" text-anchor="end">Out</text>')
+    step = max(1, math.ceil(n / 9))
+    for i, lab in enumerate(labels):
+        if i % step == 0 or i == n - 1:
+            o.append(f'<text x="{X(i):.1f}" y="{H-10}" fill="#949a9f" font-size="12" text-anchor="middle">{_esc(lab)}</text>')
+    for t in sorted(teams, key=lambda t: (t in cur, -(cur.get(t, (99,))[0]))):
+        pts = ' '.join(f'{X(i):.1f},{Y(by_poll.get(p, {}).get(t, cap)):.1f}' for i, p in enumerate(polls))
+        if t in cur and cur[t][0] <= 10:
+            stroke, width = cur[t][1] or BLUE, 3
+        elif t in cur:
+            stroke, width = 'rgba(231,233,234,.35)', 1.6
+        else:
+            stroke, width = 'rgba(231,233,234,.12)', 1.6
+        o.append(f'<polyline points="{pts}" fill="none" stroke="{stroke}" stroke-width="{width}" stroke-linejoin="round" stroke-linecap="round"><title>{_esc(t)}</title></polyline>')
+    for t, (rk, col) in cur.items():
+        o.append(f'<circle cx="{X(n-1):.1f}" cy="{Y(rk):.1f}" r="{4.5 if rk <= 10 else 3.5}" fill="{(col or BLUE) if rk <= 10 else "#9aa0a6"}" stroke="#0a0b0d" stroke-width="2"></circle>')
+    o.append('</svg>')
+    labels_out = [{'team': t, 'rank': rk, 'logo': lg, 'top': rk <= 10, 'y': round(Y(rk) / H * 100, 2)}
+                  for t, rk, _, lg in sorted(current, key=lambda c: c[1])]
+    return {'svg': ''.join(o), 'labels': labels_out, 'left': round((W - R + 12) / W * 100, 2)}

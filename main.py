@@ -7356,8 +7356,8 @@ def rankings():
         return 'Preseason' if wk == 1 else f'Week {wk}'
 
     conn = get_db()
-    teams, others, dropped, gaps, gap_axis = [], [], [], [], 30
-    history, prev_poll, other_rows = {}, {}, []
+    teams, others, dropped = [], [], []
+    history, prev_poll, other_rows, river, streak = {}, {}, [], None, 0
     sel_week = sel_type = None
     try:
         cursor = conn.cursor()
@@ -7401,10 +7401,10 @@ def rankings():
             ''', {'season': season, 'wk': sel_week, 'stype': sel_type, 'post': is_post})
             rows = cursor.fetchall()
 
-            # Rank in each of the last five polls up to this one, for the
-            # sparklines, and the poll before this one for "dropped out".
+            # Rank in every poll up to this one, for the row sparklines and the
+            # season river, and the poll before this one for "dropped out".
             upto = polls[:polls.index(chosen) + 1]
-            recent = upto[-5:]
+            recent = upto
             cursor.execute('''SELECT team, week, season_type, rank FROM ap_rankings
                               WHERE season = %s''', (season,))
             by_poll = {}
@@ -7412,6 +7412,15 @@ def rankings():
                 by_poll.setdefault((wk, st), {})[team] = rk
             history = {r[1]: [by_poll.get(p, {}).get(r[1]) for p in recent] for r in rows}
             prev_poll = by_poll.get(upto[-2], {}) if len(upto) > 1 else {}
+            # How many polls in a row this No. 1 has held the spot.
+            if rows:
+                for p in reversed(upto):
+                    if by_poll.get(p, {}).get(rows[0][1]) != 1:
+                        break
+                    streak += 1
+            river = landscape.rank_river(
+                upto, by_poll, [poll_label(wk, st) for wk, st in upto],
+                [(r[1], r[0], r[7] if (r[7] or '').startswith('#') else None, r[13] or r[5]) for r in rows])
 
             # Savant Net rank AS OF this poll. savant_weekly week N holds ratings
             # through week N's games, and poll week W reflects games through
@@ -7481,27 +7490,14 @@ def rankings():
     listed = {o['team'] for o in others}
     dropped = sorted(((t, rk) for t, rk in fell.items() if t not in listed), key=lambda x: x[1])
 
-    # Where the poll and the numbers disagree: the six biggest gaps of five or
-    # more spots between AP rank and Savant rank.
-    rated = [t for t in teams if t['svr']]
-    big = sorted((t for t in rated if abs(t['svr'] - t['rank']) >= 5),
-                 key=lambda t: (-abs(t['svr'] - t['rank']), t['rank']))[:6]
-    if big:
-        gap_axis = max(30, -(-max(t['svr'] for t in big) // 10) * 10)
-        for t in big:
-            gaps.append({'team': t['team'], 'ap': t['rank'], 'svr': t['svr'],
-                         'ap_x': 100 * (t['rank'] - 1) / (gap_axis - 1),
-                         'svr_x': 100 * (t['svr'] - 1) / (gap_axis - 1)})
-
     poll_options = [{'value': f'{st}-{wk}', 'label': poll_label(wk, st),
                      'selected': (wk == sel_week and st == sel_type)} for wk, st in polls]
     idx = next((i for i, p in enumerate(poll_options) if p['selected']), None)
     prev_opt = poll_options[idx - 1] if idx else None
     next_opt = poll_options[idx + 1] if idx is not None and idx + 1 < len(poll_options) else None
-    half = (len(teams) - 5 + 1) // 2 if len(teams) > 5 else 0
-    return render_template('rankings.html', teams=teams,
-                           top=teams[:5], cols=[teams[5:5 + half], teams[5 + half:]],
-                           others=others, dropped=dropped, gaps=gaps, gap_axis=gap_axis,
+    return render_template('rankings.html', teams=teams, river=river, streak=streak,
+                           n_polls=len(poll_options),
+                           others=others, dropped=dropped,
                            poll_options=poll_options, prev_opt=prev_opt, next_opt=next_opt,
                            sel_label=poll_label(sel_week, sel_type) if sel_week else None,
                            sel_is_final=(sel_type == 'postseason'),
