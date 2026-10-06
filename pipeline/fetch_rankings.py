@@ -1,4 +1,7 @@
 """Fetch AP Top 25 polls into ap_rankings — EVERY weekly poll, not just the final.
+Also stores the CFP selection committee's weekly top 25 in cfp_rankings (same
+CFBD response, no extra call); the bracket projection ranks by it once the
+committee starts publishing in November.
 
 CFBD's get_rankings(year) returns one entry per ranking week: the regular-season
 polls (week 1 = preseason, then weekly) plus the postseason final. We store all
@@ -76,7 +79,43 @@ cursor.execute('''
         PRIMARY KEY (season, season_type, week, team)
     )
 ''')
+# The committee's weekly top 25 (first release early November, final on
+# selection day). CFBD only — it carries the poll in the same response as the AP.
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS cfp_rankings (
+        season INTEGER NOT NULL,
+        week   INTEGER NOT NULL,
+        team   TEXT    NOT NULL,
+        rank   INTEGER NOT NULL,
+        PRIMARY KEY (season, week, team)
+    )
+''')
 conn.commit()
+
+
+def committee_rows(season, rankings):
+    """cfp_rankings rows for every committee release CFBD holds for a season."""
+    return [(season, wd.week, r.school, r.rank)
+            for wd in rankings for poll in wd.polls
+            if poll.poll == 'Playoff Committee Rankings'
+            for r in poll.ranks]
+
+
+def write_committee(cursor, season, rankings):
+    """Replace the season's committee rows when they changed; True if written.
+    An empty response writes nothing, so an outage never blanks a ranking."""
+    wanted = committee_rows(season, rankings)
+    if not wanted:
+        return False
+    cursor.execute('SELECT season, week, team, rank FROM cfp_rankings WHERE season = %s', (season,))
+    if set(wanted) == set(cursor.fetchall()):
+        return False
+    cursor.execute('DELETE FROM cfp_rankings WHERE season = %s', (season,))
+    cursor.executemany('INSERT INTO cfp_rankings (season, week, team, rank) VALUES (%s, %s, %s, %s)', wanted)
+    conn.commit()
+    print(f"{season}: committee rankings UPDATED — {len(wanted)} rows "
+          f"(latest week {max(r[1] for r in wanted)})", flush=True)
+    return True
 
 
 def ap_polls(rankings):
@@ -215,6 +254,8 @@ with cfbd.ApiClient(configuration) as api_client:
                                    rankings_api.get_rankings,
                                    year=season, attempts=3)
         polls = ap_polls(rankings)
+        if write_committee(cursor, season, rankings) and season not in changed_seasons:
+            changed_seasons.append(season)
 
         # CFBD can lag the poll's release by days. Fill only the weeks it has
         # nothing for; see espn_rankings for which ESPN endpoint to trust.

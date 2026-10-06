@@ -85,7 +85,7 @@
       </summary>
       <div class="bk-proj-note">
         <p class="bk-proj-lede">
-            Nobody has been seeded yet. This is the field the current AP poll and results would
+            Nobody has been seeded yet. This is the field the {{ 'committee’s latest rankings' if projection[0].poll == 'CFP' else 'current AP poll' }} and results would
             produce under the selection committee's 2026 protocol: the ACC, Big Ten, Big 12 and SEC
             champions get automatic bids, as does the highest-ranked team from the other six
             conferences, Notre Dame is in if it is ranked in the top 12, and the next highest-ranked
@@ -100,16 +100,17 @@
                 <span class="bk-proj-seed">{{ e.seed }}</span>
                 <span class="bk-proj-why">
                     <a class="bk-proj-team" href="{{ team_url(e.team, season) }}">{{ e.team }}</a>
-                    <span class="bk-proj-basis">{{ e.basis }} · {{ e.record }}{% if e.ranked %} · AP No. {{ e.ap_rank }}{% else %} · unranked{% endif %}</span>
+                    <span class="bk-proj-basis">{{ e.basis }} · {{ e.record }}{% if e.ranked %} · {{ e.poll }} No. {{ e.rank }}{% else %} · unranked{% endif %}</span>
                 </span>
             </li>
             {% endfor %}
         </ul>
         <p class="bk-proj-caveat">
             Until a title game is played, a conference's projected champion is the best-ranked
-            team among those with the fewest conference losses. The AP poll stands in for the
-            committee's ranking, which only starts in November; unranked teams are ordered by
-            record, then SP+, then the Savant rating.
+            team among those with the fewest conference losses. {% if projection[0].poll == 'CFP' %}Teams are
+            ordered by the committee's latest top 25{% else %}The AP poll stands in for the
+            committee's ranking until its first release in early November{% endif %}; unranked teams are
+            ordered by record, then SP+, then the Savant rating.
         </p>
       </div>
     </details>
@@ -184,7 +185,7 @@
     <section class="bkr-panel is-open" id="bkPanel" aria-label="{{ 'Projected field' if projection else 'Title still to be decided' }}">
       <span class="bkr-panel-k">{{ 'Projected field' if projection else 'Still to be decided' }}</span>
       <span class="bkr-panel-name">Title TBD</span>
-      <span class="bkr-panel-sub">{% if projection %}Seeded from the current AP poll.{% endif %}{% if not four_team %} Seeds 1–4 skip the first round.{% endif %}</span>
+      <span class="bkr-panel-sub">{% if projection %}Seeded from the {{ 'committee’s latest rankings' if projection[0].poll == 'CFP' else 'current AP poll' }}.{% endif %}{% if not four_team %} Seeds 1–4 skip the first round.{% endif %}</span>
       {% if not four_team %}
       <ol class="bkr-run">
         {% for t in (cfp_teams or [])|selectattr('seed', 'le', 4) %}

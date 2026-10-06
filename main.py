@@ -693,6 +693,25 @@ def get_ap_rankings(cursor, season=CURRENT_SEASON):
     return dict(hit)
 
 
+def get_committee_rankings(cursor, season):
+    """The CFP selection committee's LATEST top 25 for a season as {team: rank},
+    or {} before its first release (early November) or on a fresh DB without
+    cfp_rankings. Cached 10 minutes, like the AP poll it sits beside."""
+    key = f'cfp_latest:{season}'
+    hit = data_cache.get(key)
+    if hit is None:
+        try:
+            cursor.execute('''SELECT team, rank FROM cfp_rankings WHERE season = %s
+                                AND week = (SELECT MAX(week) FROM cfp_rankings WHERE season = %s)''',
+                           (season, season))
+            hit = {t: r for t, r in cursor.fetchall()}
+        except Exception:
+            cursor.connection.rollback()
+            hit = {}
+        data_cache.set(key, hit, timeout=600)
+    return dict(hit)
+
+
 def get_ap_week_map(cursor, season):
     """Every weekly AP poll for a season, for as-of-game-week lookups.
     Returns (regular, final): regular = {ranking_week: {team: rank}},
@@ -11887,14 +11906,17 @@ def _project_cfp_field(cursor, season):
         fewest conference losses. "Highest-ranked team" alone handed the
         Big 12 to a team that had already lost two league games.
 
-    The AP poll stands in for the committee's ranking (which only exists from
-    November). Unranked teams are ordered by resume: fewer losses first, then
-    SP+, then the site's Savant rating.
+    The ranking is the committee's latest top 25 once it has published one
+    (from early November); before that the AP poll stands in. Unranked teams
+    are ordered by resume: fewer losses first, then SP+, then the site's
+    Savant rating.
 
     Returns (seeds, entries): seeds is {team: seed} in the shape the bracket
     builder consumes; entries carries the reasoning per team.
     """
-    ap = get_ap_rankings(cursor, season)
+    ap, poll = get_committee_rankings(cursor, season), 'CFP'
+    if not ap:
+        ap, poll = get_ap_rankings(cursor, season), 'AP'
     if not ap:
         return {}, []
 
@@ -11947,7 +11969,7 @@ def _project_cfp_field(cursor, season):
         taken.add(team)
         r = rows.get(team, {})
         entries.append({'team': team, 'conference': r.get('conf'),
-                        'ap_rank': ap.get(team), 'basis': basis, 'auto': auto,
+                        'rank': ap.get(team), 'poll': poll, 'basis': basis, 'auto': auto,
                         'ranked': team in ap,
                         'record': f"{r.get('wins', 0)}-{r.get('losses', 0)}"})
 
