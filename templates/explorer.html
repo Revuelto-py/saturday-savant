@@ -8,349 +8,484 @@
 {% block og_title %}{% if scope == 'matchup' %}{% if mu_a and mu_b %}{{ mu_a }} vs {{ mu_b }} — the series{% else %}Head-to-Head{% endif %}{% else %}Stat Explorer{% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{% if scope == 'matchup' %}{% if mu_a and mu_b %}Every {{ mu_a }}–{{ mu_b }} meeting since {{ mu_earliest }}: the series record, the current streak, and each game's score in order.{% else %}Pick any two college football teams and get the head-to-head series — who leads, the current streak, and every meeting in order, {{ mu_earliest }} onward.{% endif %}{% else %}Plot any two stats against each other — teams as logos, players as headshots, with trend lines and a fitted trend. Savant ratings, SP+, EPA, and more, 2016–{{ season }}.{% endif %}{% endblock %}
 {% block content %}
-<div class="page-wrapper" style="padding-top:32px">
+{% set chev %}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>{% endset %}
+{% set swap_icon %}<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>{% endset %}
+{# Questions a reader arrives with, each one a pair of axes. Rendered as buttons
+   that set both selects at once; the selects stay for everything else. #}
+{% set team_questions = [
+    ('Best offense vs best defense', 'off_savant', 'def_savant'),
+    ('Who is outplaying their talent?', 'talent', 'net_savant'),
+    ('Explosive or efficient?', 'off_sr', 'off_expl'),
+    ('Who wins the havoc battle?', 'def_havoc', 'def_ppa'),
+] %}
+{% set player_questions = {
+    'QB': [('Productive or efficient?', 'pass_yds', 'epa'), ('Who protects the ball?', 'pass_td', 'interceptions'),
+           ('Accurate or aggressive?', 'comp_pct', 'ypa'), ('Dual threats', 'pass_yds', 'rush_yds')],
+    'RB': [('Volume or efficiency?', 'carries', 'ypc'), ('Who finds the end zone?', 'rush_yds', 'rush_td'),
+           ('Backs in the passing game', 'rush_yds', 'rec_yds'), ('Value per play', 'rush_yds', 'epa')],
+    'WR': [('Volume or big plays?', 'receptions', 'ypr'), ('Yards and scores', 'rec_yds', 'rec_td'), ('Value per play', 'rec_yds', 'epa')],
+    'TE': [('Volume or big plays?', 'receptions', 'ypr'), ('Yards and scores', 'rec_yds', 'rec_td'), ('Value per play', 'rec_yds', 'epa')],
+    'DL': [('Who lives in the backfield?', 'tfl', 'sacks'), ('Tackles vs plays behind the line', 'tackles', 'tfl')],
+    'LB': [('Who lives in the backfield?', 'tfl', 'sacks'), ('Tackles vs plays behind the line', 'tackles', 'tfl')],
+    'DB': [('Ball hawks', 'pd', 'interceptions'), ('Run support', 'tackles', 'tfl')],
+} %}
+{% set rivalries = [('Ohio State', 'Michigan'), ('Alabama', 'Auburn'), ('Texas', 'Oklahoma'), ('Georgia', 'Florida'), ('USC', 'Notre Dame')] %}
 
-<div class="xp-head">
+<div class="page-wrapper xe-page">
+
+<header class="xe-head">
     <div>
         {% if scope == 'matchup' %}
-        <h1 class="xp-title">Head-to-Head</h1>
-        <p class="xp-sub">Pick two teams and get the series: who leads, the current streak, and every meeting in order. No counting.</p>
+        <h1 class="xe-h1">Head-to-Head</h1>
+        <p class="xe-sub">Pick any two teams and get the series: who leads, the current streak, and every meeting in order.</p>
         {% else %}
-        <h1 class="xp-title">{{ season }} {{ 'Player' if scope == 'player' else 'Team' }} Landscape</h1>
-        <p class="xp-sub">Pick any two stats — {% if scope == 'player' %}the national leaders at a position plot as their headshot{% else %}every FBS team plots as its logo{% endif %}. Axes always point the good way: up and right is better, whatever the stat.</p>
+        <h1 class="xe-h1">Stat Explorer</h1>
+        <p class="xe-sub">Every FBS {{ 'player at a position' if scope == 'player' else 'team' }}, plotted. Pick any two stats, or start from a question. Up and to the right is always better.</p>
         {% endif %}
     </div>
-    {# A series spans seasons, so the season picker has nothing to act on in
-       matchup mode — the window control below is the time control there. #}
-    {% if scope != 'matchup' and available_seasons and available_seasons|length > 1 %}
-    <select class="lb-select season-select" id="xp-season" aria-label="Season">
-        {% for s in available_seasons %}
-        <option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>
-        {% endfor %}
-    </select>
-    {% endif %}
-</div>
-
-<!-- Team | Player scope -->
-<div class="lb-mode-toggle" style="margin-bottom: var(--s4)">
-    <a class="lb-mode-btn {{ 'active' if scope == 'team' }}" href="/explorer?scope=team&season={{ season }}">Teams</a>
-    <a class="lb-mode-btn {{ 'active' if scope == 'player' }}" href="/explorer?scope=player&season={{ season }}">Players</a>
-    <a class="lb-mode-btn {{ 'active' if scope == 'matchup' }}" href="/explorer?scope=matchup">Matchups</a>
-</div>
+    <div class="xe-head-ctl">
+        <nav class="xe-seg" aria-label="What to plot">
+            <a href="/explorer?scope=team&season={{ season }}" {{ 'aria-current=page' if scope == 'team' }}>Teams</a>
+            <a href="/explorer?scope=player&season={{ season }}" {{ 'aria-current=page' if scope == 'player' }}>Players</a>
+            <a href="/explorer?scope=matchup" {{ 'aria-current=page' if scope == 'matchup' }}>Matchups</a>
+        </nav>
+        {# A series spans seasons, so the season picker has nothing to act on in
+           matchup mode — the window control is the time control there. #}
+        {% if scope != 'matchup' and available_seasons and available_seasons|length > 1 %}
+        <span class="xe-select-wrap">
+            <select class="xe-select" id="xp-season" aria-label="Season">
+                {% for s in available_seasons %}<option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>{% endfor %}
+            </select>{{ chev }}
+        </span>
+        {% endif %}
+    </div>
+</header>
 
 {% if scope == 'team' %}
 <!-- ===================== TEAM SCATTER ===================== -->
-<div class="xp-controls">
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-x">X-Axis</label>
-        <select id="xp-x" class="lb-select"></select>
-    </div>
-    <button class="xp-swap" id="xp-swap" title="Swap axes" aria-label="Swap axes">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
-        </svg><span class="xp-swap-text">Swap axes</span>
-    </button>
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-y">Y-Axis</label>
-        <select id="xp-y" class="lb-select"></select>
-    </div>
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-size">Bubble Size</label>
-        <select id="xp-size" class="lb-select">
-            <option value="">None (fixed)</option>
-            <option value="sos">Strength of Schedule</option>
-            <option value="scoring_opps">Scoring Opportunities</option>
-            <option value="plays">Total Plays (Off)</option>
-        </select>
-    </div>
-    <div class="xp-hint">Hover a logo for exact values · click to open the team page</div>
+<div class="xe-qs" role="group" aria-label="Start from a question">
+    {% for label, x, y in team_questions %}
+    <button type="button" class="xe-chip" data-x="{{ x }}" data-y="{{ y }}" aria-pressed="false">{{ label }}</button>
+    {% endfor %}
+    <a class="xe-chip" href="#run-pass">Run game vs pass game</a>
 </div>
 
-<div class="xp-card">
-    <div class="xp-plot-wrap">
+<section class="xe-card" aria-labelledby="xe-plot-title">
+    <div class="xe-ctl">
+        <div class="xe-ctl-g">
+            <label class="xe-ctl-l" for="xp-x">Across</label>
+            <span class="xe-select-wrap"><select id="xp-x" class="xe-select"></select>{{ chev }}</span>
+        </div>
+        <div class="xe-ctl-g">
+            <label class="xe-ctl-l" for="xp-y">Up</label>
+            <span class="xe-select-wrap"><select id="xp-y" class="xe-select"></select>{{ chev }}</span>
+        </div>
+        <button type="button" class="xe-swap" id="xp-swap">{{ swap_icon }}Swap axes</button>
+        <div class="xe-ctl-g">
+            <label class="xe-ctl-l" for="xp-size">Logo size</label>
+            <span class="xe-select-wrap"><select id="xp-size" class="xe-select">
+                <option value="">Same for every team</option>
+                <option value="sos">Strength of schedule</option>
+                <option value="scoring_opps">Scoring opportunities</option>
+                <option value="plays">Total plays (offense)</option>
+            </select>{{ chev }}</span>
+        </div>
+        <div class="xe-ctl-g">
+            <span class="xe-ctl-l" id="xe-hl-label">Highlight a conference</span>
+            <div class="xe-chips" role="group" aria-labelledby="xe-hl-label">
+                {% for v, l in [('', 'All'), ('SEC', 'SEC'), ('Big Ten', 'Big Ten'), ('Big 12', 'Big 12'), ('ACC', 'ACC'), ('g5', 'Group of 5')] %}
+                <button type="button" class="xe-chip xe-chip-sm" data-hl="{{ v }}" aria-pressed="{{ 'true' if not v else 'false' }}">{{ l }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        <p class="xe-note">Hover a logo for exact values; click it to open the team.{% if talent_season and talent_season != season %} Roster talent is the {{ talent_season }} composite, the latest published.{% endif %}</p>
+    </div>
+    <div class="xe-plot">
+        <div class="xe-plot-head">
+            <h2 class="xe-plot-t" id="xe-plot-title">Best offense vs best defense</h2>
+            <span class="xe-plot-n" id="xp-count">{{ teams_data|length }} FBS teams, {{ season }}</span>
+        </div>
+        <div class="xp-plot-wrap">
             <div id="xp-plot" class="xp-plot"></div>
-            {# Shown until Plotly has drawn. The chart is ~200 headshots and a
-               library load, so without this the page holds an empty box for a
-               beat and then snaps. #}
+            {# Shown until Plotly has drawn. #}
             <div id="xp-skel" class="xp-skel" aria-hidden="true">
                 <span class="xp-skel-axis xp-skel-y skel"></span>
                 <span class="xp-skel-axis xp-skel-x skel"></span>
-                <span class="xp-skel-cloud">
-                    {% for _ in range(22) %}<i class="skel"></i>{% endfor %}
-                </span>
+                <span class="xp-skel-cloud">{% for _ in range(22) %}<i class="skel"></i>{% endfor %}</span>
             </div>
         </div>
-    <div class="xp-legend">
-        <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
-        <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
-        <span class="xp-legend-note" id="xp-count">{{ teams_data|length }} teams · {{ season }}</span>
+        <div class="xp-legend">
+            <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
+            <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
+        </div>
     </div>
-</div>
+</section>
 
 <!-- ===================== RUN vs PASS IDENTITY ===================== -->
-{# A second chart, deliberately not another free-form scatter: the landscape
-   above carries no play-type split at all, and the question this answers —
-   is a team's ground game or its passing game doing the work — needs the two
-   plotted against each other with the league average as the origin. #}
-<div class="sp-head">
-    <h2 class="sp-title">Run Game vs Pass Game</h2>
-    <p class="sp-sub">Every team's ground game against its passing game — or, on defence, how
-        well they stop each. The crosshair is the FBS average, so the quadrant a logo sits in is
-        the team's identity, and its distance from the diagonal is how lopsided they are.</p>
-</div>
-
-<div class="xp-controls">
-    <div class="lb-filter-group">
-        <span class="lb-filter-label" id="sp-side-label">Side of the ball</span>
-        <div class="lb-mode-toggle sp-toggle" role="group" aria-labelledby="sp-side-label">
-            <button type="button" class="lb-mode-btn active" data-side="off" aria-pressed="true">Offense</button>
-            <button type="button" class="lb-mode-btn" data-side="def" aria-pressed="false">Defense</button>
+{# Not another free-form scatter: the question — is a team's ground game or its
+   passing game doing the work — needs the two plotted against each other with
+   the league average as the origin. #}
+<section class="xe-card xe-card-split" id="run-pass" aria-labelledby="sp-title">
+    <div class="xe-ctl">
+        <h2 class="xe-ctl-h" id="sp-title">Run game vs pass game</h2>
+        <p class="xe-note xe-note-top">Every team's ground game against its passing game. The crosshair is the FBS average, so the corner a logo sits in is the team's identity.</p>
+        <div class="xe-ctl-g">
+            <span class="xe-ctl-l" id="sp-side-label">Side of the ball</span>
+            <div class="xe-chips sp-toggle" role="group" aria-labelledby="sp-side-label">
+                <button type="button" class="xe-chip xe-chip-sm" data-side="off" aria-pressed="true">Offense</button>
+                <button type="button" class="xe-chip xe-chip-sm" data-side="def" aria-pressed="false">Defense</button>
+            </div>
+        </div>
+        <div class="xe-ctl-g">
+            <label class="xe-ctl-l" for="sp-metric">Measured by</label>
+            <span class="xe-select-wrap"><select id="sp-metric" class="xe-select">
+                <option value="ppa">EPA per play</option>
+                <option value="sr">Success rate</option>
+                <option value="expl">Explosiveness</option>
+            </select>{{ chev }}</span>
+        </div>
+        <p class="xe-note">Up and right is better on both axes, defense included.</p>
+    </div>
+    <div class="xe-plot">
+        <div class="xp-plot-wrap">
+            <div id="sp-plot" class="xp-plot"></div>
+            <div id="sp-skel" class="xp-skel" aria-hidden="true">
+                <span class="xp-skel-axis xp-skel-y skel"></span>
+                <span class="xp-skel-axis xp-skel-x skel"></span>
+                <span class="xp-skel-cloud">{% for _ in range(22) %}<i class="skel"></i>{% endfor %}</span>
+            </div>
+        </div>
+        <div class="xp-legend">
+            <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
+            <span class="xp-legend-note" id="sp-note"></span>
         </div>
     </div>
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="sp-metric">Measured by</label>
-        <select id="sp-metric" class="lb-select">
-            <option value="ppa">EPA per play</option>
-            <option value="sr">Success rate</option>
-            <option value="expl">Explosiveness</option>
-        </select>
-    </div>
-    <div class="xp-hint">Up and right is better on both axes, defense included</div>
-</div>
-
-<div class="xp-card">
-    <div class="xp-plot-wrap">
-        <div id="sp-plot" class="xp-plot"></div>
-        <div id="sp-skel" class="xp-skel" aria-hidden="true">
-            <span class="xp-skel-axis xp-skel-y skel"></span>
-            <span class="xp-skel-axis xp-skel-x skel"></span>
-            <span class="xp-skel-cloud">
-                {% for _ in range(22) %}<i class="skel"></i>{% endfor %}
-            </span>
-        </div>
-    </div>
-    <div class="xp-legend">
-        <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>FBS average</span>
-        <span class="xp-legend-note" id="sp-note"></span>
-    </div>
-</div>
+</section>
 
 {% elif scope == 'player' %}
 <!-- ===================== PLAYER SCOPE ===================== -->
-<!-- Position applies to both views (defines the peer group) -->
-<div class="xp-controls" style="margin-bottom: var(--s3)">
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-pos">Position</label>
-        <select id="xp-pos" class="lb-select">
-            {% for g in player_groups %}
-            <option value="{{ g.key }}" {{ 'selected' if g.key == player_group }}>{{ g.label }}</option>
-            {% endfor %}
-        </select>
-    </div>
+{% set pq = player_questions.get(player_group, []) %}
+{% if pq %}
+<div class="xe-qs" role="group" aria-label="Start from a question">
+    {% for label, x, y in pq %}
+    <button type="button" class="xe-chip" data-x="{{ x }}" data-y="{{ y }}" aria-pressed="false">{{ label }}</button>
+    {% endfor %}
 </div>
+{% endif %}
 
-<!-- ---- Player scatter ---- -->
-<div class="xp-controls">
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-x">X-Axis</label>
-        <select id="xp-x" class="lb-select"></select>
-    </div>
-    <button class="xp-swap" id="xp-swap" title="Swap axes" aria-label="Swap axes">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>
-        </svg><span class="xp-swap-text">Swap axes</span>
-    </button>
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-y">Y-Axis</label>
-        <select id="xp-y" class="lb-select"></select>
-    </div>
-    <div class="lb-filter-group">
-        <label class="lb-filter-label" for="xp-top">Show</label>
-        <select id="xp-top" class="lb-select">
-            {% for n in player_top_opts %}
-            <option value="{{ n }}" {{ 'selected' if n == player_top }}>Top {{ n }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <label class="xp-check">
-        <input type="checkbox" id="xp-qual" {{ 'checked' if qualified_only }}>
-        <span>Qualified only</span>
-    </label>
-</div>
-
-<div class="xp-card">
-    <div class="xp-plot-wrap">
-        <div id="xp-plot" class="xp-plot"></div>
-        {# Shown until Plotly has drawn. The chart is ~200 headshots and a
-           library load, so without this the page holds an empty box for a
-           beat and then snaps. #}
-        <div id="xp-skel" class="xp-skel" aria-hidden="true">
-            <span class="xp-skel-axis xp-skel-y skel"></span>
-            <span class="xp-skel-axis xp-skel-x skel"></span>
-            <span class="xp-skel-cloud">
-                {% for _ in range(22) %}<i class="skel"></i>{% endfor %}
-            </span>
+<section class="xe-card" aria-labelledby="xe-plot-title">
+    <div class="xe-ctl">
+        <div class="xe-ctl-g">
+            <span class="xe-ctl-l" id="xe-pos-label">Position</span>
+            <nav class="xe-chips" aria-labelledby="xe-pos-label">
+                {% for g in player_groups %}
+                <a class="xe-chip xe-chip-sm" href="/explorer?scope=player&pos={{ g.key }}&season={{ season }}&top={{ player_top }}&qual={{ '1' if qualified_only else '0' }}"
+                   title="{{ g.label }}" {{ 'aria-current=page' if g.key == player_group }}>{{ g.key }}</a>
+                {% endfor %}
+            </nav>
         </div>
-        {# The hovered player, drawn large. An HTML element rather than a
-           Plotly layout image: scaling this is a compositor transform, so
-           it can ease in at 60fps, where a relayout per mousemove snapped
-           from nothing to full size and re-laid out the whole figure. #}
-        <img id="xp-hl" class="xp-hl" alt="" aria-hidden="true">
+        <div class="xe-ctl-g">
+            <label class="xe-ctl-l" for="xp-x">Across</label>
+            <span class="xe-select-wrap"><select id="xp-x" class="xe-select"></select>{{ chev }}</span>
+        </div>
+        <div class="xe-ctl-g">
+            <label class="xe-ctl-l" for="xp-y">Up</label>
+            <span class="xe-select-wrap"><select id="xp-y" class="xe-select"></select>{{ chev }}</span>
+        </div>
+        <button type="button" class="xe-swap" id="xp-swap">{{ swap_icon }}Swap axes</button>
+        <div class="xe-ctl-g">
+            <span class="xe-ctl-l" id="xe-top-label">Show the top, by {{ player_rank_stat }}</span>
+            <nav class="xe-chips" aria-labelledby="xe-top-label">
+                {% for n in player_top_opts %}
+                <a class="xe-chip xe-chip-sm" href="/explorer?scope=player&pos={{ player_group }}&season={{ season }}&top={{ n }}&qual={{ '1' if qualified_only else '0' }}"
+                   {{ 'aria-current=page' if n == player_top }}>{{ n }}</a>
+                {% endfor %}
+            </nav>
+        </div>
+        <label class="xe-check">
+            <input type="checkbox" id="xp-qual" {{ 'checked' if qualified_only }}>
+            <span>Qualified players only</span>
+        </label>
+        <p class="xe-note">Hover a player to enlarge them; click to open their page.</p>
     </div>
-    <div class="xp-legend">
-        <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
-        <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>Group average</span>
-        <span class="xp-legend-note" id="xp-count">Top {{ players_data|length }} nationally by {{ player_rank_stat }} · {{ season }}</span>
+    <div class="xe-plot">
+        <div class="xe-plot-head">
+            <h2 class="xe-plot-t" id="xe-plot-title">{{ (player_groups|selectattr('key', 'equalto', player_group)|first).label }}</h2>
+            <span class="xe-plot-n" id="xp-count">Top {{ players_data|length }} nationally by {{ player_rank_stat }}, {{ season }}</span>
+        </div>
+        <div class="xp-plot-wrap">
+            <div id="xp-plot" class="xp-plot"></div>
+            <div id="xp-skel" class="xp-skel" aria-hidden="true">
+                <span class="xp-skel-axis xp-skel-y skel"></span>
+                <span class="xp-skel-axis xp-skel-x skel"></span>
+                <span class="xp-skel-cloud">{% for _ in range(22) %}<i class="skel"></i>{% endfor %}</span>
+            </div>
+            {# The hovered player, drawn large. An HTML element rather than a
+               Plotly layout image: scaling this is a compositor transform, so
+               it can ease in at 60fps. #}
+            <img id="xp-hl" class="xp-hl" alt="" aria-hidden="true">
+        </div>
+        <div class="xp-legend">
+            <span class="xp-legend-item"><span class="xp-key xp-key--trend"></span>Trend line</span>
+            <span class="xp-legend-item"><span class="xp-key xp-key--avg"></span>Group average</span>
+        </div>
     </div>
-</div>
+</section>
 
 {% elif scope == 'matchup' %}
 <!-- ===================== HEAD-TO-HEAD ===================== -->
 {# Server-rendered off ?a=/?b=/?win=, not fetched: a matchup is the kind of
-   thing you send to someone, so it needs to live at a URL. It also means the
-   result survives a reload and the back button works. #}
-<div class="mu-pickers">
-    {% for slot, picked, logo in [('a', mu_a, mu_a_logo|default(none)), ('b', mu_b, mu_b_logo|default(none))] %}
-    <div class="mu-pick" data-slot="{{ slot }}">
-        <label class="mu-pick-label" for="mu-input-{{ slot }}">{{ 'First team' if slot == 'a' else 'Second team' }}</label>
-        {% if picked %}
-        <div class="mu-slot">
-            {% if logo %}<img src="{{ logo }}" alt="" class="mu-slot-logo">{% endif %}
-            <span class="mu-slot-name">{{ picked }}</span>
-            <button type="button" class="mu-slot-x" data-clear="{{ slot }}"
-                    aria-label="Clear {{ picked }}">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-                     stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
-            </button>
+   thing you send to someone, so it needs to live at a URL. #}
+<nav class="xe-qs" aria-label="Start from a rivalry">
+    {% for ra, rb in rivalries %}
+    <a class="xe-chip" href="/explorer?scope=matchup&a={{ ra|urlencode }}&b={{ rb|urlencode }}"
+       {{ 'aria-current=page' if (mu_a == ra and mu_b == rb) }}>{{ ra }} vs {{ rb }}</a>
+    {% endfor %}
+</nav>
+
+<section class="xe-card xe-card-mu" aria-label="Head-to-head">
+    <div class="xe-ctl">
+        <div class="mu-pickers">
+            {% for slot, picked, logo in [('a', mu_a, mu_a_logo|default(none)), ('b', mu_b, mu_b_logo|default(none))] %}
+            <div class="mu-pick xe-ctl-g" data-slot="{{ slot }}">
+                <label class="xe-ctl-l" for="mu-input-{{ slot }}">{{ 'First team' if slot == 'a' else 'Second team' }}</label>
+                {% if picked %}
+                <div class="mu-slot">
+                    {% if logo %}<img src="{{ logo }}" alt="" class="mu-slot-logo">{% endif %}
+                    <span class="mu-slot-name">{{ picked }}</span>
+                    <button type="button" class="mu-slot-x" data-clear="{{ slot }}" aria-label="Clear {{ picked }}">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+                    </button>
+                </div>
+                {% else %}
+                <div class="cmp-search mu-searchbox">
+                    <span class="cmp-search-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+                    </span>
+                    <input type="text" class="cmp-search-input mu-input" id="mu-input-{{ slot }}"
+                           data-slot="{{ slot }}" placeholder="Search a team…" autocomplete="off"
+                           role="combobox" aria-expanded="false" aria-autocomplete="list"
+                           aria-controls="mu-drop-{{ slot }}">
+                    <div class="cmp-dropdown mu-drop" id="mu-drop-{{ slot }}" data-slot="{{ slot }}" role="listbox"></div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
-        {% else %}
-        <div class="cmp-search mu-searchbox">
-            <span class="cmp-search-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
-            </span>
-            <input type="text" class="cmp-search-input mu-input" id="mu-input-{{ slot }}"
-                   data-slot="{{ slot }}" placeholder="Search a team…" autocomplete="off"
-                   role="combobox" aria-expanded="false" aria-autocomplete="list"
-                   aria-controls="mu-drop-{{ slot }}">
-            <div class="cmp-dropdown mu-drop" id="mu-drop-{{ slot }}" data-slot="{{ slot }}" role="listbox"></div>
+        {% if mu_a and mu_b %}
+        <div class="xe-ctl-g">
+            <span class="xe-ctl-l" id="mu-win-label">Window</span>
+            <nav class="xe-chips" aria-labelledby="mu-win-label">
+                <a class="xe-chip xe-chip-sm" href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win={{ window_years }}" {{ 'aria-current=page' if mu_win != 'all' }}>Last {{ window_years }} years</a>
+                <a class="xe-chip xe-chip-sm" href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win=all" {{ 'aria-current=page' if mu_win == 'all' }}>All{% if mu_older %} (+{{ mu_older }}){% endif %}</a>
+            </nav>
         </div>
         {% endif %}
-    </div>
-    {% endfor %}
-</div>
-
-{% if mu_error %}
-<p class="mu-error" role="alert">{{ mu_error }}</p>
-{% endif %}
-
-{% if mu_series and mu_games %}
-{% set s = mu_series %}
-{% set pair = forecast_pair(mu_a_color | team_hex('#1c9cf0'), mu_b_color | team_hex('#9aa0a6')) %}
-<div class="mu-result">
-
-    <h2 class="mu-verdict">
-        {% if s.leader %}<strong>{{ s.leader }}</strong> leads
-            {{ s.a_wins if s.leader == mu_a else s.b_wins }}–{{ s.b_wins if s.leader == mu_a else s.a_wins }}{% if s.ties %}–{{ s.ties }}{% endif %}
-        {% else %}Series tied {{ s.a_wins }}–{{ s.b_wins }}{% if s.ties %}–{{ s.ties }}{% endif %}{% endif %}
-        <span class="mu-verdict-window">{{ mu_window_label }}</span>
-    </h2>
-
-    <div class="mu-bar-row">
-        <span class="mu-bar-side">
-            <span class="mu-bar-team">{{ mu_a }}</span>
-            <span class="mu-bar-wins">{{ s.a_wins }}</span>
-        </span>
-        <span class="fc-bar mu-bar" role="img"
-              aria-label="{{ mu_a }} {{ s.a_wins }} wins, {{ mu_b }} {{ s.b_wins }} wins in {{ s.meetings }} meetings">
-            <span class="fc-bar-fill" style="background:linear-gradient(90deg,
-                {{ pair[0] }} 0%, {{ pair[0] }} calc({{ s.a_share }}% - 1px),
-                transparent calc({{ s.a_share }}% - 1px), transparent calc({{ s.a_share }}% + 1px),
-                {{ pair[1] }} calc({{ s.a_share }}% + 1px), {{ pair[1] }} 100%)"></span>
-        </span>
-        <span class="mu-bar-side mu-bar-side-b">
-            <span class="mu-bar-wins">{{ s.b_wins }}</span>
-            <span class="mu-bar-team">{{ mu_b }}</span>
-        </span>
+        <p class="xe-note">Any two FBS teams work, rivals or not. Game coverage starts in {{ mu_earliest }}.</p>
     </div>
 
-    <div class="mu-controls">
-        <div class="mu-window" role="group" aria-label="Time window">
-            <a class="mu-win-btn {{ 'active' if mu_win != 'all' }}"
-               href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win={{ window_years }}">Last {{ window_years }} years</a>
-            <a class="mu-win-btn {{ 'active' if mu_win == 'all' }}"
-               href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win=all">All{% if mu_older %} (+{{ mu_older }}){% endif %}</a>
+    <div class="xe-plot xe-mu">
+    {% if mu_error %}
+        <p class="mu-error" role="alert">{{ mu_error }}</p>
+    {% endif %}
+
+    {% if mu_series and mu_games %}
+    {% set s = mu_series %}
+    {% set pair = forecast_pair(mu_a_color | team_hex('#1c9cf0'), mu_b_color | team_hex('#9aa0a6')) %}
+        <div class="xe-mu-head">
+            <h2 class="xe-mu-verdict">
+                {% if s.leader %}{{ s.leader }} leads
+                    <span>{{ s.a_wins if s.leader == mu_a else s.b_wins }}–{{ s.b_wins if s.leader == mu_a else s.a_wins }}{% if s.ties %}–{{ s.ties }}{% endif %}</span>
+                {% else %}Series tied <span>{{ s.a_wins }}–{{ s.b_wins }}{% if s.ties %}–{{ s.ties }}{% endif %}</span>{% endif %}
+            </h2>
+            <span class="xe-plot-n">{{ mu_window_label }}</span>
         </div>
-        <a class="mu-full" href="/rivalry/{{ mu_a|urlencode }}/{{ mu_b|urlencode }}">Full series page &rarr;</a>
+
+        <div class="xe-mu-bar" role="img" aria-label="{{ mu_a }} {{ s.a_wins }} wins, {{ mu_b }} {{ s.b_wins }} wins in {{ s.meetings }} meetings">
+            <span class="xe-mu-side" style="flex: {{ [s.a_wins, 0.4]|max }}; background: {{ pair[0] }}">
+                {% if mu_a_logo %}<img src="{{ mu_a_logo }}" alt="" width="22" height="22">{% endif %}<span class="xe-mu-name">{{ mu_a }}</span> <b>{{ s.a_wins }}</b>
+            </span>
+            <span class="xe-mu-side is-b" style="flex: {{ [s.b_wins, 0.4]|max }}; background: {{ pair[1] }}">
+                <b>{{ s.b_wins }}</b> <span class="xe-mu-name">{{ mu_b }}</span>{% if mu_b_logo %}<img src="{{ mu_b_logo }}" alt="" width="22" height="22">{% endif %}
+            </span>
+        </div>
+
+        {% if mu_stats %}
+        <ul class="xe-mu-stats" role="list">
+            <li><span>Meetings</span><b class="is-num">{{ s.meetings }}</b></li>
+            <li><span>Current streak</span><b>{% if s.streak_team %}{{ s.streak_team }} ×{{ s.streak }}{% else %}—{% endif %}</b></li>
+            <li><span>Average margin</span><b class="is-num">{{ mu_stats.avg_margin }}</b></li>
+            <li><span>Average combined</span><b class="is-num">{{ mu_stats.avg_total }}</b></li>
+            <li><span>Widest</span><b>{{ mu_stats.biggest.winner }} by {{ mu_stats.biggest.margin }}</b></li>
+            <li><span>Closest</span><b>{{ mu_stats.closest.winner or 'Tie' }} by {{ mu_stats.closest.margin }}</b></li>
+        </ul>
+        {% endif %}
+
+        {# Every meeting as a bar: up when the first team won, down when the
+           second did, height = margin. The list below has the scores. #}
+        {% set games_asc = mu_games|reverse|list %}
+        {% set n = games_asc|length %}
+        {% set ns = namespace(m=7) %}{% for g in games_asc %}{% set ns.m = [ns.m, (g.a_pts - g.b_pts)|abs]|max %}{% endfor %}
+        {% set W, H, L, R, T, B = 760, 240, 40, 12, 22, 30 %}
+        {% set bw = (W - L - R) / n %}
+        {% set mid = T + (H - T - B) / 2 %}
+        {% set k = ((H - T - B) / 2 - 14) / ns.m %}
+        <p class="xe-mu-sub">Every meeting, by margin</p>
+        <svg class="xl-svg" viewBox="0 0 {{ W }} {{ H }}" role="img" aria-label="Margin of every {{ mu_a }}–{{ mu_b }} meeting, oldest first: bars above the line are {{ mu_a }} wins, below are {{ mu_b }} wins.">
+            <line x1="{{ L }}" x2="{{ W - R }}" y1="{{ mid }}" y2="{{ mid }}" stroke="rgba(255,255,255,.25)"></line>
+            <text x="{{ L }}" y="{{ T - 8 }}" fill="#9aa0a6" font-size="12">{{ mu_a }} won</text>
+            <text x="{{ L }}" y="{{ H - 6 }}" fill="#9aa0a6" font-size="12">{{ mu_b }} won</text>
+            {% for g in games_asc %}
+            {% set m = g.a_pts - g.b_pts %}
+            {% set x = L + loop.index0 * bw + bw * 0.2 %}
+            {% set w = bw * 0.6 %}
+            {% set h = [(m|abs) * k, 2]|max %}
+            <rect x="{{ x }}" y="{{ mid - h if m > 0 else mid }}" width="{{ w }}" height="{{ h }}" rx="3" fill="{{ pair[0] if m > 0 else (pair[1] if m < 0 else '#9aa0a6') }}"><title>{{ g.season }}: {{ mu_a }} {{ g.a_pts }}, {{ mu_b }} {{ g.b_pts }}</title></rect>
+            <text x="{{ x + w / 2 }}" y="{{ (mid - h - 5) if m > 0 else (mid + h + 13) }}" fill="#e7e9ea" font-size="11" font-weight="650" text-anchor="middle">{{ m|abs }}</text>
+            {% if n <= 16 or loop.index0 % 2 == 0 %}<text x="{{ x + w / 2 }}" y="{{ mid + (14 if m > 0 else -6) }}" fill="#949a9f" font-size="10.5" text-anchor="middle">{{ g.season }}</text>{% endif %}
+            {% endfor %}
+        </svg>
+
+        {# The score column is "A - B" with no header, so the note says whose
+           number comes first — the W/L chip alone leaves it to inference. #}
+        <h3 class="xe-mu-sub">Every meeting, oldest first <span class="xe-plot-n">{{ mu_a }} score first</span></h3>
+        <ol class="mu-games" role="list">
+            {% for g in games_asc %}
+            <li>
+                <a class="mu-game" href="/game/{{ g.id }}">
+                    <span class="mu-when">
+                        <span class="mu-season">{{ g.season }}</span>
+                        <span class="mu-week">{{ 'Postseason' if g.season_type and 'POSTSEASON' in g.season_type|upper else 'Week %s'|format(g.week) if g.week else '' }}</span>
+                    </span>
+                    <span class="mu-score">
+                        <span class="mu-sc {{ 'is-won' if g.winner == mu_a }}">{{ g.a_pts }}</span>
+                        <span class="mu-dash">–</span>
+                        <span class="mu-sc {{ 'is-won' if g.winner == mu_b }}">{{ g.b_pts }}</span>
+                    </span>
+                    {# Text, not colour alone: the chip says W or L from A's side. #}
+                    <span class="mu-res {{ 'mu-res-w' if g.winner == mu_a else ('mu-res-l' if g.winner == mu_b else 'mu-res-t') }}">
+                        {{ 'W' if g.winner == mu_a else ('L' if g.winner == mu_b else 'T') }}
+                    </span>
+                    <span class="mu-venue">{{ 'vs' if g.a_home else 'at' }} {{ mu_b }}</span>
+                    <span class="mu-date">{{ g.date }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
+        <a class="xe-link" href="/rivalry/{{ mu_a|urlencode }}/{{ mu_b|urlencode }}">Full series page</a>
+
+    {% elif mu_a and mu_b and not mu_error %}
+        <div class="mu-empty">
+            <p class="mu-empty-lede"><strong>{{ mu_a }}</strong> and <strong>{{ mu_b }}</strong> have not met
+            {% if mu_win != 'all' %}in the last {{ window_years }} years{% else %}in the seasons we hold{% endif %}.</p>
+            {% if mu_win != 'all' and mu_older %}
+            <p class="mu-empty-sub">There {{ 'is 1 earlier meeting' if mu_older == 1 else 'are %d earlier meetings'|format(mu_older) }} on record.
+                <a href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win=all">Show all</a></p>
+            {% else %}
+            <p class="mu-empty-sub">Game coverage starts in {{ mu_earliest }}, so a series that ended before then won't appear here.</p>
+            {% endif %}
+        </div>
+    {% elif not mu_error %}
+        <div class="mu-empty">
+            <p class="mu-empty-lede">Pick two teams to see the series.</p>
+            <p class="mu-empty-sub">You get the head-to-head record over the last {{ window_years }} years, the current
+            streak, and every meeting listed in order, with scores, venue and a link to each game.</p>
+        </div>
+    {% endif %}
     </div>
-
-    {% if mu_stats %}
-    <ul class="mu-stats" role="list">
-        <li class="mu-stat"><span class="mu-stat-k">Meetings</span><span class="mu-stat-v">{{ s.meetings }}</span></li>
-        <li class="mu-stat"><span class="mu-stat-k">Current streak</span>
-            <span class="mu-stat-v">{% if s.streak_team %}{{ s.streak_team }} &times;{{ s.streak }}{% else %}—{% endif %}</span></li>
-        <li class="mu-stat"><span class="mu-stat-k">Avg margin</span><span class="mu-stat-v">{{ mu_stats.avg_margin }}</span></li>
-        <li class="mu-stat"><span class="mu-stat-k">Avg combined</span><span class="mu-stat-v">{{ mu_stats.avg_total }}</span></li>
-        <li class="mu-stat"><span class="mu-stat-k">Widest</span>
-            <span class="mu-stat-v">{{ mu_stats.biggest.winner }} by {{ mu_stats.biggest.margin }}</span></li>
-        <li class="mu-stat"><span class="mu-stat-k">Closest</span>
-            <span class="mu-stat-v">{{ mu_stats.closest.winner or 'Tie' }} by {{ mu_stats.closest.margin }}</span></li>
-    </ul>
-    {% endif %}
-
-    {# The score column is "A - B" with no header, so the note has to say whose
-       number comes first — the W/L chip alone leaves it to inference. #}
-    <h3 class="mu-list-head">Every meeting<span class="mu-list-note">{{ mu_a }} – {{ mu_b }} · oldest first</span></h3>
-    <ol class="mu-games" role="list">
-        {# Reversed: the query runs newest-first because the streak walk needs
-           it that way, but the list was asked for in chronological order. #}
-        {% for g in mu_games|reverse %}
-        <li>
-            <a class="mu-game" href="/game/{{ g.id }}">
-                <span class="mu-when">
-                    <span class="mu-season">{{ g.season }}</span>
-                    <span class="mu-week">{{ 'Postseason' if g.season_type and 'POSTSEASON' in g.season_type|upper else 'Week %s'|format(g.week) if g.week else '' }}</span>
-                </span>
-                <span class="mu-score">
-                    <span class="mu-sc {{ 'is-won' if g.winner == mu_a }}">{{ g.a_pts }}</span>
-                    <span class="mu-dash">–</span>
-                    <span class="mu-sc {{ 'is-won' if g.winner == mu_b }}">{{ g.b_pts }}</span>
-                </span>
-                {# Text, not colour alone: the chip says W or L from A's side. #}
-                <span class="mu-res {{ 'mu-res-w' if g.winner == mu_a else ('mu-res-l' if g.winner == mu_b else 'mu-res-t') }}">
-                    {{ 'W' if g.winner == mu_a else ('L' if g.winner == mu_b else 'T') }}
-                </span>
-                <span class="mu-venue">{{ 'vs' if g.a_home else 'at' }} {{ mu_b }}</span>
-                <span class="mu-date">{{ g.date }}</span>
-            </a>
-        </li>
-        {% endfor %}
-    </ol>
-</div>
-
-{% elif mu_a and mu_b and not mu_error %}
-<div class="mu-empty">
-    <p class="mu-empty-lede"><strong>{{ mu_a }}</strong> and <strong>{{ mu_b }}</strong> have not met
-    {% if mu_win != 'all' %}in the last {{ window_years }} years{% else %}in the seasons we hold{% endif %}.</p>
-    {% if mu_win != 'all' and mu_older %}
-    <p class="mu-empty-sub">There {{ 'is 1 earlier meeting' if mu_older == 1 else 'are %d earlier meetings'|format(mu_older) }} on record.
-        <a href="/explorer?scope=matchup&a={{ mu_a|urlencode }}&b={{ mu_b|urlencode }}&win=all">Show all</a></p>
-    {% else %}
-    <p class="mu-empty-sub">Game coverage starts in {{ mu_earliest }}, so a series that ended before then won't appear here.</p>
-    {% endif %}
-</div>
-
-{% elif not mu_error %}
-<div class="mu-empty">
-    <p class="mu-empty-lede">Pick two teams to see the series.</p>
-    <p class="mu-empty-sub">You get the head-to-head record over the last {{ window_years }} years, the current
-    streak, and every meeting listed in order — scores, venue and a link to each game.</p>
-</div>
+</section>
 {% endif %}
 
+{% if land %}
+{% set L_ = land %}
+<!-- ===================== THE LANDSCAPE ===================== -->
+<section class="xl" aria-labelledby="xl-title">
+    <header class="xl-head">
+        <h2 class="xl-h2" id="xl-title">The landscape</h2>
+        <p class="xl-sub">Six views of college football in {{ L_.season }}, rebuilt from the same data as the rest of the site.</p>
+    </header>
+    <div class="xl-grid">
+
+        {% set c = L_.conf %}
+        <article class="xl-card is-wide">
+            <p class="xl-k">Conference strength</p>
+            {% if c.g5_best %}
+            <h3 class="xl-h3">The Group of 5&#39;s best would rank {{ c.g5_rank }} among the {{ L_.power_label }}</h3>
+            <p class="xl-find">Every team&#39;s Savant Net Rating, one row per conference, ordered by the median team (the white tick).{% if c.top_conf %} The {{ c.top_conf }} has the strongest middle.{% endif %} <b>{{ c.g5_best }}</b>, the best team outside the {{ L_.power_label }} at {{ '%+.1f'|format(c.g5_net) }}, is rated above {{ c.g5_above }} power-conference teams.</p>
+            {% else %}
+            <h3 class="xl-h3">How the conferences stack up</h3>
+            {% endif %}
+            {{ c.svg|safe }}
+            <div class="xl-foot"><span class="xl-legend"><span><i style="background:#1c9cf0"></i>Power conferences</span><span><i style="background:#7a8086"></i>Group of 5 and independents</span></span><span>Savant Net Rating, {{ L_.season }}</span></div>
+        </article>
+
+        {% set r = L_.river %}
+        {% if r %}
+        <article class="xl-card">
+            <p class="xl-k">The rank river</p>
+            <h3 class="xl-h3">{{ r.weeks }} weeks, {{ r.n }} teams through the top 10</h3>
+            <p class="xl-find">Every team that has held a top-10 Savant Rating this season, week by week. Blue lines are in it now.{% if r.climb %} The biggest climber, <b>{{ r.climb }}</b>, went from {{ r['from'] }} to {{ r.to }}.{% endif %}</p>
+            {{ r.svg|safe }}
+            <div class="xl-foot"><span>Weekly Savant Rating rank, {{ L_.season }}</span><a class="xe-link" href="/rankings?season={{ L_.season }}">Rankings</a></div>
+        </article>
+        {% endif %}
+
+        {% set p = L_.portal %}
+        {% if p %}
+        <article class="xl-card">
+            <p class="xl-k">Portal flow</p>
+            <h3 class="xl-h3">The power leagues recruit from the levels below</h3>
+            <p class="xl-find">{{ '{:,}'.format(p.total) }} {{ L_.season }} transfers with a new school, from where they left to where they landed. Of the {{ '{:,}'.format(p.p4_in) }} who joined a power-conference program, <b>{{ '{:,}'.format(p.up) }}</b> ({{ p.up_pct }}%) came up from the Group of 5 or below, in blue.</p>
+            {{ p.svg|safe }}
+            <div class="xl-foot"><span>Transfers still without a new school are left out.</span><a class="xe-link" href="/transfers">Transfer portal</a></div>
+        </article>
+        {% endif %}
+
+        {% set m = L_.map %}
+        {% if m %}
+        <article class="xl-card is-wide">
+            <p class="xl-k">The map</p>
+            <h3 class="xl-h3">Where the stadiums are, how big, and how good the team inside is</h3>
+            <p class="xl-find">All {{ m.n }} FBS home stadiums. Size is capacity; the brighter the dot, the higher the home team&#39;s Savant Rating. <b>{{ m.n100 }}</b> seat more than 100,000.</p>
+            {{ m.svg|safe }}
+            <div class="xl-foot"><span class="xl-legend"><span><i style="background:#3a3f45"></i>Lower rated</span><span><i style="background:#1c9cf0"></i>Higher</span><span><i style="background:#cfe9fc"></i>Top of FBS</span></span><span>Each team&#39;s most-used home venue, {{ L_.season - 1 }}–{{ L_.season }}</span></div>
+        </article>
+        {% endif %}
+
+        {% set e = L_.era %}
+        {% if e %}
+        <article class="xl-card">
+            <p class="xl-k">The era</p>
+            {% set drop = e.first[1] - e.last[1] %}
+            <h3 class="xl-h3">Scoring is {{ 'down' if drop > 0 else 'up' }} {{ '%.1f'|format(drop|abs) }} points a game since {{ e.first[0] }}</h3>
+            <p class="xl-find">Average combined points in FBS-vs-FBS games: <b>{{ '%.1f'|format(e.first[1]) }}</b> in {{ e.first[0] }}, <b>{{ '%.1f'|format(e.last[1]) }}</b> in {{ e.last[0] }}. Close games have not followed it: every season, between {{ '%.0f'|format(e.close_lo) }}% and {{ '%.0f'|format(e.close_hi) }}% are decided by one score.</p>
+            {{ e.svg|safe }}
+            <p class="xl-subh">Games decided by 8 points or fewer, %</p>
+            <div class="xl-close" role="img" aria-label="Share of FBS-vs-FBS games decided by eight points or fewer, by season.">
+                {% for b in e.bars %}<div class="xl-close-c"><span class="xl-close-v">{{ '%.0f'|format(b.pct) }}</span><span class="xl-close-t"><span style="height: {{ '%.0f'|format(b.h) }}%"></span></span><span class="xl-close-y">{{ b.season }}</span></div>{% endfor %}
+            </div>
+            <div class="xl-foot"><span>FBS vs FBS, regular season and postseason</span></div>
+        </article>
+        {% endif %}
+
+        {% set t = L_.talent %}
+        {% if t %}
+        <article class="xl-card">
+            <p class="xl-k">Where the talent lives</p>
+            <h3 class="xl-h3">{{ 'Group of 5 rosters have gained the most talent' if t.g5_pct > t.sec_pct else 'The talent gap has widened' }}{{ ' since the portal opened' if t.first < 2021 <= t.last }}</h3>
+            <p class="xl-find">Average roster talent per team. Group of 5 programs went from <b>{{ '%.0f'|format(t.g5[0]) }}</b> to <b>{{ '%.0f'|format(t.g5[1]) }}</b> ({{ '%+d'|format(t.g5_pct) }}%) between {{ t.first }} and {{ t.last }}; the SEC from {{ '%.0f'|format(t.sec[0]) }} to {{ '%.0f'|format(t.sec[1]) }} ({{ '%+d'|format(t.sec_pct) }}%).</p>
+            {{ t.svg|safe }}
+            <div class="xl-foot"><span>247Sports team talent composite, teams in today&#39;s conferences. Transfers count at their recruiting rating, which favours portal-heavy rosters.</span></div>
+        </article>
+        {% endif %}
+
+    </div>
+</section>
 {% endif %}
 
 </div>
 {% endblock %}
+
 
 {% block scripts %}
 {# Matchup mode plots nothing, so it has no business paying for Plotly. #}
@@ -423,7 +558,8 @@ document.addEventListener('DOMContentLoaded', function () {
         off_expl:   { label: 'Explosiveness · Offense',  group: 'Efficiency', invert: false, dp: 3 },
         def_havoc:  { label: 'Havoc Rate · Defense',     group: 'Efficiency', invert: false, dp: 1, unit: '%' },
         ppg_for:    { label: 'Points Scored / Game',     group: 'Scoring',    invert: false, dp: 1 },
-        ppg_against:{ label: 'Points Allowed / Game',    group: 'Scoring',    invert: true,  dp: 1 }
+        ppg_against:{ label: 'Points Allowed / Game',    group: 'Scoring',    invert: true,  dp: 1 },
+        talent:     { label: 'Roster Talent',            group: 'Roster',     invert: false, dp: 0 }
     };
     var SIZE_LABELS = { sos: 'Strength of Schedule', scoring_opps: 'Scoring Opportunities', plays: 'Total Plays' };
 
@@ -436,6 +572,27 @@ document.addEventListener('DOMContentLoaded', function () {
     if (params.get('size')) selSize.value = params.get('size');
 
     function fmt(k, v) { return (v==null) ? '—' : v.toFixed(STATS[k].dp) + (STATS[k].unit||''); }
+
+    // Conference highlight: the rest of the field stays on the chart, faded, so
+    // a conference reads against everyone rather than against itself.
+    var HL = '';
+    var POWER = ['SEC', 'Big Ten', 'Big 12', 'ACC'];
+    function lit(t) {
+        if (!HL) return true;
+        return HL === 'g5' ? POWER.indexOf(t.conf) < 0 : t.conf === HL;
+    }
+    document.querySelectorAll('[data-hl]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            HL = b.dataset.hl;
+            document.querySelectorAll('[data-hl]').forEach(function (o) {
+                o.setAttribute('aria-pressed', o === b ? 'true' : 'false');
+            });
+            buildTeam();
+        });
+    });
+    var askTeam = wireQuestions(selX, selY, function () { buildTeam(); }, function (x, y) {
+        return STATS[x].label + ' vs ' + STATS[y].label;
+    });
 
     function buildTeam() {
         var xk = selX.value, yk = selY.value, sk = selSize.value;
@@ -481,10 +638,12 @@ document.addEventListener('DOMContentLoaded', function () {
         layout.images = pts.map(function(t,i){
             return { source:t.logo, x:t.stats[xk], y:t.stats[yk], xref:'x', yref:'y',
                      sizex:baseX*sizeScale[i], sizey:baseY*sizeScale[i],
-                     xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
+                     xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above',
+                     opacity: lit(t) ? 1 : 0.14 };
         });
         Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true});
         hideSkeleton();
+        askTeam();
         syncUrl({x:xk, y:yk, size:sk});
     }
 
@@ -511,7 +670,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     var spSide = 'off';
     var spSel = document.getElementById('sp-metric');
-    var spBtns = document.querySelectorAll('.sp-toggle .lb-mode-btn');
+    var spBtns = document.querySelectorAll('.sp-toggle [data-side]');
 
     function spKey() { return spSide + '_' + spSel.value; }
 
@@ -662,7 +821,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var AXMAP = {}; AXES.forEach(function(a){ AXMAP[a.key]=a; });
 
     var selX = document.getElementById('xp-x'), selY = document.getElementById('xp-y');
-    var selPos = document.getElementById('xp-pos'), selTop = document.getElementById('xp-top');
+    var selTop = document.getElementById('xp-top');
     // Resting and hovered marker diameters, in px. The jump is what makes a
     // point in a crowded cluster readable without clicking into it.
     var CHIP = 26, CHIP_HOVER = 46;
@@ -675,6 +834,9 @@ document.addEventListener('DOMContentLoaded', function () {
     selY.value = axStats[params.get('y')] ? params.get('y') : AXES[AXES.length-1].key;
 
     function fmt(k, v) { return (v==null) ? '—' : v.toFixed(axStats[k].dp) + (axStats[k].unit||''); }
+    var askPlayer = wireQuestions(selX, selY, function () { buildPlayer(); }, function (x, y) {
+        return axStats[x].label + ' vs ' + axStats[y].label;
+    });
 
     function buildPlayer() {
         var xk = selX.value, yk = selY.value;
@@ -684,7 +846,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return p.stats[xk]!=null && p.stats[yk]!=null;
         });
         document.getElementById('xp-count').textContent =
-            'Top ' + pts.length + ' nationally by ' + RANK_STAT + ' · ' + SEASON;
+            'Top ' + pts.length + ' nationally by ' + RANK_STAT + ', ' + SEASON;
         if (!pts.length) { Plotly.react('xp-plot', [], {}, {displayModeBar:false}); return; }
         LAST_PTS = pts; LAST_X = xk; LAST_Y = yk;
         var xs = pts.map(function(p){return p.stats[xk];});
@@ -726,6 +888,7 @@ document.addEventListener('DOMContentLoaded', function () {
                      sizex:sx, sizey:sy, xanchor:'center', yanchor:'middle', sizing:'contain', layer:'above' };
         });
         N_FACES = layout.images.length;
+        askPlayer();
         Plotly.react('xp-plot', traces, layout, {displayModeBar:false, responsive:true})
               .then(sizeFaces);
         hideSkeleton();
@@ -773,7 +936,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     // Position + qualified change the plotted pool -> reload (preserving the
     // current view via reloadWith merging into the existing query string)
-    selPos.addEventListener('change', function(){ reloadWith({scope:'player', pos:selPos.value}); });
     chkQual.addEventListener('change', function(){ reloadWith({scope:'player', pos:GROUP, qual: chkQual.checked?'1':'0'}); });
 
     // Hover: the point under the pointer grows. The ring moves to it and the
@@ -831,6 +993,30 @@ document.addEventListener('DOMContentLoaded', function () {
 {% endif %}
 
     // ---------- shared helpers ----------
+    // The question chips: each sets both axes. Returns a sync function the
+    // builders call after every redraw, so the pressed chip and the chart title
+    // follow the axes whichever control changed them.
+    function wireQuestions(sx, sy, rebuild, fallbackTitle) {
+        var chips = document.querySelectorAll('.xe-qs [data-x]');
+        var title = document.getElementById('xe-plot-title');
+        chips.forEach(function (c) {
+            c.addEventListener('click', function () {
+                if ([].some.call(sx.options, function (o) { return o.value === c.dataset.x; }) &&
+                    [].some.call(sy.options, function (o) { return o.value === c.dataset.y; })) {
+                    sx.value = c.dataset.x; sy.value = c.dataset.y; rebuild();
+                }
+            });
+        });
+        return function () {
+            var hit = null;
+            chips.forEach(function (c) {
+                var on = c.dataset.x === sx.value && c.dataset.y === sy.value;
+                c.setAttribute('aria-pressed', on ? 'true' : 'false');
+                if (on) hit = c;
+            });
+            if (title) title.textContent = hit ? hit.textContent.trim() : fallbackTitle(sx.value, sy.value);
+        };
+    }
     // Fires once when the viewport crosses the phone breakpoint, so a chart
     // can be redrawn at the margins and wording that width calls for. Guarded
     // for Safari 13, which only has the deprecated addListener.
@@ -872,8 +1058,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     nticks: narrow ? 6 : undefined },
             shapes:[
                 {type:'line', x0:f.mx, x1:f.mx, y0:yr[0], y1:yr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5},
-                {type:'line', y0:f.my, y1:f.my, x0:xr[0], x1:xr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5}
+                {type:'line', y0:f.my, y1:f.my, x0:xr[0], x1:xr[1], line:{color:COL.dim,width:1,dash:'dot'}, opacity:0.5},
+                // The good corner, lightly lit: axes always point the better way,
+                // so above-and-right of both averages is better on both.
+                {type:'rect', layer:'below', x0:f.mx, x1:xr[1], y0:f.my, y1:yr[1], line:{width:0}, fillcolor:'rgba(28,156,240,0.05)'}
             ],
+            annotations:[{ xref:'paper', yref:'paper', x:0.995, y:0.995, xanchor:'right', yanchor:'top',
+                           showarrow:false, text:'Better on both', font:{size:12, color:'#7cc9fb'} }],
             hoverlabel: HOVER
         };
     }

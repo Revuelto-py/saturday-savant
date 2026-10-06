@@ -58,6 +58,7 @@
 
 import cfbd
 import psycopg2
+import landscape
 from psycopg2 import pool as pg_pool
 import gzip
 import io
@@ -12431,6 +12432,7 @@ def explorer():
             release_db(conn)
         return render_template('explorer.html', scope='matchup', season=season,
                                available_seasons=get_available_seasons(),
+                               land=_explorer_landscape(season),
                                window_years=MATCHUP_WINDOW_YEARS, **ctx)
 
     if scope == 'player':
@@ -12465,7 +12467,7 @@ def explorer():
                                player_group=group, player_groups=groups_meta,
                                player_top=top_n, player_top_opts=list(EXPLORER_TOP_N),
                                player_rank_stat=EXPLORER_RANK_LABEL.get(rank_stat, rank_stat),
-                               qualified_only=qualified_only,
+                               qualified_only=qualified_only, land=_explorer_landscape(season),
                                season=season, available_seasons=get_available_seasons())
 
     conn = get_db()
@@ -12489,12 +12491,17 @@ def explorer():
                    tst.off_rushing_explosiveness, tst.off_passing_explosiveness,
                    tst.def_rushing_plays_ppa, tst.def_passing_plays_ppa,
                    tst.def_rushing_success_rate, tst.def_passing_success_rate,
-                   tst.def_rushing_explosiveness, tst.def_passing_explosiveness
+                   tst.def_rushing_explosiveness, tst.def_passing_explosiveness,
+                   -- Roster talent lags a season behind ratings (the composite
+                   -- publishes once a year), so take the latest at or before.
+                   tal.talent
             FROM savant_ratings sv
             JOIN teams t ON t.name = sv.team
             LEFT JOIN sp_ratings sp ON sp.team = sv.team AND sp.season = sv.season
             LEFT JOIN team_advanced ta ON ta.team = sv.team AND ta.season = sv.season
             LEFT JOIN team_stats tst ON tst.team = sv.team AND tst.season = sv.season
+            LEFT JOIN team_talent tal ON tal.team = sv.team
+                 AND tal.season = (SELECT MAX(season) FROM team_talent WHERE season <= sv.season)
             LEFT JOIN (
                 SELECT tm, AVG(pf)::float AS ppg_for, AVG(pa)::float AS ppg_against
                 FROM (
@@ -12521,8 +12528,8 @@ def explorer():
              off_ppa, def_ppa, off_sr, def_sr, off_expl, havoc,
              ppg_for, ppg_against, sos, scoring_opps, plays,
              o_rush_ppa, o_pass_ppa, o_rush_sr, o_pass_sr, o_rush_ex, o_pass_ex,
-             d_rush_ppa, d_pass_ppa, d_rush_sr, d_pass_sr, d_rush_ex, d_pass_ex
-             ) in cursor.fetchall():
+             d_rush_ppa, d_pass_ppa, d_rush_sr, d_pass_sr, d_rush_ex, d_pass_ex,
+             talent) in cursor.fetchall():
             teams_data.append({
                 'name': name, 'slug': slugify_team(name),
                 'url': team_url(name, season),
@@ -12537,6 +12544,7 @@ def explorer():
                     'off_expl': _r(off_expl, 3),
                     'def_havoc': _r(havoc * 100, 1) if havoc is not None else None,
                     'ppg_for': _r(ppg_for, 1), 'ppg_against': _r(ppg_against, 1),
+                    'talent': _r(talent, 0),
                 },
                 # Run/pass identity: [rush, pass] per side per metric, so the
                 # chart can switch lens without another request. Rates are
@@ -12557,10 +12565,25 @@ def explorer():
                     'plays': _r(plays, 0),
                 },
             })
+        cursor.execute('SELECT MAX(season) FROM team_talent WHERE season <= %s', (season,))
+        talent_season = cursor.fetchone()[0]
     finally:
         release_db(conn)
     return render_template('explorer.html', scope='team', teams_data=teams_data, season=season,
+                           talent_season=talent_season, land=_explorer_landscape(season),
                            available_seasons=get_available_seasons())
+
+
+@data_cache.memoize(timeout=21600)
+def _explorer_landscape(season):
+    """The landscape charts under every explorer mode (landscape.py). Cached on
+    its own: three modes and every axis choice share one copy per season."""
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        return landscape.build(cursor, season, _team_confs_for_season(cursor, season))
+    finally:
+        release_db(conn)
 
 
 # ── Canonical URLs ───────────────────────────────────────────────────────────

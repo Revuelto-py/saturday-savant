@@ -5038,48 +5038,6 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .pending-panel b { color: var(--text-primary); font-weight: 700; }
 
 /* ── Stat Explorer ──────────────────────────────────────────────────────── */
-.xp-head {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    gap: var(--s4); margin-bottom: var(--s5);
-}
-.xp-title {
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: var(--text-2xl); font-weight: 700;
-    letter-spacing: -0.01em; margin: 0 0 var(--s2);
-}
-.xp-sub { color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.7; max-width: 560px; margin: 0; }
-.xp-controls {
-    display: flex; align-items: flex-end; flex-wrap: wrap;
-    gap: var(--s3); margin-bottom: var(--s4);
-}
-.xp-controls .lb-select { min-width: 210px; }
-.xp-swap {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 38px; height: 38px; flex-shrink: 0;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-sm);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: color 0.15s, background-color 0.15s;
-}
-/* Desktop keeps the icon square; the label only appears where the button is a
-   full-width row (see the phone block below). */
-.xp-swap-text {
-    display: none;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.04em;
-}
-.xp-swap:hover { color: var(--text-primary); background: rgba(255,255,255,0.1); }
-.xp-swap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.xp-swap:active { transform: translateY(1px); }
-.xp-hint { color: var(--text-dim); font-size: var(--text-xs); margin-left: auto; align-self: center; }
-.xp-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: var(--s4) var(--s3) var(--s2);
-}
 /* The one chart height. .xp-plot-wrap reads the same token so the skeleton box
    and the figure can never disagree again. */
 :root { --xp-plot-h: 640px; }
@@ -5098,27 +5056,6 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
        needs vertical room more than a laptop does, because the width it has to
        spread them across is a third of one. */
     :root { --xp-plot-h: 68svh; }
-    .xp-head { flex-direction: column; }
-    /* Was pinned right on a line of its own, which read as a stray control
-       rather than the season filter for everything under it. */
-    .xp-head .season-select { align-self: stretch; width: 100%; }
-    /* One control per row. At 40% each, the two axis selects came out ~150px
-       wide and clipped their own options: "Offensive Rating" and "Defensive
-       Rating" both lost their tails behind the chevron. */
-    .xp-controls .lb-filter-group { flex: 1 1 100%; }
-    .xp-controls .lb-select { min-width: 0; width: 100%; }
-    /* The swap control becomes a labelled row between the two selects it
-       swaps, at a real tap size. An icon-only 38px square between two
-       full-width selects reads as an orphan and misses the 44px floor. */
-    .xp-swap { width: 100%; height: 44px; gap: var(--s2); }
-    .xp-swap-text { display: inline; }
-    .xp-check {
-        flex: 1 1 100%;
-        align-self: flex-start;
-        min-height: 44px;
-        padding-bottom: 0;
-    }
-    .xp-hint { display: none; }
     .xp-legend { flex-wrap: wrap; row-gap: var(--s1); }
     .xp-legend-note { margin-left: 0; flex: 1 1 100%; }
 }
@@ -5129,12 +5066,6 @@ a.tp-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 }
 
 /* ── Stat Explorer: player scope + bubble controls ──────────────────────── */
-.xp-check {
-    display: inline-flex; align-items: center; gap: 7px;
-    color: var(--text-secondary); font-size: var(--text-sm); font-weight: 600;
-    cursor: pointer; align-self: flex-end; padding-bottom: 8px; white-space: nowrap;
-}
-.xp-check input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
 /* The percentile radar that lived here was removed on 2026-09-13: it was
    broken in use and its Scatter/Radar toggle was the only way in. Its styles
    (.xp-subtoggle, .xp-radar-search, .xp-rsearch/.xp-rslot/.xp-rinput/.xp-rdrop,
@@ -6330,14 +6261,12 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 
 @media (hover: none) {
     /* Measured at 390 with touch, after the first fix round:
-         .xp-swap        38x44  (height fixed, width still short)
          .btn-primary   216x41
          .lb-th          65x42  sortable column headers
          .bk-proj-team   64x16  inline link inside the projection popover
          .ph-meta-item   45x21  and its inner link at 25x19
          .team-name-default 57x19
        Inline links need a box before a min-height can apply to them. */
-    #xp-swap { min-width: 44px; }
     .rp-item { min-height: 44px; }
     th.stat-header { height: 44px; }
     .show-all-btn { min-height: 44px; }
@@ -6349,7 +6278,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .bk-proj-team,
     .lb-howitworks,
     .howitworks,
-    .mu-full,
     .team-name-default,
     .ph-meta-item,
     .ph-meta-item a,
@@ -7498,7 +7426,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .cmp-tab,
     .cmp-seg-btn,
     .cmp-btn,
-    #xp-swap,
     .bk-proj-team,
     .lb-select,
     .lb-mode-btn,
@@ -7634,11 +7561,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s4); margin-bottom: var(--s5);
 }
-.mu-pick-label {
-    display: block; margin-bottom: 6px;
-    color: var(--text-dim); font-size: 0.75rem; font-weight: 800;
-    letter-spacing: 0.1em; text-transform: uppercase;
-}
 .mu-searchbox { width: 100%; }
 
 .mu-slot {
@@ -7670,95 +7592,7 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     border-radius: var(--r-md); color: #f0a868; font-size: var(--text-sm);
 }
 
-/* ── Verdict + share bar ──────────────────────────────────────────────────── */
-.mu-result { margin-bottom: var(--s6); }
-.mu-verdict {
-    display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap;
-    margin: 0 0 var(--s4);
-    font-family: var(--font-display); font-stretch: var(--display-stretch); font-weight: 800;
-    font-size: var(--text-lg); color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-}
-.mu-verdict strong { color: var(--accent); font-weight: 800; }
-.mu-verdict-window {
-    font-family: var(--font-body); font-weight: 700;
-    font-size: 0.75rem; letter-spacing: 0.06em;
-    color: var(--text-dim); text-transform: uppercase;
-}
-
-.mu-bar-row {
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 2.4fr) minmax(0, 1fr);
-    align-items: center; gap: var(--s3); margin-bottom: var(--s5);
-}
-.mu-bar-side { display: flex; align-items: baseline; gap: var(--s2); min-width: 0; }
-.mu-bar-side-b { justify-content: flex-end; }
-.mu-bar-team {
-    color: var(--text-secondary); font-weight: 700; font-size: 0.75rem;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.mu-bar-wins {
-    color: var(--text-primary); font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 800; font-size: var(--text-md); font-variant-numeric: tabular-nums;
-}
-.mu-bar { height: 14px; }
-
-/* ── Window + link ────────────────────────────────────────────────────────── */
-.mu-controls {
-    display: flex; align-items: center; gap: var(--s4);
-    flex-wrap: wrap; margin-bottom: var(--s5);
-}
-.mu-window {
-    display: inline-flex; gap: 2px; padding: 3px;
-    background: var(--bg-subtle); border: 1px solid var(--border);
-    border-radius: var(--r-md);
-}
-.mu-win-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    padding: 7px 14px; border-radius: var(--r-sm);
-    color: var(--text-secondary); text-decoration: none;
-    font-size: 0.75rem; font-weight: 700; white-space: nowrap;
-    transition: color var(--t-fast), background-color var(--t-fast);
-}
-.mu-win-btn:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-.mu-win-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.mu-win-btn:active { background: var(--bg-card); }
-.mu-win-btn.active { color: var(--text-primary); background: var(--bg-card); }
-.mu-full {
-    margin-left: auto; color: var(--text-secondary); font-weight: 700;
-    font-size: 0.75rem; text-decoration: none; white-space: nowrap;
-    transition: color var(--t-fast);
-}
-.mu-full:hover { color: var(--accent); }
-.mu-full:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
-.mu-full:active { color: var(--text-primary); }
-
-/* ── Summary figures ──────────────────────────────────────────────────────── */
-.mu-stats {
-    list-style: none; padding: 0; margin: 0 0 var(--s6);
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 1px; background: var(--border);
-    border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden;
-}
-.mu-stat { padding: var(--s3) var(--s4); background: var(--bg-card); }
-.mu-stat-k {
-    display: block; color: var(--text-dim); font-size: 0.75rem;
-    font-weight: 700; letter-spacing: 0.05em; margin-bottom: 3px;
-}
-.mu-stat-v {
-    display: block; color: var(--text-primary); font-weight: 700;
-    font-size: var(--text-sm); font-variant-numeric: tabular-nums;
-}
-
 /* ── The meetings ─────────────────────────────────────────────────────────── */
-.mu-list-head {
-    display: flex; align-items: baseline; gap: var(--s3);
-    margin: 0 0 var(--s3); font-size: var(--text-sm); font-weight: 800;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary);
-}
-.mu-list-note {
-    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
-    color: var(--text-dim); text-transform: none;
-}
 .mu-games { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
 .mu-game {
     display: grid; align-items: center; gap: var(--s3);
@@ -7818,13 +7652,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
        and the row has a link to the game for anyone who needs the day. */
     .mu-game { grid-template-columns: 84px 82px 26px minmax(0, 1fr); }
     .mu-date { display: none; }
-    .mu-bar-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
-    /* Stacked, the mirrored B side would read "1 Maryland". Reversing puts the
-       name back in front of its number without touching the DOM order that the
-       side-by-side desktop layout depends on. */
-    .mu-bar-side-b { flex-direction: row-reverse; justify-content: flex-end; }
-    .mu-controls { gap: var(--s3); }
-    .mu-full { margin-left: 0; }
 }
 
 @media (max-width: 479.98px) {
@@ -7839,7 +7666,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
        section is appended later in the file, so an equal-specificity rule up
        there loses on source order. Measured 28x28 and 32 high. */
     .mu-slot-x { width: 44px; height: 44px; }
-    .mu-win-btn { min-height: 44px; }
     .mu-game { min-height: 44px; }
 }
 
@@ -7886,51 +7712,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 }
 
 @media (hover: none) {
-    /* The "Qualified only" control: the checkbox is a 15px native box and its
-       label only made the row 27px tall, so the whole thing sat under the
-       touch floor. Appended here rather than in the shared touch block near
-       the top because the explorer's own rules come later in this file and
-       would otherwise win on source order. */
-    .xp-check { min-height: 44px; }
-}
-
-/* ── Stat Explorer: Run vs Pass identity chart ────────────────────────────
-   A second chart under the team landscape. It borrows that chart's card,
-   plot and legend classes wholesale; only the section header and the
-   segmented side toggle are its own. */
-.sp-head { margin: var(--s6) 0 var(--s4); }
-.sp-title {
-    margin: 0 0 6px; font-size: var(--text-lg); font-weight: 800;
-    color: var(--text-primary); letter-spacing: -0.01em;
-}
-.sp-sub {
-    margin: 0; max-width: 58ch; color: var(--text-secondary);
-    font-size: var(--text-sm); line-height: 1.65;
-}
-.sp-toggle { display: inline-flex; width: fit-content; }
-/* .lb-mode-btn was written for <a>, so it never resets background or border —
-   which a <button> inherits from the UA stylesheet and renders as a grey chip
-   with a bevel. These are real buttons (they change the chart in place rather
-   than navigate), so they also need the focus and press states an anchor would
-   have got from the global link rules. */
-.sp-toggle .lb-mode-btn {
-    appearance: none;
-    font-family: inherit;
-    cursor: pointer;
-}
-/* Reset the UA chrome on the UNSELECTED buttons only. The selected one is left
-   entirely to the site's own `.lb-mode-btn.active` (accent fill, #1a1200 text
-   — the near-black is what makes it readable on that blue). An earlier version
-   of this block restated the active colours and, being later in the file at
-   higher specificity, replaced that near-black with light text: 2.4:1, where
-   every other toggle on the site is around 8:1. Do not set colour here. */
-.sp-toggle .lb-mode-btn:not(.active) { background: none; border: none; }
-.sp-toggle .lb-mode-btn:hover:not(.active) { background: var(--bg-card-hover); }
-.sp-toggle .lb-mode-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.sp-toggle .lb-mode-btn:active:not(.active) { background: var(--bg-subtle); }
-
-@media (hover: none) {
-    .sp-toggle .lb-mode-btn { min-height: 44px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -11228,4 +11009,160 @@ a.bkr-panel-name:focus-visible { outline: 2px solid var(--accent); outline-offse
     .sf-swarm-key { display: block; }
     .sf-cmp-row { grid-template-columns: minmax(0,1fr) 64px; row-gap: 6px; }
     .sf-cmp-t { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STAT EXPLORER — /explorer (teams, players, matchups) and its landscape
+   One shell for all three modes: a header with the mode switch, a row of
+   question chips that set both axes at once, then a card with the controls
+   on the left and the chart on the right. Under every mode, the landscape:
+   six server-rendered charts (landscape.py). The Plotly internals keep their
+   own .xp-plot / .xp-skel / .xp-hl classes; mu-* rows are the matchup list.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.xe-page { max-width: 1280px; position: relative; isolation: isolate; padding-bottom: 40px; }
+.xe-page::before {
+    content: ''; position: absolute; inset: 0 0 auto; height: 900px; z-index: -1; pointer-events: none;
+    background: radial-gradient(1000px 700px at 70% -5%, rgba(28,156,240,.13), transparent 60%);
+}
+.xe-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 28px; flex-wrap: wrap; padding-block: 48px 26px; }
+.xe-h1 {
+    margin: 0; font-family: var(--font-display); font-stretch: 75%; font-weight: 850;
+    font-size: clamp(52px, 7vw, 104px); line-height: .9; letter-spacing: -.04em; color: var(--text-primary);
+}
+.xe-sub { margin: 14px 0 0; max-width: 48ch; font-size: clamp(16px, 1.3vw, 19px); line-height: 1.5; color: #c4c8cc; }
+.xe-head-ctl { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.xe-seg { display: inline-flex; padding: 4px; border-radius: 999px; background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--border); }
+.xe-seg a {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 20px; border-radius: 999px;
+    color: var(--text-secondary); font-weight: 650; font-size: 15px; text-decoration: none;
+    transition: background-color .2s ease, color .2s ease;
+}
+.xe-seg a:hover { color: var(--text-primary); }
+.xe-seg a[aria-current="page"] { background: var(--text-primary); color: #000; }
+.xe-seg a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.xe-select-wrap { position: relative; display: inline-flex; align-items: center; width: 100%; }
+.xe-head-ctl .xe-select-wrap { width: auto; }
+.xe-select-wrap svg { position: absolute; right: 14px; pointer-events: none; color: var(--text-secondary); }
+.xe-select {
+    appearance: none; -webkit-appearance: none; width: 100%; min-height: 48px; padding: 0 40px 0 14px; border: 0; border-radius: 12px;
+    background: var(--bg-subtle); color: var(--text-primary); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); transition: background-color .2s ease;
+}
+.xe-select:hover { background: var(--bg-card); }
+.xe-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xe-select option, .xe-select optgroup { background: var(--bg-card); color: var(--text-primary); }
+
+.xe-qs { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+.xe-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.xe-chip {
+    display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px;
+    background: transparent; color: #c4c8cc; font: inherit; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
+    transition: background-color .2s ease, color .2s ease, transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+.xe-chip-sm { min-height: 38px; padding: 0 13px; font-size: 13px; }
+.xe-chip:hover { background: rgba(255,255,255,.05); color: #fff; }
+.xe-chip:active { transform: scale(.97); }
+.xe-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xe-chip[aria-pressed="true"], .xe-chip[aria-current="page"], .xe-chip.active {
+    background: rgba(28,156,240,.16); color: #fff; box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.xe-card {
+    display: grid; grid-template-columns: 290px minmax(0, 1fr); margin-bottom: 28px; border-radius: 24px; overflow: hidden;
+    background: var(--bg-surface);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), 0 40px 80px -40px rgba(28,156,240,.22), 0 20px 50px -30px rgba(0,0,0,.9);
+}
+.xe-card-split { scroll-margin-top: calc(var(--nav-h) + 16px); }
+.xe-ctl {
+    display: flex; flex-direction: column; gap: 20px; padding: 26px 24px;
+    border-right: 1px solid rgba(255,255,255,.07); background: linear-gradient(180deg, #0e1013, var(--bg-surface));
+}
+.xe-ctl-g { display: flex; flex-direction: column; gap: 8px; }
+.xe-ctl-l { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.xe-ctl-h { margin: 0; font-family: var(--font-display); font-stretch: 82%; font-size: 24px; font-weight: 800; line-height: 1.1; color: var(--text-primary); }
+.xe-swap {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 0; border-radius: 12px;
+    background: transparent; color: var(--text-secondary); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); transition: background-color .2s ease, color .2s ease;
+}
+.xe-swap:hover { background: rgba(255,255,255,.05); color: #fff; }
+.xe-swap:active { transform: scale(.98); }
+.xe-swap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xe-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--text-primary); cursor: pointer; }
+.xe-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.xe-note { margin: auto 0 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.07); font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+.xe-note-top { margin: 0; padding: 0; border: 0; }
+.xe-plot { min-width: 0; padding: 22px 26px 18px; }
+.xe-plot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.xe-plot-t { margin: 0; font-family: var(--font-display); font-stretch: 87.5%; font-size: 20px; font-weight: 750; color: var(--text-primary); }
+.xe-plot-n { font-size: 13px; color: var(--text-dim); }
+.xe-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; border-radius: 8px; color: #7cc9fb; font-weight: 650; font-size: 14px; text-decoration: none; }
+.xe-link:hover { color: #fff; }
+.xe-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Matchups */
+.xe-card-mu .mu-pickers { display: flex; flex-direction: column; gap: 18px; margin: 0; }
+.xe-card-mu .mu-slot { min-height: 52px; }
+.xe-mu { display: flex; flex-direction: column; gap: 18px; padding: 28px 30px; }
+.xe-mu-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.xe-mu-verdict { margin: 0; font-family: var(--font-display); font-stretch: 75%; font-size: clamp(32px, 3.4vw, 48px); font-weight: 850; line-height: 1; letter-spacing: -.03em; color: var(--text-primary); }
+.xe-mu-verdict span { color: var(--accent); font-variant-numeric: tabular-nums; }
+.xe-mu-bar { display: flex; height: 48px; border-radius: 14px; overflow: hidden; font-weight: 700; font-size: 15px; color: #fff; }
+.xe-mu-side { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 16px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.xe-mu-side.is-b { justify-content: flex-end; border-left: 3px solid var(--bg-surface); }
+.xe-mu-side img { width: 22px; height: 22px; object-fit: contain; flex: none; }
+.xe-mu-side b { font-family: var(--font-display); font-stretch: 82%; font-size: 22px; }
+.xe-mu-name { overflow: hidden; text-overflow: ellipsis; }
+.xe-mu-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.xe-mu-stats li { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: var(--bg-subtle); }
+.xe-mu-stats span { font-size: 12.5px; color: var(--text-secondary); }
+.xe-mu-stats b { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+.xe-mu-stats b.is-num { font-family: var(--font-display); font-stretch: 82%; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.xe-mu-sub { margin: 6px 0 0; display: flex; gap: 10px; align-items: baseline; font-size: 14px; font-weight: 650; color: var(--text-primary); }
+
+/* ── The landscape ── */
+.xl { padding-top: 92px; }
+.xl-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--border); }
+.xl-h2 { margin: 0; font-family: var(--font-display); font-stretch: 75%; font-size: clamp(40px, 4.4vw, 64px); font-weight: 850; line-height: .95; letter-spacing: -.03em; color: var(--text-primary); }
+.xl-sub { margin: 0; max-width: 52ch; font-size: 16px; line-height: 1.6; color: var(--text-secondary); }
+.xl-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.xl-card {
+    display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 28px 28px 20px; border-radius: 24px;
+    background: linear-gradient(180deg, #0e1013, var(--bg-surface));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), 0 30px 60px -36px rgba(0,0,0,.9);
+}
+.xl-card.is-wide { grid-column: 1 / -1; }
+.xl-k { margin: 0; font-size: 13px; font-weight: 650; color: var(--accent); }
+.xl-h3 { margin: 0; font-family: var(--font-display); font-stretch: 82%; font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -.015em; color: var(--text-primary); text-wrap: balance; }
+.xl-find { margin: 0; max-width: 64ch; font-size: 16px; line-height: 1.6; color: #c4c8cc; }
+.xl-find b { color: #fff; font-weight: 700; }
+.xl-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.xl-foot { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.07); font-size: 12.5px; color: var(--text-dim); }
+.xl-legend { display: flex; gap: 18px; flex-wrap: wrap; color: var(--text-secondary); }
+.xl-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.xl-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; }
+.xl-subh { margin: 4px 0 0; font-size: 14px; font-weight: 650; color: var(--text-primary); }
+.xl-close { display: grid; grid-template-columns: repeat(auto-fit, minmax(28px, 1fr)); gap: 6px; align-items: end; }
+.xl-close-c { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.xl-close-t { position: relative; width: 100%; height: 56px; border-radius: 6px; background: rgba(255,255,255,.04); overflow: hidden; }
+.xl-close-t span { position: absolute; left: 0; right: 0; bottom: 0; background: #f0a868; border-radius: 6px 6px 0 0; }
+.xl-close-v { font-size: 12px; font-weight: 650; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.xl-close-y { font-size: 11px; color: var(--text-dim); }
+
+@media (prefers-reduced-motion: reduce) { .xe-chip, .xe-seg a, .xe-select, .xe-swap { transition: none; } }
+@media (max-width: 1000px) {
+    .xe-card { grid-template-columns: 1fr; }
+    .xe-ctl { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+    .xe-note { margin-top: 0; }
+    .xl-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+    .xe-head { padding-top: 28px; }
+    .xe-plot { padding: 14px 8px 12px; }
+    .xe-mu { padding: 18px 12px; }
+    .xl-card { padding: 20px 16px 16px; }
+    .xl-close-y { writing-mode: vertical-rl; transform: rotate(180deg); }
+    .xe-mu-side { padding: 0 10px; font-size: 13px; }
 }
