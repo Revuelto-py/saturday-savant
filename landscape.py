@@ -225,7 +225,8 @@ def stadiums(venues, net):
         a, b, c = (58, 63, 69), (28, 156, 240), (207, 233, 252)
         p, q, g = (a, b, f / .7) if f < .7 else (b, c, (f - .7) / .3)
         return '#%02x%02x%02x' % tuple(round(p[i] + (q[i] - p[i]) * g) for i in range(3))
-    o = ['<svg class="xl-svg" viewBox="0 0 975 610" role="img" aria-label="Map of the United States with every FBS home stadium placed by location, sized by capacity and shaded by the home team&#39;s Savant Net Rating.">',
+    # The outline's Aleutians run past x=0 (to -57.6), so the box starts at -60.
+    o = ['<svg class="xl-svg" viewBox="-60 0 1035 610" role="img" aria-label="Map of the United States with every FBS home stadium placed by location, sized by capacity and shaded by the home team&#39;s Savant Net Rating.">',
          f'<path d="{geo["land"]}" fill="#101215" stroke="rgba(231,233,234,.42)" stroke-width="1.1" stroke-linejoin="round"></path>',
          f'<path d="{geo["borders"]}" fill="none" stroke="rgba(255,255,255,.1)" stroke-width=".6"></path>']
     for r, x, y, team, cap in sorted(pts, reverse=True):
