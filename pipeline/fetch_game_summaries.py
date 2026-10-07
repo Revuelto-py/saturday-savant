@@ -44,6 +44,34 @@ cursor.execute('''
 todo = [r[0] for r in cursor.fetchall()]
 print(f"{len(todo)} completed games missing summaries")
 
+# A summary stored before ESPN finished filling it has drives, so it is not
+# "missing", but its play-by-play stops short of the final: 2026 WVU-Oklahoma
+# State was stored at 21-21 in the third quarter of a 24-41 game, and Savant
+# Rating read it as a loss. Re-fetch any of the newest season's games whose last
+# scored play does not match the official final (the upsert below only keeps a
+# bigger blob, so a still-short response changes nothing).
+cursor.execute('''
+    SELECT g.id, g.home_points, g.away_points, s.summary_gz
+    FROM games g JOIN game_summaries s ON s.game_id = g.id
+    WHERE g.completed = 1 AND g.home_points IS NOT NULL
+      AND g.season = (SELECT MAX(season) FROM games WHERE completed = 1)
+''')
+stale = []
+for gid, hp, ap, gz in cursor.fetchall():
+    try:
+        d = json.loads(gzip.decompress(bytes(gz)))
+    except Exception:
+        continue
+    last = None
+    for dr in (d.get('drives') or {}).get('previous') or []:
+        for p in dr.get('plays') or []:
+            if p.get('homeScore') is not None and p.get('awayScore') is not None:
+                last = (p['homeScore'], p['awayScore'])
+    if last is not None and last != (hp, ap):
+        stale.append(gid)
+print(f"{len(stale)} stored summaries end short of the final score")
+todo += stale
+
 # ESPN keys the site never reads — betting, editorial, and video content
 # make up ~30% of the payload
 CRUFT = ['news', 'article', 'videos', 'standings', 'pickcenter',

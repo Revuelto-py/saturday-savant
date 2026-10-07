@@ -248,7 +248,14 @@ def parse_game_drives(summary, home_name, away_name):
         end_home, end_away = run_home, run_away
         for p in plays:
             hs, as_ = p.get('homeScore'), p.get('awayScore')
+            # No single play adds more than 8 (a touchdown and a two-point try).
+            # ESPN occasionally stamps a play with a wrong score, usually the
+            # final: 2026 WVU-Oklahoma State has 24-41 on a first-quarter punt,
+            # and the running max then credited every later scoring drive with
+            # 0, turning a 17-point road win into a loss. Skip such a play.
             if hs is not None and as_ is not None:
+                if hs - end_home > 8 or as_ - end_away > 8:
+                    continue
                 end_home = max(end_home, hs)
                 end_away = max(end_away, as_)
 
