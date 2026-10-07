@@ -11095,7 +11095,9 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .tps-h2 { margin: 0; font-family: var(--font-display); font-stretch: 78%; font-weight: 850; font-size: clamp(28px, 3vw, 40px); line-height: 1; letter-spacing: -.025em; color: var(--text-primary); }
 .tps-when { font-size: 14px; color: #9aa0a6; }
 .tps-ph { position: relative; display: inline-block; flex: none; border-radius: 50%; overflow: hidden; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--tc) 55%, #202226), color-mix(in srgb, var(--tc) 16%, #0a0b0d)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
-.tps-ph img { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); width: 108%; height: 108%; object-fit: contain; }
+/* Headshots are 600x436 landscape cutouts: contain shrank the player to ~3/4 of
+   the circle, so fill it the way .player-avatar-sm does, trimming the sides. */
+.tps-ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .tps-ini { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 14px; font-weight: 700; color: #c4c8cc; }
 
 .tps-leaders { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 22px; }
