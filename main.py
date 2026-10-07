@@ -3911,6 +3911,91 @@ def top_games(games, forecasts, limit=TOP_GAMES_N, season=None):
     scored.sort(key=lambda x: (-x[0], x[1].get('day_key') or '', x[1]['id']))
     return [g for _, g in scored[:limit]]
 
+def _home_briefing(cursor, season, games, forecasts, top):
+    """The home page's "week in one screen" panels. Every panel is optional:
+    each is None/empty until its data exists (no ratings before week 1, no
+    simulation before the first forecasts, no upcoming games once a week ends),
+    and the template drops what is missing."""
+    cursor.execute('''SELECT s.team, s.net_rating, s.net_ranking, s.off_ranking, s.def_ranking,
+                             COALESCE(t.logo_dark, t.logo)
+                        FROM savant_ratings s JOIN teams t ON t.name = s.team
+                       WHERE s.season = %s AND s.net_ranking IS NOT NULL
+                       ORDER BY s.net_ranking''', (season,))
+    sv_rows = cursor.fetchall()
+    sv = {r[0]: int(r[2]) for r in sv_rows}
+    logos = {r[0]: r[5] for r in sv_rows}
+    top8 = [dict(team=r[0], net=r[1], rank=r[2], logo=r[5],
+                 sub=f'Offense {landscape.ordinal(r[3])}, defense {landscape.ordinal(r[4])}' if r[3] and r[4] else '')
+            for r in sv_rows[:8]]
+
+    # Game of the week: the top-ranked game still to be played, with a forecast.
+    gotw = next((g for g in top if not g['completed'] and g['id'] in forecasts), None)
+    if gotw:
+        a, h = forecast_pair(landscape.visible_on_black(team_hex(gotw.get('away_color'), '#5d6268')),
+                             landscape.visible_on_black(team_hex(gotw.get('home_color'), '#5d6268')))
+        hp = forecasts[gotw['id']]
+        gotw = dict(gotw, a_col=a, h_col=h, home_p=hp, away_p=1 - hp)
+
+    # Upset watch: the best chance to beat a team ranked above you, by the AP
+    # poll (ranked beats unranked) or, against a Savant top-25 team, by Savant
+    # Rating. A game counts once, under whichever ranking gives the underdog
+    # the bigger chance, so a favourite by both rankings is never the "upset".
+    upsets = []
+    for g in games:
+        p = forecasts.get(g['id'])
+        if p is None or g['completed']:
+            continue
+        favs = []
+        rh, ra = g.get('home_rank'), g.get('away_rank')
+        if rh or ra:
+            favs.append('home' if rh and (not ra or rh < ra) else 'away')
+        sh, sa = sv.get(g['home'], 999), sv.get(g['away'], 999)
+        if min(sh, sa) <= 25:
+            favs.append('home' if sh < sa else 'away')
+        best = None
+        for fav in favs:
+            dog = 'away' if fav == 'home' else 'home'
+            chance = p if dog == 'home' else 1 - p
+            if best is None or chance > best['chance'] + 1e-9:
+                best = dict(dog=g[dog], fav=g[fav], chance=chance, dog_home=dog == 'home',
+                            dog_rank=g.get(dog + '_rank'), fav_rank=g.get(fav + '_rank'),
+                            dog_logo=g.get(dog + '_logo'), id=g['id'],
+                            sv=(f'Savant {landscape.ordinal(sv[g[dog]])} vs {landscape.ordinal(sv[g[fav]])}, '
+                                if g[dog] in sv and g[fav] in sv else ''),
+                            when=f"{(g.get('kickoff_date') or '').split(', ')[0]} {g.get('kickoff_time') or ''}".strip())
+        if best:
+            upsets.append(best)
+    upsets.sort(key=lambda u: -u['chance'])
+
+    # Polls vs. the numbers: AP teams the rating rates lowest relative to their
+    # poll spot, and Savant top-25 teams the poll has well below their rating.
+    ap = get_ap_rankings(cursor, season)
+    over = sorted((dict(team=t, ap=r, svr=sv[t]) for t, r in ap.items() if t in sv and sv[t] > r),
+                  key=lambda x: -(x['svr'] - x['ap']))[:3]
+    under = [dict(team=r[0], ap=ap.get(r[0]), svr=sv[r[0]]) for r in sv_rows[:25]
+             if not ap.get(r[0]) or ap[r[0]] - sv[r[0]] >= 8][:3]
+    for x in over + under:
+        x['logo'] = logos.get(x['team'])
+        x['svr_txt'] = landscape.ordinal(x['svr'])
+
+    sim = _pool_store_get(f'simulator:{season}')
+    odds = []
+    if sim:
+        cursor.execute('SELECT name, COALESCE(logo_dark, logo) FROM teams WHERE name = ANY(%s)',
+                       ([t['team'] for t in sim['teams'][:8]],))
+        lg = dict(cursor.fetchall())
+        odds = [dict(team=t['team'], cfp=t['cfp'], logo=lg.get(t['team'])) for t in sim['teams'][:8]]
+
+    movers = _savant_movers(season, n=4)
+    if movers:
+        for k in ('up', 'down'):
+            for m in movers[k]:
+                m['move'] = f"{landscape.ordinal(m['prev_rank'])} to {landscape.ordinal(m['rank'])}"
+    return dict(top8=top8, n_rated=len(sv_rows), gotw=gotw, upsets=upsets[:5],
+                polls_over=over, polls_under=under if over else [], odds=odds,
+                movers=movers, record=forecast_record(season))
+
+
 @app.route('/')
 @app.route('/week/<int:week>/<season_type>')
 # query_string=True so ?leaders=<year> caches as its own entry — without it the
@@ -4012,6 +4097,7 @@ def home(week=None, season_type='regular'):
         # Drive tracking lives on the game page (Drives tab); point the hero
         # pill at the most prominent recent game rather than an unrelated page.
         featured_game_id = top[0]['id'] if top else None
+        briefing = _home_briefing(cursor, home_season, games, forecasts, top)
         # Regular season only: the postseason view is already grouped by round,
         # which is a stronger ordering than anything this would compute.
 
@@ -4028,7 +4114,7 @@ def home(week=None, season_type='regular'):
         forecasts=forecasts, completed_forecasts=completed_forecasts,
         leaders_season=leaders_season, leader_seasons=leader_seasons,
         fbs_team_count=fbs_team_count, featured_game_id=featured_game_id,
-        movers=_savant_movers(home_season))
+        n_seasons=len(leader_seasons), **briefing)
 
 @app.route('/games')
 @cache.cached(timeout=21600, query_string=True)

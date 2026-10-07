@@ -3,112 +3,168 @@
 {% block title %}Saturday Savant · College Football Analytics{% endblock %}
 {% block og_description %}Live scores, win probabilities, and Savant Ratings for every FBS college football game. Advanced stats, EPA, and forecasts for all {{ fbs_team_count or 136 }} teams, updated through the {{ home_season }} season.{% endblock %}
 
+{% macro logo(src, size) -%}
+{%- if src %}<img src="{{ src }}" alt="" width="{{ size }}" height="{{ size }}" loading="lazy">{% else %}<span class="hp-noimg" style="width: {{ size }}px; height: {{ size }}px"></span>{% endif -%}
+{%- endmacro %}
+{% macro pct(p) -%}{{ (p * 100)|round|int }}%{%- endmacro %}
+
 {% block content %}
 
 {# ── Masthead ─────────────────────────────────────────────────────────────
      One football built out of thousands of footballs (static/savant-ball.js):
      they assemble on load, and scrolling spins the ball and breaks it apart
-     before the slate arrives. It fills the screen below the navbar and ticker
+     before the week arrives. It fills the screen below the navbar and ticker
      by choice, and everything in it reads without the canvas: no WebGL or no
-     JS leaves the wordmark and subline as a complete hero. ── #}
+     JS leaves the wordmark, subline and links as a complete hero. ── #}
 <section class="sb-hero" id="sbHero" aria-labelledby="sbTitle">
     <canvas class="sb-ball" id="sbBall" aria-hidden="true"></canvas>
     <div class="page-wrapper sb-inner">
         <h1 class="sb-wm" id="sbTitle"><span class="sb-w1">Saturday</span> <span class="sb-w2">Savant</span></h1>
-        <p class="sb-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team — every season since 2016.</p>
+        <p class="sb-sub">Opponent-adjusted team ratings, win probabilities graded against what they predicted, and drive-level data for every FBS team, every season since 2016.</p>
+        <div class="hp-proof">
+            {% if record %}<a href="/savant-forecast"><b>{{ record.pct }}%</b> of {{ home_season }} games called right</a>{% endif %}
+            <span><b>{{ fbs_team_count }}</b> FBS teams</span>
+            {% if n_seasons %}<span><b>{{ n_seasons }}</b> seasons of data</span>{% endif %}
+        </div>
+        <a class="hp-cue" href="#week">This week in college football</a>
     </div>
 </section>
 
-<div class="page-wrapper">
-<div class="row g-5">
+<div class="page-wrapper hp" id="week">
 
-    <!-- Top Games -->
-    <div class="col-lg-8">
-      <section aria-labelledby="topGamesTitle">
-        <div class="slate-head slate-head-week" id="slate">
-            <h2 class="section-label" id="topGamesTitle">Top Games
-                <span class="section-label-season">{% if season_type == 'postseason' %}Postseason{% else %}Week {{ selected_week }}{% endif %} · {{ home_season }}</span>
-            </h2>
-            {% if games %}<a class="slate-head-note tg-all" href="/games?season={{ home_season }}&amp;week={{ selected_week }}&amp;stype={{ season_type }}">All {{ games|length }} games →</a>{% endif %}
-            <select class="form-select w-auto" onchange="window.location='/week/'+this.value" aria-label="Select week">
-                {% for w, stype in all_weeks %}
-                    {% set stype_short = 'postseason' if 'POSTSEASON' in stype else 'regular' %}
-                    <option value="{{ w }}/{{ stype_short }}"
-                        {% if w == selected_week and stype_short == season_type %}selected{% endif %}>
-                        {% if 'POSTSEASON' in stype %}Postseason{% else %}Week {{ w }}{% endif %}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        {% if top_games %}
-        <p class="slate-caption">Ranked by what is at stake: AP rankings, rivalries, conference games, team strength, and how close the forecast or the final was.</p>
-        {# An ordered list: the order is the point. role="list" keeps the list
-           semantics that list-style:none drops in Safari. #}
-        <ol class="home-games-grid tg-list" role="list">
-            {% for game in top_games %}
-            <li class="tg-item">
-                <span class="tg-rank">{{ loop.index }}</span>
-                {{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}
-            </li>
-            {% endfor %}
-        </ol>
-        {% else %}
-        <p class="slate-empty">No games are scheduled for {% if season_type == 'postseason' %}the {{ home_season }} postseason{% else %}Week {{ selected_week }} of {{ home_season }}{% endif %}. Pick another week above, or see the <a href="/games">full season schedule</a>.</p>
-        {% endif %}
-      </section>
-
-      {% if movers and (movers.up or movers.down) %}
-      {# Week-over-week Net Savant Rating change, under the slate. Direction is
-         carried by the arrow and the sign, not by colour alone. #}
-      <section class="mv-card" aria-labelledby="mvTitle">
-        <div class="slate-head">
-            <h2 class="section-label" id="mvTitle">Savant Movers
-                <span class="section-label-season">Week {{ movers.prev_week }} → {{ movers.week }}</span>
-            </h2>
-            <a class="slate-head-note tg-all" href="/savant-rating">How the rating works →</a>
-        </div>
-        <p class="slate-caption">The biggest changes in Net Savant Rating since last week.</p>
-        <div class="mv-cols">
-            {% for label, rows, up in (('Rising', movers.up, true), ('Falling', movers.down, false)) %}
-            {% if rows %}
-            <div class="leader-card mv-col">
-                <h3 class="mv-group">{{ label }}</h3>
-                {% for m in rows %}
-                <a class="leader-row mv-row" href="{{ team_url(m.team, home_season) }}">
-                    {% if m.logo %}<img class="mv-logo" src="{{ m.logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}
-                    <div style="flex:1;min-width:0">
-                        <span class="leader-name">{{ m.team }}</span>
-                        <div class="leader-team">#{{ m.prev_rank }} → #{{ m.rank }}</div>
-                    </div>
-                    <span class="mv-delta {{ 'is-up' if up else 'is-down' }}"><span aria-hidden="true">{{ '▲' if up else '▼' }}</span> {{ ('%+.1f'|format(m.delta)).replace('-', '−') }}</span>
-                </a>
-                {% endfor %}
-            </div>
-            {% endif %}
-            {% endfor %}
-        </div>
-      </section>
-      {% endif %}
+{# ── The week in one screen ── #}
+<section class="hp-sec" aria-labelledby="hpWeekH">
+    <div class="hp-sec-h">
+        <h2 id="hpWeekH">{% if season_type == 'postseason' %}The postseason{% else %}Week {{ selected_week }}{% endif %}, in one screen</h2>
+        <span>Updated after every game</span>
     </div>
 
-    <!-- Leaders Section -->
-    <div class="col-lg-4">
-      <div class="leader-rail">
-        <div class="slate-head">
-            <h2 class="section-label">Season Leaders</h2>
-            {% if leader_seasons and leader_seasons|length > 1 %}
-            {# Leaders run on their own season, independent of the games column:
-               they are stats-derived, and the season being played has none yet. #}
-            <select class="lb-select season-select" style="min-width:92px;padding:4px 10px" aria-label="Leaders season"
-                    onchange="location = location.pathname + '?leaders=' + this.value">
-                {% for s in leader_seasons %}
-                <option value="{{ s }}" {{ 'selected' if s == leaders_season else '' }}>{{ s }}</option>
-                {% endfor %}
-            </select>
-            {% endif %}
-        </div>
+    <div class="hp-grid2{{ ' is-solo' if not gotw }}">
+        {% if gotw %}{% set g = gotw %}{% set a_fav = g.away_p >= 0.5 %}
+        <article class="hp-gotw" style="--a: {{ g.a_col }}; --h: {{ g.h_col }}" aria-labelledby="hpGotwH">
+            <div class="hp-gotw-k"><span><b id="hpGotwH">Game of the week</b>, the best matchup on the slate by ranks and forecast</span><span>{{ g.kickoff_date }}, {{ g.kickoff_time }}</span></div>
+            <div class="hp-gotw-mid">
+                <div class="hp-gotw-m">
+                    <div class="hp-side">{{ logo(g.away_logo, 84) }}<div><b>{{ g.away }}</b>{% if g.away_rank %}<span>No. {{ g.away_rank }} AP</span>{% endif %}</div></div>
+                    <span class="hp-at">{{ 'vs' if g.neutral_site else 'at' }}</span>
+                    <div class="hp-side is-r"><div><b>{{ g.home }}</b>{% if g.home_rank %}<span>No. {{ g.home_rank }} AP</span>{% endif %}</div>{{ logo(g.home_logo, 84) }}</div>
+                </div>
+                <div class="hp-wp">
+                    <div class="hp-wp-bar" role="img" aria-label="Savant Forecast: {{ g.away }} {{ pct(g.away_p) }}, {{ g.home }} {{ pct(g.home_p) }}">
+                        <i class="{{ 'is-fav' if a_fav }}" style="width: {{ '%.1f'|format(g.away_p * 100) }}%"></i><i class="{{ 'is-fav' if not a_fav }}" style="width: {{ '%.1f'|format(g.home_p * 100) }}%"></i>
+                    </div>
+                    <div class="hp-wp-l"><span class="{{ 'is-fav' if a_fav }}"><b>{{ pct(g.away_p) }}</b>{{ g.away }}</span><span class="hp-dim">Savant Forecast</span><span class="{{ 'is-fav' if not a_fav }}"><b>{{ pct(g.home_p) }}</b>{{ g.home }}</span></div>
+                </div>
+            </div>
+            <div class="hp-gotw-a">
+                <a class="hp-btn is-p" href="/game/{{ g.id }}">Game preview</a>
+                <a class="hp-btn" href="/rivalry/{{ g.away|team_slug }}/{{ g.home|team_slug }}">Head-to-head history</a>
+            </div>
+        </article>
+        {% endif %}
 
+        {% if top8 %}
+        <section class="hp-card hp-pad" aria-labelledby="hpTopH">
+            <div class="hp-card-h"><h3 id="hpTopH">Savant Top {{ top8|length }}</h3><a href="/rankings">All {{ n_rated }}</a></div>
+            {% for t in top8 %}
+            <a class="hp-row" href="{{ team_url(t.team, home_season) }}">
+                <span class="hp-rk">{{ t.rank }}</span>{{ logo(t.logo, 30) }}
+                <span class="hp-nm">{{ t.team }}{% if t.sub %}<span>{{ t.sub }}</span>{% endif %}</span>
+                <span class="hp-v">{{ '%+.1f'|format(t.net) }}</span>
+            </a>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </div>
+
+    {% if odds or upsets or polls_over %}
+    <div class="hp-grid3">
+        {% if odds %}
+        <section class="hp-card hp-pad" aria-labelledby="hpOddsH">
+            <div class="hp-card-h"><h3 id="hpOddsH">Playoff odds</h3><a href="/simulator">Season simulator</a></div>
+            {% for t in odds %}
+            <a class="hp-odds" href="{{ team_url(t.team, home_season) }}">{{ logo(t.logo, 26) }}<span class="hp-nm">{{ t.team }}</span><i><em style="width: {{ '%.0f'|format(t.cfp * 100) }}%"></em></i><b>{% if t.cfp >= 0.995 %}&gt;99%{% elif t.cfp < 0.005 %}&lt;1%{% else %}{{ pct(t.cfp) }}{% endif %}</b></a>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        {% if upsets %}
+        <section class="hp-card hp-pad" aria-labelledby="hpUpsetH">
+            <div class="hp-card-h"><h3 id="hpUpsetH">Upset watch</h3><span>Best chance to beat a higher-ranked team, by AP or Savant</span></div>
+            {% for u in upsets %}
+            <a class="hp-risk" href="/game/{{ u.id }}">{{ logo(u.dog_logo, 30) }}
+                <span class="hp-nm">{% if u.dog_rank %}No. {{ u.dog_rank }} {% endif %}{{ u.dog }} over {% if u.fav_rank %}No. {{ u.fav_rank }} {% endif %}{{ u.fav }}<span>{{ u.sv }}{{ u.when }}, {{ 'home' if u.dog_home else 'away' }}</span></span>
+                <b>{{ pct(u.chance) }}</b></a>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        {% if polls_over %}
+        <section class="hp-card hp-pad" aria-labelledby="hpPollsH">
+            <div class="hp-card-h"><h3 id="hpPollsH">Polls vs. the numbers</h3><a href="/rankings">Rankings</a></div>
+            <div class="hp-pv-k">Voters like them more</div>
+            {% for t in polls_over %}
+            <a class="hp-row is-pv" href="{{ team_url(t.team, home_season) }}">{{ logo(t.logo, 30) }}<span class="hp-nm">{{ t.team }}<span>No. {{ t.ap }} AP, {{ t.svr_txt }} Savant</span></span><span class="hp-v is-down">{{ t.svr_txt }}</span></a>
+            {% endfor %}
+            {% if polls_under %}
+            <div class="hp-pv-k" style="margin-top: 10px">The numbers like them more</div>
+            {% for t in polls_under %}
+            <a class="hp-row is-pv" href="{{ team_url(t.team, home_season) }}">{{ logo(t.logo, 30) }}<span class="hp-nm">{{ t.team }}<span>{% if t.ap %}No. {{ t.ap }} AP{% else %}Unranked in AP{% endif %}, {{ t.svr_txt }} Savant</span></span><span class="hp-v is-up">{% if t.ap %}No. {{ t.ap }}{% else %}NR{% endif %}</span></a>
+            {% endfor %}
+            {% endif %}
+        </section>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+
+{# ── Top games: the site's own game cards, the same ones /games draws ── #}
+<section class="hp-sec" aria-labelledby="hpGamesH">
+    <div class="hp-sec-h">
+        <h2 id="hpGamesH">Top games</h2>
+        {% if games %}<a href="/games?season={{ home_season }}&amp;week={{ selected_week }}&amp;stype={{ season_type }}">All {{ games|length }} games</a>{% endif %}
+    </div>
+    {% if top_games %}
+    <div class="hp-gcards">
+        {% for game in top_games[:9] %}{{ gc.game_card(game, prob=forecasts.get(game.id), forecast=completed_forecasts.get(game.id)) }}{% endfor %}
+    </div>
+    {% else %}
+    <p class="slate-empty">No games are scheduled for {% if season_type == 'postseason' %}the {{ home_season }} postseason{% else %}Week {{ selected_week }} of {{ home_season }}{% endif %}. See the <a href="/games">full season schedule</a>.</p>
+    {% endif %}
+</section>
+
+<section class="hp-sec" aria-labelledby="hpDeeperH">
+    <div class="hp-sec-h"><h2 id="hpDeeperH">Go deeper</h2><span>The tools behind the numbers</span></div>
+    <div class="hp-explore">
+        <a class="hp-ex" href="/simulator"><b>Season simulator</b><span>Every team's odds of a title game, the Playoff and the national title, from 10,000 simulated seasons.</span><em>Open</em></a>
+        <a class="hp-ex" href="/explorer"><b>Stat explorer</b><span>Plot any two stats for every team or player, and see where yours sits in the landscape.</span><em>Open</em></a>
+        <a class="hp-ex" href="/compare"><b>Compare players</b><span>Two players side by side: production, efficiency and percentiles against their position.</span><em>Open</em></a>
+        <a class="hp-ex" href="/savant-rating"><b>Savant Rating</b><span>How the opponent-adjusted rating works, and how well it predicts what happens next.</span><em>Open</em></a>
+    </div>
+</section>
+
+{% if movers and (movers.up or movers.down) %}
+<section class="hp-sec">
+    <div class="hp-card hp-pad" role="region" aria-labelledby="hpMovesH">
+        <div class="hp-card-h"><h3 id="hpMovesH">Biggest moves this week</h3><span>Savant Rating, week {{ movers.prev_week }} to {{ movers.week }}</span></div>
+        <div class="hp-mv-grid">
+            {% for m in movers.up %}
+            <a class="hp-mv" href="{{ team_url(m.team, home_season) }}">{{ logo(m.logo, 30) }}<span class="hp-nm">{{ m.team }}<span>{{ m.move }}</span></span><b class="is-up">+{{ '%.1f'|format(m.delta) }}</b></a>
+            {% endfor %}
+            {% for m in movers.down %}
+            <a class="hp-mv" href="{{ team_url(m.team, home_season) }}">{{ logo(m.logo, 30) }}<span class="hp-nm">{{ m.team }}<span>{{ m.move }}</span></span><b class="is-down">−{{ '%.1f'|format(-m.delta) }}</b></a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{# ── Season leaders: the site's leader cards. Leaders run on their own season
+     (?leaders=<year>): they are stats-derived, and the season being played has
+     none until its first games are recorded. ── #}
+<section class="hp-sec" aria-labelledby="hpLeadH">
+    <div class="hp-sec-h"><h2 id="hpLeadH">Season leaders{% if leaders_season != home_season %} <span class="hp-h-season">{{ leaders_season }}</span>{% endif %}</h2><a href="/leaderboards?season={{ leaders_season }}">All leaderboards</a></div>
+    <div class="hp-lead-grid">
         {% for label, href, players in leaders %}
         <div class="leader-card">
             <div class="leader-head">
@@ -131,33 +187,20 @@
                 </div>
                 <span class="leader-val">{{ p[2] }}</span>
             {% endset %}
-
             {% if loop.first %}
-                {% if p[5] %}
-                <a class="leader-row featured" href="/player/{{ p[5] }}">{{ inner }}</a>
-                {% else %}
-                <div class="leader-row featured">{{ inner }}</div>
-                {% endif %}
+                {% if p[5] %}<a class="leader-row featured" href="/player/{{ p[5] }}">{{ inner }}</a>{% else %}<div class="leader-row featured">{{ inner }}</div>{% endif %}
             {% else %}
-                {% if p[5] %}
-                <a class="leader-row" href="/player/{{ p[5] }}">
-                    <span class="leader-rank">{{ loop.index }}</span>{{ inner }}
-                </a>
-                {% else %}
-                <div class="leader-row">
-                    <span class="leader-rank">{{ loop.index }}</span>{{ inner }}
-                </div>
-                {% endif %}
+                {% if p[5] %}<a class="leader-row" href="/player/{{ p[5] }}"><span class="leader-rank">{{ loop.index }}</span>{{ inner }}</a>
+                {% else %}<div class="leader-row"><span class="leader-rank">{{ loop.index }}</span>{{ inner }}</div>{% endif %}
             {% endif %}
             {% endfor %}
         </div>
         {% else %}
         <p class="slate-empty">No {{ leaders_season }} stat lines yet. Leaders fill in once the season's first games are recorded.</p>
         {% endfor %}
-      </div>
     </div>
+</section>
 
-</div>
 </div>
 {% endblock %}
 
