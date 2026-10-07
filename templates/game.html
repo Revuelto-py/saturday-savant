@@ -38,12 +38,12 @@
    forecast, in points, from an even matchup at this venue (home field is the
    first push). The pushes add up to the forecast exactly, so the table closes
    on the number instead of apologising that it doesn't. Away on the left,
-   home on the right, the same axis as the hero above; the abbreviation on
-   each push says which team, so colour is never the only cue. Collapsed by
+   home on the right, the same axis as the hero above, each in its team's
+   primary colour; the abbreviation on each push says which team, so colour
+   is never the only cue (two red teams still read). Collapsed by
    default: the hero already states the forecast, this is the "why". #}
 {% macro forecast_sheet(fc, fav_team, past) %}
 {% set s = fc.contrib %}
-{% set pr = hero_pair(away_color, home_color) %}
 {% set ab = team_abbr or {} %}
 {% set a_ab = ab.get('away') or away_team %}
 {% set h_ab = ab.get('home') or home_team %}
@@ -75,7 +75,7 @@
                 <div class="fsx-mid">
                     <b>{{ r.label }}</b>
                     {% if r.note %}<span class="fsx-note">{{ r.note }}</span>{% endif %}
-                    <span class="fsx-bar" role="img" aria-label="{{ r.label }} moves the forecast {{ '%.1f' % r.pts }} points toward {{ home_team if to_home else away_team }}"><i style="{{ 'left' if to_home else 'right' }}: 50%; width: {{ r.width }}%; background: {{ pr[1] if to_home else pr[0] }}"></i></span>
+                    <span class="fsx-bar" role="img" aria-label="{{ r.label }} moves the forecast {{ '%.1f' % r.pts }} points toward {{ home_team if to_home else away_team }}"><i style="{{ 'left' if to_home else 'right' }}: 50%; width: {{ r.width }}%; background: {{ home_color if to_home else away_color }}"></i></span>
                     <span class="fsx-pt">+{{ '%.1f' % r.pts }} {{ h_ab if to_home else a_ab }}</span>
                 </div>
                 <div class="fsx-v fsx-v-h{{ ' is-edge' if r.h.edge }}">{% if r.h.txt %}{{ r.h.txt }}{% if r.h.cap %}<small>{{ r.h.cap }}</small>{% endif %}{% endif %}</div>
@@ -85,7 +85,7 @@
                 <div class="fsx-v fsx-v-a fsx-pct{{ ' is-edge' if h_pct < 50 }}">{{ '%.1f' % (100 - h_pct) }}%</div>
                 <div class="fsx-mid">
                     <b>Adds up to</b>
-                    <span class="fsx-split" role="img" aria-label="{{ away_team }} {{ '%.1f' % (100 - h_pct) }} percent, {{ home_team }} {{ '%.1f' % h_pct }} percent"><i style="width: {{ '%.1f' % (100 - h_pct) }}%; background: {{ pr[0] }}"></i><i style="width: {{ '%.1f' % h_pct }}%; background: {{ pr[1] }}"></i></span>
+                    <span class="fsx-split" role="img" aria-label="{{ away_team }} {{ '%.1f' % (100 - h_pct) }} percent, {{ home_team }} {{ '%.1f' % h_pct }} percent"><i style="width: {{ '%.1f' % (100 - h_pct) }}%; background: {{ away_color }}"></i><i style="width: {{ '%.1f' % h_pct }}%; background: {{ home_color }}"></i></span>
                     <span class="fsx-note">Locked at kickoff, graded after</span>
                 </div>
                 <div class="fsx-v fsx-v-h fsx-pct{{ ' is-edge' if h_pct >= 50 }}">{{ '%.1f' % h_pct }}%</div>

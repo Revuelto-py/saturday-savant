@@ -5724,6 +5724,9 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
 .fsx-bar { position: relative; width: 100%; max-width: 320px; height: 8px; border-radius: 999px; background: rgba(255,255,255,.05); }
 .fsx-bar::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; border-left: 1px solid rgba(255,255,255,.28); }
 .fsx-bar i { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+/* Bars are each team's PRIMARY colour, unlifted; a faint light edge keeps a
+   dark primary (crimson, navy, black) visible on the card. */
+.fsx-bar i, .fsx-split i { box-shadow: inset 0 0 0 1px rgba(255,255,255,.3); }
 .fsx-pt { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .fsx-total { padding-top: 16px; border-top-color: rgba(255,255,255,.16); }
 .fsx-total .fsx-pct { font-size: 34px; font-weight: 850; }
