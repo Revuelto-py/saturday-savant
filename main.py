@@ -3931,8 +3931,9 @@ def _home_briefing(cursor, season, games, forecasts, top):
     # Game of the week: the top-ranked game still to be played, with a forecast.
     gotw = next((g for g in top if not g['completed'] and g['id'] in forecasts), None)
     if gotw:
-        a, h = forecast_pair(landscape.visible_on_black(team_hex(gotw.get('away_color'), '#5d6268')),
-                             landscape.visible_on_black(team_hex(gotw.get('home_color'), '#5d6268')))
+        # The same pair the game card's edge draws, so the two never disagree.
+        a, h = forecast_pair(team_hex(gotw.get('away_color'), '#5a2b2b'),
+                             team_hex(gotw.get('home_color'), '#2b3a55'))
         hp = forecasts[gotw['id']]
         gotw = dict(gotw, a_col=a, h_col=h, home_p=hp, away_p=1 - hp)
 

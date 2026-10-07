@@ -4078,7 +4078,8 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 
 .hp { padding-top: 0; }
 .hp a { text-decoration: none; color: inherit; }
-.hp img { display: block; flex: none; object-fit: contain; }
+.hp img { display: block; flex: none; }
+.hp-row img, .hp-risk img, .hp-mv img, .hp-odds img, .hp-side img { object-fit: contain; }
 .hp-noimg { display: inline-block; flex: none; border-radius: 50%; background: rgba(255,255,255,.08); }
 .hp-sec { margin-top: 64px; }
 .hp-sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
