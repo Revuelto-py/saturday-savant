@@ -1,6 +1,6 @@
 # Savant Forecast — retrain plan & experiment log
 
-The production model (`forecast_model.json`, v2, 21 features — the 16 inputs
+The production model (`forecast_model.json`, v3, 21 features — the 16 inputs
 plus five early-season twins, see "Shipped 2026-09-28" below) is trained
 **locally only** by `forecast/train_forecast.py`; sklearn never deploys. Serving is a dot
 product in `pipeline/predict_games.py`.
@@ -28,7 +28,8 @@ product in `pipeline/predict_games.py`.
 
 After each season completes (January, once bowls/CFP are final and the weekly
 cron has ingested them). Retraining rolls the season splits forward, e.g. after
-2026: train 2017–2024, validate 2025, test 2026.
+2026: train 2017–2024, validate 2025, test 2026 — and then (since v3) refits the
+shipped artifact on 2017–2026; the reported numbers stay the held-out ones.
 
 ```bash
 python3 forecast/train_forecast.py          # prints the full protocol report
@@ -104,6 +105,40 @@ rejected on them, and one near-miss was caused by skipping the third.
 4. **Test candidates one at a time first, then in combination.** Combined
    effects differ, and on ~8.6k games more features is a real overfitting risk:
    all 13 candidates together scored *worse* than the production 16.
+
+## Shipped 2026-10-07 — refit through the test season (v2 → v3)
+
+From the full Savant Rating / Forecast audit. Nothing about the features
+changed; what changed is which seasons the shipped artifact is fit on.
+
+- **The artifact used to be the 2017–23 fit**, the same model the test report
+  grades. 2024 (val) and 2025 (test) never entered the live model. Now
+  `train_forecast.py` prints the honest report exactly as before (train 2017–23,
+  tune 2024, test 2025 once), then refits on 2017–2025 for the artifact, with C
+  chosen one step later (fit 2017–24, score 2025). Artifact field `fit_seasons`
+  records it. Walk-forward 2021–26, 4,216 games, lag-2 fit vs latest fit:
+  accuracy 71.42% both (McNemar +78/−78), Brier 0.1875 → 0.1855, log loss
+  0.5525 → 0.5474, Brier better in 6/6 seasons. `train_fcs_forecast.py` refits
+  the same way (FCS artifact v2).
+- **Held-out report under v3's Savant history** (the Savant Rating history was
+  rebuilt the same day, which changes `prior_savant_diff`): test 2025 72.28%,
+  Brier 0.1821, log loss 0.5390; beats prior-SP+ 65.35% and Elo-alone 70.92%,
+  below Vegas 73.51%. The 70–80% bucket ran 4 pts under-confident on n=170
+  (1.3 SE); pooled walk-forward 2021–26 calibration is within 2 pts everywhere,
+  slope 0.94.
+- **Margin/probability clashes are called even.** The Ridge margin head can lean
+  the other way near 50% (~2.5% of games; "Tulsa by 2" on a game the margin had
+  Arkansas winning). `predict_games._predict` now sets the margin to 0 when its
+  sign disagrees with the probability; the game page shows "Toss-up". Deriving
+  the margin from the probability (σ·logit, σ fit on training) removes clashes
+  too but costs accuracy: walk-forward MAE 12.90 vs 12.82 (t=+3.4). Rejected.
+- **Breakdown:** v3 splits last season's strength between `prior_sp_diff_early`
+  (+0.24) and `prior_savant_diff_early` (+0.30, was +0.15). They measure one
+  thing, so `forecast_explain` folds prior Savant into the prior-SP+ row,
+  relabelled "Last season's ratings". All other signs unchanged from v2.
+- Family shares recomputed: in-season 61.1 / roster 18.4 / priors 16.7 /
+  situation 3.7. 2025 backtest rows stay v2 (out-of-sample); 2026 scored rows
+  stay frozen; unscored 2026 rows re-forecast as v3.
 
 ## Shipped 2026-09-28 — early-season twins (v1 → v2)
 

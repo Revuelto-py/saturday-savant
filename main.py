@@ -5966,7 +5966,7 @@ def _svr_constants():
     so the four assignments are read from its source instead. Any that fail to
     parse fall back to the value in force when this was written.
     """
-    out = {'hfa': 1.19, 'prior_drives': 25, 'regress': 0.65,
+    out = {'hfa': 1.09, 'prior_drives': 35, 'regress': 0.80,
            'garbage': {2: 38, 3: 28, 4: 21}}
     try:
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -6149,16 +6149,16 @@ def _svr_figures(field, games, top10, avg_off, svr, dpg):
 # couple the web process to a model file. Recompute after any retrain with
 # tools/forecast_family_shares.py and update these four numbers.
 FORECAST_FAMILIES = [
-    ('In-season form', 57.6,
+    ('In-season form', 61.1,
      'Game-by-game Elo, points scored and allowed per game, record, games played.',
      'var(--accent)'),
-    ('Roster & recruiting', 22.4,
+    ('Roster & recruiting', 18.4,
      'Four-year recruiting average, returning production, transfer-portal talent.',
      '#34d399'),
-    ('Preseason priors', 15.3,
+    ('Preseason priors', 16.7,
      "Last season's SP+ and Savant Net, and a flag for teams that have neither.",
      '#c084fc'),
-    ('Situation', 4.8,
+    ('Situation', 3.7,
      'Neutral site, postseason, days of rest, week of the season.',
      '#f0a868'),
 ]

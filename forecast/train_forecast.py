@@ -9,6 +9,8 @@ Protocol (fixed before any training):
   • Metrics: straight-up accuracy, Brier score, log loss, calibration deciles,
     accuracy by season (walk-forward), by week bucket, favorites vs underdogs.
   • Ship bar: must beat the prior-SP+ and Elo-alone baselines on test.
+  • The artifact is then refit on every season through the test season (see
+    "production fit"); the test numbers stay those of the held-out fit.
 
 Artifact: forecast_model.json — feature names, scaler params, coefficients.
 Serving is a dot product; sklearn is a training-time dependency only.
@@ -203,6 +205,25 @@ def main():
         v_mae = np.abs(vm - actual[vi]).mean() if len(vi) else float('nan')
         print(f"  {name:10} model MAE={mae:.2f}  vegas MAE={v_mae:.2f}  (n={len(split)})")
 
+    # ── production fit: every completed season ──────────────────────────────
+    # Everything above is the honest report: a model that never saw the test
+    # season, graded on it once. The model that SHIPS is then refit on every
+    # season through the test season, because shipping the 2017-23 fit left the
+    # two most recent seasons out of the live model entirely. Walk-forward
+    # 2021-26 (4,216 games): same accuracy (71.42% both), Brier 0.1875 ->
+    # 0.1855, log loss 0.5525 -> 0.5474, Brier better in all six seasons.
+    # C is chosen the same way one step later: fit through the val season,
+    # score on the test season.
+    _, _, _, C = fit_logistic([r for r in rows if TRAIN_SEASONS[0] <= r['season'] <= VAL_SEASON], te)
+    prod = [r for r in rows if TRAIN_SEASONS[0] <= r['season'] <= TEST_SEASON]
+    Xtr, ytr = xy(prod)
+    mu, sd = Xtr.mean(axis=0), Xtr.std(axis=0)
+    sd[sd == 0] = 1.0
+    clf = LogisticRegression(C=C, max_iter=2000).fit((Xtr - mu) / sd, ytr)
+    ridge = Ridge(alpha=10.0).fit((Xtr - mu) / sd,
+                                  np.array([r['home_points'] - r['away_points'] for r in prod], dtype=float))
+    print(f"\n== PRODUCTION FIT == {TRAIN_SEASONS[0]}-{TEST_SEASON}, n={len(prod)}, C={C}")
+
     # ── coefficients (explainability) ───────────────────────────────────────
     print("\n== COEFFICIENTS (standardized) ==")
     order = np.argsort(-np.abs(clf.coef_[0]))
@@ -212,8 +233,11 @@ def main():
 
     # ── artifact ────────────────────────────────────────────────────────────
     artifact = {
-        'version': 2,   # 2 = early-season twins (2026-09-28)
+        'version': 3,   # 2 = early-season twins (2026-09-28); 3 = refit through the test season
         'trained_at': datetime.now(timezone.utc).isoformat(),
+        # The shipped fit covers every season through test_season; the reported
+        # accuracy comes from the separate train_seasons fit, graded on test_season.
+        'fit_seasons': list(range(TRAIN_SEASONS[0], TEST_SEASON + 1)),
         'train_seasons': TRAIN_SEASONS, 'val_season': VAL_SEASON, 'test_season': TEST_SEASON,
         'feature_names': FEATURE_NAMES,
         'scaler_mean': mu.tolist(), 'scaler_std': sd.tolist(),

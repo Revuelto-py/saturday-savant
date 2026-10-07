@@ -18,17 +18,20 @@ WHICH FEATURES ARE PUBLIC
 The model fits 21 features, but only six carry independently meaningful,
 sign-correct weight; the rest are collinearity artifacts or bookkeeping and
 were deliberately kept out of the public explanation (a wpct_diff that lands
-NEGATIVE is re-expressing Elo, not saying wins hurt you). v2 weights, full
+NEGATIVE is re-expressing Elo, not saying wins hurt you). v3 weights, full
 season / extra early-season weight from the `_early` twin (folded into the
 same row, see contrib()):
 
-    elo_diff       +0.89 / −0.35    recruit4_diff  +0.30 / +0.17
-    ppg_diff       +0.37            ret_prod_diff  +0.24 / +0.05
-    papg_diff      −0.32            prior_sp_diff  −0.04 / +0.34
+    elo_diff       +0.94 / −0.49    recruit4_diff  +0.15 / +0.25
+    ppg_diff       +0.40            ret_prod_diff  +0.21 / +0.05
+    papg_diff      −0.34            prior_sp_diff  −0.04 / +0.24
+                                    prior_savant   −0.02 / +0.30
 
-So Elo's weight grows as the season goes and last season's SP+ matters in
-September and is ~0 by November — the fade the twins exist to express.
-Omitted: prior_savant_diff (collinear with prior SP+), recruit_diff
+(v3, 2026-10-07: refit 2017-25 on the rebuilt Savant history.) So Elo's
+weight grows as the season goes and last season's ratings matter in September
+and are ~0 by November — the fade the twins exist to express. Prior SP+ and
+prior Savant are reported as ONE row ("Last season's ratings"), since they
+measure the same thing and the fit splits it between them. Omitted: recruit_diff
 (collinear with the 4-year average), transfer_diff (a measured null),
 wpct_diff (sign-flipped Elo restatement), and the bookkeeping inputs
 prior_missing / games_min / rest_diff / week / postseason.
@@ -50,7 +53,7 @@ PUBLIC_FEATURES = [
     ('ppg_diff',      'Points per game',      'ppg'),
     ('ret_prod_diff', 'Returning production', 'pct'),
     ('papg_diff',     'Points allowed',       'papg'),
-    ('prior_sp_diff', "Last season's SP+",    'sp'),
+    ('prior_sp_diff', "Last season's ratings", 'sp'),
 ]
 
 # Feature index of the neutral-site flag, folded into the home-field row.
@@ -104,6 +107,12 @@ def explain(model, feats):
         # its push belongs to the parent's row, not a row of its own.
         if name + '_early' in idx:
             c += contrib(name + '_early')
+        # Last season's SP+ and last season's Savant Rating are one idea, how
+        # good the team was a year ago, and v3 splits its weight between them
+        # almost evenly (+0.24 / +0.30 early). Showing SP+ alone hid half of
+        # it; showing both would double-count one signal. One row carries both.
+        if name == 'prior_sp_diff' and 'prior_savant_diff' in idx:
+            c += contrib('prior_savant_diff')
         return c
 
     # Before either side has kicked off, season-to-date scoring is 0−0: the

@@ -46,6 +46,13 @@ def _predict(mdl, feats):
     logit = mdl['intercept'] + sum(c * v for c, v in zip(mdl['coef'], z))
     prob = 1.0 / (1.0 + math.exp(-logit))
     margin = mdl['margin_intercept'] + sum(c * v for c, v in zip(mdl['margin_coef'], z))
+    # The margin is a separate (Ridge) head, so near 50% it can lean the other
+    # way: Arkansas 49.5% "by 1.8", which the game page renders as the OTHER team
+    # by 2. ~2.5% of games, all within a couple of points of even. Deriving the
+    # margin from the probability instead removes the clash but is less accurate
+    # (walk-forward 2021-26 MAE 12.90 vs 12.82), so a clash is called even.
+    if (prob >= 0.5) != (margin >= 0):
+        margin = 0.0
     return prob, margin
 
 

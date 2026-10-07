@@ -100,9 +100,21 @@ def main():
         print(f"  {FCS_FEATURE_NAMES[i]:18} {clf.coef_[0][i]:+.4f}")
     print(f"  {'<intercept>':18} {clf.intercept_[0]:+.4f}")
 
+    # ── production fit: every completed season ──────────────────────────────
+    # The report above is the held-out fit; the artifact that ships is refit
+    # on every season through TEST, as forecast/train_forecast.py does, so the
+    # two newest seasons are not left out of the live model.
+    prod = [r for r in fcs if TRAIN[0] <= r['season'] <= TEST]
+    Xtr, ytr = xy(prod)
+    mu, sd = Xtr.mean(0), Xtr.std(0); sd[sd == 0] = 1.0
+    clf = LogisticRegression(C=C, max_iter=3000).fit((Xtr - mu) / sd, ytr)
+    ridge = Ridge(alpha=10.0).fit((Xtr - mu) / sd, np.array([r['margin'] for r in prod], dtype=float))
+    print(f"\n== PRODUCTION FIT == {TRAIN[0]}-{TEST}, n={len(prod)}, C={C}")
+
     artifact = {
-        'version': 1, 'kind': 'fbs_vs_fcs',
+        'version': 2, 'kind': 'fbs_vs_fcs',   # 2 = refit through the test season
         'trained_at': datetime.now(timezone.utc).isoformat(),
+        'fit_seasons': list(range(TRAIN[0], TEST + 1)),
         'feature_names': FCS_FEATURE_NAMES,
         'scaler_mean': mu.tolist(), 'scaler_std': sd.tolist(),
         'coef': clf.coef_[0].tolist(), 'intercept': float(clf.intercept_[0]),

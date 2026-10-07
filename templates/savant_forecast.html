@@ -114,15 +114,15 @@
             <div class="svr-row-text">
                 <span class="svr-step" aria-hidden="true">1</span>
                 <h2 class="svr-h2" id="fc-model-h">One question, asked before kickoff</h2>
-                <p class="svr-row-fig"><span>2017–23</span> training seasons; tuned on 2024, tested on 2025</p>
+                <p class="svr-row-fig"><span>2017–23</span> training seasons; tuned on 2024, tested on 2025, then refit through 2025</p>
                 <div class="svr-prose">
-                    <p>The forecast answers a single thing: <em>what are the odds each team wins this game?</em> It is a logistic regression, the plainest model that does this job, trained on 2017 through 2023, tuned on 2024, and tested on a 2025 season it had never seen.</p>
-                    <p>A second output turns the same inputs into an expected margin, which is where the "by about 10" line on a game page comes from.</p>
+                    <p>The forecast answers a single thing: <em>what are the odds each team wins this game?</em> It is a logistic regression, the plainest model that does this job, trained on 2017 through 2023, tuned on 2024, and tested on a 2025 season it had never seen. Once that test was graded, the live model was refit on every season through 2025, so the newest football counts too; the accuracy on this page is still the held-out test.</p>
+                    <p>A second output turns the same inputs into an expected margin, which is where the "by about 10" line on a game page comes from. When the two outputs lean different ways in a near coin-flip, the game is called a toss-up rather than given to either side.</p>
                 </div>
             </div>
             <figure class="svr-art">
                 <ol class="sf-seasons" aria-label="How each season is used">
-                    {% for use, y0, y1, cls in [('Elo warm-up', 2016, 2016, 'is-burn'), ('Trained', 2017, 2023, 'is-train'), ('Tuned', 2024, 2024, 'is-tune'), ('Tested', 2025, 2025, 'is-test'), ('Live', 2026, 2026, 'is-live')] %}
+                    {% for use, y0, y1, cls in [('Elo warm-up', 2016, 2016, 'is-burn'), ('Trained', 2017, 2023, 'is-train'), ('Tuned', 2024, 2024, 'is-tune'), ('Tested', 2025, 2025, 'is-test'), ('Live fit', 2017, 2025, 'is-train'), ('Live', 2026, 2026, 'is-live')] %}
                     <li>
                         <span class="sf-use">{{ use }}</span>
                         <span class="sf-gantt"><span class="sf-gantt-bar {{ cls }}" style="left: {{ ((y0 - 2016) / 11 * 100)|round(2) }}%; width: {{ ((y1 - y0 + 1) / 11 * 100)|round(2) }}%"></span></span>
@@ -130,7 +130,7 @@
                     </li>
                     {% endfor %}
                 </ol>
-                <figcaption class="svr-note svr-art-cap">The test season never touched training, so its accuracy is a fair read of a season the model has not seen.</figcaption>
+                <figcaption class="svr-note svr-art-cap">The test season never touched training, so its accuracy is a fair read of a season the model has not seen. Only after that grade was the live model refit through 2025.</figcaption>
             </figure>
         </section>
 
