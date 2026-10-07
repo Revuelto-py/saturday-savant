@@ -53,10 +53,6 @@ $PY pipeline/fetch_data.py
 # sees the corrected week. It runs again at the end for the tables written later.
 echo "── [2/23] label week 0 (apply_week_zero) ──"
 $PY pipeline/apply_week_zero.py || note_fail "week 0 pass failed — weeks unchanged, continuing"
-# Needs this week's predictions (step 21). Soft: a failure keeps last week's
-# stored simulation on /simulator rather than aborting the summary below.
-echo "── [23/23] Season simulator: play out the rest of the season (simulate_season) ──"
-$PY pipeline/simulate_season.py || note_fail "season simulator failed — /simulator keeps last week's run"
 # Player game logs. main.py caches these per player-season and only rebuilds one
 # when the cached copy predates the newest completed kickoff — refreshing them
 # here in bulk (~17 CFBD calls for the whole player base) keeps that rebuild out

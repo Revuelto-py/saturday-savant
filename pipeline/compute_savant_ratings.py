@@ -40,6 +40,12 @@ Drive inclusion rules (what counts as a possession):
       allowed" by the defense that scored it. PATs and 2-point tries ride
       along with the touchdown play's running score, so touchdown drives
       are worth their true 6/7/8 points.
+    • Data checks: a drive's points must agree with how ESPN says it ended
+      (offensive TD 6-8, made FG 3, punt/turnover/downs 0), else the result
+      wins (_checked_points); each side is matched to its team by final score,
+      not ESPN's home/away flag (_espn_flipped); and only that season's FBS
+      field is rated (fbs_field). Walk-forward 2017-26, chained rebuild:
+      MAE 12.953 -> 12.916 (t=-2.17).
 
 Home-field neutralization:
     Each non-neutral game's raw efficiencies are scaled by the square root
@@ -185,13 +191,29 @@ GARBAGE_MARGIN = {1: None, 2: 38, 3: 28, 4: 21}
 #
 # Shrinking the measured value toward this constant was also tested and only
 # helped as it approached it, which is the tell that the in-season measurement
-# carries no signal worth keeping. The sweep is flat between 1.12 and 1.25 (MAE
-# prefers ~1.13, straight-up ~1.25); 1.19 is the mean of the seven completed
-# seasons above and sits in the middle of that plateau. Recompute it with
-# tools/savant_hfa.py after each season.
-HFA_RATIO      = 1.19
+# carries no signal worth keeping.
+#
+# 1.09, not the 1.19 the completed seasons measure (2026-10-07 audit). The
+# full-season home/away split is STILL not a clean home-field number: across a
+# whole season, home teams in FBS-vs-FBS games are stronger on average (buy
+# games, G5 programs visiting for paydays), so part of that 19% is talent, and
+# dividing it out charged every home win for being at home. Chosen by what
+# predicts instead. Walk-forward 2017-26, full chained rebuilds, 5,709 games,
+# with the data checks and the prior settings below:
+#
+#     HFA 1.19 / 25 drives / 0.65   MAE 12.914   log loss 0.5435   (weeks 3-6: 13.218)
+#     HFA 1.09 / 35 drives / 0.80   MAE 12.812   log loss 0.5397   (weeks 3-6: 12.992)
+#
+# t = -4.97, better in all 10 seasons. Alone, lower is better all the way down
+# the tested range (1.26 worse; 1.15, 1.12, 1.09, 1.06 each better than 1.19);
+# 1.09 is the best of the combinations. In points, the fitted home edge is
+# ~2.7 (season_sim.HFA_PTS). tools/savant_hfa.py still reports the raw split.
+HFA_RATIO      = 1.09
 
-PRIOR_DRIVES   = 25      # pseudo-drives blended into every team (target below)
+# 35 (was 25): see HFA_RATIO for the joint backtest. Alone, 30 and 35 beat 25,
+# 45 ties it and 60 is worse; with PRIOR_REGRESS 0.8 the gain compounds,
+# because a prior that carries more of last season is worth weighting more.
+PRIOR_DRIVES   = 35      # pseudo-drives blended into every team (target below)
 
 # What those pseudo-drives point AT. Shrinking toward the national average says
 # "an unproven team is average", which is how a team whose only countable game
@@ -209,10 +231,12 @@ PRIOR_DRIVES   = 25      # pseudo-drives blended into every team (target below)
 #  national-average prior — the pair is MAE 12.90 -> 11.96 and, in weeks 3-6,
 #  14.65 -> 12.28.)
 #
-# 0.65 = how much of last season's deviation from average carries over. The
-# backtest is flat from 0.5 to 0.75. A team with no prior season (new to FBS,
-# or the earliest season loaded) falls back to the national average.
-PRIOR_REGRESS  = 0.65
+# 0.80 (was 0.65) = how much of last season's deviation from average carries
+# over. On the cleaned data 0.5 is clearly worse, 0.75 and 0.8 better, 0.9
+# flat; 0.8 wins jointly with PRIOR_DRIVES 35 (see HFA_RATIO). A team with no
+# prior season (new to FBS, or the earliest season loaded) falls back to the
+# national average.
+PRIOR_REGRESS  = 0.80
 RECENCY_MAX    = 0.35    # last game weighted (1 + this) × the first game
 CONVERGENCE    = 1e-9
 MAX_ITERATIONS = 500
@@ -286,22 +310,77 @@ def parse_game_drives(summary, home_name, away_name):
         else:
             pts = end_away - start_away
             defense = home_name
-        pts = max(0, min(8, pts))                        # guard against data glitches
+        pts = _checked_points(result, max(0, min(8, pts)))
         out.append((offense, defense, pts, period))
     return out
+
+
+# Drive results whose offense cannot have scored: a return touchdown on one of
+# these is the DEFENSE's score ("Interception Touchdown", "Punt Return
+# Touchdown", "Missed FG Touchdown"...), so a touchdown in the label alone does
+# not make it an offensive score.
+_NO_SCORE = ('punt', 'interception', 'fumble', 'downs', 'missed fg', 'blocked',
+             'safety', 'turnover')
+
+
+def _checked_points(result, pts):
+    """A drive's points from the running score, checked against how ESPN says
+    the drive ended. The score stamps on plays are the weaker of the two
+    signals: across 2023-25, 2.4% of offensive touchdown drives read 0-5 points
+    (301 read 0) and 1.8% of made field goals read 0, because the scoring
+    play's stamp is missing or lands in the next drive, and those points then
+    vanish from the rating. Whole games are worse: some carry 0-0 on every
+    play, some carry doubled scores. The result label survives all of that."""
+    r = result.lower()
+    if any(k in r for k in _NO_SCORE):
+        return 0
+    if 'field goal' in r and 'touchdown' in r:
+        return pts                                       # fake or returned kick: ambiguous
+    if 'touchdown' in r:
+        return pts if 6 <= pts <= 8 else 7               # 7 = the usual try
+    if 'field goal' in r:
+        return 3
+    return pts                                           # end of half/game, unlabeled
+
+
+def _espn_flipped(summary, hp, ap):
+    """True when ESPN's home competitor is the schedule's away team, read off
+    the final score (games cannot end tied)."""
+    if hp is None or ap is None or hp == ap:
+        return False
+    try:
+        comps = summary['header']['competitions'][0]['competitors']
+        sc = {c['homeAway']: int(c['score']) for c in comps}
+        return (sc['home'], sc['away']) == (ap, hp)
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
+
+
+def fbs_field(cur, season):
+    """The FBS teams OF THAT SEASON: the teams SP+ rated that year (it covers
+    exactly the FBS field, 128-138 teams), as the Savant Forecast already does.
+    The teams table only knows current conferences, so it rated James Madison
+    and Liberty as FBS years before they moved up, kept Idaho out of the
+    seasons it was FBS, and left 20-28 FCS teams in every stored season.
+    Falls back to the teams table when SP+ has not covered the season yet."""
+    cur.execute("SELECT team FROM sp_ratings WHERE season = %s AND rating IS NOT NULL", (season,))
+    sp = {r[0] for r in cur.fetchall()} - {'nationalAverages'}
+    if len(sp) >= 100:
+        return sp
+    fcs_in = "','".join(FCS_CONFS)
+    cur.execute(f"SELECT name FROM teams WHERE conference NOT IN ('{fcs_in}')")
+    return {r[0] for r in cur.fetchall()}
 
 
 def load_game_samples(cur):
     """Return (games, fbs, hfa_ratio): per-game drive aggregates for every
     FBS-vs-FBS completed game, the FBS team set, and the measured
     home-field points-per-drive ratio."""
-    fcs_in = "','".join(FCS_CONFS)
-    cur.execute(f"SELECT name FROM teams WHERE conference NOT IN ('{fcs_in}')")
-    fbs = {r[0] for r in cur.fetchall()}
+    fbs = fbs_field(cur, SEASON)
 
     cur.execute('''
         SELECT g.id, g.week, g.season_type, g.home_team, g.away_team,
-               COALESCE(g.neutral_site, 0), s.summary_gz
+               COALESCE(g.neutral_site, 0), s.summary_gz, g.home_points, g.away_points
         FROM games g JOIN game_summaries s ON s.game_id = g.id
         WHERE g.completed = 1 AND g.season = %s
         ORDER BY g.week, g.id
@@ -311,12 +390,18 @@ def load_game_samples(cur):
     home_pts = home_drv = away_pts = away_drv = 0
     skipped_non_fbs = skipped_no_drives = 0
 
-    for gid, week, stype, home, away, neutral_site, gz in cur.fetchall():
+    for gid, week, stype, home, away, neutral_site, gz, hp, ap in cur.fetchall():
         if home not in fbs or away not in fbs:
             skipped_non_fbs += 1
             continue
         summary = json.loads(gzip.decompress(gz))
-        rows = parse_game_drives(summary, home, away)
+        # The parser names teams by ESPN's home/away flag. ESPN and the schedule
+        # disagree on who was home in ~2 games a season (2020 LSU-Missouri,
+        # 2023 Eastern Michigan-South Alabama), and there each team was credited
+        # with the other's offense. Final scores identify the teams instead:
+        # if ESPN's home score is our away team's, ESPN's home side is ours away.
+        rows = parse_game_drives(summary, *((away, home) if _espn_flipped(summary, hp, ap)
+                                            else (home, away)))
         if not rows:
             skipped_no_drives += 1
             continue

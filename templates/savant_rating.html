@@ -104,6 +104,7 @@
                 <div class="svr-prose">
                     <p>Drives that are not real attempts to score are thrown out first: kneel-downs, overtime possessions that start in field-goal range, and all of <strong>garbage time</strong>, any drive that begins with the game already out of hand.</p>
                     <p>That is why SVR needs no cap on blowout wins. A drive maxes out at 8 points, and the padded second half of a 56–0 game never enters the sample. Pick-sixes and return touchdowns count for neither side, and games against FCS opponents do not count at all.</p>
+                    <p>Every drive is also checked against how it ended. The play-by-play feed sometimes stamps the wrong score on a play, so a touchdown drive can read as zero points or a punt as seven; when the score and the result disagree, the result wins. Each side is matched to its team by the final score, not by the feed's home and away labels, and a team is only rated in the seasons it was actually FBS.</p>
                 </div>
             </div>
             <figure class="svr-art">
@@ -163,8 +164,8 @@
                 <h2 class="svr-h2" id="svr-hfa-h">Home field is taken out</h2>
                 <p class="svr-row-fig"><span>{{ '%.2f'|format(svr.hfa) }}</span> home-to-away, points per drive</p>
                 <div class="svr-prose">
-                    <p>Home teams score about {{ hfa_pct }}% more points per drive. That is divided out of every game, so each rating is expressed at a neutral site.</p>
-                    <p>The figure is measured over seven completed seasons and held fixed on purpose. September schedules are lopsided by design, and a figure measured live in week 3 reads nearly double the truth, distorting every team that happened to open at home.</p>
+                    <p>Playing at home is worth about {{ hfa_pct }}% more points per drive. That is divided out of every game, so each rating is expressed at a neutral site.</p>
+                    <p>The figure is held fixed, and it is set by what predicts games best across ten seasons. A raw home-versus-away split reads far higher, about 19% over a full season and nearly double that in September, because the home team is often simply the stronger one: big programs host smaller ones. Counting all of that as home field would charge every good team for its own home wins.</p>
                 </div>
             </div>
             <figure class="svr-art">

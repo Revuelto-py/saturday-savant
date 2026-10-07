@@ -93,6 +93,10 @@ def rebuild(mod, cur, season, games, priors):
     with contextlib.redirect_stdout(io.StringIO()):
         final = mod.compute_ratings(games, mod.HFA_RATIO, priors)
     if not DRY:
+        # write_snapshot upserts per team, so a team that is no longer rated
+        # (an FCS school the old team list let in) would keep its stale weekly
+        # rows. Every week of the season is rewritten below, so clear first.
+        cur.execute('DELETE FROM savant_weekly WHERE season = %s', (season,))
         mod.write_table(cur, final)
         # A finished season's last snapshot is the postseason sentinel; an
         # in-progress one is labelled by the last week actually played.

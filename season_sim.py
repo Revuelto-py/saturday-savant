@@ -17,6 +17,7 @@ Selection and seeding follow the committee's 2026 protocol:
   * seeds follow the ranking (top four = byes); an automatic qualifier ranked
     outside the top 12 is seeded last
   * games after selection day are ignored (Army-Navy)
+  * first-round games are on campus (seeds 5-8 host); the rest are neutral
 
 The committee's RANKING is a stand-in: Savant Rating + 3.5 per game over .500 +
 half the strength of schedule, then a head-to-head pass among near-equal teams.
@@ -33,6 +34,10 @@ GROUP_OF_SIX = ('American Athletic', 'Conference USA', 'Mid-American',
                 'Mountain West', 'Pac-12', 'Sun Belt')
 INDEPENDENT = 'FBS Independents'
 FIELD = 12
+# Home field in Savant Rating points: the walk-forward backtest's fitted edge
+# under the 2026-10-07 calibration (2017-26, 5,709 games), applied to the
+# on-campus first round.
+HFA_PTS = 2.7
 STAGES = ('ccg', 'champ', 'cfp', 'bye', 'semi', 'final', 'title')
 
 
@@ -105,6 +110,10 @@ def simulate(data, n=10000, seed=20261010):
     def play(a, b):
         return a if rnd() < pr(a, b) else b
 
+    def host(h, a):
+        # First-round games are on the higher seed's campus, not neutral.
+        return h if rnd() < 1 / (1 + math.exp(-(R[h] - R[a] + HFA_PTS) / 9)) else a
+
     pair_games = {}
     for gi, (h, a, _, _) in enumerate(G):
         if h >= 0 and a >= 0:
@@ -163,8 +172,8 @@ def simulate(data, n=10000, seed=20261010):
         assert len(field) == FIELD and sum(T[t]['conf'] in POWER and champ_of.get(T[t]['conf']) == t for t in field) == len(POWER)
 
         f = field
-        q = [play(f[0], play(f[7], f[8])), play(f[3], play(f[4], f[11])),
-             play(f[1], play(f[6], f[9])), play(f[2], play(f[5], f[10]))]
+        q = [play(f[0], host(f[7], f[8])), play(f[3], host(f[4], f[11])),
+             play(f[1], host(f[6], f[9])), play(f[2], host(f[5], f[10]))]
         f1, f2 = play(q[0], q[1]), play(q[2], q[3])
         title = play(f1, f2)
         for s, t in enumerate(f, start=1):
