@@ -5678,6 +5678,104 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .fc-row:hover { transform: none; }
 }
 
+/* ── Savant Forecast, side by side (game.html forecast_sheet) ────────────
+   Collapsed by default: the hero already states the forecast, this is the
+   "why". Every input with both teams' numbers and a push bar, away left and
+   home right as in the hero; the pushes add up to the forecast. A side panel
+   says how often forecasts like this one have come true. */
+.fsx { margin-top: var(--s3); }
+.fsx-toggle {
+    display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 16px;
+    border-radius: 12px; list-style: none; cursor: pointer;
+    background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px rgba(255,255,255,.09);
+    color: var(--text-primary); font-size: 15px; font-weight: 700;
+    transition: background-color var(--t-fast), box-shadow var(--t-fast);
+}
+.fsx-toggle::-webkit-details-marker { display: none; }
+.fsx-toggle:hover { background: rgba(255,255,255,.055); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
+.fsx-toggle:active { background: rgba(255,255,255,.075); }
+.fsx-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fsx-chev { flex: none; color: var(--accent); transition: transform .22s cubic-bezier(.2,.9,.3,1.2); }
+.fsx[open] > .fsx-toggle .fsx-chev { transform: rotate(90deg); }
+.fsx-toggle-hint { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--text-dim); }
+.fsx-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; padding: 22px 4px 4px; }
+.fsx-intro { margin: 0 0 16px; max-width: 66ch; font-size: 14.5px; line-height: 1.6; color: var(--text-secondary); }
+.fsx-head, .fsx-row { display: grid; grid-template-columns: 124px minmax(0, 1fr) 124px; align-items: center; gap: 18px; }
+.fsx-head { padding-bottom: 10px; }
+.fsx-team { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14.5px; font-weight: 750; color: var(--text-primary); }
+.fsx-team-a { justify-content: flex-end; text-align: right; }
+.fsx-team img { flex: none; object-fit: contain; }
+.fsx-team-ab { display: none; }
+.fsx-head-k { text-align: center; font-size: 12.5px; color: var(--text-dim); }
+.fsx-row { padding: 12px 0; border-top: 1px solid rgba(255,255,255,.06); }
+.fsx-v {
+    font-family: var(--font-display); font-stretch: 78%; font-weight: 800; font-size: 24px; line-height: 1;
+    font-variant-numeric: tabular-nums; color: #6f767c;
+}
+.fsx-v.is-edge { color: #fff; }
+.fsx-v small {
+    display: block; margin-top: 4px; font-family: var(--font-body); font-stretch: 100%;
+    font-size: 12px; font-weight: 600; line-height: 1.3; color: var(--text-dim);
+}
+.fsx-v-a { text-align: right; }
+.fsx-mid { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; text-align: center; }
+.fsx-mid b { font-size: 14.5px; font-weight: 700; color: var(--text-primary); }
+.fsx-note { font-size: 12.5px; color: var(--text-dim); }
+.fsx-bar { position: relative; width: 100%; max-width: 320px; height: 8px; border-radius: 999px; background: rgba(255,255,255,.05); }
+.fsx-bar::after { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px; border-left: 1px solid rgba(255,255,255,.28); }
+.fsx-bar i { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+.fsx-pt { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.fsx-total { padding-top: 16px; border-top-color: rgba(255,255,255,.16); }
+.fsx-total .fsx-pct { font-size: 34px; font-weight: 850; }
+.fsx-split { display: flex; gap: 2px; width: 100%; max-width: 320px; height: 10px; }
+.fsx-split i:first-child { border-radius: 999px 0 0 999px; }
+.fsx-split i:last-child { border-radius: 0 999px 999px 0; }
+.fsx-side { display: flex; flex-direction: column; gap: 14px; padding-left: 28px; border-left: 1px solid rgba(255,255,255,.07); }
+.fsx-side-h { margin: 0; font-family: var(--font-body); font-size: 16px; font-weight: 750; color: var(--text-primary); }
+.fsx-side-p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+.fsx-side-p b { color: var(--text-primary); font-weight: 700; }
+.fsx-cal { display: grid; grid-template-columns: 58px minmax(0, 1fr) 38px; align-items: center; gap: 10px; font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.fsx-cal > span:last-child { text-align: right; }
+.fsx-cal-k { font-size: 12px; color: var(--text-dim); }
+.fsx-cal-t { position: relative; height: 14px; border-radius: 999px; background: rgba(255,255,255,.04); }
+.fsx-cal-t i { position: absolute; left: 0; top: 4px; height: 6px; border-radius: 999px; background: #2a5f86; }
+.fsx-cal-t em { position: absolute; top: 1px; width: 2px; height: 12px; margin-left: -1px; background: #fff; }
+.fsx-cal.is-here { color: var(--text-primary); font-weight: 700; }
+.fsx-cal.is-here .fsx-cal-t { box-shadow: inset 0 0 0 1px rgba(124,201,251,.6); }
+.fsx-cal.is-here .fsx-cal-t i { background: var(--accent); }
+.fsx-near { padding: 14px 16px; border-radius: 12px; background: rgba(28,156,240,.08); box-shadow: inset 0 0 0 1px rgba(28,156,240,.25); }
+.fsx-near b { display: block; font-family: var(--font-display); font-stretch: 78%; font-size: 24px; font-weight: 850; line-height: 1; color: var(--text-primary); }
+.fsx-near span { display: block; margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.fsx-link { align-self: flex-start; font-size: 13.5px; font-weight: 600; color: #7cc9fb; text-decoration: none; transition: color var(--t-fast); }
+.fsx-link:hover { color: #bfe3fc; }
+.fsx-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+@media (max-width: 991.98px) {
+    .fsx-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+    .fsx-side { padding: 18px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.08); }
+}
+@media (max-width: 699.98px) {
+    .fsx-toggle { flex-wrap: wrap; row-gap: 2px; font-size: 14px; }
+    .fsx-toggle-hint { flex-basis: 100%; margin-left: 24px; font-size: 12px; }
+    .fsx-body { padding: 14px 0 0; }
+    .fsx-intro { font-size: 13px; }
+    .fsx-head, .fsx-row { grid-template-columns: 64px minmax(0, 1fr) 64px; gap: 10px; }
+    .fsx-team { font-size: 13px; gap: 6px; }
+    .fsx-team img { width: 20px; height: 20px; }
+    .fsx-team-n { display: none; }
+    .fsx-team-ab { display: inline; }
+    .fsx-head-k { font-size: 11.5px; }
+    .fsx-row { padding: 10px 0; }
+    .fsx-v { font-size: 19px; }
+    .fsx-v small { display: none; }
+    .fsx-mid { gap: 5px; }
+    .fsx-mid b { font-size: 13px; }
+    .fsx-note, .fsx-pt { font-size: 12px; }
+    .fsx-total .fsx-pct { font-size: 25px; }
+    .fsx-side-p, .fsx-near span { font-size: 12.5px; }
+    .fsx-cal { grid-template-columns: 52px minmax(0, 1fr) 34px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .fsx-chev, .fsx-toggle, .fsx-link { transition: none; } }
+
 /* ── Upset badge & this-week's-upsets ────────────────────────────────────
    The forecast favored the loser. Uses the site's existing red accent
    (--red), the same "notable/negative" treatment as lb-pill-neg — no new

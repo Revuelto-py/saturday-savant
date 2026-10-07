@@ -32,8 +32,9 @@ os.environ.setdefault('POOL_BACKFILL', '1')
 import main
 from season_util import current_cfb_season
 from forecast_features import (build_dataset, _feature_vector, _fcs_feature_vector,
-                               _parse_dt, FEATURE_NAMES, ELO_START, ELO_CARRY, ELO_NEW_TEAM)
-from forecast_explain import explain
+                               _parse_dt, team_values, FEATURE_NAMES, ELO_START, ELO_CARRY,
+                               ELO_NEW_TEAM)
+from forecast_explain import explain, explain_sheet
 
 _HERE = ROOT
 MODEL_PATH = os.path.join(_HERE, 'forecast_model.json')
@@ -196,8 +197,13 @@ def main_():
                 prob, margin = _predict(model, feats)
                 # Decomposes the same dot product _predict just computed, from
                 # the same vector — the breakdown can't drift from the number.
+                # v2 (side by side, from an even matchup) carries each team's
+                # own numbers; explain() is the fallback if it can't close.
+                sheet = explain_sheet(model, feats,
+                                      team_values(season, home, elo, stats, refs),
+                                      team_values(season, away, elo, stats, refs))
                 store(gid, week, home, away, prob, margin, model['version'],
-                      explain(model, feats))
+                      sheet or explain(model, feats))
                 n += 1
             elif fcs_model is not None:
                 # ── FBS vs FCS: the FCS model (FBS-strength only) ──

@@ -1994,6 +1994,48 @@ def get_rivalry_map(cursor):
         data_cache.set('rivalry_map', hit)
     return dict(hit)
 
+def _forecast_track():
+    """(favourite's probability, favourite won) for every graded FBS-vs-FBS
+    forecast — the record the game page's "How sure is it?" panel reads.
+    FBS-vs-FCS rows carry no breakdown (contrib IS NULL) and are left out, as
+    on /savant-forecast. Cached an hour; grading only happens weekly."""
+    hit = data_cache.get('fc_track')
+    if hit is None:
+        conn = get_db()
+        try:
+            cur = conn.cursor()
+            cur.execute('SELECT home_prob, home_won FROM game_predictions '
+                        'WHERE scored = 1 AND contrib IS NOT NULL AND home_prob IS NOT NULL')
+            hit = [(max(p, 1 - p), int((p >= 0.5) == (w == 1))) for p, w in cur.fetchall()]
+        except Exception:
+            conn.rollback()
+            hit = []
+        finally:
+            release_db(conn)
+        data_cache.set('fc_track', hit, timeout=3600)
+    return hit
+
+
+def forecast_trust(fav_prob):
+    """How often favourites have won at each confidence level, and within five
+    points of this forecast. None until enough forecasts are graded to say."""
+    track = _forecast_track()
+    if fav_prob is None or len(track) < 100:
+        return None
+    buckets = []
+    for lo in (0.5, 0.6, 0.7, 0.8, 0.9):
+        hi = lo + 0.1 if lo < 0.9 else 1.01
+        b = [t for t in track if lo <= t[0] < hi]
+        if b:
+            buckets.append({'label': '90%+' if lo == 0.9 else f'{lo * 100:.0f}–{hi * 100:.0f}%',
+                            'pred': sum(t[0] for t in b) / len(b) * 100,
+                            'won': sum(t[1] for t in b) / len(b) * 100,
+                            'n': len(b), 'here': lo <= fav_prob < hi})
+    near = [t for t in track if abs(t[0] - fav_prob) <= 0.05]
+    return {'n': len(track), 'buckets': buckets,
+            'near_n': len(near), 'near_won': sum(t[1] for t in near)}
+
+
 def get_frozen_forecasts(cursor, game_ids):
     """Frozen pre-kickoff Savant Forecast + graded outcome for completed games
     that carry a scored prediction — the SAME rows the upset badge and accuracy
@@ -8356,6 +8398,7 @@ def game_detail(game_id):
         return render_template('game.html',
             game=game_info, home_team=home_team, away_team=away_team,
             forecast=forecast,
+            fc_trust=forecast_trust(forecast['fav_prob']) if forecast else None,
             home_is_fbs=home_is_fbs, away_is_fbs=away_is_fbs,
             # As-of-week ranks (per-season now) — empty until that week's poll
             # exists, so upcoming games show ranks once the poll is out.
@@ -9312,6 +9355,7 @@ def game_detail(game_id):
     return render_template('game.html',
         game=game_info,
         forecast=forecast,
+        fc_trust=forecast_trust(forecast['fav_prob']) if forecast else None,
         is_scheduled=False, is_live=False,
         game_passing=get_game_passing_profile(game_id),
         home_team=home_team,

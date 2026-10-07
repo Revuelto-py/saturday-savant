@@ -187,6 +187,25 @@ def _feature_vector(season, week, neutral, post, home, away,
     return vec + [vec[FEATURE_NAMES.index(n)] * fade for n in _EARLY_OF]
 
 
+def team_values(season, team, elo, stats, refs):
+    """One side's own numbers behind the features, for the game page's
+    side-by-side breakdown. Display-only: the model reads the differences
+    _feature_vector builds; this reads the same sources, never different ones."""
+    s = stats.get(team) or {'g': 0, 'pf': 0, 'pa': 0}
+    rec = [refs['recruit'].get((y, team)) for y in range(season - 3, season + 1)]
+    rec = [v for v in rec if v is not None]
+    return {
+        'ret_prod': refs['retprod'].get((season, team)),
+        'sp': refs['sp'].get((season - 1, team)),
+        'svr': refs['savant'].get((season - 1, team)),
+        'g': s['g'],
+        'ppg': s['pf'] / s['g'] if s['g'] else None,
+        'papg': s['pa'] / s['g'] if s['g'] else None,
+        'elo': elo.get(team),
+        'recruit4': sum(rec) / len(rec) if rec else None,
+    }
+
+
 def build_dataset(first_season=2016, last_season=2025, return_state=False, collect_fcs=False):
     """Returns (rows, feature_names) — or (rows, names, state) with
     return_state, where `state` carries the Elo ratings, season-to-date stats,

@@ -33,8 +33,113 @@
    chart stays readable without colour vision.
    Renders nothing when there's no stored breakdown (FCS matchups, pre-Forecast
    games), per the feature's existing graceful-degradation rule. #}
+{# ── Savant Forecast, side by side (v2 breakdown) ───────────────────────────
+   Every input with BOTH teams' own numbers, and a bar for how far it moves the
+   forecast, in points, from an even matchup at this venue (home field is the
+   first push). The pushes add up to the forecast exactly, so the table closes
+   on the number instead of apologising that it doesn't. Away on the left,
+   home on the right, the same axis as the hero above; the abbreviation on
+   each push says which team, so colour is never the only cue. Collapsed by
+   default: the hero already states the forecast, this is the "why". #}
+{% macro forecast_sheet(fc, fav_team, past) %}
+{% set s = fc.contrib %}
+{% set pr = hero_pair(away_color, home_color) %}
+{% set ab = team_abbr or {} %}
+{% set a_ab = ab.get('away') or away_team %}
+{% set h_ab = ab.get('home') or home_team %}
+{% set called_even = fc.margin is none or fc.margin|abs < 1.5 %}
+{% set h_pct = s.home_prob * 100 %}
+<details class="fsx">
+    <summary class="fsx-toggle">
+        <svg class="fsx-chev" viewBox="0 0 16 16" width="14" height="14" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round"
+             stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"/></svg>
+        <span class="fsx-toggle-t">
+            {%- if called_even -%}What {{ 'drove' if past else 'drives' }} this forecast
+            {%- else -%}Why Savant {{ 'favored' if past else 'favors' }} {{ fav_team }}{%- endif -%}
+        </span>
+        <span class="fsx-toggle-hint">Both teams&rsquo; numbers, input by input</span>
+    </summary>
+    <div class="fsx-body">
+        <div class="fsx-sheet">
+            <p class="fsx-intro">Every input the model reads, with both teams&rsquo; numbers. Each bar shows which way it pushes the forecast and by how many points, starting from an even matchup; the pushes add up to the final number.</p>
+            <div class="fsx-head" aria-hidden="true">
+                <span class="fsx-team fsx-team-a"><span class="fsx-team-n">{{ away_team }}</span><span class="fsx-team-ab">{{ a_ab }}</span>{% if game[10] %}<img src="{{ game[10] }}" alt="" width="24" height="24" loading="lazy">{% endif %}</span>
+                <span class="fsx-head-k">Biggest push first</span>
+                <span class="fsx-team fsx-team-h">{% if game[9] %}<img src="{{ game[9] }}" alt="" width="24" height="24" loading="lazy">{% endif %}<span class="fsx-team-n">{{ home_team }}</span><span class="fsx-team-ab">{{ h_ab }}</span></span>
+            </div>
+            {% for r in s.rows %}
+            {% set to_home = r.toward == 'home' %}
+            <div class="fsx-row">
+                <div class="fsx-v fsx-v-a{{ ' is-edge' if r.a.edge }}">{% if r.a.txt %}{{ r.a.txt }}{% if r.a.cap %}<small>{{ r.a.cap }}</small>{% endif %}{% endif %}</div>
+                <div class="fsx-mid">
+                    <b>{{ r.label }}</b>
+                    {% if r.note %}<span class="fsx-note">{{ r.note }}</span>{% endif %}
+                    <span class="fsx-bar" role="img" aria-label="{{ r.label }} moves the forecast {{ '%.1f' % r.pts }} points toward {{ home_team if to_home else away_team }}"><i style="{{ 'left' if to_home else 'right' }}: 50%; width: {{ r.width }}%; background: {{ pr[1] if to_home else pr[0] }}"></i></span>
+                    <span class="fsx-pt">+{{ '%.1f' % r.pts }} {{ h_ab if to_home else a_ab }}</span>
+                </div>
+                <div class="fsx-v fsx-v-h{{ ' is-edge' if r.h.edge }}">{% if r.h.txt %}{{ r.h.txt }}{% if r.h.cap %}<small>{{ r.h.cap }}</small>{% endif %}{% endif %}</div>
+            </div>
+            {% endfor %}
+            <div class="fsx-row fsx-total">
+                <div class="fsx-v fsx-v-a fsx-pct{{ ' is-edge' if h_pct < 50 }}">{{ '%.1f' % (100 - h_pct) }}%</div>
+                <div class="fsx-mid">
+                    <b>Adds up to</b>
+                    <span class="fsx-split" role="img" aria-label="{{ away_team }} {{ '%.1f' % (100 - h_pct) }} percent, {{ home_team }} {{ '%.1f' % h_pct }} percent"><i style="width: {{ '%.1f' % (100 - h_pct) }}%; background: {{ pr[0] }}"></i><i style="width: {{ '%.1f' % h_pct }}%; background: {{ pr[1] }}"></i></span>
+                    <span class="fsx-note">Locked at kickoff, graded after</span>
+                </div>
+                <div class="fsx-v fsx-v-h fsx-pct{{ ' is-edge' if h_pct >= 50 }}">{{ '%.1f' % h_pct }}%</div>
+            </div>
+        </div>
+        {% set t = fc_trust %}
+        <aside class="fsx-side" aria-label="How sure the forecast is">
+            <h3 class="fsx-side-h">How sure is {{ '%.0f' % (fc.fav_prob * 100) }}%?</h3>
+            {% if t %}
+            <p class="fsx-side-p">Every forecast is graded. How often favorites have won at each level of confidence, across {{ '{:,}'.format(t.n) }} graded FBS games.</p>
+            <div class="fsx-cal fsx-cal-k" aria-hidden="true"><span>Forecast</span><span>Tick: what it said. Bar: how often they won</span><span>Won</span></div>
+            {% for b in t.buckets %}
+            <div class="fsx-cal{{ ' is-here' if b.here }}">
+                <span>{{ b.label }}</span>
+                <span class="fsx-cal-t" role="img" aria-label="Forecasts of {{ b.label }}: said {{ '%.0f' % b.pred }} percent, favorites won {{ '%.0f' % b.won }} percent of {{ b.n }}"><i style="width: {{ '%.1f' % b.won }}%"></i><em style="left: {{ '%.1f' % b.pred }}%"></em></span>
+                <span>{{ '%.0f' % b.won }}%</span>
+            </div>
+            {% endfor %}
+            {% if t.near_n %}
+            <div class="fsx-near">
+                <b>{{ t.near_won }} of {{ t.near_n }}</b>
+                <span>favorites won when the forecast was within five points of this one: {{ '%.0f' % (t.near_won / t.near_n * 100) }}%.</span>
+            </div>
+            {% endif %}
+            {% endif %}
+            {% if market and market.home_margin is not none %}
+            {% set m = market.home_margin %}
+            {% set v_home = m > 0 %}
+            {% set sv = (('called' if past else 'calls') ~ ' it even') if called_even else ((('had ' if past else 'has ') ~ fav_team ~ ' by ' ~ ('%.0f' % (fc.margin|abs)))) %}
+            <p class="fsx-side-p">
+                {%- if m|abs < 0.5 -%}
+                <b>Vegas {{ 'called' if past else 'calls' }} it a pick&rsquo;em.</b> Savant {{ sv }}.
+                {%- else -%}
+                <b>Vegas {{ ('agreed' if past else 'agrees') if (v_home == (s.home_prob >= 0.5)) else ('saw it differently' if past else 'sees it differently') }}:</b> {{ h_ab if v_home else a_ab }} &minus;{{ '%g' % (m|abs) }}. Savant {{ sv }}.
+                {%- endif -%}
+            </p>
+            {% endif %}
+            {% if s.pre_share is not none %}
+            <p class="fsx-side-p">
+                {%- if s.games_min < 1 -%}<b>Before either team had played,</b>
+                {%- else -%}<b>{{ s.games_min }} game{{ 's' if s.games_min != 1 }} in,</b>{%- endif %}
+                {{ '%.0f' % (s.pre_share * 100) }}% of the push {{ 'came' if past else 'comes' }} from last season and the roster, the rest from this season&rsquo;s results.
+            </p>
+            {% endif %}
+            <a class="fsx-link" href="/savant-forecast">How the forecast works</a>
+        </aside>
+    </div>
+</details>
+{% endmacro %}
+
 {% macro forecast_why(fc, fav_team, past) %}
-{% if fc and fc.contrib %}
+{% if fc and fc.contrib and fc.contrib is mapping %}
+{{ forecast_sheet(fc, fav_team, past) }}
+{% elif fc and fc.contrib %}
 {% set peak = fc.contrib | map(attribute='logit') | map('abs') | max %}
 {# When the model calls a game even, "Why Savant favors X" would contradict the
    line above it — so the heading drops the favourite on the same threshold the

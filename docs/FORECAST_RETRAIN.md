@@ -43,6 +43,18 @@ breakthrough).
 
 ### After shipping a new model — the per-game breakdown must follow
 
+> **Two breakdown formats live in `game_predictions.contrib` (since 2026-10-07).**
+> Rows written by `pipeline/predict_games.py` are **v2** (`forecast_explain.explain_sheet`):
+> a dict `{"v": 2, rows, logit, games_min, pre_share}` measured from an EVEN matchup
+> (difference features at 0, context features at the game's values), with each
+> team's own numbers from `forecast_features.team_values`. Its pushes sum to the
+> stored logit exactly (checked at write; it falls back to v1 if not). The game
+> page renders v2 as the side-by-side sheet (`forecast_sheet` in game.html,
+> collapsed by default) and older **v1** lists (`explain()`, training-mean based,
+> six public rows) with the old bars. `backfill/backfill_forecast_contrib.py`
+> still writes v1. v2 needs no PUBLIC_FEATURES review; its groups are
+> `forecast_explain.SHEET_GROUPS`.
+
 The game page's "Why Savant favors X" breakdown (`forecast_explain.py`) is
 derived from the model, so a retrain invalidates two things that do **not**
 update themselves:
