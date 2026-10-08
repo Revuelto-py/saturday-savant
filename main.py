@@ -10872,24 +10872,30 @@ def _build_draft_sprite(rd):
     def fetch(url):
         if not url:
             return b''
-        try:
-            r = req.get(url, timeout=8)
-            return r.content if r.status_code == 200 else None
-        except Exception:
-            return None
+        for _ in range(2):   # R2 throttles bursts; one retry clears most misses
+            try:
+                r = req.get(url, timeout=8)
+                if r.status_code == 200:
+                    return r.content
+            except Exception:
+                pass
+        return None
 
     with ThreadPoolExecutor(max_workers=16) as ex:
         blobs = list(ex.map(fetch, [p['headshot'] for p in picks]))
     strip = Image.new('RGBA', (w * len(picks), h), (0, 0, 0, 0))
     complete = True
     for i, blob in enumerate(blobs):
+        if blob is None:
+            complete = False     # a failed fetch: blank for now, don't keep the strip
+            continue
         if blob == b'':
             continue
         try:
             im = Image.open(io.BytesIO(blob)).convert('RGBA')
             strip.paste(ImageOps.fit(im, (w, h), Image.LANCZOS, centering=(0.5, 0)), (i * w, 0))
         except Exception:
-            complete = False     # a failed fetch leaves a blank cell; don't keep it
+            pass                 # an undecodable file (one 2017 PNG in R2 is) stays blank for good
     buf = io.BytesIO()
     strip.save(buf, 'WEBP', quality=80, method=4)
     return buf.getvalue(), complete
