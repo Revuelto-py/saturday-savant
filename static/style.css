@@ -1171,7 +1171,7 @@ tr.postseason-row:hover {
    compare.html), so these rules style one state at a time.
    ══════════════════════════════════════════════════════════════════════ */
 .fo { padding-top: 32px; padding-bottom: 64px; }
-.fo-body { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; transition: opacity .15s ease-out; }
+.fo-body { max-width: 1320px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; transition: opacity .15s ease-out; }
 .fo.is-busy .fo-body { opacity: .55; }
 .fo-pairwrap { display: flex; flex-direction: column; gap: 22px; }
 .fo a { color: inherit; text-decoration: none; }
@@ -1220,7 +1220,7 @@ tr.postseason-row:hover {
 
 /* The hero: each side's photo faces the middle on its team's colour. */
 .fo-hero {
-    position: relative; overflow: hidden; border-radius: 24px; min-height: 330px;
+    position: relative; overflow: hidden; border-radius: 24px; min-height: clamp(260px, 26vw, 330px);
     display: grid; grid-template-columns: minmax(0, 1fr) 170px minmax(0, 1fr);
     background: radial-gradient(60% 130% at 0% 60%, var(--ga), transparent 64%),
                 radial-gradient(60% 130% at 100% 60%, var(--gb), transparent 64%), #0b0c0f;
@@ -1228,7 +1228,7 @@ tr.postseason-row:hover {
 }
 .fo-side { display: flex; align-items: flex-end; min-width: 0; }
 .fo-side-b { flex-direction: row-reverse; text-align: right; }
-.fo-photo { flex: none; width: clamp(220px, 25vw, 320px); align-self: flex-end; line-height: 0; }
+.fo-photo { flex: none; width: clamp(160px, 30vw - 100px, 320px); align-self: flex-end; line-height: 0; }   /* gives way to the name below ~1400px */
 .fo-face { display: block; width: 100%; height: auto; }
 .fo-side-b .fo-face:not(.is-logo) { transform: scaleX(-1); }
 .fo-hero.is-teams .fo-side { align-items: center; }
@@ -1238,16 +1238,16 @@ tr.postseason-row:hover {
     display: grid; place-items: center; aspect-ratio: 1.38; color: #fff; background: var(--c);
     font-family: var(--font-display); font-stretch: 78%; font-weight: 850; font-size: 64px; line-height: 1;
 }
-.fo-who { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 0 0 30px 4px; }
+.fo-who { flex: 1 1 0; container-type: inline-size; display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 0 0 30px 4px; }
 .fo-side-b .fo-who { align-items: flex-end; padding: 0 4px 30px 0; }
 .fo-hero.is-teams .fo-who { padding-top: 30px; }
 .fo-name {
     margin: 0; color: #fff;
     font-family: var(--font-display); font-stretch: 78%; font-weight: 850;
-    font-size: clamp(34px, 3.4vw, 50px); line-height: .92; letter-spacing: -.02em;
+    /* Shrinks until the longest word fits the column: about .5em a letter. */
+    font-size: min(clamp(34px, 3.4vw, 50px), 100cqi / (var(--n, 8) * .5)); line-height: .92; letter-spacing: -.02em;
 }
 .fo-name span, .fo-name b { display: block; font-weight: inherit; overflow-wrap: anywhere; }
-.fo-name.is-long { font-size: clamp(28px, 2.6vw, 38px); }
 .fo-name a:hover { color: #bfe3fc; }
 .fo-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; font-size: 14px; color: #e7e9ea; }
 .fo-side-b .fo-meta { flex-direction: row-reverse; }
@@ -1458,7 +1458,7 @@ tr.postseason-row:hover {
     .fo-hero.is-teams .fo-photo { width: auto; height: 130px; margin: 0; align-items: center; justify-content: center; }
     .fo-hero.is-teams .fo-face { width: 96px; margin: 0; }
     .fo-who, .fo-side-b .fo-who, .fo-hero.is-teams .fo-who { gap: 7px; padding: 12px 14px 14px; }
-    .fo-name, .fo-name.is-long { font-size: 24px; }
+    .fo-name { font-size: min(24px, 100cqi / (var(--n, 8) * .5)); }
     .fo-name span { font-stretch: 100%; font-weight: 600; font-size: 12.5px; letter-spacing: 0; color: #c4c8cc; margin-bottom: 3px; }
     .fo-meta { gap: 6px; font-size: 12.5px; }
     .fo-meta img { width: 16px; height: 16px; }

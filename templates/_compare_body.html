@@ -100,7 +100,8 @@
     <div class="fo-side fo-side-{{ side }}">
         <div class="fo-photo">{{ face(e, 'fo-face') }}</div>
         <div class="fo-who">
-            <h2 class="fo-name{{ ' is-long' if e.last|length > 9 }}"><a href="{{ e.url }}">{% if e.first %}<span>{{ e.first }}</span> {% endif %}<b>{{ e.last }}</b></a></h2>
+            {# --n: the longest word, which the type size is fitted to (never broken mid-word) #}
+            <h2 class="fo-name" style="--n: {{ (e.first ~ ' ' ~ e.last).split()|map('length')|max or 8 }}"><a href="{{ e.url }}">{% if e.first %}<span>{{ e.first }}</span> {% endif %}<b>{{ e.last }}</b></a></h2>
             <p class="fo-meta">
                 {% if not e.is_team and e.logo %}<img src="{{ e.logo }}" alt="" width="20" height="20">{% endif %}
                 <span>{{ e.conference if e.is_team else e.team }}</span>
