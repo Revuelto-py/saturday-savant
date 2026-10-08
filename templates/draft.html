@@ -45,25 +45,24 @@
     {% if r1 %}
     <section class="dr-sec" aria-labelledby="dr-r1-h">
         <div class="dr-sec-h"><h2 class="section-label" id="dr-r1-h">The first round</h2></div>
-        <ol class="dr-r1">
+        <ol class="dr-r1"{% if r1_sprite %} style="--sp: url('{{ r1_sprite }}'); --n: {{ r1|length }}"{% endif %}>
             {% for p in r1 %}
             <li>
                 <a class="dr-pk" href="/player/{{ p.id }}">
                     <span class="dr-pk-n">{{ p.overall }}</span>
-                    <span class="dr-tile{{ ' is-dark' if p.dark }}" style="--c: {{ p.college_color }}" aria-hidden="true">
-                        {% if p.face %}<img src="{{ p.face }}" alt="" width="200" height="145"{% if loop.index > 12 %} loading="lazy"{% endif %}>
-                        {% else %}<span>{{ p.name[:1] }}</span>{% endif %}
+                    <span class="dr-tile{{ ' is-dark' if p.dark }}" style="--c: {{ p.college_color }}; --x: {{ loop.index0 }}" aria-hidden="true">
+                        {% if p.headshot %}<i class="dr-ph"></i>{% else %}<span>{{ p.name[:1] }}</span>{% endif %}
                     </span>
                     <span class="dr-pk-t">
                         <b class="dr-pk-name">{{ p.name }}</b>
                         <span class="dr-pk-row dr-pk-from">
                             {% if p.pos %}<span class="dr-pos">{{ p.pos }}</span>{% endif %}
-                            {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" width="16" height="16">{% endif %}
+                            {% if p.college_logo %}<img src="{{ p.college_logo|espn_px(48) }}" alt="" width="16" height="16">{% endif %}
                             <span>{{ p.college or '—' }}</span>
                         </span>
                         <span class="dr-pk-row dr-pk-to">
                             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"/></svg>
-                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" width="16" height="16" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
+                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo|espn_px(48) }}" alt="" width="16" height="16" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
                             <span>{{ p.nfl or '—' }}</span>
                         </span>
                     </span>
@@ -87,7 +86,7 @@
             {% set tag = 'a' if s.slug else 'div' %}
             <{{ tag }} class="dr-sc"{% if s.slug %} href="/team/{{ s.slug }}"{% endif %}>
                 <span class="dr-sc-top">
-                    {% if s.logo %}<img src="{{ s.logo }}" alt="" width="34" height="34" loading="lazy">{% else %}<span></span>{% endif %}
+                    {% if s.logo %}<img src="{{ s.logo|espn_px(72) }}" alt="" width="34" height="34" loading="lazy">{% else %}<span></span>{% endif %}
                     <span class="dr-sc-n">{{ s.n }}</span>
                 </span>
                 <span>

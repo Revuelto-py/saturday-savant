@@ -2,15 +2,14 @@
    for: the page rendered all seven at once, 457KB and 793 images for a reader
    who usually wants one. Rendered standalone by /draft/<year>?round=<n>, and
    inline for the open round. #}
-<div class="dr-list" data-round="{{ rd.round }}">
+<div class="dr-list" data-round="{{ rd.round }}"{% if rd.sprite %} style="--sp: url('{{ rd.sprite }}'); --n: {{ rd.picks|length }}"{% endif %}>
     <ol class="dr-rows" start="{{ rd.picks[0].overall if rd.picks else 1 }}">
         {% for p in rd.picks %}
         <li>
             <a class="dr-row" href="/player/{{ p.id }}">
                 <span class="dr-n"><b>{{ p.overall }}</b><small>{{ p.round }}.{{ '%02d' % p.pick }}</small></span>
-                <span class="dr-tile{{ ' is-dark' if p.dark }}" style="--c: {{ p.college_color }}" aria-hidden="true">
-                    {% if p.shot %}<img src="{{ p.shot }}" alt="" loading="lazy" width="128" height="93">
-                    {% else %}<span>{{ p.name[:1] }}</span>{% endif %}
+                <span class="dr-tile{{ ' is-dark' if p.dark }}" style="--c: {{ p.college_color }}; --x: {{ loop.index0 }}" aria-hidden="true">
+                    {% if p.headshot %}<i class="dr-ph"></i>{% else %}<span>{{ p.name[:1] }}</span>{% endif %}
                 </span>
                 {# The position sits beside the name on a wide row and beside
                    the college on a phone, where the name needs the width; the
@@ -21,12 +20,12 @@
                 </span>
                 <span class="dr-side dr-from">
                     {% if p.pos %}<span class="dr-pos dr-pos-narrow">{{ p.pos }}</span>{% endif %}
-                    {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" loading="lazy" width="22" height="22">{% endif %}
+                    {% if p.college_logo %}<img src="{{ p.college_logo|espn_px(48) }}" alt="" loading="lazy" width="22" height="22">{% endif %}
                     <span>{{ p.college or '—' }}</span>
                 </span>
                 <svg class="dr-chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"/></svg>
                 <span class="dr-side dr-to">
-                    {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" loading="lazy" width="22" height="22" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
+                    {% if p.nfl_logo %}<img src="{{ p.nfl_logo|espn_px(48) }}" alt="" loading="lazy" width="22" height="22" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
                     <span>{{ p.nfl or '—' }}</span>
                 </span>
             </a>

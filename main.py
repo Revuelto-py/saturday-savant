@@ -252,7 +252,7 @@ def _is_asset_path(p):
     The image proxies are host-allowlisted and memory-cached, and one Stat
     Explorer view asks them for ~150 headshots — through a page budget that
     half-draws the chart and locks the visitor out for a minute."""
-    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith(('/img/c/', '/img/r/'))
+    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith(('/img/c/', '/img/draft/'))
 
 
 @app.before_request
@@ -395,6 +395,10 @@ def ensure_indexes():
             -- dropped as redundant with the uq_player_ppa_pid_season UNIQUE
             -- constraint (same columns), which already serves those lookups.
             CREATE INDEX IF NOT EXISTS idx_players_team ON players(team);
+            -- /draft: every class query filtered 58k players by draft_year
+            -- with a full scan (~370ms); partial, since few players are drafted.
+            CREATE INDEX IF NOT EXISTS idx_players_draft ON players (draft_year, draft_round, draft_pick)
+                WHERE draft_year IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_games_season_week ON games(season, week);
             -- multi-season perf set (added with the 2016-2025 expansion):
             -- the (id::text) expression index is what lets every
@@ -10708,11 +10712,24 @@ TRANSFER_SORTS = {
 }
 
 
-@app.route('/draft')
-@app.route('/draft/<int:year>')
-@cache.cached(timeout=21600, query_string=True)
-def draft(year=None):
-    """Every pick of a draft class, in order.
+@data_cache.memoize(timeout=604800)
+def _draft_years():
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT DISTINCT draft_year FROM players '
+                       'WHERE draft_year IS NOT NULL ORDER BY draft_year DESC')
+        return [r[0] for r in cursor.fetchall()]
+    finally:
+        release_db(conn)
+
+
+# A class never changes once it is ingested, so it is held for a week in the
+# data cache — which the pipeline's purge clears — rather than only in the page
+# cache, where player-page traffic evicts it within the hour.
+@data_cache.memoize(timeout=604800)
+def _draft_class(year):
+    """Every pick of one class, in order, with the programmes that produced it.
 
     draft_pick is the pick WITHIN its round, not the overall selection, so the
     overall number is derived: each round's size is taken from its highest pick
@@ -10722,15 +10739,6 @@ def draft(year=None):
     conn = get_db()
     try:
         cursor = conn.cursor()
-        cursor.execute('SELECT DISTINCT draft_year FROM players '
-                       'WHERE draft_year IS NOT NULL ORDER BY draft_year DESC')
-        years = [r[0] for r in cursor.fetchall()]
-        if not years:
-            return render_template('draft.html', years=[], year=None, rounds=[],
-                                   r1=[], later=[], active=None,
-                                   schools=[], total=0, school_count=0)
-        year = year if year in years else years[0]
-
         cursor.execute("""
             WITH sizes AS (
                 SELECT draft_round, MAX(draft_pick) AS n
@@ -10759,66 +10767,215 @@ def draft(year=None):
              ORDER BY p.draft_round, p.draft_pick,
                       (p.headshot IS NOT NULL) DESC, (t.logo_dark IS NOT NULL) DESC, p.id
         """, (year, year))
-
-        rounds, by_school = [], {}
-        for (pid, fn, ln, pos, shot, college, clogo, ccolor, cslug,
-             nfl, nfl_logo, rnd, pick, overall) in cursor.fetchall():
-            # Guard the inline colour the photo tiles use — a malformed value
-            # would otherwise emit broken CSS on every affected pick.
-            color = ccolor if (ccolor and ccolor[0] == '#' and len(ccolor) == 7) else '#2b3a55'
-            row = {
-                'id': pid, 'name': f'{fn or ""} {ln or ""}'.strip(), 'pos': pos,
-                # Stored headshots are ~275KB 600px PNGs; a round is 32-40 of
-                # them, so both sizes come through the resizing route.
-                'shot': explorer_face_url(shot, 128, circle=False) if shot else None,
-                'face': explorer_face_url(shot, 200, circle=False) if shot else None,
-                'college': college, 'college_logo': clogo, 'college_slug': cslug,
-                'college_color': color, 'dark': landscape._dark(color),
-                # ESPN's light-ground NFL marks (navy Giants, Titans) vanish on
-                # this black; the 500-dark set carries a light outline. ESPN's edge
-                # now and then 404s one, so the templates fall back to the light mark.
-                'nfl': nfl, 'nfl_logo': (nfl_logo or '').replace('/nfl/500/', '/nfl/500-dark/') or None,
-                'round': rnd, 'pick': pick, 'overall': overall,
-            }
-            if not rounds or rounds[-1]['round'] != rnd:
-                rounds.append({'round': rnd, 'picks': []})
-            rounds[-1]['picks'].append(row)
-            if college:
-                sch = by_school.setdefault(college, {'name': college, 'logo': clogo, 'slug': cslug,
-                                                     'color': color, 'dark': row['dark'], 'n': 0, 'r1': 0})
-                sch['n'] += 1
-                sch['r1'] += rnd == 1
-
-        # The college angle is the point of this page — an NFL draft board
-        # anywhere else leads with the teams doing the picking.
-        schools = sorted(by_school.values(), key=lambda s: (-s['n'], s['name']))
-        total = sum(len(r['picks']) for r in rounds)
+        rows = cursor.fetchall()
     finally:
         release_db(conn)
 
-    # ?round=<n> returns one round's markup for the page to fetch; ?open=<n>
-    # renders that round inline instead, which is where the placeholder's link
-    # goes when there is no JavaScript.
-    def _rnum(r):
-        return r['round'] if isinstance(r, dict) else r.round
+    rounds, by_school = [], {}
+    for (pid, fn, ln, pos, shot, college, clogo, ccolor, cslug,
+         nfl, nfl_logo, rnd, pick, overall) in rows:
+        # Guard the inline colour the photo tiles use — a malformed value
+        # would otherwise emit broken CSS on every affected pick.
+        color = ccolor if (ccolor and ccolor[0] == '#' and len(ccolor) == 7) else '#2b3a55'
+        row = {
+            'id': pid, 'name': f'{fn or ""} {ln or ""}'.strip(), 'pos': pos,
+            'headshot': shot,   # the source; pages draw it from the round's sprite
+            'college': college, 'college_logo': clogo, 'college_slug': cslug,
+            'college_color': color, 'dark': landscape._dark(color),
+            # ESPN's light-ground NFL marks (navy Giants, Titans) vanish on
+            # this black; the 500-dark set carries a light outline. ESPN's edge
+            # now and then 404s one, so the templates fall back to the light mark.
+            'nfl': nfl, 'nfl_logo': (nfl_logo or '').replace('/nfl/500/', '/nfl/500-dark/') or None,
+            'round': rnd, 'pick': pick, 'overall': overall,
+        }
+        if not rounds or rounds[-1]['round'] != rnd:
+            rounds.append({'round': rnd, 'picks': []})
+        rounds[-1]['picks'].append(row)
+        if college:
+            sch = by_school.setdefault(college, {'name': college, 'logo': clogo, 'slug': cslug,
+                                                 'color': color, 'dark': row['dark'], 'n': 0, 'r1': 0})
+            sch['n'] += 1
+            sch['r1'] += rnd == 1
+    for rd in rounds:
+        rd['sprite'] = _draft_sprite_url(year, rd)
 
+    # The college angle is the point of this page — an NFL draft board
+    # anywhere else leads with the teams doing the picking.
+    schools = sorted(by_school.values(), key=lambda s: (-s['n'], s['name']))
+    return {'rounds': rounds, 'schools': schools[:12], 'school_count': len(by_school),
+            'total': sum(len(r['picks']) for r in rounds)}
+
+
+# ── Draft headshot sprites ───────────────────────────────────────────────────
+# A round is 32-40 faces. As separate images each one was an R2 fetch plus a
+# resize on a cold worker — the last face of a 2023 page arrived after ~5.6s —
+# and 32-40 requests even when warm. Instead every round's faces are one WebP
+# strip, one request, built once ever: the bytes are kept in Postgres
+# (img_store), so a fresh worker reads ~150KB rather than rebuilding. The hash
+# in the URL is of the source photo URLs, which carry a content hash, so a
+# changed photo means a new strip rather than a stale one.
+_SPRITE_CELL = (168, 122)   # 2x the largest tile (84x61); all tiles share the cutouts' ~1.37 aspect
+_sprite_guard = _threading.Lock()
+_sprite_locks = {}
+
+
+def _draft_sprite_hash(rd):
+    import hashlib
+    return hashlib.sha1('|'.join(p['headshot'] or '' for p in rd['picks']).encode()).hexdigest()[:12]
+
+
+def _draft_sprite_url(year, rd):
+    if not any(p['headshot'] for p in rd['picks']):
+        return None
+    return f"/img/draft/{year}-{rd['round']}-{_draft_sprite_hash(rd)}.webp"
+
+
+def _img_store_get(key):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT body FROM img_store WHERE key = %s', (key,))
+        row = cur.fetchone()
+        return bytes(row[0]) if row else None
+    except Exception:
+        conn.rollback()     # no table yet, or a dropped connection: build instead
+        return None
+    finally:
+        release_db(conn)
+
+
+def _img_store_put(key, body):
+    # ponytail: superseded strips (a re-shot photo) are never deleted; ~150KB a
+    # round, so prune by created_at if the table ever matters.
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute('CREATE TABLE IF NOT EXISTS img_store ('
+                    'key TEXT PRIMARY KEY, body BYTEA NOT NULL, created_at TIMESTAMPTZ DEFAULT now())')
+        cur.execute('INSERT INTO img_store (key, body) VALUES (%s, %s) '
+                    'ON CONFLICT (key) DO UPDATE SET body = EXCLUDED.body, created_at = now()', (key, body))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+    finally:
+        release_db(conn)
+
+
+def _build_draft_sprite(rd):
+    """(webp bytes, complete) — one cell per pick, transparent where a pick
+    has no photo. Cells are filled top-anchored, as every tile shows them."""
+    from PIL import Image, ImageOps
+    from concurrent.futures import ThreadPoolExecutor
+    w, h = _SPRITE_CELL
+    picks = rd['picks']
+
+    def fetch(url):
+        if not url:
+            return b''
+        try:
+            r = req.get(url, timeout=8)
+            return r.content if r.status_code == 200 else None
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        blobs = list(ex.map(fetch, [p['headshot'] for p in picks]))
+    strip = Image.new('RGBA', (w * len(picks), h), (0, 0, 0, 0))
+    complete = True
+    for i, blob in enumerate(blobs):
+        if blob == b'':
+            continue
+        try:
+            im = Image.open(io.BytesIO(blob)).convert('RGBA')
+            strip.paste(ImageOps.fit(im, (w, h), Image.LANCZOS, centering=(0.5, 0)), (i * w, 0))
+        except Exception:
+            complete = False     # a failed fetch leaves a blank cell; don't keep it
+    buf = io.BytesIO()
+    strip.save(buf, 'WEBP', quality=80, method=4)
+    return buf.getvalue(), complete
+
+
+def _draft_sprite_bytes(year, rd):
+    key = f"draft-sprite/{year}/{rd['round']}/{_draft_sprite_hash(rd)}"
+    body = img_cache.get(key)
+    if body:
+        return body
+    # One build per strip, however many requests arrive while it runs.
+    with _sprite_guard:
+        lock = _sprite_locks.setdefault(key, _threading.Lock())
+    with lock:
+        body = img_cache.get(key)
+        if body:
+            return body
+        body = _img_store_get(key)
+        timeout = 604800
+        if not body:
+            body, complete = _build_draft_sprite(rd)
+            if complete:
+                _img_store_put(key, body)
+            else:
+                timeout = 600    # try the missing faces again soon
+        img_cache.set(key, body, timeout=timeout)
+    return body
+
+
+@app.route('/img/draft/<int:year>-<int:rnd>-<h>.webp')
+def draft_sprite(year, rnd, h):
+    rd = None
+    if year in _draft_years():
+        rd = next((r for r in _draft_class(year)['rounds'] if r['round'] == rnd), None)
+    if rd is None or not rd['sprite']:
+        return '', 404
+    if h != _draft_sprite_hash(rd):
+        return redirect(rd['sprite'])    # a page cached before a photo changed
+    return Response(_draft_sprite_bytes(year, rd), content_type='image/webp', headers={
+        'Cache-Control': 'public, max-age=31536000, immutable'})
+
+
+@app.template_filter('espn_px')
+def espn_px(url, px):
+    """An ESPN team mark resized on ESPN's CDN. The stored URLs are the 500px
+    originals — the Raiders' is 491KB — drawn here at 16-34px, so a draft page
+    spent ~2MB on logos; at twice the drawn size they are 1-4KB each."""
+    if url and url.startswith('https://a.espncdn.com/i/'):
+        return f'https://a.espncdn.com/combiner/i?img={url[len("https://a.espncdn.com"):]}&w={px}&h={px}'
+    return url
+
+
+@app.route('/draft')
+@app.route('/draft/<int:year>')
+@cache.cached(timeout=21600, query_string=True)
+def draft(year=None):
+    """Every pick of a draft class, in order (see _draft_class)."""
+    years = _draft_years()
+    if not years:
+        return render_template('draft.html', years=[], year=None, rounds=[],
+                               r1=[], r1_sprite=None, later=[], active=None,
+                               schools=[], total=0, school_count=0)
+    year = year if year in years else years[0]
+    cls = _draft_class(year)
+    rounds = cls['rounds']
+
+    # ?round=<n> returns one round's markup for the page to fetch; ?open=<n>
+    # renders that round inline instead, which is where the tab's link goes
+    # when there is no JavaScript.
     want = request.args.get('round', type=int)
     if want is not None:
-        rd = next((r for r in rounds if _rnum(r) == want), None)
+        rd = next((r for r in rounds if r['round'] == want), None)
         if rd is not None:
             return render_template('_draft_round.html', rd=rd)
 
     # Round 1 is a grid of cards; the rest are a tabbed list with one round
     # rendered and the others fetched when asked for.
-    r1 = rounds[0]['picks'] if rounds and _rnum(rounds[0]) == 1 else []
-    later = rounds[1:] if r1 else rounds
+    first = rounds[0] if rounds and rounds[0]['round'] == 1 else None
+    later = rounds[1:] if first else rounds
     opened = request.args.get('open', type=int)
-    active = next((r for r in later if _rnum(r) == opened), later[0] if later else None)
+    active = next((r for r in later if r['round'] == opened), later[0] if later else None)
 
     return render_template('draft.html', years=years, year=year, rounds=rounds,
-                           r1=r1, later=later, active=active,
-                           schools=schools[:12], total=total,
-                           school_count=len(by_school))
+                           r1=first['picks'] if first else [], r1_sprite=first and first['sprite'],
+                           later=later, active=active, schools=cls['schools'],
+                           total=cls['total'], school_count=cls['school_count'])
 
 
 @app.route('/transfers')
@@ -11775,16 +11932,15 @@ def img_proxy():
     return Response(body, content_type=ctype, headers=headers)
 
 
-def explorer_face_url(src, width=128, circle=True):
-    """Cacheable URL for a downscaled headshot (see explorer_face): circular
-    for the explorer's markers, the plain cutout with circle=False."""
+def explorer_face_url(src, width=128):
+    """Cacheable URL for a circular, downscaled headshot (see explorer_face)."""
     from base64 import urlsafe_b64encode
     key = urlsafe_b64encode(src.encode()).decode().rstrip('=')
-    return f'/img/{"c" if circle else "r"}/{width}/{key}.webp'
+    return f'/img/c/{width}/{key}.webp'
 
 
-@app.route('/img/<any(c, r):shape>/<int:width>/<key>.webp')
-def explorer_face(shape, width, key):
+@app.route('/img/c/<int:width>/<key>.webp')
+def explorer_face(width, key):
     """The Stat Explorer's headshots, at a URL Cloudflare will cache.
 
     /img-proxy?url=... is extensionless, and Cloudflare only edge-caches paths
@@ -11805,7 +11961,7 @@ def explorer_face(shape, width, key):
     netloc = urlparse(url).netloc.lower()
     if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
         return 'Forbidden', 403
-    hit = _img_variant(url, min(max(width, 16), IMG_MAX_WIDTH), True, shape == 'c')
+    hit = _img_variant(url, min(max(width, 16), IMG_MAX_WIDTH), True, True)
     if hit is None:
         return '', 502
     body, ctype = hit
@@ -13667,7 +13823,8 @@ def _warm_cache():
         paths = ['/', '/games', '/leaderboards/passing', '/leaderboards/rushing',
                  '/leaderboards/receiving', '/leaderboards/defense',
                  '/leaderboards/kicking', '/leaderboards/punting',
-                 '/leaderboards/teams', '/rankings', '/teams', '/savant-rating', '/bracket']
+                 '/leaderboards/teams', '/rankings', '/teams', '/savant-rating', '/bracket',
+                 '/draft']
         try:
             with app.test_client() as c:
                 for p in paths:
@@ -13686,6 +13843,16 @@ def _warm_cache():
                 _search_rank_pools(yr)
             except Exception:
                 pass
+        # The newest class's face strips: a Postgres read each, or a one-time
+        # build the first boot after a class is ingested, so no visitor waits
+        # on R2 for it (R2 throttles parallel fetches: ~4s for one round).
+        try:
+            year = _draft_years()[0]
+            for rd in _draft_class(year)['rounds']:
+                if rd['sprite']:
+                    _draft_sprite_bytes(year, rd)
+        except Exception as exc:
+            print(f'draft sprite warmup skipped: {exc}', flush=True)
         _warm_explorer_headshots()
     threading.Thread(target=run, daemon=True).start()
 
