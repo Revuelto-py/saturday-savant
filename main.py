@@ -10727,7 +10727,7 @@ def draft(year=None):
         years = [r[0] for r in cursor.fetchall()]
         if not years:
             return render_template('draft.html', years=[], year=None, rounds=[],
-                                   wall=[], later=[], active=None,
+                                   r1=[], later=[], active=None,
                                    schools=[], total=0, school_count=0)
         year = year if year in years else years[0]
 
@@ -10766,15 +10766,12 @@ def draft(year=None):
             # Guard the inline colour the photo tiles use — a malformed value
             # would otherwise emit broken CSS on every affected pick.
             color = ccolor if (ccolor and ccolor[0] == '#' and len(ccolor) == 7) else '#2b3a55'
-            name = f'{fn or ""} {ln or ""}'.strip()
-            # The phone wall has room for a surname; "Jr." is not one.
-            words = [w for w in name.split() if w.rstrip('.') not in ('Jr', 'Sr', 'II', 'III', 'IV')]
             row = {
-                'id': pid, 'name': name, 'last': words[-1] if words else name, 'pos': pos,
+                'id': pid, 'name': f'{fn or ""} {ln or ""}'.strip(), 'pos': pos,
                 # Stored headshots are ~275KB 600px PNGs; a round is 32-40 of
                 # them, so both sizes come through the resizing route.
                 'shot': explorer_face_url(shot, 128, circle=False) if shot else None,
-                'face': explorer_face_url(shot, 400, circle=False) if shot else None,
+                'face': explorer_face_url(shot, 200, circle=False) if shot else None,
                 'college': college, 'college_logo': clogo, 'college_slug': cslug,
                 'college_color': color, 'dark': landscape._dark(color),
                 # ESPN's light-ground NFL marks (navy Giants, Titans) vanish on
@@ -10811,15 +10808,15 @@ def draft(year=None):
         if rd is not None:
             return render_template('_draft_round.html', rd=rd)
 
-    # Round 1 is the photo wall; the rest are a tabbed list with one round
+    # Round 1 is a grid of cards; the rest are a tabbed list with one round
     # rendered and the others fetched when asked for.
-    wall = rounds[0]['picks'] if rounds and _rnum(rounds[0]) == 1 else []
-    later = rounds[1:] if wall else rounds
+    r1 = rounds[0]['picks'] if rounds and _rnum(rounds[0]) == 1 else []
+    later = rounds[1:] if r1 else rounds
     opened = request.args.get('open', type=int)
     active = next((r for r in later if _rnum(r) == opened), later[0] if later else None)
 
     return render_template('draft.html', years=years, year=year, rounds=rounds,
-                           wall=wall, later=later, active=active,
+                           r1=r1, later=later, active=active,
                            schools=schools[:12], total=total,
                            school_count=len(by_school))
 

@@ -8,9 +8,9 @@
 
    The page leads with the PROGRAMS rather than the NFL teams. A draft board
    anywhere else is organised around who did the picking; on a college site the
-   useful question is who produced them, so round 1 is a wall of faces, each on
-   its college's colour, and the programme count sits right under it. Later
-   rounds are a list, one round at a time. #}
+   useful question is who produced them: every pick carries its college's
+   colour and logo, and the programme count sits under round 1. Later rounds
+   are a list, one round at a time. #}
 
 <div class="page-wrapper dr" style="padding-top:32px">
 
@@ -41,22 +41,36 @@
     </div>
     {% else %}
 
-    {# ── Round 1, face by face ─────────────────────────────────────────── #}
-    {% if wall %}
-    <section class="dr-wall" aria-label="First-round picks">
-        {% for p in wall %}
-        <a class="dr-wt{{ ' is-dark' if p.dark }}" href="/player/{{ p.id }}" style="--c: {{ p.college_color }}"
-           aria-label="Pick {{ p.overall }}, {{ p.name }}, {{ p.pos or 'position unknown' }}, {{ p.college or 'college unknown' }}{% if p.nfl %}, to the {{ p.nfl }}{% endif %}">
-            {% if p.face %}<img class="dr-wt-ph" src="{{ p.face }}" alt="" width="400" height="291"{% if loop.index > 8 %} loading="lazy"{% endif %}>
-            {% else %}<span class="dr-wt-i" aria-hidden="true">{{ p.name[:1] }}</span>{% endif %}
-            <span class="dr-wt-n" aria-hidden="true">{{ p.overall }}</span>
-            {% if p.nfl_logo %}<img class="dr-wt-nfl" src="{{ p.nfl_logo }}" alt="" width="22" height="22" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
-            <span class="dr-wt-b" aria-hidden="true">
-                <b class="dr-wt-full">{{ p.name }}</b><b class="dr-wt-last">{{ p.last }}</b>
-                <small>{% if p.pos %}<span class="dr-pos">{{ p.pos }}</span>{% endif %}{{ p.college or '' }}</small>
-            </span>
-        </a>
-        {% endfor %}
+    {# ── Round 1: one card per pick, all the same size ───────────────── #}
+    {% if r1 %}
+    <section class="dr-sec" aria-labelledby="dr-r1-h">
+        <div class="dr-sec-h"><h2 class="section-label" id="dr-r1-h">The first round</h2></div>
+        <ol class="dr-r1">
+            {% for p in r1 %}
+            <li>
+                <a class="dr-pk" href="/player/{{ p.id }}">
+                    <span class="dr-pk-n">{{ p.overall }}</span>
+                    <span class="dr-tile{{ ' is-dark' if p.dark }}" style="--c: {{ p.college_color }}" aria-hidden="true">
+                        {% if p.face %}<img src="{{ p.face }}" alt="" width="200" height="145"{% if loop.index > 12 %} loading="lazy"{% endif %}>
+                        {% else %}<span>{{ p.name[:1] }}</span>{% endif %}
+                    </span>
+                    <span class="dr-pk-t">
+                        <b class="dr-pk-name">{{ p.name }}</b>
+                        <span class="dr-pk-row dr-pk-from">
+                            {% if p.pos %}<span class="dr-pos">{{ p.pos }}</span>{% endif %}
+                            {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" width="16" height="16">{% endif %}
+                            <span>{{ p.college or '—' }}</span>
+                        </span>
+                        <span class="dr-pk-row dr-pk-to">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"/></svg>
+                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" width="16" height="16" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
+                            <span>{{ p.nfl or '—' }}</span>
+                        </span>
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
     </section>
     {% endif %}
 
