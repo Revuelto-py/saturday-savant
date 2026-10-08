@@ -76,7 +76,7 @@
 
     <div class="pp-photo">
         {% if player.headshot %}
-        <img src="{{ player.headshot }}" alt="{{ player.first_name }} {{ player.last_name }} headshot">
+        <img src="{{ player.headshot }}" alt="{{ player.first_name }} {{ player.last_name }} headshot" data-full>
         {% else %}
         <span class="pp-photo-none">{{ player.first_name[0] if player.first_name else '?' }}{{ player.last_name[0] if player.last_name else '' }}</span>
         {% endif %}

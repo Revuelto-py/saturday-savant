@@ -47,6 +47,7 @@ import requests
 from psycopg2.extras import execute_values
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
+from headshot_thumbs import upload_thumb
 
 BASE_DIR = ROOT
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -170,14 +171,22 @@ def main():
 
     # ── upload the changed files to R2 (same key = overwrite) ───────────────
     def push(pid):
+        path = os.path.join(HEADSHOTS_DIR, f'{pid}.png')
         try:
             s3.upload_file(
-                os.path.join(HEADSHOTS_DIR, f'{pid}.png'), bucket, f'{pid}.png',
+                path, bucket, f'{pid}.png',
                 ExtraArgs={'ContentType': 'image/png',
                            'CacheControl': 'public, max-age=31536000'})
-            return pid, True
         except Exception:
             return pid, False
+        try:
+            # The 200px copy every list page draws (headshot_thumbs.py). Failing
+            # here only means those pages fall back to the original.
+            with open(path, 'rb') as f:
+                upload_thumb(s3, bucket, pid, f.read())
+        except Exception:
+            pass
+        return pid, True
 
     pushed = []
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:

@@ -245,12 +245,12 @@
 {% set gx_week = notes if notes else ('Postseason' if is_post else 'Week ' ~ week_num) %}
 {% macro gx_half(side, color, logo, muted) %}
 <div class="gx-half gx-half--{{ side }}{{ ' is-muted' if muted }}" style="--c0:{{ shade(color, 0.08) }};--c1:{{ shade(color, 0.45) }};--c2:{{ shade(color, 0.82) }}" aria-hidden="true">
-    {% if logo %}<img class="gx-mark" src="{{ logo }}" alt="" loading="lazy">{% endif %}
+    {% if logo %}<img class="gx-mark" src="{{ logo }}" alt="" loading="lazy" data-px="500">{% endif %}
 </div>
 {% endmacro %}
 {% macro gx_side(side, team, logo, is_fbs, rank, rec, lost) %}
 <div class="gx-side gx-side--{{ side }}{{ ' is-lost' if lost }}">
-    {% if logo %}{% if is_fbs %}<a class="gx-logo-link" href="{{ team_url(team, game_season) }}" tabindex="-1" aria-hidden="true"><img class="gx-logo" src="{{ logo }}" alt=""></a>{% else %}<img class="gx-logo" src="{{ logo }}" alt="" aria-hidden="true">{% endif %}{% endif %}
+    {% if logo %}{% if is_fbs %}<a class="gx-logo-link" href="{{ team_url(team, game_season) }}" tabindex="-1" aria-hidden="true"><img class="gx-logo" src="{{ logo }}" alt="" data-px="192"></a>{% else %}<img class="gx-logo" src="{{ logo }}" alt="" aria-hidden="true" data-px="192">{% endif %}{% endif %}
     {# Always present, so a ranked side's name never sits a row lower than an
        unranked opponent's. #}
     <span class="gx-meta">{% if rank %}No. {{ rank }}{% endif %}{% if rank and rec %} · {% endif %}{% if rec %}{{ rec[0] }}-{{ rec[1] }}{% endif %}{% if not rank and not rec %}&nbsp;{% endif %}</span>

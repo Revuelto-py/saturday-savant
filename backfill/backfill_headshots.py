@@ -36,6 +36,7 @@ import requests
 import boto3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
+from headshot_thumbs import upload_thumb
 
 BASE_DIR = ROOT
 load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
@@ -136,9 +137,15 @@ def stage_upload():
 
     def put(filename):
         try:
+            path = os.path.join(HEADSHOTS_DIR, filename)
             s3.upload_file(
-                os.path.join(HEADSHOTS_DIR, filename), bucket, filename,
+                path, bucket, filename,
                 ExtraArgs={'ContentType': 'image/png', 'CacheControl': 'public, max-age=31536000'})
+            try:
+                with open(path, 'rb') as f:   # the list pages' 200px copy (headshot_thumbs.py)
+                    upload_thumb(s3, bucket, filename[:-4], f.read())
+            except Exception:
+                pass
             return True
         except Exception as e:
             print(f"  failed {filename}: {e}", flush=True)

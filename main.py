@@ -93,6 +93,76 @@ load_dotenv()
 
 app = Flask(__name__)
 
+
+# ── Image weight ──────────────────────────────────────────────────────────────
+# Team marks are stored as ESPN's 500px originals (the Raiders' is 491KB) and
+# headshots as ~275KB 600px PNGs, yet nearly every page draws them at 16-74px:
+# /games spent ~5MB on logos, the homepage and a game page ~8MB each on faces.
+# Every page rendered in this file passes through shrink_images once, before it
+# is cached, which points each <img> at a copy sized for how it is drawn:
+#   logos     -> ESPN's own resizer at twice the drawn width — the tag's width
+#                attribute, or a data-px hint (already doubled) where CSS sizes
+#                it — rounded up to a few shared sizes; 96px when neither says.
+#   headshots -> the 200px WebP kept beside the original in R2 (headshot_thumbs.py),
+#                falling back to the original if that copy is missing. A tag
+#                marked data-full, or wider than 100px, keeps the original.
+_IMG_TAG = re.compile(r'<img\b[^>]*>')
+_IMG_SRC = re.compile(r'\ssrc="([^"]*)"')
+_IMG_WIDTH = re.compile(r'\swidth="(\d+)"')
+_IMG_PX = re.compile(r'\sdata-px="(\d+)"')
+_R2_SHOT = re.compile(r'^(https://[^/"]+\.r2\.dev/)(\d+)\.png((?:\?v=[0-9a-f]+)?)$')
+_LOGO_SIZES = (32, 48, 64, 96, 128, 192, 256, 384)
+
+
+@app.template_filter('espn_px')
+def espn_px(url, px):
+    """An ESPN team mark at px square, resized on ESPN's CDN (1-10KB)."""
+    if url and url.startswith('https://a.espncdn.com/i/'):
+        return f'https://a.espncdn.com/combiner/i?img={url[len("https://a.espncdn.com"):]}&w={px}&h={px}'
+    return url
+
+
+def thumb_url(url):
+    """The 200px copy of a mirrored headshot, or the URL unchanged."""
+    m = _R2_SHOT.match(url or '')
+    return f'{m.group(1)}t/{m.group(2)}.webp{m.group(3)}' if m else url
+
+
+def _shrink_img(match):
+    tag = match.group(0)
+    src = _IMG_SRC.search(tag)
+    if not src:
+        return tag
+    url = src.group(1)
+    if url.startswith('https://a.espncdn.com/i/teamlogos/'):
+        hint, width = _IMG_PX.search(tag), _IMG_WIDTH.search(tag)
+        px = int(hint.group(1)) if hint else (2 * int(width.group(1)) if width else 96)
+        size = next((s for s in _LOGO_SIZES if s >= px), None)
+        if size is None:
+            return tag                       # drawn near full size: the original is right
+        return tag.replace(src.group(0), ' src="%s"' % espn_px(url, size).replace('&', '&amp;'), 1)
+    thumb = thumb_url(url)
+    if thumb != url and ' data-full' not in tag:
+        width = _IMG_WIDTH.search(tag)
+        if width and int(width.group(1)) > 100:
+            return tag
+        fallback = '' if ' onerror=' in tag else ' onerror="this.onerror=null;this.src=\'%s\'"' % url
+        return tag.replace(src.group(0), ' src="%s"%s' % (thumb, fallback), 1)
+    return tag
+
+
+def shrink_images(html):
+    return _IMG_TAG.sub(_shrink_img, html) if '<img' in html else html
+
+
+from flask import render_template as _flask_render_template
+
+
+def render_template(*args, **kwargs):
+    """Flask's render_template, then shrink_images (above)."""
+    return shrink_images(_flask_render_template(*args, **kwargs))
+
+
 cache = Cache(app, config={
     'CACHE_TYPE': 'SimpleCache',       # in-memory, no Redis needed
     'CACHE_DEFAULT_TIMEOUT': 3600,     # 1 hour default TTL
@@ -7630,12 +7700,13 @@ def api_players():
         results = []
         for t in team_dicts:
             results.append({'type': 'team', 'name': t['name'], 'conference': t['conference'],
-                            'logo': t['logo'], 'color': t['color'],
+                            'logo': t['logo'], 'logo_sm': espn_px(t['logo'], 64), 'color': t['color'],
                             'url': f"/team/{slugify_team(t['name'])}"})
         for pl in player_dicts:
             results.append({'type': 'player', 'id': pl['id'], 'first': pl['first'], 'last': pl['last'],
                             'team': pl['team'], 'pos': pl['pos'], 'jersey': pl['jersey'],
                             'headshot': pl['headshot'], 'logo': pl['logo'], 'fuzzy': pl['fuzzy'],
+                            'face': thumb_url(pl['headshot']), 'logo_sm': espn_px(pl['logo'], 64),
                             'stat': (f"{pl['lead'][0]['value']} {pl['lead'][0]['label']}" if pl['lead'] else None),
                             'season': pl['season'], 'active': pl['active'],
                             'url': f"/player/{pl['id']}"})
@@ -10938,16 +11009,6 @@ def draft_sprite(year, rnd, h):
         'Cache-Control': 'public, max-age=31536000, immutable'})
 
 
-@app.template_filter('espn_px')
-def espn_px(url, px):
-    """An ESPN team mark resized on ESPN's CDN. The stored URLs are the 500px
-    originals — the Raiders' is 491KB — drawn here at 16-34px, so a draft page
-    spent ~2MB on logos; at twice the drawn size they are 1-4KB each."""
-    if url and url.startswith('https://a.espncdn.com/i/'):
-        return f'https://a.espncdn.com/combiner/i?img={url[len("https://a.espncdn.com"):]}&w={px}&h={px}'
-    return url
-
-
 @app.route('/draft')
 @app.route('/draft/<int:year>')
 @cache.cached(timeout=21600, query_string=True)
@@ -11063,9 +11124,9 @@ def transfers():
             'name': f"{r[0] or ''} {r[1] or ''}".strip(), 'pos': r[2],
             'origin': r[3], 'destination': r[4], 'date': _fmt_date(r[5]), 'rating': r[6],
             'stars': r[7], 'eligibility': r[8], 'player_id': r[9],
-            # The circular 128px variant, not the 600px original: a page of 50
-            # rows was pulling ~14MB of headshots to paint 36px circles.
-            'headshot': explorer_face_url(r[10]) if r[10] else None,
+            # The original; shrink_images swaps in the 200px R2 copy (a page of
+            # 50 rows once pulled ~14MB of headshots to paint 36px circles).
+            'headshot': r[10],
             'dest_logo': r[11], 'orig_logo': r[12],
             'initials': f"{(r[0] or '?')[0]}{(r[1] or ' ')[0]}".strip(),
         } for r in cursor.fetchall()]
@@ -11108,7 +11169,7 @@ def transfers():
             'name': f"{r[0] or ''} {r[1] or ''}".strip(), 'pos': r[2], 'origin': r[3],
             'destination': r[4], 'date': _fmt_date(r[5]), 'rating': r[6], 'stars': r[7] or 0,
             'withdrew': r[8] == 'Withdrawn', 'player_id': r[9],
-            'headshot': explorer_face_url(r[10]) if r[10] else None,
+            'headshot': r[10],
             'dest_logo': r[11], 'orig_logo': r[12], 'color': r[13] or '#1c9cf0',
             'initials': f"{(r[0] or '?')[0]}{(r[1] or ' ')[0]}".strip(),
         } for r in cursor.fetchall()]

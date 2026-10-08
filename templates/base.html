@@ -905,7 +905,7 @@
                 html += '<div class="search-group">Teams</div>';
                 for (const r of teams) {
                     html += `<a class="search-result-item" id="sr-${n++}" role="option" href="${esc(r.url)}">
-                        ${r.logo ? `<img class="search-result-logo" src="${esc(r.logo)}" alt="" loading="lazy">` : '<span class="search-result-logo"></span>'}
+                        ${r.logo ? `<img class="search-result-logo" src="${esc(r.logo_sm || r.logo)}" alt="" loading="lazy">` : '<span class="search-result-logo"></span>'}
                         <span class="search-result-text"><span class="search-result-name">${mark(r.name, q)}</span>
                         <span class="search-result-meta">${esc(r.conference || '')}</span></span>
                         <span class="search-result-kind">Team</span></a>`;
@@ -915,7 +915,7 @@
                 html += `<div class="search-group">${fuzzy ? 'Did you mean' : 'Players'}</div>`;
                 for (const r of players) {
                     const avatar = r.headshot
-                        ? `<img class="search-result-avatar" src="${esc(r.headshot)}" alt="" loading="lazy">`
+                        ? `<img class="search-result-avatar" src="${esc(r.face || r.headshot)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${esc(r.headshot)}'">`
                         : `<span class="search-avatar-placeholder">${esc((r.first || '')[0] || '')}${esc((r.last || '')[0] || '')}</span>`;
                     // The headline figure from the player's latest season; a former
                     // player's year says the number isn't this season's.
@@ -925,7 +925,7 @@
                     html += `<a class="search-result-item" id="sr-${n++}" role="option" href="${esc(r.url)}">
                         ${avatar}
                         <span class="search-result-text"><span class="search-result-name">${mark(r.first + ' ' + r.last, q)}</span>
-                        <span class="search-result-meta">${r.logo ? `<img src="${esc(r.logo)}" alt="" loading="lazy">` : ''}${r.pos ? esc(r.pos) + ', ' : ''}${esc(r.team || '')}</span></span>
+                        <span class="search-result-meta">${r.logo ? `<img src="${esc(r.logo_sm || r.logo)}" alt="" loading="lazy">` : ''}${r.pos ? esc(r.pos) + ', ' : ''}${esc(r.team || '')}</span></span>
                         ${fig}</a>`;
                 }
             }
