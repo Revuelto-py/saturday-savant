@@ -59,6 +59,7 @@
 import cfbd
 import psycopg2
 import landscape
+import compare_card as compare_card_mod
 from psycopg2 import pool as pg_pool
 import gzip
 import io
@@ -76,7 +77,7 @@ from zoneinfo import ZoneInfo
 import requests as req
 from urllib.parse import urlencode
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory, url_for, g
+from flask import Flask, render_template, request, jsonify, Response, redirect, send_from_directory, url_for, g, abort
 from flask_caching import Cache
 # Labels/units for the stored Savant Forecast feature breakdown. The DB holds
 # only the model's numbers; the wording is applied here at render time.
@@ -322,7 +323,7 @@ def _is_asset_path(p):
     The image proxies are host-allowlisted and memory-cached, and one Stat
     Explorer view asks them for ~150 headshots — through a page budget that
     half-draws the chart and locks the visitor out for a minute."""
-    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith(('/img/c/', '/img/draft/'))
+    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith(('/img/c/', '/img/draft/', '/compare/card-'))
 
 
 @app.before_request
@@ -11689,7 +11690,8 @@ def _build_compare_group_rows(cursor, group_name, slots):
             _cmp_row('Tackles/G', slots, sp_wide, sp_wide_q, 'TOT',   games_by_slot, per_game=True),
             _cmp_row('Sacks/G',   slots, sp_wide, sp_wide_q, 'SACKS', games_by_slot, per_game=True),
             _cmp_row('TFL/G',     slots, sp_narrow, sp_narrow_q, 'TFL', games_by_slot, per_game=True),
-            _cmp_row('PBU/G',     slots, sp_narrow, sp_narrow_q, 'PD',  games_by_slot, per_game=True))
+            _cmp_row('PBU/G',     slots, sp_narrow, sp_narrow_q, 'PD',  games_by_slot, per_game=True),
+            _cmp_row('QB Hurries/G', slots, sp_wide, sp_wide_q, 'QB HUR', games_by_slot, per_game=True))
         # No EPA/Play row here — player_ppa only covers offensive skill positions
         # (QB/RB/FB/TE/WR) in this dataset, so it would always be empty for DL/LB.
 
@@ -11962,18 +11964,16 @@ def _img_variant(url, width, webp, circle=False):
 
 @app.route('/img-proxy')
 def img_proxy():
-    """Same-origin passthrough for headshots/logos used by the compare
-    export. The R2 headshot bucket sends no CORS headers, so loading those
-    images cross-origin taints the html2canvas canvas and the download
-    fails to render them. Routing them through our own origin fixes that.
-    Host-allowlisted to image CDNs to avoid an open proxy."""
+    """Same-origin passthrough for headshots/logos drawn into canvases (the
+    explorer chart). The R2 headshot bucket sends no CORS headers, so those
+    images taint a canvas loaded cross-origin. Routing them through our own
+    origin fixes that. Host-allowlisted to image CDNs to avoid an open proxy."""
     from urllib.parse import urlparse
     url = request.args.get('url', '')
     netloc = urlparse(url).netloc.lower()
     if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
         return 'Forbidden', 403
-    # ?w= asks for a downscaled copy. Callers that need the original — the
-    # compare export renders at full size — simply omit it.
+    # ?w= asks for a downscaled copy. Callers that need the original omit it.
     try:
         width = int(request.args.get('w', 0))
     except (TypeError, ValueError):
@@ -12037,252 +12037,490 @@ def explorer_face(width, key):
         'Access-Control-Allow-Origin': '*'})
 
 
-@app.route('/compare')
-@cache.cached(timeout=21600, query_string=True)  # players/teams + season are all in the query string
-def compare():
-    season = requested_season()   # default season for slots without an explicit year
-    avail = get_available_seasons()
-    mode = request.args.get('type', 'player')
-    if mode not in ('player', 'team'):
-        mode = 'player'
-    pos_filter = request.args.get('pos', '')
+# ── Compare ──────────────────────────────────────────────────────────────────
+# Two players or two teams, face to face. The first pick sets the position
+# group and the second search is scoped to it, so there are no position tabs.
+# _compare_data builds everything once for the page, its in-place updates
+# (?partial=1) and its share images; a finished pair has its own address,
+# /compare/<a>-vs-<b>, and the earlier picking states use the query form.
 
-    def slot_season(i):
-        """Per-slot season from ?y{i}=, falling back to the page default so old
-        single-season links keep working."""
-        raw = request.args.get(f'y{i}', type=int)
-        return raw if (raw and raw in avail) else season
-    slot_seasons = [slot_season(i) for i in (1, 2, 3)]
+# The page used to print the row builders' abbreviations ("INT/G", "Off. EPA /
+# Play"); a share image is read by people who never saw the legend.
+COMPARE_LABELS = {
+    'Comp %': 'Completion %', 'Pass Yds/G': 'Pass yards per game', 'Pass TD/G': 'Pass TDs per game',
+    'INT/G': 'Interceptions per game', 'Yds/Att': 'Yards per attempt',
+    'Avg Depth of Target': 'Average depth of target', 'Air Yards Share': 'Air yards share',
+    'Deep Attempt Rate': 'Deep attempt rate', 'Rush Yds/G': 'Rush yards per game',
+    'EPA / Play': 'EPA per play', 'EPA / Pass Play': 'EPA per pass play', 'EPA / Rush Play': 'EPA per rush play',
+    'Yds/Carry': 'Yards per carry', 'Success Rate': 'Success rate', 'Line Yards': 'Line yards',
+    'Second-Level': 'Second-level yards', 'Open-Field': 'Open-field yards', 'Stuffed Rate': 'Stuffed rate',
+    'Rec Yds': 'Receiving yards', 'Usage Rate': 'Usage rate', 'Rush Usage': 'Rush usage',
+    'Rec/G': 'Receptions per game', 'Rec Yds/G': 'Receiving yards per game', 'Rec TD/G': 'Receiving TDs per game',
+    'Yds/Rec': 'Yards per reception', 'Tackles/G': 'Tackles per game', 'Sacks/G': 'Sacks per game',
+    'TFL/G': 'Tackles for loss per game', 'PBU/G': 'Pass breakups per game', 'QB Hurries/G': 'QB hurries per game',
+    'Net Rating': 'Savant Rating', 'Offensive Rating': 'Offensive rating', 'Defensive Rating': 'Defensive rating',
+    'SP+ Rating': 'SP+', 'Off. EPA / Play': 'EPA per play', 'Rush EPA / Play': 'Rush EPA per play',
+    'Pass EPA / Play': 'Pass EPA per play', 'Off. Success Rate': 'Success rate',
+    'Rush Success Rate': 'Rush success rate', 'Pass Success Rate': 'Pass success rate',
+    'Off. Explosiveness': 'Explosiveness', 'Rush Explosiveness': 'Rush explosiveness',
+    'Pass Explosiveness': 'Pass explosiveness', 'Power Success': 'Power success',
+    'Second-Level Yards': 'Second-level yards', 'Open-Field Yards': 'Open-field yards',
+    'Def. EPA / Play': 'EPA per play allowed', 'Rush EPA Allowed': 'Rush EPA allowed',
+    'Pass EPA Allowed': 'Pass EPA allowed', 'Def. Success Rate': 'Success rate allowed',
+    'Rush Success Allowed': 'Rush success allowed', 'Pass Success Allowed': 'Pass success allowed',
+    'Def. Explosiveness': 'Explosiveness allowed', 'Rush Expl. Allowed': 'Rush explosiveness allowed',
+    'Pass Expl. Allowed': 'Pass explosiveness allowed', 'Power Success Allowed': 'Power success allowed',
+    'Stuff Rate': 'Stuff rate', 'Line Yards Allowed': 'Line yards allowed',
+    'Second-Level Allowed': 'Second-level yards allowed', 'Open-Field Allowed': 'Open-field yards allowed',
+    'Havoc Rate': 'Havoc rate', 'Havoc (Front 7)': 'Front-seven havoc', 'Havoc (DBs)': 'Defensive back havoc',
+    'Off. Field Position': 'Offensive field position', 'Def. Field Position': 'Defensive field position',
+    'Havoc & Field Position': 'Havoc and field position',
+}
+
+# group -> (singular, heading, (category, stat) that names the position, its words, pool noun)
+COMPARE_GROUPS = {
+    'QB': ('quarterback', 'Quarterbacks', ('passing', 'YDS'), 'pass yards', 'QBs'),
+    'RB': ('running back', 'Running backs', ('rushing', 'YDS'), 'rushing yards', 'running backs'),
+    'WR': ('wide receiver', 'Wide receivers', ('receiving', 'YDS'), 'receiving yards', 'receivers and tight ends'),
+    'TE': ('tight end', 'Tight ends', ('receiving', 'YDS'), 'receiving yards', 'receivers and tight ends'),
+    'DL': ('defensive lineman', 'Defensive linemen', ('defensive', 'SACKS'), 'sacks', 'front-seven defenders'),
+    'LB': ('linebacker', 'Linebackers', ('defensive', 'TOT'), 'tackles', 'front-seven defenders'),
+    'DB': ('defensive back', 'Defensive backs', ('defensive', 'TOT'), 'tackles', 'defensive backs'),
+}
+# The starting pairs use exact positions: the WR/TE percentile pool is shared,
+# and suggesting from it put two wide receivers on the tight-end tab.
+COMPARE_EXACT_POSITIONS = dict(COMPARE_PEER_POSITIONS, WR=['WR'], TE=['TE'])
+COMPARE_START_GROUPS = ('QB', 'RB', 'WR', 'TE')
+
+
+@data_cache.memoize(timeout=21600)
+def _compare_leaders(season, group):
+    """This season's top four at a position by its headline stat, or the top
+    four teams by Savant Rating: the empty page's starting pairs and the
+    'compare with' suggestions."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        if group == 'TEAMS':
+            cur.execute('''SELECT s.team, t.logo_dark FROM savant_ratings s LEFT JOIN teams t ON t.name = s.team
+                            WHERE s.season = %s AND s.net_rating IS NOT NULL
+                            ORDER BY s.net_rating DESC LIMIT 4''', (season,))
+            return [{'name': r[0], 'logo': r[1]} for r in cur.fetchall()]
+        (cat, stat) = COMPARE_GROUPS[group][2]
+        cur.execute(f'''
+            SELECT p.id, p.first_name, p.last_name, ps.team, p.headshot, MAX(CAST(ps.stat AS REAL)) AS val
+              FROM player_stats ps
+              JOIN teams tf  ON tf.name = ps.team
+              JOIN players p ON p.id::text = ps.player_id
+             WHERE ps.season = %s AND ps.category = %s AND ps.stat_type = %s
+               AND p.position = ANY(%s)
+               AND tf.conference NOT IN {FCS_CONFS}
+               {_promoted_fbs_exclusion(season, 'ps.team')}
+             GROUP BY p.id, p.first_name, p.last_name, ps.team, p.headshot
+             ORDER BY val DESC NULLS LAST
+             LIMIT 4''', (season, cat, stat, COMPARE_EXACT_POSITIONS[group]))
+        return [{'id': r[0], 'first': r[1] or '', 'last': r[2] or '', 'team': r[3], 'headshot': r[4], 'value': r[5]}
+                for r in cur.fetchall()]
+    except Exception:
+        conn.rollback()
+        return []
+    finally:
+        release_db(conn)
+
+
+def _cmp_ord(n):
+    return f"{n}{'th' if n % 100 in (11, 12, 13) else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def _cmp_lower(label):
+    """A row label inside a sentence: 'Tackles per game' -> 'tackles per game',
+    but 'EPA per play' and 'SP+' keep their capitals."""
+    return label if label[:2].isupper() else label[:1].lower() + label[1:]
+
+
+def _cmp_query(mode, ents, season=None):
+    """The query-form address for a picking state (one entity, or none)."""
+    q = {'type': mode}
+    for i, e in enumerate(ents, 1):
+        q[f'p{i}' if mode == 'player' else f't{i}'] = e['id'] if mode == 'player' else e['name']
+        if e['season'] != CURRENT_SEASON:
+            q[f'y{i}'] = e['season']
+    if season and season != CURRENT_SEASON and not ents:
+        q['season'] = season
+    return '/compare?' + urlencode(q)
+
+
+def compare_path(mode, ents):
+    """A finished pair's own address: /compare/jayden-maiava-4685454-vs-darian-
+    mensah-5121169 or /compare/ohio-state-vs-notre-dame. The ids keep two
+    players who share a name apart; a season rides along only when it is not
+    the current one."""
+    if mode == 'team':
+        parts = [slugify_team(e['name']) for e in ents]
+    else:
+        parts = [f"{slugify_team(e['first_name'] + ' ' + e['last_name'])}-{e['id']}" for e in ents]
+    q = {f'y{i}': e['season'] for i, e in enumerate(ents, 1) if e['season'] != CURRENT_SEASON}
+    return '/compare/' + '-vs-'.join(parts) + ('?' + urlencode(q) if q else '')
+
+
+def _cmp_value(v):
+    """(number, line under it) for one cell. Team ratings arrive as
+    '+31.4 (#1)'; their rank reads better than a percentile."""
+    disp = v.get('display') or '—'
+    m = re.match(r'^(.*) \(#(\d+)\)$', disp)
+    if m:
+        return m.group(1), f'#{m.group(2)} in FBS'
+    if v.get('raw') is None:
+        return '—', ''
+    disp = disp.replace('-', '−') if disp.startswith('-') else disp
+    return disp, (_cmp_ord(v['percentile']) if v.get('percentile') is not None else 'no FBS rank')
+
+
+def _compare_data(args):
+    """Everything the page, its partial updates and its share images need."""
+    def arg(k, typ=str):
+        v = args.get(k)
+        try:
+            return typ(v) if v not in (None, '') else None
+        except (TypeError, ValueError):
+            return None
+
+    avail = get_available_seasons()
+    season = arg('season', int)
+    season = season if season in avail else CURRENT_SEASON
+    mode = 'team' if args.get('type') == 'team' else 'player'
+    slot_seasons = [(arg(f'y{i}', int) if arg(f'y{i}', int) in avail else season) for i in (1, 2)]
 
     conn = get_db()
     try:
         cursor = conn.cursor()
-        # `slots` stays exactly 3 long (None for an empty/invalid slot) so the
-        # search UI can address slot 1/2/3 correctly by index. `active_*` is the
-        # compacted (2 or 3 long) list actually used for the card + stat rows.
-        slots, rows, group_name = [None, None, None], [], None
 
         def ap_rank(team, yr):
-            if not team:
-                return None
-            # Pin to the season's FINAL poll — ap_rankings holds every weekly
-            # poll now, so an unpinned fetchone would return an arbitrary week.
+            # Pinned to the season's final poll: ap_rankings holds every weekly
+            # poll, so an unpinned fetchone would return an arbitrary week.
             cursor.execute("SELECT rank FROM ap_rankings WHERE season=%s AND team=%s "
                            "ORDER BY (season_type='postseason') DESC, week DESC LIMIT 1", (yr, team))
             r = cursor.fetchone()
             return r[0] if r else None
 
+        ents = []
         if mode == 'team':
-            slot_names = [request.args.get(f't{i}') for i in (1, 2, 3)]
-            valid_names = [n for n in slot_names if n]
-            info_by_name = {}
-            if valid_names:
-                ph = ','.join(['%s'] * len(valid_names))
-                cursor.execute(f'''
-                    SELECT name, conference, logo_dark, color, alt_color
-                    FROM teams WHERE name IN ({ph})
-                ''', valid_names)
-                info_by_name = {r[0]: r for r in cursor.fetchall()}
-
-            for i, name in enumerate(slot_names):
-                info = info_by_name.get(name) if name else None
-                if info:
-                    slots[i] = {
-                        'name': info[0], 'conference': info[1], 'logo_dark': info[2],
-                        'color': info[3], 'alt_color': info[4], 'season': slot_seasons[i],
-                        'years': avail,  # teams exist every loaded season
-                        'ap_rank': ap_rank(name, slot_seasons[i]),
-                    }
-
-            active = [s for s in slots if s]
-            if len(active) >= 2:
-                rows = _build_compare_team_rows(cursor, active)
-
+            names = [arg(f't{i}') for i in (1, 2)]
+            info = {}
+            if any(names):
+                cursor.execute('SELECT name, conference, logo_dark, color, alt_color FROM teams WHERE name = ANY(%s)',
+                               ([n for n in names if n],))
+                info = {r[0]: r for r in cursor.fetchall()}
+            for i, n in enumerate(names):
+                r = info.get(n)
+                if r:
+                    ents.append({'name': r[0], 'first': '', 'last': r[0], 'full': r[0], 'conference': r[1],
+                                 'img': r[2], 'logo': r[2], 'color': r[3], 'alt_color': r[4],
+                                 'season': slot_seasons[i], 'years': avail, 'is_team': True,
+                                 'ap': ap_rank(r[0], slot_seasons[i]), 'url': team_url(r[0], slot_seasons[i])})
         else:
-            slot_ids = [int(raw) if raw and raw.isdigit() else None
-                        for raw in (request.args.get(f'p{i}') for i in (1, 2, 3))]
-            valid_ids = [pid for pid in slot_ids if pid is not None]
-            info_by_id, seasons_by_pid = {}, {}
-            if valid_ids:
-                ph = ','.join(['%s'] * len(valid_ids))
-                cursor.execute(f'''
-                    SELECT p.id, p.first_name, p.last_name, p.team, p.position, p.jersey,
-                           p.headshot, t.logo_dark, t.color, t.alt_color, t.conference
-                    FROM players p LEFT JOIN teams t ON p.team = t.name
-                    WHERE p.id IN ({ph})
-                ''', valid_ids)
-                info_by_id = {r[0]: r for r in cursor.fetchall()}
-                # Seasons each player actually recorded stats — the only years
-                # worth offering in that slot's dropdown.
-                cursor.execute(f'''
-                    SELECT player_id, season FROM player_stats
-                    WHERE player_id IN ({ph}) AND season IS NOT NULL
-                    GROUP BY player_id, season
-                ''', [str(v) for v in valid_ids])
+            ids = [arg(f'p{i}', int) for i in (1, 2)]
+            info, years = {}, {}
+            if any(ids):
+                want = [i for i in ids if i]
+                cursor.execute('''SELECT p.id, p.first_name, p.last_name, p.team, p.position, p.jersey,
+                                         p.headshot, t.logo_dark, t.color, t.alt_color, t.conference
+                                    FROM players p LEFT JOIN teams t ON p.team = t.name
+                                   WHERE p.id = ANY(%s)''', (want,))
+                info = {r[0]: r for r in cursor.fetchall()}
+                # Seasons each player actually recorded stats: the only years
+                # worth offering for that side.
+                cursor.execute('''SELECT player_id, season FROM player_stats
+                                   WHERE player_id = ANY(%s) AND season IS NOT NULL
+                                   GROUP BY player_id, season''', ([str(i) for i in want],))
                 for pid_s, ssn in cursor.fetchall():
-                    seasons_by_pid.setdefault(int(pid_s), []).append(ssn)
-                for pid in seasons_by_pid:
-                    seasons_by_pid[pid].sort(reverse=True)
+                    years.setdefault(int(pid_s), []).append(ssn)
+            for i, pid in enumerate(ids):
+                r = info.get(pid)
+                if not r:
+                    continue
+                ys = sorted(years.get(pid, []), reverse=True)
+                eff = slot_seasons[i] if slot_seasons[i] in ys else (ys[0] if ys else slot_seasons[i])
+                ents.append({'id': r[0], 'first_name': r[1] or '', 'last_name': r[2] or '',
+                             'first': r[1] or '', 'last': r[2] or '', 'full': f'{r[1] or ""} {r[2] or ""}'.strip(),
+                             'team': r[3], 'pos': r[4], 'img': r[6], 'logo': r[7], 'color': r[8], 'alt_color': r[9],
+                             'conference': r[10], 'season': eff, 'years': ys or [eff], 'is_team': False,
+                             'ap': ap_rank(r[3], eff), 'url': player_url(r[0], eff)})
 
-            for i, pid in enumerate(slot_ids):
-                info = info_by_id.get(pid) if pid is not None else None
-                if info:
-                    years = seasons_by_pid.get(pid, [])
-                    # Clamp to a season the player actually played: honor the
-                    # requested year if valid, else default to their most recent.
-                    eff = slot_seasons[i] if slot_seasons[i] in years else (years[0] if years else slot_seasons[i])
-                    slots[i] = {
-                        'id': info[0], 'first_name': info[1], 'last_name': info[2],
-                        'team': info[3], 'position': info[4], 'jersey': info[5],
-                        'headshot': info[6], 'logo_dark': info[7], 'color': info[8],
-                        'alt_color': info[9], 'conference': info[10], 'season': eff,
-                        'years': years or [eff],
-                        'ap_rank': ap_rank(info[3], eff),
-                    }
-
-            active = [s for s in slots if s]
-            if not pos_filter and active:
-                first_pos = (active[0]['position'] or '').upper()
-                pos_filter = POS_GROUP_MAP.get(first_pos, 'QB')
-            group_name = pos_filter if pos_filter in COMPARE_PEER_POSITIONS else 'QB'
-
-            if len(active) >= 2:
-                rows = _build_compare_group_rows(cursor, group_name, active)
+        group = None
+        if mode == 'player' and ents:
+            group = POS_GROUP_MAP.get((ents[0]['pos'] or '').upper())
+            group = group if group in COMPARE_GROUPS else 'QB'
+        rows = []
+        if len(ents) == 2:
+            rows = (_build_compare_team_rows(cursor, ents) if mode == 'team'
+                    else _build_compare_group_rows(cursor, group, ents))
     finally:
         release_db(conn)
 
-    players = slots if mode == 'player' else [None, None, None]
-    teams_out = slots if mode == 'team' else [None, None, None]
-    active_entities = [s for s in slots if s]
+    # Each side keeps its team colour through the hero, the bars and the share
+    # image; a clash falls back to the second team's alternate, then white.
+    for e, hue in zip(ents, compare_colors([(e.get('color'), e.get('alt_color')) for e in ents])):
+        # A light colour (Oklahoma's white) is washed thinner: a tint, not a fog.
+        e.update(hue=hue, glow=hex_rgba(hue, 0.2 if (landscape._lum(hue) or 0) > .5 else 0.6),
+                 dark=landscape._dark(hue))
+    if len(ents) == 2 and ents[0]['last'] == ents[1]['last']:
+        for e in ents:                                    # Maiava 2025 vs Maiava 2026
+            e['last_label'] = f"{e['last']} {e['season']}" if ents[0]['season'] != ents[1]['season'] else e['full']
+    for e in ents:
+        e.setdefault('last_label', e['last'])
+        bits = [e['name'] if mode == 'team' else (e['team'] or '')]
+        if mode == 'team' and e.get('conference'):
+            bits = [e['conference']]
+        if e.get('ap'):
+            bits.append(f"AP {e['ap']}")
+        e['meta'] = ', '.join(b for b in bits if b)
 
-    # Each entity carries its team colour through the matchup header, the
-    # bars and the share image.
-    hues = compare_colors([(e.get('color'), e.get('alt_color')) for e in active_entities])
-    for e, hue in zip(active_entities, hues):
-        e.update(hue=hue, ink=ink_on(hue), kc=white_knob(hue), glow=hex_rgba(hue, 0.32), halo=hex_rgba(hue, 0.7))
+    ctx = {'mode': mode, 'season': season, 'ents': ents, 'group': group, 'current_season': CURRENT_SEASON,
+           'self_url': _cmp_query(mode, ents, season) if (ents or mode == 'team' or season != CURRENT_SEASON) else '/compare',
+           'group_plural': (COMPARE_GROUPS[group][1] if group else ('Teams' if mode == 'team' else 'Players')),
+           'group_one': (COMPARE_GROUPS[group][0] if group else 'team'), 'search_scope': ''}
+    seasons = sorted({e['season'] for e in ents})
+    season_words = (f'{seasons[0]} season' if len(seasons) == 1 else f'{seasons[0]} and {seasons[1]} seasons') if seasons else ''
 
-    # "Stats led" per entity (a tie at the top credits both), and the share
-    # image's rows: the metrics where the percentiles sit furthest apart.
-    leads = [sum(1 for r in rows if r['values'][i].get('lead')) for i in range(len(active_entities))]
-    ranked = [r for r in rows if all(v['percentile'] is not None for v in r['values'])]
-    share_rows = sorted(ranked, key=lambda r: max(v['percentile'] for v in r['values'])
-                                              - min(v['percentile'] for v in r['values']),
-                        reverse=True)[:10 if len(active_entities) == 2 else 8]
-
-    base_params = request.args.to_dict()
-    # Switching the position tab clears the slots. A QB carried into the RB tab
-    # is not an RB, so every rushing row came back "—" and the page looked
-    # broken; the honest behaviour is an empty board to fill. Re-selecting the
-    # tab you are already on keeps what you have.
-    current_tab = 'TEAMS' if mode == 'team' else group_name
-    slot_params = ('p1', 'p2', 'p3', 't1', 't2', 't3', 'y1', 'y2', 'y3')
-    tab_urls = {}
-    for tab in ('QB', 'RB', 'WR', 'TE', 'DL', 'LB', 'DB', 'TEAMS'):
-        params = dict(base_params)
-        if tab != current_tab:
-            for k in slot_params:
-                params.pop(k, None)
-        if tab == 'TEAMS':
-            params['type'] = 'team'
-            params.pop('pos', None)
+    if len(ents) < 2:
+        ctx['title'] = 'Compare players and teams'
+        ctx['desc'] = ('Put any two college football players or teams side by side: every stat, '
+                       'its FBS percentile, and an image ready to post.')
+        if not ents:
+            ctx['starts'] = []
+            for g in COMPARE_START_GROUPS:
+                lead = _compare_leaders(season, g)[:2]
+                if len(lead) == 2:
+                    ctx['starts'].append({
+                        'title': f"{lead[0]['last']} vs {lead[1]['last']}", 'pos': g,
+                        'sub': f'Top two in {COMPARE_GROUPS[g][3]}',
+                        'faces': [thumb_url(p['headshot']) if p['headshot'] else None for p in lead],
+                        'url': compare_path('player', [dict(p, first_name=p['first'], last_name=p['last'],
+                                                            season=season) for p in lead])})
+            lead = _compare_leaders(season, 'TEAMS')[:2]
+            if len(lead) == 2:
+                ctx['starts'].append({'title': f"{lead[0]['name']} vs {lead[1]['name']}", 'pos': 'Teams',
+                                      'sub': 'Top two in Savant Rating', 'logos': [t['logo'] for t in lead],
+                                      'url': compare_path('team', [dict(t, season=season) for t in lead])})
+            ctx['player_base'] = _cmp_query('player', [], season) + '&p1='
+            ctx['team_base'] = _cmp_query('team', [], season) + '&t1='
         else:
-            params['type'] = 'player'
-            params['pos'] = tab
-        tab_urls[tab] = '/compare?' + urlencode(params)
+            a = ents[0]
+            ctx['remove_url'] = _cmp_query(mode, [], season)
+            if mode == 'team':
+                ctx['search_scope'] = 'TEAMS'
+                ctx['team_base'] = _cmp_query('team', [a]) + '&t2='
+                picks = [t for t in _compare_leaders(a['season'], 'TEAMS') if t['name'] != a['name']][:2]
+                ctx['quick'] = [{'label': t['name'], 'sub': 'Top four in Savant Rating', 'img': t['logo'], 'logo': True,
+                                 'url': compare_path('team', [a, dict(t, season=a['season'])])} for t in picks]
+            else:
+                ctx['search_scope'] = group
+                ctx['player_base'] = _cmp_query('player', [a]) + '&p2='
+                picks = [p for p in _compare_leaders(a['season'], group) if p['id'] != a['id']][:2]
+                ctx['quick'] = [{'label': f"{p['first']} {p['last']}".strip(),
+                                 'sub': f"{p['team']}, top four in {COMPARE_GROUPS[group][3]}",
+                                 'img': thumb_url(p['headshot']) if p['headshot'] else None,
+                                 'url': compare_path('player', [a, dict(p, first_name=p['first'], last_name=p['last'],
+                                                                        season=a['season'])])} for p in picks]
+                prev = [y for y in a['years'] if y < a['season']]
+                if prev:
+                    ctx['quick'].append({'label': f"{a['last']} in {prev[0]}", 'sub': 'This season against an earlier one',
+                                         'img': thumb_url(a['img']) if a['img'] else None,
+                                         'url': compare_path('player', [a, dict(a, season=prev[0])])})
+        return ctx
 
-    # Which view the card opens in. It lives in the query string rather than in
-    # localStorage so a shared link arrives showing what the sender was looking
-    # at; the toggle itself swaps it client-side without a round trip.
-    view = 'stats' if request.args.get('view') == 'stats' else 'percentiles'
+    a, b = ents
+    secs, totals = [], [0, 0, 0]
+    for r in rows:
+        v0, v1 = r['values']
+        lead = 0 if v0.get('lead') else (1 if v1.get('lead') else None)
+        tie = lead is None and v0.get('raw') is not None and v1.get('raw') is not None
+        label = COMPARE_LABELS.get(r['label'], r['label'])
+        cells = []
+        for side, v in enumerate((v0, v1)):
+            val, sub = _cmp_value(v)
+            cells.append({'value': val, 'sub': sub, 'pct': v.get('percentile'),
+                          'cls': 'is-tie' if tie else ('is-win' if lead == side else '')})
+        name = COMPARE_LABELS.get(r['section'], r['section'])
+        if not secs or secs[-1]['name'] != name:
+            secs.append({'name': name, 'a': 0, 'b': 0, 'rows': []})
+        s = secs[-1]
+        if lead is not None:
+            s['ab'[lead]] += 1
+            totals[lead] += 1
+        elif tie:
+            totals[2] += 1
+        gap = abs(v0['percentile'] - v1['percentile']) if (v0.get('percentile') is not None and
+                                                           v1.get('percentile') is not None) else -1
+        s['rows'].append({'label': label, 'lead': lead, 'tie': tie, 'cells': cells, 'gap': gap})
+    n = len(rows)
+    for i, s in enumerate(secs):
+        s['n'] = len(s['rows'])
+        # Teams have 37 rows; their long sections start folded to their score.
+        s['open'] = mode == 'player' or i < 2
+        s['fold_phone'] = mode == 'team' and i >= 1
 
-    # What the percentile bars are measured against, stated next to them.
-    if mode == 'team':
-        pool_note = 'Percentile vs every FBS team in the same season.'
+    A, B, T = totals
+    an, bn = a['last_label'], b['last_label']
+    flat = [r for s in secs for r in s['rows']]
+
+    def best(side):
+        mine = [r for r in flat if r['lead'] == side]
+        return max(mine, key=lambda r: r['gap']) if mine else None
+
+    def say(r, side):
+        other = 1 - side
+        return f"{_cmp_lower(r['label'])}, {r['cells'][side]['value']} to {r['cells'][other]['value']}"
+
+    if A == B:
+        verdict = f"Dead even: {A} each" + (f", {T} tied." if T else '.')
+        ba, bb = best(0), best(1)
+        verdict2 = (f"{an} wins {_cmp_lower(ba['label'])}; {bn} wins {_cmp_lower(bb['label'])}."
+                    if ba and bb else '')
     else:
-        pool_note = ('Percentile vs qualified FBS '
-                     f'{group_name}s in each entity’s own season.')
+        w = 0 if A > B else 1
+        wn, ln = (an, bn) if w == 0 else (bn, an)
+        wc = max(A, B)
+        if wc == n:
+            verdict = f"{wn} wins all {n}."
+        else:
+            verdict = f"{wn} leads {wc} of {n}."
+        edge = best(1 - w)
+        if edge:
+            verdict2 = f"{ln}'s best edge: {say(edge, 1 - w)}."
+        else:
+            widest = best(w)
+            verdict2 = f"Widest gap: {say(widest, w)}." if widest else ''
 
-    # An empty compare page used to be three blank search boxes and a Download
-    # button with nothing to download. Offering a real pair to open — the two
-    # leading passers — turns the zero state into a working example the reader
-    # then edits. Reuses the memoized home-page leaders, so it costs no query.
-    suggested = None
-    suggest_board = 'passing'
-    if not active_entities and mode == 'player':
-        # The stat that names each position group, and the board to send a
-        # reader to. This used to be hardcoded to passing yards and pos=QB, so
-        # every tab offered the same two quarterbacks and the link dragged you
-        # back to QB after you had asked for receivers.
-        cat, stat_type, suggest_board = {
-            'QB': ('passing',   'YDS',   'passing'),
-            'RB': ('rushing',   'YDS',   'rushing'),
-            'WR': ('receiving', 'YDS',   'receiving'),
-            'TE': ('receiving', 'YDS',   'receiving'),
-            'DL': ('defensive', 'SACKS', 'defense'),
-            'LB': ('defensive', 'TOT',   'defense'),
-            'DB': ('defensive', 'TOT',   'defense'),
-        }.get(group_name, ('passing', 'YDS', 'passing'))
+    title_names = f"{an} vs {bn}"
+    kind = ('team' if mode == 'team' else group) + ' comparison'
+    ctx.update({
+        'secs': secs, 'totals': {'a': A, 'b': B, 't': T, 'n': n}, 'verdict': verdict, 'verdict2': verdict2,
+        'title': f"{title_names}: {season_words.replace(' season', '').replace(' seasons', '')} {kind}",
+        'h1': title_names,
+        'sub': f"{ctx['group_plural']}, {season_words}",
+        'desc': f"{verdict} {verdict2}".strip(),
+        'pool_note': ('Bar: percentile among FBS teams' if mode == 'team'
+                      else f'Bar: percentile among qualified FBS {COMPARE_GROUPS[group][4]}'),
+        'pair_url': compare_path(mode, ents),
+        'swap_url': compare_path(mode, [b, a]),
+    })
+    for i, e in enumerate(ents):
+        other = ents[1 - i]
+        e['remove_url'] = _cmp_query(mode, [other])
+        e['season_links'] = [{'year': y, 'url': compare_path(mode, [dict(e, season=y), other][::1 if i == 0 else -1]),
+                              'on': y == e['season']} for y in e['years'][:12]]
+
+    q = {'type': mode}
+    for i, e in enumerate(ents, 1):
+        q[f'p{i}' if mode == 'player' else f't{i}'] = e['id'] if mode == 'player' else e['name']
+        q[f'y{i}'] = e['season']
+    ctx['card_urls'] = {f: f'/compare/card-{f}.png?' + urlencode(q) for f in compare_card_mod.SIZES}
+    ctx['og_image'] = site_origin() + ctx['card_urls']['wide']
+
+    # Keep comparing: the leader against the next name on the board, and the
+    # leader against his own previous season.
+    w = a if A >= B else b
+    keep = []
+    if mode == 'team':
+        nxt = next((t for t in _compare_leaders(w['season'], 'TEAMS') if t['name'] not in (a['name'], b['name'])), None)
+        if nxt:
+            keep.append({'label': f"{w['name']} vs {nxt['name']}", 'img': nxt['logo'], 'logo': True,
+                         'url': compare_path('team', [w, dict(nxt, season=w['season'])])})
+    else:
+        nxt = next((p for p in _compare_leaders(w['season'], group) if p['id'] not in (a['id'], b['id'])), None)
+        if nxt:
+            keep.append({'label': f"{w['last']} vs {nxt['first']} {nxt['last']}",
+                         'img': thumb_url(nxt['headshot']) if nxt['headshot'] else None,
+                         'url': compare_path('player', [w, dict(nxt, first_name=nxt['first'], last_name=nxt['last'],
+                                                                season=w['season'])])})
+        prev = [y for y in w['years'] if y < w['season']]
+        if prev and not (a.get('id') == b.get('id')):
+            keep.append({'label': f"{w['last']}'s {prev[0]} season", 'img': None,
+                         'url': compare_path('player', [w, dict(w, season=prev[0])])})
+    ctx['keep'] = keep
+
+    # The share images' rows: where the two sit furthest apart on the
+    # percentile scale, then anything unranked to fill a short list.
+    ranked = sorted([r for r in flat if r['gap'] >= 0], key=lambda r: -r['gap'])
+    rest = [r for r in flat if r['gap'] < 0]
+    ctx['card'] = {
+        'kind': f"{group or 'Team'} comparison, {season_words.replace(' seasons', '').replace(' season', '')}",
+        'note': ctx['pool_note'].replace('Bar:', 'Bars:'),
+        'ents': [{'first': e['first'], 'last': e['last_label'] if e['last_label'] != e['full'] else e['last'],
+                  'meta': e['meta'], 'color': e['hue'], 'img': e['img'], 'team': e['is_team']} for e in ents],
+        'rows': [{'label': r['label'], 'av': r['cells'][0]['value'], 'bv': r['cells'][1]['value'],
+                  'ap': r['cells'][0]['pct'], 'bp': r['cells'][1]['pct'], 'lead': r['lead']}
+                 for r in (ranked + rest)[:8]],
+    }
+    return ctx
+
+
+def _compare_render(args):
+    ctx = _compare_data(args)
+    if args.get('partial'):
+        return render_template('_compare_body.html', **ctx)
+    return render_template('compare.html', **ctx)
+
+
+@app.route('/compare')
+@cache.cached(timeout=21600, query_string=True)
+def compare():
+    # A finished pair asked for by query (an old link, or a pick made without
+    # JavaScript) moves to its own address, which is the one worth sharing.
+    if not request.args.get('partial') and (request.args.get('p2') or request.args.get('t2')):
+        ctx = _compare_data(request.args)
+        if len(ctx['ents']) == 2:
+            return redirect(ctx['pair_url'])
+    return _compare_render(request.args)
+
+
+@app.route('/compare/<path:pair>')
+@cache.cached(timeout=21600, query_string=True)
+def compare_pair(pair):
+    sides = pair.split('-vs-')
+    if len(sides) != 2:
+        abort(404)
+    ids = [re.search(r'-(\d+)$', s) for s in sides]
+    args = dict(request.args)
+    if all(ids):
+        args.update(type='player', p1=ids[0].group(1), p2=ids[1].group(1))
+    else:
         conn = get_db()
         try:
-            cur2 = conn.cursor()
-            # Filtered by POSITION, not by the stat alone: the rushing leader is
-            # regularly a quarterback, and offering him on the RB tab would open
-            # a board this tab cannot measure him on. Peer list is the page's
-            # own, and the FBS test is the one the leaderboards use.
-            cur2.execute(f'''
-                SELECT ps.player_name, ps.team, MAX(ps.player_id) AS pid,
-                       MAX(CAST(ps.stat AS REAL)) AS val
-                  FROM player_stats ps
-                  JOIN teams tf   ON tf.name = ps.team
-                  JOIN players p  ON p.id::text = ps.player_id
-                 WHERE ps.season = %s AND ps.category = %s AND ps.stat_type = %s
-                   AND p.position = ANY(%s)
-                   AND tf.conference NOT IN {FCS_CONFS}
-                   {_promoted_fbs_exclusion(season, 'ps.team')}
-                 GROUP BY ps.player_name, ps.team
-                 ORDER BY val DESC NULLS LAST
-                 LIMIT 2
-            ''', (season, cat, stat_type,
-                  COMPARE_PEER_POSITIONS.get(group_name, ['QB'])))
-            pair = cur2.fetchall()
-            if len(pair) == 2 and pair[0][2] and pair[1][2]:
-                (a_name, a_team, a_id, _), (b_name, b_team, b_id, _) = pair
-                suggested = {
-                    'a_name': a_name, 'a_team': a_team,
-                    'b_name': b_name, 'b_team': b_team,
-                    'url': '/compare?' + urlencode({
-                        'type': 'player', 'pos': group_name,
-                        'p1': a_id, 'p2': b_id, 'y1': season, 'y2': season}),
-                }
-        except Exception:
-            suggested = None
+            cur = conn.cursor()
+            cur.execute('SELECT slug, name FROM teams WHERE slug = ANY(%s)', (sides,))
+            by_slug = dict(cur.fetchall())
         finally:
             release_db(conn)
-    elif not active_entities:
-        # Same idea on the team tab: the two best-rated teams are a comparison
-        # worth opening, and a filled board teaches the tool faster than copy.
-        conn = get_db()
-        try:
-            cur2 = conn.cursor()
-            cur2.execute('''SELECT team FROM savant_ratings WHERE season=%s AND net_rating IS NOT NULL
-                            ORDER BY net_rating DESC LIMIT 2''', (season,))
-            top = [r[0] for r in cur2.fetchall()]
-            if len(top) == 2:
-                suggested = {'a_name': top[0], 'a_team': '', 'b_name': top[1], 'b_team': '',
-                             'url': '/compare?' + urlencode({'type': 'team', 't1': top[0], 't2': top[1],
-                                                             'y1': season, 'y2': season})}
-        except Exception:
-            suggested = None
-        finally:
-            release_db(conn)
+        if not all(s in by_slug for s in sides):
+            abort(404)
+        args.update(type='team', t1=by_slug[sides[0]], t2=by_slug[sides[1]])
+    return _compare_render(args)
 
-    return render_template('compare.html',
-        mode=mode, players=players, teams=teams_out, active_entities=active_entities, rows=rows,
-        season=season, available_seasons=get_available_seasons(),
-        group_name=group_name, pos_filter=pos_filter, tab_urls=tab_urls,
-        suggested=suggested, suggest_board=suggest_board, view=view, pool_note=pool_note,
-        leads=leads, share_rows=share_rows,
-    )
+
+@app.route('/compare/card-<fmt>.png')
+@cache.cached(timeout=21600, query_string=True)
+def compare_card_image(fmt):
+    """The share image for one comparison, drawn once per distinct content:
+    the bytes are kept in Postgres (img_store, keyed by a hash of what is drawn)
+    so a fresh worker after a deploy reads them instead of redrawing, and a
+    week's new stats make a new key rather than a stale image."""
+    if fmt not in compare_card_mod.SIZES:
+        abort(404)
+    ctx = _compare_data(request.args)
+    if len(ctx['ents']) != 2:
+        abort(404)
+    import hashlib
+    key = 'cmp-card/%s/%s' % (fmt, hashlib.sha1(json.dumps(ctx['card'], sort_keys=True, default=str)
+                                                .encode()).hexdigest()[:20])
+    body = img_cache.get(key) or _img_store_get(key)
+    if not body:
+        body = compare_card_mod.render(ctx['card'], fmt)
+        _img_store_put(key, body)
+    img_cache.set(key, body, timeout=604800)
+    return Response(body, content_type='image/png', headers={'Cache-Control': 'public, max-age=86400'})
 
 
 # ── CFP Bracket ──────────────────────────────────────────────────────────

@@ -1,0 +1,207 @@
+{# The compare page's body, in every state. The full page includes it, and
+   the page's script swaps it in place (?partial=1) on every pick, swap,
+   season change and removal, so nothing reloads. data-url is the address the
+   state should show in the bar; a finished pair's is /compare/<a>-vs-<b>. #}
+{% set n = ents|length %}
+{% macro search(placeholder, scope, player_base, team_base) %}
+<div class="fo-search" data-search data-scope="{{ scope }}" data-player-base="{{ player_base or '' }}" data-team-base="{{ team_base or '' }}">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
+    <input type="search" placeholder="{{ placeholder }}" aria-label="{{ placeholder }}" autocomplete="off" spellcheck="false"
+           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="fo-dd">
+    <div class="fo-dd" id="fo-dd" role="listbox" aria-label="Results"></div>
+</div>
+{% endmacro %}
+{% macro face(e, cls) -%}
+{% if e.img %}<img class="{{ cls }}{{ ' is-logo' if e.is_team }}" src="{{ e.img }}" alt="" width="600" height="436"{% if e.is_team %} data-px="384"{% else %} data-full{% endif %}>
+{%- else %}<span class="{{ cls }} fo-initials" style="--c: {{ e.hue }}" aria-hidden="true">{{ (e.first[:1] ~ e.last[:1]) if not e.is_team else e.name[:1] }}</span>{% endif %}
+{%- endmacro %}
+<div class="fo-body" data-url="{{ pair_url or self_url }}" data-title="{{ title }} · Saturday Savant"
+     data-season="{{ current_season }}"{% if n == 2 %} style="--ca: {{ ents[0].hue }}; --cb: {{ ents[1].hue }}"{% endif %}{% if n == 2 %} data-recent="{{ {'url': pair_url, 'title': h1, 'faces': [ents[0].img, ents[1].img], 'teams': mode == 'team'}|tojson|forceescape }}"{% endif %}>
+
+{% if n == 0 %}
+<div class="fo-start">
+    <h1 class="fo-h1">Who's better?</h1>
+    <p class="fo-lede">Pick two players or teams. Every stat lines up side by side, with an image ready to post.</p>
+    {{ search('Search a player or team', '', player_base, team_base) }}
+    <a class="fo-recent" href="#" data-nav data-recent-slot hidden>
+        <span class="fo-pair" data-faces></span>
+        <span class="fo-recent-t"><small>Pick up where you left off</small><b data-title></b></span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"></polyline></svg>
+    </a>
+    {% if starts %}
+    <section aria-labelledby="fo-starts-h">
+        <h2 class="section-label" id="fo-starts-h">Start with this season's leaders</h2>
+        <div class="fo-list">
+            {% for s in starts %}
+            <a class="fo-item" href="{{ s.url }}" data-nav>
+                <span class="fo-pair">
+                    {% if s.logos %}{% for l in s.logos %}<img class="is-logo" src="{{ l }}" alt="" width="40" height="30">{% endfor %}
+                    {% else %}{% for f in s.faces %}{% if f %}<img src="{{ f }}" alt="" width="40" height="30">{% else %}<span></span>{% endif %}{% endfor %}{% endif %}
+                </span>
+                <span class="fo-item-t"><b>{{ s.title }}</b><small>{{ s.sub }}</small></span>
+                <span class="fo-pill">{{ s.pos }}</span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+{% elif n == 1 %}
+{% set a = ents[0] %}
+<div class="fo-start">
+    <h1 class="sr-only">Compare {{ a.full }}</h1>
+    <div class="fo-picked">
+        <span class="fo-tile{{ ' is-dark' if a.dark }}" style="--c: {{ a.hue }}">{{ face(a, 'fo-tile-img') }}</span>
+        <span class="fo-picked-t"><b>{{ a.full }}</b><small>{{ (a.pos ~ ', ') if a.pos }}{{ a.meta }}, {{ a.season }}</small></span>
+        <a class="fo-icon" href="{{ remove_url }}" data-nav aria-label="Remove {{ a.full }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg></a>
+    </div>
+    <p class="fo-vs">vs</p>
+    {{ search('Add a ' ~ group_one, search_scope, player_base, team_base) }}
+    <p class="fo-hint">{{ 'Only teams are listed here.' if mode == 'team' else ('Only ' ~ (group_plural|lower) ~ ' are listed, so every stat lines up.') }}</p>
+    {% if quick %}
+    <section aria-labelledby="fo-quick-h">
+        <h2 class="section-label" id="fo-quick-h">Quick picks</h2>
+        <div class="fo-list">
+            {% for q in quick %}
+            <a class="fo-item" href="{{ q.url }}" data-nav>
+                <span class="fo-pair">{% if q.img %}<img{% if q.logo %} class="is-logo"{% endif %} src="{{ q.img }}" alt="" width="52" height="38">{% else %}<span></span>{% endif %}</span>
+                <span class="fo-item-t"><b>{{ q.label }}</b><small>{{ q.sub }}</small></span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+{% else %}
+{% set a, b = ents[0], ents[1] %}
+<div class="fo-pairwrap{{ ' a-dark' if a.dark }}{{ ' b-dark' if b.dark }}">
+<header class="fo-head">
+    <div>
+        <h1 class="fo-h1">{{ h1 }}</h1>
+        <p class="fo-sub">{{ sub }}</p>
+    </div>
+    <div class="fo-actions">
+        <button type="button" class="fo-btn" data-copy>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"></path></svg>
+            <span>Copy link</span>
+        </button>
+        <button type="button" class="fo-btn is-pri" data-share-open>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+            <span>Share image</span>
+        </button>
+    </div>
+</header>
+
+<section class="fo-hero{{ ' is-teams' if mode == 'team' }}" aria-label="The matchup" style="--ga: {{ a.glow }}; --gb: {{ b.glow }}">
+    {% for e in ents %}
+    {% set side = 'a' if loop.first else 'b' %}
+    <div class="fo-side fo-side-{{ side }}">
+        <div class="fo-photo">{{ face(e, 'fo-face') }}</div>
+        <div class="fo-who">
+            <h2 class="fo-name{{ ' is-long' if e.last|length > 9 }}"><a href="{{ e.url }}">{% if e.first %}<span>{{ e.first }}</span> {% endif %}<b>{{ e.last }}</b></a></h2>
+            <p class="fo-meta">
+                {% if not e.is_team and e.logo %}<img src="{{ e.logo }}" alt="" width="20" height="20">{% endif %}
+                <span>{{ e.conference if e.is_team else e.team }}</span>
+                {% if e.pos %}<span class="fo-pill">{{ e.pos }}</span>{% endif %}
+                {% if e.ap %}<span class="fo-pill">AP {{ e.ap }}</span>{% endif %}
+            </p>
+            <div class="fo-ctrl">
+                {% if e.season_links|length > 1 %}
+                <details class="fo-season">
+                    <summary class="fo-chip" aria-label="Season for {{ e.full }}: {{ e.season }}">{{ e.season }}<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 8 11 13 6"></polyline></svg></summary>
+                    <div class="fo-menu">{% for y in e.season_links %}<a href="{{ y.url }}" data-nav{% if y.on %} aria-current="true"{% endif %}>{{ y.year }}</a>{% endfor %}</div>
+                </details>
+                {% else %}<span class="fo-chip is-static">{{ e.season }}</span>{% endif %}
+                <a class="fo-icon" href="{{ e.remove_url }}" data-nav aria-label="Remove {{ e.full }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg></a>
+            </div>
+        </div>
+    </div>
+    {% if loop.first %}
+    <div class="fo-mid">
+        <a class="fo-chip" href="{{ swap_url }}" data-nav><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 5h18"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 19H3"></path></svg>Swap sides</a>
+    </div>
+    {% endif %}
+    {% endfor %}
+</section>
+
+<section class="fo-card fo-verdict" aria-label="The verdict">
+    <div class="fo-verdict-t">
+        <p class="fo-verdict-1">{{ verdict }}</p>
+        {% if verdict2 %}<p class="fo-verdict-2">{{ verdict2 }}</p>{% endif %}
+    </div>
+    {% if secs|length > 1 %}
+    <div class="fo-cats">
+        {% for s in secs %}
+        <div class="fo-cat">
+            <span>{{ 'Havoc' if s.name.startswith('Havoc') else s.name }}</span>
+            <b class="num">{{ s.a }}<i> – </i>{{ s.b }}</b>
+            <span class="fo-split" aria-hidden="true"><i class="fo-split-a" style="flex: {{ [s.a, 0.08]|max }}"></i><i class="fo-split-b" style="flex: {{ [s.b, 0.08]|max }}"></i></span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+
+<section class="fo-card fo-stats" aria-label="Every stat">
+    <div class="fo-legend">
+        <span class="fo-key fo-key-a"><i></i>{{ a.last_label }}</span>
+        <span class="fo-pool">{{ pool_note }}</span>
+        <span class="fo-key fo-key-b">{{ b.last_label }}<i></i></span>
+    </div>
+    {% for s in secs %}
+    <details class="fo-sec"{% if s.open %} open{% endif %}{% if s.fold_phone %} data-fold-phone{% endif %}>
+        <summary class="fo-sec-h">
+            <span class="fo-sec-n{{ ' is-ahead' if s.a > s.b }}">{{ s.a }}</span>
+            <span class="fo-rule"></span>
+            <span class="fo-sec-t"><b>{{ s.name }}</b><small>Show all {{ s.n }}</small></span>
+            <span class="fo-rule"></span>
+            <span class="fo-sec-n{{ ' is-ahead' if s.b > s.a }}">{{ s.b }}</span>
+        </summary>
+        {% for r in s.rows %}
+        {% set c0, c1 = r.cells[0], r.cells[1] %}
+        <div class="fo-row" role="group" aria-label="{{ r.label }}: {{ a.last_label }} {{ c0.value }}, {{ b.last_label }} {{ c1.value }}{{ ', tied' if r.tie else ((', ' ~ (a.last_label if r.lead == 0 else b.last_label) ~ ' leads') if r.lead is not none else '') }}">
+            <span class="fo-v fo-v-a"><b class="num {{ c0.cls }}">{{ c0.value }}</b><small>{{ c0.sub }}</small></span>
+            <span class="fo-trk fo-trk-a{{ ' is-hatch' if c0.pct is none }}" aria-hidden="true">{% if c0.pct is not none %}<i style="width: {{ [c0.pct, 2]|max }}%"></i>{% endif %}</span>
+            <span class="fo-lab">{{ r.label }}{% if r.tie %}<span class="fo-tag">Tied</span>{% endif %}</span>
+            <span class="fo-trk fo-trk-b{{ ' is-hatch' if c1.pct is none }}" aria-hidden="true">{% if c1.pct is not none %}<i style="width: {{ [c1.pct, 2]|max }}%"></i>{% endif %}</span>
+            <span class="fo-v fo-v-b"><b class="num {{ c1.cls }}">{{ c1.value }}</b><small>{{ c1.sub }}</small></span>
+        </div>
+        {% endfor %}
+    </details>
+    {% endfor %}
+    <p class="fo-note">Brighter number wins the row. Per-game rates use team games played.{% if mode == 'team' %} For what a defense allows, a longer bar means it allows less.{% endif %} Hatched bars have no FBS rank.</p>
+</section>
+
+{% if keep %}
+<section class="fo-keep" aria-label="Keep comparing">
+    {% for k in keep %}
+    <a class="fo-chip is-soft" href="{{ k.url }}" data-nav>{% if k.img %}<img{% if k.logo %} class="is-logo"{% endif %} src="{{ k.img }}" alt="" width="28" height="20">{% endif %}{{ k.label }}</a>
+    {% endfor %}
+</section>
+{% endif %}
+
+<dialog class="fo-share" aria-labelledby="fo-share-h" data-file="saturday-savant-{{ (a.last_label ~ '-vs-' ~ b.last_label)|lower|replace(' ', '-') }}">
+    <div class="fo-share-in">
+        <div class="fo-share-top">
+            <h2 id="fo-share-h">Share this comparison</h2>
+            <button type="button" class="fo-icon" data-close aria-label="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"></line><line x1="19" y1="5" x2="5" y2="19"></line></svg></button>
+        </div>
+        <div class="fo-share-prev"><img src="{{ card_urls.post }}" alt="Preview of the image" width="1080" height="1350" loading="lazy" data-preview></div>
+        <div class="fo-seg" role="radiogroup" aria-label="Image size">
+            <button type="button" role="radio" aria-checked="true" class="is-on" data-fmt="post" data-src="{{ card_urls.post }}">Post</button>
+            <button type="button" role="radio" aria-checked="false" data-fmt="story" data-src="{{ card_urls.story }}">Story</button>
+            <button type="button" role="radio" aria-checked="false" data-fmt="wide" data-src="{{ card_urls.wide }}">Wide</button>
+        </div>
+        <div class="fo-share-acts">
+            <button type="button" class="fo-btn is-pri" data-share-file hidden>Share image</button>
+            <a class="fo-btn" data-save href="{{ card_urls.post }}" download>Save image</a>
+            <button type="button" class="fo-btn" data-copy><span>Copy link</span></button>
+        </div>
+        <p class="fo-share-note">The link shows this card wherever it's pasted.</p>
+    </div>
+</dialog>
+</div>
+{% endif %}
+</div>

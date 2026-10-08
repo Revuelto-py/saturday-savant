@@ -1163,230 +1163,347 @@ tr.postseason-row:hover {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
-   COMPARE PAGE
-   Two or three players (or teams), one metric per row. Every row is read
-   either as a percentile against the FBS field or as the raw numbers; the
-   card's data-view attribute is the switch and both readings ship in the
-   markup, so the toggle is a repaint rather than a round trip.
-
-   The percentile scale here is the site's, not a local one: the same five
-   bands and the same ringed knob the player and team pages draw, because a
-   number has to mean the same colour wherever it appears.
+   COMPARE — the face-off
+   Two players or two teams. A hero with both sides on their team colours,
+   a verdict, then every stat as mirrored bars out from a shared label:
+   each bar is that side's FBS percentile, the brighter number wins the
+   row. The body below .fo is swapped in place on every pick (see
+   compare.html), so these rules style one state at a time.
    ══════════════════════════════════════════════════════════════════════ */
-.cmp-page {
-    /* The metric-label column. Everything on the card — the head row and every
-       stat row — hangs off this one value, which is what keeps the labels, the
-       brand block and the bars in a single vertical line. */
-    --cmp-label: clamp(92px, 13vw, 164px);
-    --cmp-gap: var(--s3);
-    --cmp-knob: 26px;
-    --cmp-pad: var(--s5);
-    padding-top: var(--s8);
-    padding-bottom: var(--s10);
+.fo { padding-top: 32px; padding-bottom: 64px; }
+.fo-body { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; transition: opacity .15s ease-out; }
+.fo.is-busy .fo-body { opacity: .55; }
+.fo-pairwrap { display: flex; flex-direction: column; gap: 22px; }
+.fo a { color: inherit; text-decoration: none; }
+.fo :is(a, button, summary, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fo .num { font-variant-numeric: tabular-nums; }
+
+.fo-h1 {
+    margin: 0; color: #fff;
+    font-family: var(--font-display); font-stretch: 78%; font-weight: 850;
+    font-size: clamp(2rem, 1.4rem + 1.8vw, 2.75rem); line-height: .95; letter-spacing: -.02em;
+}
+.fo-sub { margin: 8px 0 0; font-size: 14px; color: #a9afb4; }
+.fo-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.fo-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.fo-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 44px; padding: 0 16px; border: 0; border-radius: 12px; cursor: pointer;
+    font: inherit; font-size: 14px; font-weight: 700; color: #e7e9ea;
+    background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
+}
+.fo-btn:hover { background: rgba(255,255,255,.1); }
+.fo-btn:active { transform: scale(.98); }
+.fo-btn.is-pri { color: #00111f; background: #1c9cf0; box-shadow: none; }
+.fo-btn.is-pri:hover { background: #4cb2f4; }
+.fo-pill {
+    display: inline-flex; align-items: center; flex: none; height: 22px; padding: 0 8px; border-radius: 6px;
+    font-size: 12px; font-weight: 750; color: #fff; background: rgba(255,255,255,.1);
+}
+.fo-chip {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 10px;
+    font-size: 13px; font-weight: 700; color: #e7e9ea; cursor: pointer; list-style: none;
+    background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+}
+.fo-chip::-webkit-details-marker { display: none; }
+.fo-chip:hover { background: rgba(255,255,255,.08); }
+.fo-chip.is-static { cursor: default; }
+.fo-chip.is-soft { min-height: 40px; background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.fo-chip img { width: 28px; height: 20px; border-radius: 4px; object-fit: cover; object-position: 50% 0; }
+.fo-icon {
+    display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; border: 0; border-radius: 10px;
+    color: #c4c8cc; background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); cursor: pointer;
+}
+.fo-icon:hover { color: #fff; background: rgba(255,255,255,.08); }
+.fo-card { border-radius: 20px; background: linear-gradient(180deg, #0e1013, #08090b); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.fo .is-logo { object-fit: contain !important; }
+
+/* The hero: each side's photo faces the middle on its team's colour. */
+.fo-hero {
+    position: relative; overflow: hidden; border-radius: 24px; min-height: 330px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 170px minmax(0, 1fr);
+    background: radial-gradient(60% 130% at 0% 60%, var(--ga), transparent 64%),
+                radial-gradient(60% 130% at 100% 60%, var(--gb), transparent 64%), #0b0c0f;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.fo-side { display: flex; align-items: flex-end; min-width: 0; }
+.fo-side-b { flex-direction: row-reverse; text-align: right; }
+.fo-photo { flex: none; width: clamp(220px, 25vw, 320px); align-self: flex-end; line-height: 0; }
+.fo-face { display: block; width: 100%; height: auto; }
+.fo-side-b .fo-face:not(.is-logo) { transform: scaleX(-1); }
+.fo-hero.is-teams .fo-side { align-items: center; }
+.fo-hero.is-teams .fo-photo { width: clamp(120px, 14vw, 170px); align-self: center; margin: 0 22px; }
+.fo-hero.is-teams .fo-face { height: auto; aspect-ratio: 1; }
+.fo-initials {
+    display: grid; place-items: center; aspect-ratio: 1.38; color: #fff; background: var(--c);
+    font-family: var(--font-display); font-stretch: 78%; font-weight: 850; font-size: 64px; line-height: 1;
+}
+.fo-who { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 0 0 30px 4px; }
+.fo-side-b .fo-who { align-items: flex-end; padding: 0 4px 30px 0; }
+.fo-hero.is-teams .fo-who { padding-top: 30px; }
+.fo-name {
+    margin: 0; color: #fff;
+    font-family: var(--font-display); font-stretch: 78%; font-weight: 850;
+    font-size: clamp(34px, 3.4vw, 50px); line-height: .92; letter-spacing: -.02em;
+}
+.fo-name span, .fo-name b { display: block; font-weight: inherit; overflow-wrap: anywhere; }
+.fo-name.is-long { font-size: clamp(28px, 2.6vw, 38px); }
+.fo-name a:hover { color: #bfe3fc; }
+.fo-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; font-size: 14px; color: #e7e9ea; }
+.fo-side-b .fo-meta { flex-direction: row-reverse; }
+.fo-meta img { width: 20px; height: 20px; object-fit: contain; }
+.fo-ctrl { display: flex; gap: 8px; align-items: center; }
+.fo-side-b .fo-ctrl { flex-direction: row-reverse; }
+.fo-mid { display: flex; align-items: center; justify-content: center; }
+.fo-season { position: relative; }
+.fo-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; display: grid; gap: 2px; min-width: 96px;
+    max-height: 260px; overflow-y: auto; padding: 6px; border-radius: 12px;
+    background: #14171b; box-shadow: inset 0 0 0 1px rgba(255,255,255,.1), 0 20px 50px -20px rgba(0,0,0,.9);
+}
+.fo-side-b .fo-menu { left: auto; right: 0; }
+.fo-menu a { padding: 9px 12px; border-radius: 8px; font-size: 14px; font-weight: 650; color: #e7e9ea; text-align: left; }
+.fo-menu a:hover { background: rgba(255,255,255,.06); }
+.fo-menu a[aria-current] { color: #fff; background: rgba(28,156,240,.18); }
+
+/* The verdict, and each category's score. */
+.fo-verdict { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 22px 26px; flex-wrap: wrap; }
+.fo-verdict-t { flex: 1 1 420px; min-width: 0; }
+.fo-verdict-1 { margin: 0; font-size: 22px; font-weight: 800; color: #fff; }
+.fo-verdict-2 { margin: 6px 0 0; max-width: 600px; font-size: 15px; line-height: 1.55; color: #a9afb4; }
+.fo-cats { display: flex; gap: 10px; flex-wrap: wrap; }
+.fo-cat {
+    display: flex; flex-direction: column; gap: 7px; width: 126px; padding: 12px 14px; border-radius: 14px;
+    background: rgba(255,255,255,.035); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07);
+}
+.fo-cat > span:first-child { font-size: 12.5px; font-weight: 700; color: #a9afb4; }
+.fo-cat b { font-family: var(--font-display); font-stretch: 78%; font-weight: 850; font-size: 26px; line-height: 1; color: #fff; }
+.fo-cat b i { font-style: normal; color: rgba(255,255,255,.35); }
+.fo-split { display: flex; gap: 2px; height: 5px; }
+.fo-split i { border-radius: 3px; }
+.fo-split-a { background: var(--ca); }
+.fo-split-b { background: var(--cb); }
+.a-dark .fo-split-a, .a-dark .fo-trk-a i, .a-dark .fo-key-a i { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32); }
+.b-dark .fo-split-b, .b-dark .fo-trk-b i, .b-dark .fo-key-b i { box-shadow: inset 0 0 0 1px rgba(255,255,255,.32); }
+
+/* Every stat: value, bar, label, bar, value. */
+.fo-stats { padding: 8px 0 14px; }
+.fo-legend, .fo-sec-h, .fo-row {
+    display: grid; grid-template-columns: 96px minmax(0, 1fr) 220px minmax(0, 1fr) 96px;
+    align-items: center; column-gap: 18px; padding-left: 24px; padding-right: 24px;
+}
+.fo-legend { padding-top: 16px; padding-bottom: 6px; font-size: 13px; font-weight: 700; color: #fff; }
+.fo-key { display: flex; align-items: center; gap: 7px; }
+.fo-key-a { grid-column: 1 / 3; justify-content: flex-end; }
+.fo-key-b { grid-column: 4 / 6; }
+.fo-key i { width: 10px; height: 10px; border-radius: 3px; }
+.fo-key-a i { background: var(--ca); }
+.fo-key-b i { background: var(--cb); }
+.fo-pool { text-align: center; font-size: 12px; font-weight: 600; color: #8f969c; }
+.fo-sec-h { padding-top: 22px; padding-bottom: 10px; cursor: pointer; list-style: none; }
+.fo-sec-h::-webkit-details-marker { display: none; }
+.fo-sec-n {
+    font-family: var(--font-display); font-stretch: 78%; font-weight: 850; font-size: 22px; line-height: 1;
+    font-variant-numeric: tabular-nums; color: rgba(255,255,255,.45);
+}
+.fo-sec-n:first-child { text-align: right; }
+.fo-sec-n.is-ahead { color: #fff; }
+.fo-rule { height: 1px; background: rgba(255,255,255,.08); }
+.fo-sec-t { display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
+.fo-sec-t b { font-size: 13px; font-weight: 800; color: #fff; }
+.fo-sec-t small { display: none; font-size: 12.5px; font-weight: 700; color: #7cc9fb; }
+.fo-sec:not([open]) .fo-sec-t small { display: block; }
+.fo-sec:not([open]) .fo-sec-h:hover { background: rgba(255,255,255,.03); }
+.fo-row { min-height: 58px; padding-top: 8px; padding-bottom: 8px; border-top: 1px solid rgba(255,255,255,.06); }
+.fo-row:hover { background: rgba(255,255,255,.025); }
+.fo-v { min-width: 0; }
+.fo-v-a { text-align: right; }
+.fo-v b { display: block; font-size: 17px; font-weight: 600; line-height: 1.1; color: #8f969c; }
+.fo-v b.is-win { color: #fff; font-weight: 800; }
+.fo-v b.is-tie { color: #e7e9ea; font-weight: 650; }
+.fo-v small { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: #7b8288; }
+.fo-trk { display: flex; height: 10px; border-radius: 999px; background: rgba(255,255,255,.05); }
+.fo-trk i { height: 100%; border-radius: 999px; }
+.fo-trk-a { justify-content: flex-end; }
+.fo-trk-a i { background: var(--ca); }
+.fo-trk-b i { background: var(--cb); }
+.fo-trk.is-hatch { background: repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 3px, transparent 3px 7px); }
+.fo-lab { text-align: center; font-size: 14px; font-weight: 650; color: #c4c8cc; }
+.fo-tag {
+    display: inline-flex; align-items: center; height: 18px; padding: 0 6px; margin-left: 6px; border-radius: 5px;
+    vertical-align: 1px; font-size: 11px; font-weight: 750; color: #c4c8cc; background: rgba(255,255,255,.08);
+}
+.fo-note { margin: 14px 24px 0; font-size: 12.5px; line-height: 1.5; color: #8f969c; }
+.fo-keep { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Picking: the empty page and the one-picked page. */
+.fo-start { width: 100%; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.fo-lede { margin: -6px 0 0; font-size: 15px; line-height: 1.55; color: #a9afb4; }
+.fo-start .section-label { margin: 4px 0 10px; }
+.fo-search {
+    position: relative; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px;
+    border-radius: 14px; color: #7cc9fb; background: #0e1013; box-shadow: inset 0 0 0 1.5px rgba(124,201,251,.45);
+}
+.fo-search:focus-within { box-shadow: inset 0 0 0 1.5px rgba(124,201,251,.95); }
+.fo .fo-search input:focus-visible { outline: none; }      /* the box draws the focus */
+.fo-search input {
+    flex: 1; min-width: 0; height: 100%; border: 0; padding: 0; background: transparent;
+    font: inherit; font-size: 16px; color: #fff; outline: none;
+}
+.fo-search input::placeholder { color: #8f969c; }
+.fo-search input::-webkit-search-cancel-button { display: none; }
+.fo-dd {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; display: none;
+    max-height: 430px; overflow-y: auto; border-radius: 14px; background: #101215;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.1), 0 24px 60px -20px rgba(0,0,0,.85);
+}
+.fo-dd.is-open { display: block; }
+.fo-opt { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 12px; color: #e7e9ea; }
+.fo-opt + .fo-opt { border-top: 1px solid rgba(255,255,255,.06); }
+.fo-opt:hover, .fo-opt.is-active { background: rgba(28,156,240,.12); }
+.fo-opt-img { flex: none; width: 52px; height: 38px; border-radius: 8px; object-fit: cover; object-position: 50% 0; background: #1a1d22; }
+.fo-opt-img.is-logo { padding: 3px; }
+.fo-opt-t { flex: 1; min-width: 0; }
+.fo-opt-t b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; font-weight: 700; color: #fff; }
+.fo-opt-t mark { padding: 0; margin: 0; border-radius: 0; color: #7cc9fb; background: none; }
+.fo-opt-t small { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12.5px; color: #a9afb4; }
+.fo-opt-t small img { width: 14px; height: 14px; object-fit: contain; }
+.fo-opt-r { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+.fo-opt-r small { font-size: 12px; color: #e7e9ea; }
+.fo-opt-r small.is-old { color: #8f969c; }
+.fo-dd-note { margin: 0; padding: 14px 16px; font-size: 13px; color: #a9afb4; }
+.fo-pair { display: flex; flex: none; }
+.fo-pair img, .fo-pair > span { width: 40px; height: 30px; border-radius: 6px; object-fit: cover; object-position: 50% 0; background: #1a1d22; }
+.fo-pair > * + * { margin-left: -8px; box-shadow: 0 0 0 2px #0e1013; }
+.fo-pair .is-logo { padding: 2px; }
+.fo-recent {
+    display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; color: #6f767c;
+    background: linear-gradient(180deg, #0e1013, #08090b); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.fo-recent[hidden] { display: none; }
+.fo-recent:hover { box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.fo-recent-t { flex: 1; min-width: 0; }
+.fo-recent-t small { display: block; font-size: 12px; font-weight: 700; color: #a9afb4; }
+.fo-recent-t b { font-size: 14.5px; color: #fff; }
+.fo-list { overflow: hidden; border-radius: 16px; background: linear-gradient(180deg, #0e1013, #08090b); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.fo-item { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 12px; color: #e7e9ea; }
+.fo-item + .fo-item { border-top: 1px solid rgba(255,255,255,.06); }
+.fo-item:hover { background: rgba(255,255,255,.03); }
+.fo-item .fo-pair img, .fo-item .fo-pair > span { width: 52px; height: 38px; }
+.fo-item-t { flex: 1; min-width: 0; }
+.fo-item-t b { display: block; font-size: 14.5px; color: #fff; }
+.fo-item-t small { font-size: 12.5px; color: #a9afb4; }
+.fo-picked { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 16px; background: linear-gradient(180deg, #0e1013, #08090b); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.fo-tile { position: relative; overflow: hidden; flex: none; width: 72px; height: 52px; border-radius: 10px; background: var(--c); }
+.fo-tile::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.fo-tile.is-dark::after { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); }
+.fo-tile-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; font-size: 22px; aspect-ratio: auto; }
+.fo-picked-t { flex: 1; min-width: 0; }
+.fo-picked-t b { display: block; font-size: 15.5px; color: #fff; }
+.fo-picked-t small { font-size: 12.5px; color: #a9afb4; }
+.fo-vs { margin: -8px 0; text-align: center; font-size: 12.5px; font-weight: 700; color: #6f767c; }
+.fo-hint { margin: -8px 4px 0; font-size: 12.5px; color: #8f969c; }
+
+/* The share sheet. */
+.fo-share {
+    width: calc(100% - 28px); max-width: 440px; padding: 0; border: 0; color: #e7e9ea; background: transparent;
+}
+.fo-share::backdrop { background: rgba(0,0,0,.65); }
+.fo-share-in {
+    display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 18px 20px; border-radius: 22px;
+    background: #121418; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.fo-share-top { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.fo-share-top h2 { margin: 0; font-size: 16px; font-weight: 800; color: #fff; }
+.fo-share-prev img { display: block; width: 240px; height: auto; border-radius: 10px; box-shadow: 0 16px 40px -16px rgba(0,0,0,.9); }
+.fo-share-prev img.is-story { width: 172px; }
+.fo-share-prev img.is-wide { width: 100%; max-width: 400px; }
+.fo-seg { display: flex; padding: 3px; border-radius: 12px; background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.fo-seg button { min-height: 36px; padding: 0 16px; border: 0; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 700; color: #a9afb4; background: transparent; cursor: pointer; }
+.fo-seg button.is-on { color: #000; background: #e7e9ea; }
+.fo-share-acts { display: flex; gap: 8px; width: 100%; flex-wrap: wrap; }
+.fo-share-acts .fo-btn { flex: 1 1 120px; }
+.fo-share-acts .fo-btn.is-pri { flex-basis: 100%; }
+.fo-share-note { margin: 0; font-size: 12px; color: #8f969c; }
+
+@media (prefers-reduced-motion: reduce) {
+    .fo-body { transition: none; }
 }
 
-/* ── Masthead: the title, and the position switch beside it ──────────── */
-.cmp-masthead {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--s4);
-    margin-bottom: var(--s5);
-}
-.cmp-h1 {
-    margin: 0;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 800;
-    font-size: var(--text-2xl);
-    line-height: 0.95;
-    letter-spacing: -0.02em;
-    color: var(--text-primary);
+@media (max-width: 767.98px) {
+    .fo { padding-top: 20px; padding-bottom: 32px; }
+    .fo-body, .fo-pairwrap { gap: 14px; }
+    .fo-head { flex-direction: column; align-items: stretch; gap: 12px; }
+    .fo-sub { margin-top: 6px; font-size: 13px; }
+    .fo-actions .fo-btn { flex: 1; }
+
+    /* Hero: both photos side by side, names below them, swap underneath. */
+    .fo-hero {
+        min-height: 0; border-radius: 20px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas: "pa pb" "wa wb" "mid mid";
+    }
+    .fo-side { display: contents; }
+    .fo-side-a .fo-photo { grid-area: pa; }
+    .fo-side-b .fo-photo { grid-area: pb; }
+    .fo-side-a .fo-who { grid-area: wa; }
+    .fo-side-b .fo-who { grid-area: wb; }
+    .fo-mid { grid-area: mid; padding: 0 14px 14px; }
+    .fo-photo { width: auto; height: 150px; display: flex; align-items: flex-end; overflow: hidden; }
+    .fo-side-a .fo-photo { justify-content: flex-start; }
+    .fo-side-b .fo-photo { justify-content: flex-end; }
+    .fo-face { width: 190px; flex: none; }
+    .fo-side-a .fo-face { margin-left: -14px; }
+    .fo-side-b .fo-face { margin-right: -14px; }
+    .fo-hero.is-teams .fo-photo { width: auto; height: 130px; margin: 0; align-items: center; justify-content: center; }
+    .fo-hero.is-teams .fo-face { width: 96px; margin: 0; }
+    .fo-who, .fo-side-b .fo-who, .fo-hero.is-teams .fo-who { gap: 7px; padding: 12px 14px 14px; }
+    .fo-name, .fo-name.is-long { font-size: 24px; }
+    .fo-name span { font-stretch: 100%; font-weight: 600; font-size: 12.5px; letter-spacing: 0; color: #c4c8cc; margin-bottom: 3px; }
+    .fo-meta { gap: 6px; font-size: 12.5px; }
+    .fo-meta img { width: 16px; height: 16px; }
+    .fo-meta .fo-pill { height: 20px; font-size: 11px; padding: 0 6px; }
+    .fo-chip { min-height: 32px; font-size: 12.5px; }
+    .fo-icon { width: 32px; height: 32px; }
+
+    .fo-verdict { flex-direction: column; align-items: stretch; gap: 14px; padding: 16px; }
+    .fo-verdict-t { flex: none; }
+    .fo-verdict-1 { font-size: 17px; }
+    .fo-verdict-2 { font-size: 13.5px; line-height: 1.5; }
+    .fo-cats { flex-wrap: nowrap; gap: 8px; }
+    .fo-cat { flex: 1 1 0; min-width: 0; width: auto; padding: 10px; gap: 5px; }
+    .fo-cat b { font-size: 21px; }
+
+    /* Rows: the label on its own line, the two values and bars under it. */
+    .fo-stats { padding: 4px 0 14px; }
+    .fo-legend { display: flex; justify-content: space-between; padding: 14px 14px 4px; font-size: 12.5px; }
+    .fo-pool { font-size: 12px; }
+    .fo-sec-h { display: flex; gap: 10px; padding: 16px 14px 6px; }
+    .fo-sec-h .fo-rule { flex: 1; }
+    .fo-sec-n { font-size: 19px; }
+    .fo-sec-t b { font-size: 12.5px; }
+    .fo-row {
+        grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) 56px;
+        grid-template-areas: "lab lab lab lab" "va ta tb vb";
+        column-gap: 8px; row-gap: 6px; min-height: 0; padding: 9px 14px 10px;
+    }
+    .fo-lab { grid-area: lab; font-size: 12.5px; }
+    .fo-v-a { grid-area: va; }
+    .fo-trk-a { grid-area: ta; height: 8px; }
+    .fo-trk-b { grid-area: tb; height: 8px; }
+    .fo-v-b { grid-area: vb; }
+    .fo-v b { font-size: 15px; }
+    .fo-note { margin: 12px 14px 0; font-size: 12px; }
+    .fo-keep { flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px; padding: 0 14px; scrollbar-width: none; }
+    .fo-keep .fo-chip { flex: none; }
+
+    .fo-share { width: 100%; max-width: none; margin: auto 0 0; }
+    .fo-share-in { border-radius: 22px 22px 0 0; padding-bottom: 26px; }
 }
 
-/* ── Position / mode tabs ─────────────────────────────────────────────── */
-.cmp-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-}
-.cmp-tab {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 48px;
-    min-height: 40px;
-    padding: 0 var(--s3);
-    border: 1px solid transparent;
-    border-radius: var(--r-sm);
-    background: rgba(255,255,255,0.045);
-    color: var(--text-secondary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 700;
-    font-size: var(--text-base);
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    text-decoration: none;
-    transition-property: var(--t-ui);
-    transition-duration: 0.15s;
-    transition-timing-function: ease;
-}
-.cmp-tab-wide { padding: 0 var(--s5); }
-.cmp-tab:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); }
-.cmp-tab:active { transform: translateY(1px); }
-.cmp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.cmp-tab.is-on {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #05131d;
-    box-shadow: 0 4px 16px rgba(28,156,240,0.28);
-}
-.cmp-tab.is-on:hover { background: var(--accent); color: #05131d; }
-.cmp-tab-gap {
-    width: 1px;
-    height: 22px;
-    margin: 0 var(--s2);
-    background: var(--border-strong);
-    flex-shrink: 0;
-}
-
-/* ── The matchup ──────────────────────────────────────────────────────────
-   One panel, one column per player or team. Each side's team colour glows in
-   from its corner (the gradient is written inline, since the colours are the
-   entities'), and rings the photo. The colour is a fill and an edge only:
-   plenty of team primaries are too dark to be text on this ground, so every
-   word and figure here stays off-white. */
-.cmp-hero {
-    position: relative;
-    margin-bottom: var(--s5);
-    padding: var(--s8) var(--s6) var(--s6);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 48px -24px rgba(0,0,0,0.8);
-}
-.cmp-hero-grid {
-    display: grid;
-    grid-template-columns: repeat(var(--slots, 2), minmax(0, 1fr));
-    gap: var(--s5);
-    align-items: start;
-}
-.cmp-ent {
-    --photo: 120px;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--s3);
-    min-width: 0;
-    text-align: center;
-}
-.cmp-hero-grid[style*="--slots:3"] .cmp-ent { --photo: 104px; }
-.cmp-ent:focus-within { z-index: 60; }   /* the open dropdown sits over the next column */
-.cmp-ent-photo, .cmp-ent-ring {
-    width: var(--photo);
-    height: var(--photo);
-    flex-shrink: 0;
-    border-radius: 50%;
-}
-.cmp-ent-photo {
-    display: grid;
-    place-items: center;
-    background: #202127 center / cover no-repeat;
-    box-shadow: 0 0 0 4px var(--hue), 0 14px 44px -12px var(--halo);
-    color: var(--text-primary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: calc(var(--photo) / 3);
-    font-weight: 850;
-}
-.cmp-ent-photo.is-logo { background-size: 68%; }
-.cmp-ent-name {
-    max-width: 100%;
-    color: #fff;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.5rem);
-    font-weight: 850;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    border-radius: var(--r-sm);
-}
-.cmp-ent-name:hover { color: var(--accent); }
-.cmp-ent-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.cmp-ent-meta {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    gap: 6px 10px;
-    color: var(--text-secondary);
-    font-size: var(--text-md, 1.0625rem);
-}
-.cmp-ent-ap {
-    padding: 2px 8px;
-    border-radius: 5px;
-    background: rgba(28,156,240,0.14);
-    color: #8fcdf8;
-    font-weight: 700;
-    font-size: var(--text-sm);
-}
-.cmp-ent-lead { color: var(--text-secondary); font-size: var(--text-sm); }
-.cmp-ent-lead b {
-    margin-right: 4px;
-    color: #fff;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: clamp(2.2rem, 1.6rem + 1.4vw, 3rem);
-    font-weight: 850;
-    line-height: 1;
-    font-variant-numeric: proportional-nums;
-}
-.cmp-ent-ctrl { display: flex; align-items: center; gap: 6px; }
-.cmp-ent-season,
-.cmp-ent-btn {
-    height: 38px;
-    background: rgba(19,20,23,0.8);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-sm);
-    color: var(--text-primary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: var(--text-sm);
-    font-weight: 700;
-    transition-property: var(--t-ui);
-    transition-duration: 0.15s;
-}
-.cmp-ent-season { min-width: 78px; padding: 0 10px; cursor: pointer; }
-.cmp-ent-season.is-static { display: inline-grid; place-items: center; cursor: default; }
-.cmp-ent-btn {
-    width: 38px;
-    display: grid;
-    place-items: center;
-    padding: 0;
-    color: var(--text-secondary);
-    cursor: pointer;
-}
-.cmp-ent-btn svg { width: 15px; height: 15px; }
-.cmp-ent-season:hover, .cmp-ent-btn:hover { border-color: var(--text-dim); color: var(--text-primary); }
-.cmp-ent-season:focus-visible, .cmp-ent-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.cmp-ent-btn:active { transform: translateY(1px); }
-.cmp-ent-btn.is-remove:hover { background: rgba(244,33,46,0.18); border-color: rgba(244,33,46,0.45); color: #ff9aa2; }
-
-/* The empty column: the same footprint as a filled one, drawn as a hole. */
-.cmp-ent-ring {
-    display: grid;
-    place-items: center;
-    border: 2px dashed rgba(255,255,255,0.22);
-    color: var(--text-dim);
-}
-.cmp-ent-ring svg { width: 36%; height: 36%; }
-.cmp-ent-add .cmp-search { width: 100%; max-width: 320px; }
-.cmp-ent-add .cmp-search-input { height: 48px; background: rgba(19,20,23,0.8); }
-.cmp-ent-add .cmp-dropdown { text-align: left; }
-
-/* An empty slot is a hole to fill, and the dashed edge says so without a
-   label — the placeholder already names what goes in it. */
+/* The Stat Explorer's matchup search box. The class names come from the
+   old compare page, which no longer uses them. An empty slot is a hole to
+   fill, and the dashed edge says so without a label. */
 .cmp-search { position: relative; }
 .cmp-search-icon {
     position: absolute;
@@ -1457,14 +1574,7 @@ tr.postseason-row:hover {
 .cmp-dd-item:last-child { border-bottom: none; }
 .cmp-dd-item:hover { background: rgba(28,156,240,0.12); }
 .cmp-dd-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.cmp-dd-face {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-    object-position: top;
-    flex-shrink: 0;
-    font-size: var(--text-xs);
-}
+
 .cmp-dd-logo {
     width: 26px; height: 26px;
     object-fit: contain;
@@ -1483,323 +1593,6 @@ tr.postseason-row:hover {
 .cmp-dd-sub { display: block; color: var(--text-secondary); font-size: var(--text-xs); }
 .cmp-dd-note { padding: 16px; text-align: center; color: var(--text-dim); font-size: var(--text-sm); }
 
-/* ── Zero / one-picked state ──────────────────────────────────────────── */
-/* Compare is one of five primary nav items, and the empty version of it used
-   to be three blank boxes and nothing to read. It measures at a comfortable
-   prose width rather than filling the row of slots above it, and it wears the
-   same card the slots do — it sat on --bg-surface, a shade off the page
-   itself, so it read as an outline floating under the board rather than as a
-   panel belonging to it. */
-.cmp-zero {
-    max-width: 60ch;
-    margin-inline: auto;
-    padding: var(--s8) var(--s6);
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    box-shadow: var(--shadow-card);
-    text-align: center;
-}
-.cmp-zero-lede {
-    margin: 0 auto;
-    max-width: 46ch;
-    color: var(--text-secondary);
-    font-size: var(--text-base);
-    line-height: 1.7;
-    text-wrap: balance;
-}
-/* The suggestion is a quiet panel, not a blue slab: it used to be a filled
-   accent wash carrying 1.45rem of bold white, which outweighed the heading of
-   the page it sits on. The accent now lives in the hover and focus states,
-   where it marks the thing as clickable. */
-.cmp-zero-try {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    width: 100%;
-    margin-top: var(--s6);
-    padding: var(--s4) var(--s5);
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    text-decoration: none;
-    transition-property: var(--t-ui);
-    transition-duration: 0.15s;
-}
-.cmp-zero-try:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--border-gold);
-}
-.cmp-zero-try:hover .cmp-zero-try-names { color: var(--accent); }
-.cmp-zero-try:active { transform: translateY(1px); }
-.cmp-zero-try:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-/* Names the tab you are on, so switching position visibly changes the offer. */
-.cmp-zero-try-label {
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: var(--text-xs);
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-}
-.cmp-zero-try-names {
-    color: var(--text-primary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 700;
-    font-size: var(--text-md);
-    line-height: 1.25;
-    text-wrap: balance;
-    transition: color var(--t-fast);
-}
-.cmp-zero-try-vs { color: var(--text-dim); font-weight: 600; }
-.cmp-zero-try-meta { color: var(--text-dim); font-size: var(--text-xs); }
-.cmp-zero-hint {
-    margin: var(--s5) auto 0;
-    max-width: 46ch;
-    color: var(--text-dim);
-    font-size: var(--text-sm);
-    line-height: 1.6;
-}
-.cmp-zero-hint a { color: var(--accent); }
-
-/* ── View switch + export ─────────────────────────────────────────────── */
-.cmp-viewbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: var(--s3);
-    margin-bottom: var(--s4);
-}
-.cmp-seg {
-    display: inline-flex;
-    gap: 2px;
-    padding: 3px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-pill);
-}
-.cmp-seg-btn {
-    appearance: none;
-    min-height: 38px;
-    padding: 0 var(--s5);
-    background: none;
-    border: 0;
-    border-radius: var(--r-pill);
-    color: var(--text-secondary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-weight: 700;
-    font-size: var(--text-base);
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition-property: var(--t-ui);
-    transition-duration: 0.18s;
-}
-.cmp-seg-btn:hover { color: var(--text-primary); }
-.cmp-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* The active segment is white rather than accent-blue: blue already means
-   "primary action" on the button beside it, and red/blue mean percentile
-   inside the card. */
-.cmp-seg-btn.is-on { background: var(--text-primary); color: #0a0b0d; }
-
-.cmp-actions { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.cmp-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 0 var(--s4);
-    background: rgba(255,255,255,0.05);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--r-pill);
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-weight: 600;
-    font-size: var(--text-sm);
-    cursor: pointer;
-    transition-property: var(--t-ui);
-    transition-duration: 0.15s;
-}
-.cmp-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
-.cmp-btn:hover { background: rgba(255,255,255,0.1); color: var(--text-primary); border-color: var(--text-dim); }
-.cmp-btn:active { transform: translateY(1px); }
-.cmp-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.cmp-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
-.cmp-btn.is-primary {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #05131d;
-    box-shadow: 0 6px 20px rgba(28,156,240,0.26);
-}
-.cmp-btn.is-primary:hover { background: #3fabf3; border-color: #3fabf3; color: #05131d; }
-
-.cmp-pool { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); flex: 1; min-width: 16ch; }
-
-/* ── The table ────────────────────────────────────────────────────────────
-   One row per stat: its name, then every entity as a lane on one shared
-   0-100 scale (so who is ahead, and by how much, reads along a single row),
-   then the raw numbers. The bars are the player and team pages' bars — the
-   same track, fill and ringed knob — drawn in each entity's team colour. */
-.cmp-card {
-    --label: minmax(140px, 240px);
-    --valw: minmax(84px, 132px);
-    background: #111215;
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    overflow: hidden;
-}
-.cmp-thead,
-.cmp-row {
-    display: grid;
-    grid-template-columns: var(--label) minmax(0, 1fr) repeat(var(--cols), var(--valw));
-    column-gap: var(--s5);
-    align-items: center;
-    padding-inline: var(--s5);
-}
-.cmp-thead { padding-block: var(--s4) var(--s3); background: #0f1013; }
-.cmp-thead-label { color: var(--text-dim); font-size: var(--text-sm); }
-.cmp-scale {
-    position: relative;
-    height: 18px;
-    margin-inline: 16px;
-    color: var(--text-dim);
-    font-size: 0.8125rem;
-    font-variant-numeric: tabular-nums;
-}
-.cmp-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
-.cmp-scale .is-mid { color: #c4c8cc; font-weight: 600; }
-.cmp-colh {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    color: var(--text-primary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: 1rem;
-    font-weight: 750;
-    white-space: nowrap;
-}
-.cmp-colh i, .cmp-shot-dot i {
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
-    box-sizing: border-box;
-    border: 2px solid #fff;
-    border-radius: 50%;
-    background: var(--hue);
-}
-.cmp-sect-h {
-    margin: 0;
-    padding: var(--s5) var(--s5) var(--s2);
-    border-top: 1px solid var(--border);
-    color: var(--text-primary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: clamp(1.2rem, 1.05rem + 0.5vw, 1.4rem);
-    font-weight: 750;
-    letter-spacing: -0.01em;
-}
-.cmp-row { padding-block: var(--s2); }
-.cmp-row:hover { background: rgba(255,255,255,0.02); }
-.cmp-rlabel {
-    color: var(--text-primary);
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: 1.0625rem;
-    font-weight: 600;
-}
-/* The knob overhangs the track by half its width at 0 and 100, so the lanes
-   are inset by that much and the scale above is inset to match. */
-.cmp-lanes {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 7px 16px;
-}
-.cmp-lanes::before {
-    content: "";
-    position: absolute;
-    top: 0; bottom: 0;
-    left: 50%;
-    width: 1px;
-    background: rgba(255,255,255,0.16);
-}
-/* The sitewide Savant bar, in each entity's team colour: full-height fill,
-   thin track, white-ringed knob with a white number. */
-.cmp-lane {
-    --knob: 32px;
-    position: relative;
-    height: 22px;
-    background: linear-gradient(rgba(184,201,207,0.2), rgba(184,201,207,0.2)) center / 100% 8px no-repeat;
-}
-.cmp-card[data-view="percentiles"] .cmp-lane { --w: var(--pp); }
-.cmp-card[data-view="stats"] .cmp-lane { --w: var(--ps); }
-.cmp-fill {
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: calc(var(--w) * 1%);
-    background: var(--hue);
-    transform-origin: left center;
-    animation: cmp-grow 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-    animation-delay: calc(var(--i, 0) * 20ms);
-}
-.cmp-knob {
-    position: absolute;
-    top: 50%;
-    left: calc(var(--w) * 1%);
-    z-index: 2;
-    width: var(--knob);
-    height: var(--knob);
-    box-sizing: border-box;
-    display: grid;
-    place-items: center;
-    border: 3px solid #fff;
-    border-radius: 50%;
-    background: var(--kc);
-    color: #fff;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: 0.8125rem;
-    font-weight: 750;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-    transform: translate(-50%, -50%);
-    animation: cmp-pop 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
-    animation-delay: calc(var(--i, 0) * 20ms + 110ms);
-}
-.cmp-row:has(.cmp-lane:nth-child(3)) .cmp-lane { --knob: 30px; }
-/* A value with no qualified percentile: hatched, full length, no knob. */
-.cmp-card[data-view="percentiles"] .cmp-lane.is-unranked .cmp-fill {
-    width: 100%;
-    background: repeating-linear-gradient(135deg, rgba(255,255,255,0.14) 0 6px, rgba(255,255,255,0.04) 6px 12px);
-}
-.cmp-card[data-view="stats"] .cmp-knob { display: none; }
-.cmp-lane.is-empty { background: rgba(255,255,255,0.035); }
-
-.cmp-val {
-    text-align: right;
-    color: #c4c8cc;
-    font-family: var(--font-display); font-stretch: var(--display-stretch);
-    font-size: 1.375rem;
-    font-weight: 600;
-    line-height: 1;
-    white-space: nowrap;
-    font-variant-numeric: proportional-nums;
-}
-.cmp-val.is-lead { color: #fff; font-weight: 850; }
-.cmp-val.is-empty { color: var(--text-dim); }
-
-.cmp-foot {
-    margin-top: var(--s4);
-    padding: var(--s3) var(--s5);
-    border-top: 1px solid var(--border);
-    background: rgba(255,255,255,0.02);
-}
-.cmp-foot-note { color: var(--text-dim); font-size: var(--text-xs); line-height: 1.5; }
-.cmp-card[data-view="percentiles"] .cmp-foot-stats { display: none; }
-.cmp-card[data-view="stats"] .cmp-foot-pct { display: none; }
-
 /* ── The one authored moment: the bars arrive ─────────────────────────── */
 @keyframes cmp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes cmp-pop {
@@ -1807,186 +1600,11 @@ tr.postseason-row:hover {
     to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* ── The share image ──────────────────────────────────────────────────────
-   A fixed 1080×1350 (4:5) picture: the shape X, Instagram, Threads and Bluesky
-   show uncropped. Pixel sizes on purpose — it is an image, not a layout, and
-   it must come out identical whatever device draws it. Parked off-screen.
-   Normal width throughout: html2canvas draws each word at the width the
-   canvas font has, which has no condensed axis, so 87.5% text measured in
-   the page came out overprinted in the file. */
-.cmp-shot-wrap { position: absolute; left: -12000px; top: 0; width: 1080px; height: 1350px; overflow: hidden; pointer-events: none; }
-.cmp-shot {
-    --lane: 20px;
-    width: 1080px;
-    height: 1350px;
-    box-sizing: border-box;
-    padding: 52px 60px 44px;
-    display: flex;
-    flex-direction: column;
-    color: #e7e9ea;
-    font-family: var(--font-body);
-}
-.cmp-shot-top { display: flex; align-items: center; justify-content: space-between; }
-.cmp-shot-brand {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    font-family: var(--font-display);
-    font-size: 26px;
-    font-weight: 850;
-    letter-spacing: -0.02em;
-}
-.cmp-shot-brand img { width: 40px; height: 40px; }
-.cmp-shot-brand b { color: var(--accent); font-weight: 850; }
-.cmp-shot-kind { color: #9aa0a6; font-family: var(--font-display); font-size: 22px; font-weight: 600; }
-.cmp-shot-match { display: flex; gap: 24px; margin: 40px 0 34px; }
-.cmp-shot-ent { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
-.cmp-shot-photo {
-    width: 132px;
-    height: 132px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: #202127 center / cover no-repeat;
-    /* A border, not a spread shadow: html2canvas paints a spread shadow as a
-       filled disc over the photo. */
-    border: 4px solid var(--hue);
-    font-family: var(--font-display);
-    font-size: 44px;
-    font-weight: 850;
-}
-.cmp-shot-photo.is-logo { background-size: 68%; }
-.cmp-shot-name {
-    max-width: 100%;
-    font-family: var(--font-display);
-    font-size: 46px;
-    font-weight: 850;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.cmp-shot-meta { color: #9aa0a6; font-size: 22px; }
-.cmp-shot-lead { color: #9aa0a6; font-size: 20px; }
-.cmp-shot-lead b { margin-right: 6px; color: #fff; font-family: var(--font-display); font-size: 52px; font-weight: 850; line-height: 1; }
-.cmp-shot[data-n="3"] { --lane: 18px; }
-.cmp-shot[data-n="3"] .cmp-shot-photo { width: 104px; height: 104px; font-size: 34px; }
-.cmp-shot[data-n="3"] .cmp-shot-name { font-size: 38px; }
-.cmp-shot-head,
-.cmp-shot-row {
-    display: grid;
-    grid-template-columns: 250px minmax(0, 1fr) repeat(var(--cols, 2), 112px);
-    column-gap: 28px;
-    align-items: center;
-}
-.cmp-shot[data-n="3"] .cmp-shot-head, .cmp-shot[data-n="3"] .cmp-shot-row { --cols: 3; grid-template-columns: 230px minmax(0, 1fr) repeat(3, 104px); column-gap: 22px; }
-.cmp-shot-head { padding-bottom: 14px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.12); color: #949a9f; font-size: 18px; }
-.cmp-shot-scale { display: flex; justify-content: space-between; padding-inline: 18px; font-size: 16px; }
-.cmp-shot-scale .is-mid { color: #c4c8cc; font-weight: 600; }
-.cmp-shot-dot { display: flex; justify-content: flex-end; }
-.cmp-shot-dot i { width: 16px; height: 16px; }
-.cmp-shot-rows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; }
-.cmp-shot-label { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
-.cmp-shot-lanes { position: relative; display: flex; flex-direction: column; gap: 16px; padding: 4px 18px; }
-.cmp-shot[data-n="3"] .cmp-shot-lanes { gap: 12px; }
-.cmp-shot-lanes::before { content: ""; position: absolute; top: -6px; bottom: -6px; left: 50%; width: 2px; background: rgba(255,255,255,0.14); }
-.cmp-shot-lane { position: relative; height: var(--lane); background: linear-gradient(rgba(184,201,207,0.2), rgba(184,201,207,0.2)) center / 100% 8px no-repeat; }
-.cmp-shot-fill { position: absolute; inset: 0 auto 0 0; width: calc(var(--w) * 1%); background: var(--hue); }
-.cmp-shot-knob {
-    position: absolute;
-    top: 50%;
-    left: calc(var(--w) * 1%);
-    z-index: 2;
-    width: 36px;
-    height: 36px;
-    box-sizing: border-box;
-    display: grid;
-    place-items: center;
-    border: 3px solid #fff;
-    border-radius: 50%;
-    background: var(--kc);
-    color: #fff;
-    font-family: var(--font-display);
-    font-size: 15px;
-    font-weight: 900;
-    line-height: 1;
-    transform: translate(-50%, -50%);
-}
-.cmp-shot-val { text-align: right; color: #b9bec3; font-family: var(--font-display); font-size: 28px; font-weight: 600; line-height: 1; white-space: nowrap; }
-.cmp-shot[data-n="3"] .cmp-shot-val { font-size: 25px; }
-.cmp-shot-val.is-lead { color: #fff; font-weight: 850; }
-.cmp-shot-foot {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 24px;
-    padding-top: 22px;
-    border-top: 1px solid rgba(255,255,255,0.12);
-    color: #949a9f;
-    font-size: 17px;
-    line-height: 1.4;
-}
-.cmp-shot-foot span { max-width: 620px; }
-.cmp-shot-foot b { color: #e7e9ea; font-family: var(--font-display); font-size: 24px; font-weight: 750; white-space: nowrap; }
-
-/* ── Narrow screens ───────────────────────────────────────────────────── */
-@media (max-width: 900px) {
-    .cmp-masthead { flex-direction: column; align-items: flex-start; }
-    .cmp-hero-grid { gap: var(--s3); }
-    .cmp-ent { --photo: 96px; }
-    .cmp-hero-grid[style*="--slots:3"] .cmp-ent { --photo: 80px; }
-}
-@media (max-width: 700px) {
-    .cmp-hero { padding: var(--s5) var(--s3) var(--s4); }
-    /* Two across still fits; a third column (or the add slot beside two)
-       drops to its own row rather than squeezing three into 360px. */
-    .cmp-hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .cmp-hero-grid > :nth-child(3) { grid-column: 1 / -1; }
-    .cmp-ent { --photo: 84px; gap: 9px; }
-    .cmp-ent-add { flex-direction: row; justify-content: center; }
-    .cmp-ent-add .cmp-ent-ring { display: none; }
-    .cmp-ent-name { font-size: 1.375rem; white-space: normal; }
-    .cmp-ent-meta { font-size: var(--text-sm); }
-    .cmp-ent-lead b { font-size: 2.375rem; }
-    .cmp-ent-ctrl { width: 100%; }
-    /* Two 44px buttons leave about 55px for the year, which the arrow would
-       eat; the year alone is the affordance here. */
-    .cmp-ent-season { flex: 1; min-width: 0; padding: 0 4px; appearance: none; -webkit-appearance: none; text-align: center; text-align-last: center; }
-    /* One scrolling row, not two wrapped ones. */
-    .cmp-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: calc(100% + 2 * var(--s4)); margin-inline: calc(-1 * var(--s4)); padding-inline: var(--s4); }
-    .cmp-tabs::-webkit-scrollbar { display: none; }
-    .cmp-tab { flex-shrink: 0; }
-    .cmp-ent-season, .cmp-ent-btn { height: 44px; }
-    .cmp-ent-btn { width: 44px; flex-shrink: 0; }
-
-    .cmp-viewbar { flex-wrap: wrap; }
-    .cmp-seg { flex: 1; }
-    .cmp-seg-btn { flex: 1; padding: 0 var(--s3); }
-    .cmp-pool { order: 3; flex-basis: 100%; }
-
-    /* A row becomes the stat's name and its numbers on one line, with the
-       lanes full width beneath. The scale header gives way to a key. */
-    .cmp-thead { grid-template-columns: repeat(var(--cols), auto) 1fr; column-gap: var(--s4); padding-inline: var(--s4); }
-    .cmp-thead-label, .cmp-scale { display: none; }
-    .cmp-colh { justify-content: flex-start; font-size: 0.9375rem; }
-    .cmp-thead::after { content: "FBS percentile"; justify-self: end; color: var(--text-dim); font-size: var(--text-xs); }
-    .cmp-row {
-        grid-template-columns: minmax(0, 1fr) repeat(var(--cols), auto);
-        column-gap: var(--s3);
-        row-gap: 8px;
-        padding: 11px var(--s4) 12px;
-    }
-    .cmp-lanes { grid-column: 1 / -1; grid-row: 2; padding: 6px 12px; }
-    .cmp-rlabel { font-size: 1rem; }
-    .cmp-val { min-width: 52px; font-size: 1.125rem; }
-    .cmp-sect-h { padding-inline: var(--s4); }
-}
 @media (prefers-reduced-motion: reduce) {
-    .cmp-fill, .cmp-knob { animation: none; transition: none; }
-    .cmp-tab, .cmp-btn, .cmp-seg-btn, .cmp-ent-btn, .cmp-ent-season, .cmp-search-input,
-    .cmp-dd-item, .cmp-zero-try { transition: none; }
-    .cmp-tab:active, .cmp-btn:active, .cmp-ent-btn:active, .cmp-zero-try:active { transform: none; }
+
+     .cmp-search-input,
+    .cmp-dd-item { transition: none; }
+
 }
 
 /* Leaderboards */
@@ -6052,7 +5670,6 @@ a.rp-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px
     .team-name-default,
     .ph-meta-item,
     .ph-meta-item a,
-    .cmp-zero-hint a,
     .team-standings-all {
         display: inline-flex;
         align-items: center;
@@ -6704,7 +6321,6 @@ a.dr-sc:active { transform: scale(.985); }
     .dr-sc-name { font-size: 13.5px; }
     .dr-sc-r1 { font-size: 12px; }
 
-
     /* Rows: number and photo span both lines; name above, position and
        college below; the NFL team is its logo, its name kept for readers. */
     .dr-rows { padding: 2px 0; }
@@ -7228,12 +6844,8 @@ a.dr-sc:active { transform: scale(.985); }
    pointerless devices so desktop density is untouched — 34px is a fine mouse
    target and growing it there would only cost information per screen. */
 @media (hover: none) {
-    /* Measured at 390 with touch: the compare position pills came in at
-       45x34.7 with a 6px gap, the explorer axis-swap at 38x38, and the
-       bracket projection links at 64x16 with no gap to their neighbour. */
-    .cmp-tab,
-    .cmp-seg-btn,
-    .cmp-btn,
+    /* Measured at 390 with touch: the bracket projection links came in at
+       64x16 with no gap to their neighbour. */
     .bk-proj-team,
     .lb-select,
     .lb-mode-btn,
@@ -7242,8 +6854,7 @@ a.dr-sc:active { transform: scale(.985); }
        mobile page under the floor, and the primary one. */
     select.form-select { min-height: 44px; }
     .lb-page-btn { min-width: 44px; }
-    .cmp-ent-btn, .cmp-ent-season { height: 44px; }
-    .cmp-ent-btn { width: 44px; }
+
     .lb-mode-btn { display: inline-flex; align-items: center; }
 }
 

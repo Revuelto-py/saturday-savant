@@ -1,522 +1,227 @@
 {% extends "base.html" %}
-{% block title %}Compare {{ 'Teams' if mode == 'team' else 'Players' }} · Saturday Savant{% endblock %}
-{% block og_title %}Compare {{ 'Teams' if mode == 'team' else 'Players' }} · Saturday Savant{% endblock %}
-{% block og_description %}Compare {{ 'college football teams' if mode == 'team' else 'college football players' }} side by side — advanced stats, ratings, and percentile rankings on Saturday Savant.{% endblock %}
+{% block title %}{{ title }} · Saturday Savant{% endblock %}
+{% block og_title %}{{ title }} · Saturday Savant{% endblock %}
+{% block og_description %}{{ desc }}{% endblock %}
+{% block og_image %}{{ og_image or (request.url_root ~ 'static/logo-512.png') }}{% endblock %}
 
 {% block content %}
-
-{% set slots = players if mode == 'player' else teams %}
-{% set n = active_entities|length %}
-{% set noun = 'player' if mode == 'player' else 'team' %}
-
-{% macro ord(x) -%}
-{{ x }}{% if (x % 100) in [11, 12, 13] %}th{% elif (x % 10) == 1 %}st{% elif (x % 10) == 2 %}nd{% elif (x % 10) == 3 %}rd{% else %}th{% endif %}
-{%- endmacro %}
-
-{# Display name, short name, photo and meta line, shared by the header, the
-   table and the share image. #}
-{% macro ename(e) %}{{ e.name if mode == 'team' else (e.first_name ~ ' ' ~ e.last_name) }}{% endmacro %}
-{% macro eshort(e) %}{{ e.name if mode == 'team' else e.last_name }}{% endmacro %}
-{% macro eimg(e) %}{{ (e.logo_dark if mode == 'team' else e.headshot) or '' }}{% endmacro %}
-{% macro einit(e) %}{{ (e.name or '?')[0] if mode == 'team' else ((e.first_name or '?')[0] ~ (e.last_name or '')[0]) }}{% endmacro %}
-{% macro emeta(e) %}{{ (e.conference or '') if mode == 'team' else ((e.position or '—') ~ ' · ' ~ e.team) }}{% endmacro %}
-
-{# A photo is a background image, not an <img>: html2canvas honours
-   background-size but not object-fit, and that warped every headshot in the
-   export. data-headshot lets the export route it through the image proxy. #}
-{% macro photo(e, cls) -%}
-{% set src = eimg(e) %}
-<div class="{{ cls }}{{ ' is-logo' if mode == 'team' else '' }}"{% if src %} data-headshot="{{ src }}" style="background-image:url('{{ src }}')"{% endif %}>{% if not src %}{{ einit(e) }}{% endif %}</div>
-{%- endmacro %}
-
-{# The glow behind the matchup: each side's colour from its own corner, the
-   middle team's from the top. #}
-{% macro glow(ents) -%}
-{%- if ents -%}radial-gradient(90% 120% at 0% 0%, {{ ents[0].glow }}, transparent 62%), {% endif -%}
-{%- if ents|length >= 2 -%}radial-gradient(90% 120% at 100% 0%, {{ ents[-1].glow }}, transparent 62%), {% endif -%}
-{%- if ents|length == 3 -%}radial-gradient(60% 90% at 50% 0%, {{ ents[1].glow }}, transparent 65%), {% endif -%}
-#0b0c0f
-{%- endmacro %}
-
-<div class="page-wrapper cmp-page">
-
-    <header class="cmp-masthead">
-        <h1 class="cmp-h1">Compare {{ 'teams' if mode == 'team' else 'players' }}</h1>
-        <!-- Switching a tab clears the board: a QB has no rushing-back rows,
-             so carrying him across only produced empty ones. -->
-        <nav class="cmp-tabs" aria-label="Compare by position">
-            {% for tab in ['QB','RB','WR','TE','DL','LB','DB'] %}
-            <a href="{{ tab_urls[tab] }}" class="cmp-tab{% if mode == 'player' and group_name == tab %} is-on{% endif %}"
-               {% if mode == 'player' and group_name == tab %}aria-current="page"{% endif %}>{{ tab }}</a>
-            {% endfor %}
-            <span class="cmp-tab-gap" aria-hidden="true"></span>
-            <a href="{{ tab_urls['TEAMS'] }}" class="cmp-tab cmp-tab-wide{% if mode == 'team' %} is-on{% endif %}"
-               {% if mode == 'team' %}aria-current="page"{% endif %}>Teams</a>
-        </nav>
-    </header>
-
-    <!-- The matchup: every filled slot, then the first empty one to fill. -->
-    {% set ns = namespace(empty=none, k=0) %}
-    {% for e in slots %}{% if not e and ns.empty is none %}{% set ns.empty = loop.index %}{% endif %}{% endfor %}
-    <section class="cmp-hero" style="background:{{ glow(active_entities) }}">
-        <div class="cmp-hero-grid" style="--slots:{{ n + (1 if ns.empty else 0) }}">
-        {% for i in [0, 1, 2] %}
-            {% set e = slots[i] %}
-            {% set slot_num = i + 1 %}
-            {% set key = ('p' if mode == 'player' else 't') ~ slot_num %}
-            {% if e %}
-            {% set k = ns.k %}{% set ns.k = ns.k + 1 %}
-            <div class="cmp-ent" style="--hue:{{ e.hue }};--halo:{{ e.halo }}">
-                {{ photo(e, 'cmp-ent-photo') }}
-                <a class="cmp-ent-name" href="{{ team_url(e.name, e.season) if mode == 'team' else player_url(e.id, e.season) }}">{{ ename(e) }}</a>
-                <div class="cmp-ent-meta">
-                    <span>{{ emeta(e) }}</span>
-                    {% if e.ap_rank %}<span class="cmp-ent-ap"><span class="sr-only">AP rank </span>AP {{ e.ap_rank }}</span>{% endif %}
-                </div>
-                {% if n >= 2 %}
-                <div class="cmp-ent-lead"><b>{{ leads[k] }}</b> <span>of {{ rows|length }} stats led</span></div>
-                {% endif %}
-                <div class="cmp-ent-ctrl">
-                    {% set years = e.years or available_seasons %}
-                    {% if years and years|length > 1 %}
-                    <select class="cmp-ent-season" aria-label="Season for {{ ename(e) }}"
-                            onchange="compareSetSeason({{ slot_num }}, this.value)">
-                        {% for s in years %}<option value="{{ s }}" {{ 'selected' if s == e.season else '' }}>{{ s }}</option>{% endfor %}
-                    </select>
-                    {% else %}
-                    <span class="cmp-ent-season is-static">{{ e.season }}</span>
-                    {% endif %}
-                    {% if i < 2 %}
-                    <button type="button" class="cmp-ent-btn" title="Move to slot {{ slot_num + 1 }}"
-                            aria-label="Move {{ ename(e) }} to slot {{ slot_num + 1 }}"
-                            onclick="compareSwap('{{ key }}', '{{ ('p' if mode == 'player' else 't') ~ (slot_num + 1) }}')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 5h18"/><polyline points="7 23 3 19 7 15"/><path d="M21 19H3"/></svg>
-                    </button>
-                    {% endif %}
-                    <button type="button" class="cmp-ent-btn is-remove" title="Remove"
-                            aria-label="Remove {{ ename(e) }}" onclick="compareRemove('{{ key }}')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
-                    </button>
-                </div>
-            </div>
-            {% elif slot_num == ns.empty %}
-            <div class="cmp-ent cmp-ent-add">
-                <span class="cmp-ent-ring" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                </span>
-                <div class="cmp-search">
-                    <span class="cmp-search-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.5" y2="16.5"></line></svg>
-                    </span>
-                    {% set what = (group_name if mode == 'player' else 'team') %}
-                    {% set lbl = ('Add a ' ~ what) if n == 0 else (('Add another ' ~ what) if n == 1 else ('Add a third ' ~ what)) %}
-                    <input type="text" class="cmp-search-input" placeholder="{{ lbl }}…"
-                           autocomplete="off" data-slot-input="{{ key }}" aria-label="{{ lbl }}">
-                    <div class="cmp-dropdown" data-slot-dropdown="{{ key }}" role="listbox"></div>
-                </div>
-            </div>
-            {% endif %}
-        {% endfor %}
-        </div>
-    </section>
-
-    {% if n < 2 %}
-    <div class="cmp-zero">
-        <p class="cmp-zero-lede">
-            {% if n == 1 %}
-                One more {{ noun }} and the board fills in.
-            {% else %}
-                Pick two or three {{ noun }}s. Every stat gets one row, with each one's
-                standing against the FBS field on a shared scale and the raw number beside it.
-            {% endif %}
-        </p>
-        {% if suggested %}
-        <a class="cmp-zero-try" href="{{ suggested.url }}">
-            <span class="cmp-zero-try-label">Try {{ group_name if mode == 'player' else 'these' }}</span>
-            <span class="cmp-zero-try-names">{{ suggested.a_name }} <span class="cmp-zero-try-vs">vs</span> {{ suggested.b_name }}</span>
-            {% if suggested.a_team %}<span class="cmp-zero-try-meta">{{ suggested.a_team }} · {{ suggested.b_team }}</span>{% endif %}
-        </a>
-        {% endif %}
-        <p class="cmp-zero-hint">
-            Searching by last name is quickest. Not sure who to look at? The
-            <a href="/leaderboards/{{ suggest_board or 'passing' }}?season={{ season }}">leaderboards</a> are a good place to start.
-        </p>
-    </div>
-    {% endif %}
-
-    {% if n >= 2 %}
-
-    <div class="cmp-viewbar">
-        <div class="cmp-seg" role="radiogroup" aria-label="How to read the numbers">
-            <button type="button" class="cmp-seg-btn{% if view == 'percentiles' %} is-on{% endif %}"
-                    role="radio" aria-checked="{{ 'true' if view == 'percentiles' else 'false' }}"
-                    data-view="percentiles">Percentiles</button>
-            <button type="button" class="cmp-seg-btn{% if view == 'stats' %} is-on{% endif %}"
-                    role="radio" aria-checked="{{ 'true' if view == 'stats' else 'false' }}"
-                    data-view="stats">Stats</button>
-        </div>
-        <p class="cmp-pool">{{ pool_note }}</p>
-        <div class="cmp-actions">
-            <button type="button" class="cmp-btn" id="cmpShare">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19"/></svg>
-                <span>Copy link</span>
-            </button>
-            <button type="button" class="cmp-btn is-primary" id="cmpDownload">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span>Download image</span>
-            </button>
-        </div>
-    </div>
-
-    {# One lane per entity on a shared 0-100 scale. Both readings ship in the
-       markup: --pp is the percentile, --ps the cell's length within this
-       comparison, and the card's data-view picks which one the bar reads. #}
-    {% macro lane(v, e) %}
-    {% set has_p = v.percentile is not none %}
-    <div class="cmp-lane{% if v.raw is none %} is-empty{% elif not has_p %} is-unranked{% endif %}"
-         style="--hue:{{ e.hue }};--kc:{{ e.kc }};--pp:{{ v.percentile or 0 }};--ps:{{ v.share or 0 }}"
-         {% if v.raw is not none and not has_p %}title="No qualified percentile for this stat"{% endif %}>
-        {% if v.raw is not none %}
-        <span class="cmp-fill"></span>
-        {% if has_p %}<span class="cmp-knob" aria-label="{{ eshort(e) }}: {{ ord(v.percentile) }} percentile">{{ v.percentile }}</span>{% endif %}
-        {% endif %}
-    </div>
-    {% endmacro %}
-
-    <section class="cmp-card" id="compareCard" data-view="{{ view }}" style="--cols:{{ n }}">
-        <div class="cmp-thead">
-            <span class="cmp-thead-label">Stat</span>
-            <div class="cmp-scale" aria-hidden="true">
-                <span style="left:0">0</span><span style="left:25%">25</span>
-                <span class="is-mid" style="left:50%">50 · median</span>
-                <span style="left:75%">75</span><span style="left:100%">100</span>
-            </div>
-            {% for e in active_entities %}
-            <span class="cmp-colh"><i style="--hue:{{ e.hue }}"></i>{{ eshort(e) }}</span>
-            {% endfor %}
-        </div>
-
-        {% set sec = namespace(name=None) %}
-        {% for row in rows %}
-            {% if row.section != sec.name %}
-                {% if sec.name is not none %}</div>{% endif %}
-                {% set sec.name = row.section %}
-                <div class="cmp-sect">
-                <h2 class="cmp-sect-h">{{ row.section }}</h2>
-            {% endif %}
-            <div class="cmp-row" style="--i:{{ loop.index0 }}">
-                <div class="cmp-rlabel">{{ row.label }}</div>
-                <div class="cmp-lanes">
-                    {% for v in row['values'] %}{{ lane(v, active_entities[loop.index0]) }}{% endfor %}
-                </div>
-                {% for v in row['values'] %}
-                <div class="cmp-val{% if v.lead %} is-lead{% endif %}{% if v.raw is none %} is-empty{% endif %}">{{ v.display }}</div>
-                {% endfor %}
-            </div>
-        {% endfor %}
-        {% if sec.name is not none %}</div>{% endif %}
-
-        <footer class="cmp-foot">
-            <span class="cmp-foot-note cmp-foot-pct">{{ pool_note }} Hatched bars have no qualified percentile.</span>
-            <span class="cmp-foot-note cmp-foot-stats">Bars show each {{ noun }}'s standing within this comparison. Per-game rates use completed team games.</span>
-        </footer>
-    </section>
-
-    {# The share image: a fixed 1080×1350 (4:5) card the feeds show uncropped.
-       Off-screen, never read aloud; the download button rasterises it. It
-       carries the metrics where the percentiles sit furthest apart; "stats
-       led" still counts every row. #}
-    <div class="cmp-shot-wrap" aria-hidden="true">
-    <div class="cmp-shot" id="cmpShot" data-n="{{ n }}" style="background:{{ glow(active_entities) }}">
-        <div class="cmp-shot-top">
-            <span class="cmp-shot-brand"><img src="/static/logo-mark-256.png" alt="">Saturday <b>Savant</b></span>
-            <span class="cmp-shot-kind">{{ (group_name ~ ' comparison') if mode == 'player' else 'Team comparison' }}</span>
-        </div>
-        <div class="cmp-shot-match">
-            {% for e in active_entities %}
-            <div class="cmp-shot-ent" style="--hue:{{ e.hue }};--halo:{{ e.halo }}">
-                {{ photo(e, 'cmp-shot-photo') }}
-                <div class="cmp-shot-name">{{ ename(e) }}</div>
-                <div class="cmp-shot-meta">{{ emeta(e) }} · {{ e.season }}{% if e.ap_rank %} · AP {{ e.ap_rank }}{% endif %}</div>
-                <div class="cmp-shot-lead"><b>{{ leads[loop.index0] }}</b> of {{ rows|length }} stats led</div>
-            </div>
-            {% endfor %}
-        </div>
-        <div class="cmp-shot-head">
-            <span>Biggest gaps · {{ share_rows|length }} of {{ rows|length }}</span>
-            <div class="cmp-shot-scale"><span>0</span><span class="is-mid">50th</span><span>100</span></div>
-            {% for e in active_entities %}<span class="cmp-shot-dot"><i style="--hue:{{ e.hue }}"></i></span>{% endfor %}
-        </div>
-        <div class="cmp-shot-rows">
-            {% for row in share_rows %}
-            <div class="cmp-shot-row">
-                <span class="cmp-shot-label">{{ row.label }}</span>
-                <div class="cmp-shot-lanes">
-                    {% for v in row['values'] %}{% set e = active_entities[loop.index0] %}
-                    <div class="cmp-shot-lane" style="--hue:{{ e.hue }};--kc:{{ e.kc }};--w:{{ v.percentile }}">
-                        <span class="cmp-shot-fill"></span><span class="cmp-shot-knob">{{ v.percentile }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% for v in row['values'] %}<span class="cmp-shot-val{% if v.lead %} is-lead{% endif %}">{{ v.display }}</span>{% endfor %}
-            </div>
-            {% endfor %}
-        </div>
-        <div class="cmp-shot-foot">
-            <span>{{ pool_note }} Stats led counts all {{ rows|length }}.</span>
-            <b>saturdaysavant.com/compare</b>
-        </div>
-    </div>
-    </div>
-
-    {% endif %}
-
-</div>
-
+{# Two players or two teams, face to face. Everything below #fo is the body
+   partial, swapped in place by the script at the bottom. #}
+<div class="page-wrapper fo" id="fo">{% include "_compare_body.html" %}</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-(function() {
-    const MODE = {{ mode|tojson }};
-    const POS  = {{ (group_name or '')|tojson }};  // active position tab filters player search
-    // Names the download after who is in it, so three saved comparisons are
-    // three distinguishable files rather than compare (1).png.
-    const FILE = {{ (active_entities | map(attribute='name') | list) | tojson
-                    if mode == 'team' else
-                    (active_entities | map(attribute='last_name') | list) | tojson }};
+(function () {
+    var root = document.getElementById('fo');
+    if (!root) return;
 
-    function currentParams() { return new URLSearchParams(window.location.search); }
-    function navigate(params) { window.location.href = '/compare?' + params.toString(); }
-    window.compareRemove = function(key) {
-        const params = currentParams(); params.delete(key); navigate(params);
-    };
-    window.compareSwap = function(keyA, keyB) {
-        const params = currentParams();
-        const a = params.get(keyA), b = params.get(keyB);
-        if (a !== null) params.set(keyB, a); else params.delete(keyB);
-        if (b !== null) params.set(keyA, b); else params.delete(keyA);
-        // Keep each entity's season attached to it as it moves between slots.
-        const yA = 'y' + keyA.slice(-1), yB = 'y' + keyB.slice(-1);
-        const sa = params.get(yA), sb = params.get(yB);
-        if (sa !== null) params.set(yB, sa); else params.delete(yB);
-        if (sb !== null) params.set(yA, sb); else params.delete(yA);
-        navigate(params);
-    };
-    function selectEntity(paramKey, value) {
-        const params = currentParams(); params.set(paramKey, value); navigate(params);
-    }
-    window.compareSetSeason = function(slotNum, year) {
-        const params = currentParams(); params.set('y' + slotNum, year); navigate(params);
-    };
-
-    // ── View switch ──────────────────────────────────────────────────────
-    // Both readings are already in the DOM, so this is a class flip, not a
-    // reload. The URL follows along (replaceState, no history entry) so the
-    // link someone copies opens on the view they were looking at.
-    const card = document.getElementById('compareCard');
-    document.querySelectorAll('.cmp-seg-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const v = btn.getAttribute('data-view');
-            if (!card || card.getAttribute('data-view') === v) return;
-            card.setAttribute('data-view', v);
-            document.querySelectorAll('.cmp-seg-btn').forEach(function(b) {
-                const on = b === btn;
-                b.classList.toggle('is-on', on);
-                b.setAttribute('aria-checked', on ? 'true' : 'false');
-            });
-            const params = currentParams();
-            if (v === 'stats') params.set('view', 'stats'); else params.delete('view');
-            const q = params.toString();
-            history.replaceState(null, '', '/compare' + (q ? '?' + q : ''));
+    function body() { return root.firstElementChild; }
+    function absolute(u) { return new URL(u, location.origin).href; }
+    var esc = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
+    };
+
+    // ── In-place navigation ──────────────────────────────────────────────
+    // Every pick, swap, season change and removal is a link. With JS the
+    // body is fetched (?partial=1) and swapped, and the address bar follows;
+    // without it the link loads the same state as a page.
+    function go(url, push) {
+        var u = new URL(url, location.origin);
+        u.searchParams.set('partial', '1');
+        root.classList.add('is-busy');
+        return fetch(u, { headers: { 'Accept': 'text/html' } })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+            .then(function (html) {
+                root.innerHTML = html;
+                if (push !== false) history.pushState(null, '', body().dataset.url);
+                document.title = body().dataset.title;
+                bind();
+                if (root.getBoundingClientRect().top < 0) root.scrollIntoView();
+            })
+            .catch(function () { location.href = url; })
+            .finally(function () { root.classList.remove('is-busy'); });
+    }
+    root.addEventListener('click', function (e) {
+        var a = e.target.closest('a[data-nav]');
+        if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        var open = a.closest('details.fo-season');
+        if (open) open.open = false;
+        go(a.href);
     });
+    window.addEventListener('popstate', function () { go(location.href, false); });
+    // The first visit to a query-form address lands on the canonical one.
+    if (body().dataset.url && location.pathname + location.search !== body().dataset.url) {
+        history.replaceState(null, '', body().dataset.url);
+    }
 
-    // ── Per-slot live search ─────────────────────────────────────────────
-    document.querySelectorAll('[data-slot-input]').forEach(function(input) {
-        const paramKey = input.getAttribute('data-slot-input');
-        const dropdown = document.querySelector('[data-slot-dropdown="' + paramKey + '"]');
-        let timer;
+    // ── Search ───────────────────────────────────────────────────────────
+    // One box. Empty page: players and teams. After a pick: the same
+    // position group, or teams. Results show the face, team and this
+    // season's headline stat; players with stats this season come first.
+    function bindSearch(box) {
+        var input = box.querySelector('input'), dd = box.querySelector('.fo-dd');
+        var scope = box.dataset.scope, pBase = box.dataset.playerBase, tBase = box.dataset.teamBase;
+        var season = Number(body().dataset.season);
+        var timer, ctrl, items = [], active = -1, seen = new Map();
 
-        function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-
-        function render(results) {
-            const wanted = MODE === 'player' ? 'player' : 'team';
-            const filtered = results.filter(r => r.type === wanted);
-            if (!filtered.length) {
-                dropdown.innerHTML = '<div class="cmp-dd-note">No ' + (wanted === 'player' ? (POS || 'player') + 's' : 'teams') + ' match that.</div>';
-                dropdown.classList.add('is-open');
-                return;
-            }
-            let html = '';
-            for (const r of filtered) {
-                if (wanted === 'player') {
-                    const avatar = r.headshot
-                        ? `<img src="${esc(r.headshot)}" class="cmp-dd-face" alt="">`
-                        : `<div class="avatar-placeholder cmp-dd-face">${esc((r.first||'')[0]||'')}${esc((r.last||'')[0]||'')}</div>`;
-                    html += `<button type="button" class="cmp-dd-item" role="option" data-id="${esc(r.id)}">${avatar}
-                        <span class="cmp-dd-text">
-                            <span class="cmp-dd-name">${esc(r.first)} ${esc(r.last)}</span>
-                            <span class="cmp-dd-sub">${esc(r.pos || '')} · ${esc(r.team || '')}</span>
-                        </span></button>`;
-                } else {
-                    html += `<button type="button" class="cmp-dd-item" role="option" data-name="${esc(r.name)}">
-                        ${r.logo ? `<img src="${esc(r.logo)}" class="cmp-dd-logo" alt="">` : '<span class="cmp-dd-logo"></span>'}
-                        <span class="cmp-dd-text">
-                            <span class="cmp-dd-name">${esc(r.name)}</span>
-                            <span class="cmp-dd-sub">${esc(r.conference || '')}</span>
-                        </span></button>`;
-                }
-            }
-            dropdown.innerHTML = html;
-            dropdown.classList.add('is-open');
-            dropdown.querySelectorAll('[data-id]').forEach(el =>
-                el.addEventListener('click', () => selectEntity(paramKey, el.getAttribute('data-id'))));
-            dropdown.querySelectorAll('[data-name]').forEach(el =>
-                el.addEventListener('click', () => selectEntity(paramKey, el.getAttribute('data-name'))));
+        function mark(text, q) {
+            var words = q.toLowerCase().split(/\s+/).filter(Boolean);
+            return String(text).split(/(\s+)/).map(function (w) {
+                var hit = words.find(function (t) { return w.toLowerCase().indexOf(t) === 0; });
+                return hit ? '<mark>' + esc(w.slice(0, hit.length)) + '</mark>' + esc(w.slice(hit.length)) : esc(w);
+            }).join('');
         }
-
-        input.addEventListener('input', function() {
-            const q = this.value.trim();
+        function close() { dd.classList.remove('is-open'); input.setAttribute('aria-expanded', 'false'); items = []; active = -1; }
+        function show(html) {
+            dd.innerHTML = html;
+            dd.classList.add('is-open');
+            input.setAttribute('aria-expanded', 'true');
+            items = Array.prototype.slice.call(dd.querySelectorAll('.fo-opt'));
+            active = -1;
+        }
+        function highlight(i) {
+            items.forEach(function (el, j) { el.classList.toggle('is-active', j === i); });
+            active = i;
+            if (items[i]) items[i].scrollIntoView({ block: 'nearest' });
+        }
+        function render(results, q) {
+            var players = results.filter(function (r) { return r.type === 'player'; });
+            var teams = results.filter(function (r) { return r.type === 'team'; });
+            if (scope === 'TEAMS') players = [];
+            else if (scope) teams = [];
+            if (!pBase) players = [];
+            if (!tBase) teams = [];
+            players = players.filter(function (r) { return r.season === season; })
+                .concat(players.filter(function (r) { return r.season !== season; }));
+            var html = '';
+            players.forEach(function (r) {
+                html += '<a class="fo-opt" role="option" data-nav href="' + esc(pBase + r.id) + '">' +
+                    (r.face ? '<img class="fo-opt-img" src="' + esc(r.face) + '" alt="" onerror="this.onerror=null;this.src=\'' + esc(r.headshot) + '\'">'
+                            : '<span class="fo-opt-img"></span>') +
+                    '<span class="fo-opt-t"><b>' + mark((r.first || '') + ' ' + (r.last || ''), q) + '</b><small>' +
+                    (r.logo_sm ? '<img src="' + esc(r.logo_sm) + '" alt="" width="14" height="14">' : '') + esc(r.team || '') + '</small></span>' +
+                    '<span class="fo-opt-r"><span class="fo-pill">' + esc(r.pos || '') + '</span><small' + (r.season === season ? '' : ' class="is-old"') + '>' +
+                    esc(r.stat ? r.stat + (r.season && r.season !== season ? ' in ' + r.season : '') : 'No stats') + '</small></span></a>';
+            });
+            teams.forEach(function (r) {
+                html += '<a class="fo-opt" role="option" data-nav href="' + esc(tBase + encodeURIComponent(r.name)) + '">' +
+                    '<img class="fo-opt-img is-logo" src="' + esc(r.logo_sm || r.logo || '') + '" alt="">' +
+                    '<span class="fo-opt-t"><b>' + mark(r.name, q) + '</b><small>' + esc(r.conference || '') + '</small></span>' +
+                    '<span class="fo-opt-r"><span class="fo-pill">Team</span></span></a>';
+            });
+            show(html || '<p class="fo-dd-note">No ' + (scope === 'TEAMS' ? 'teams' : (scope ? 'players at this position' : 'players or teams')) +
+                         ' match “' + esc(q) + '”.</p>');
+        }
+        input.addEventListener('input', function () {
+            var q = input.value.trim();
             clearTimeout(timer);
-            if (q.length < 2) { dropdown.classList.remove('is-open'); dropdown.innerHTML = ''; return; }
-            dropdown.innerHTML = '<div class="cmp-dd-note">Searching…</div>';
-            dropdown.classList.add('is-open');
-            // In player mode the active position tab filters the results server-side.
-            let apiUrl = '/api/players?q=' + encodeURIComponent(q);
-            if (MODE === 'player' && POS) apiUrl += '&pos=' + encodeURIComponent(POS);
-            timer = setTimeout(() =>
-                fetch(apiUrl)
-                    .then(r => r.json()).then(render)
-                    .catch(() => { dropdown.innerHTML = '<div class="cmp-dd-note">Search is unavailable right now. Try again in a moment.</div>'; }),
-            220);
+            if (q.length < 2) { close(); return; }
+            var url = '/api/players?q=' + encodeURIComponent(q) + (scope && scope !== 'TEAMS' ? '&pos=' + encodeURIComponent(scope) : '');
+            if (seen.has(url)) { render(seen.get(url), q); return; }
+            timer = setTimeout(function () {
+                if (ctrl) ctrl.abort();
+                ctrl = new AbortController();
+                fetch(url, { signal: ctrl.signal }).then(function (r) { return r.json(); })
+                    .then(function (d) { seen.set(url, d); render(d, q); })
+                    .catch(function (e) { if (e.name !== 'AbortError') show('<p class="fo-dd-note">Search is unavailable right now. Try again in a moment.</p>'); });
+            }, 120);
         });
-
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') { dropdown.classList.remove('is-open'); this.blur(); }
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'ArrowDown' && items.length) { e.preventDefault(); highlight(Math.min(active + 1, items.length - 1)); }
+            else if (e.key === 'ArrowUp' && items.length) { e.preventDefault(); highlight(Math.max(active - 1, 0)); }
+            else if (e.key === 'Enter') { var pick = items[active] || items[0]; if (pick) { e.preventDefault(); pick.click(); } }
+            else if (e.key === 'Escape') { close(); }
         });
-        document.addEventListener('click', function(e) {
-            if (!input.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.remove('is-open');
-        });
-    });
-
-    // ── Image export ─────────────────────────────────────────────────────
-    // Route a cross-origin image through our same-origin proxy so html2canvas
-    // can rasterise it. The R2 headshot bucket sends no CORS headers, which
-    // otherwise leaves the photos blank in the export.
-    function proxied(src) {
-        if (!/^https?:\/\//i.test(src)) return null;      // relative = same-origin
-        try { if (new URL(src, location.href).host === location.host) return null; }
-        catch (e) { return null; }
-        return '/img-proxy?url=' + encodeURIComponent(src);
+        document.addEventListener('click', function (e) { if (!box.contains(e.target)) close(); });
+        if (scope || !matchMedia('(hover: none)').matches) input.focus({ preventScroll: true });
     }
 
-    const downloadBtn = document.getElementById('cmpDownload');
-    const shot = document.getElementById('cmpShot');
-    // Phones that can hand a file to the share sheet get "Share image": the
-    // point of the picture is to post it, and a download is one step further
-    // from that on a phone.
-    const canShareFiles = !!(navigator.canShare && window.File &&
-        navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] }) &&
-        matchMedia('(hover: none)').matches);
-    if (downloadBtn && canShareFiles) downloadBtn.querySelector('span').textContent = 'Share image';
-
-    if (downloadBtn && shot) {
-        const label = downloadBtn.querySelector('span');
-        const original = label.textContent;
-        const reset = function(t, ms) { label.textContent = t; setTimeout(function() { label.textContent = original; }, ms); };
-        const slug = (FILE.length ? FILE : ['compare'])
-            .join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        const name = 'saturday-savant-' + (slug || 'compare') + '.png';
-
-        async function render() {
-            if (typeof html2canvas === 'undefined') throw new Error('html2canvas missing');
-            const restores = [], loads = [];
-            shot.querySelectorAll('[data-headshot]').forEach(function(el) {
-                const orig = el.getAttribute('data-headshot');
-                const px = proxied(orig);
-                if (!px) return;
-                el.style.backgroundImage = "url('" + px + "')";
-                restores.push(function() { el.style.backgroundImage = "url('" + orig + "')"; });
-                loads.push(new Promise(function(res) { const im = new Image(); im.onload = im.onerror = res; im.src = px; }));
-            });
-            try {
-                // preload, but never hang the export if a proxy fetch stalls
-                await Promise.race([Promise.all(loads), new Promise(function(r) { setTimeout(r, 5000); })]);
-                const canvas = await html2canvas(shot, { backgroundColor: '#07080a', scale: 1, useCORS: true,
-                                                         width: 1080, height: 1350, windowWidth: 1280 });
-                const blob = await new Promise(function(r) { canvas.toBlob(r, 'image/png'); });
-                return new File([blob], name, { type: 'image/png' });
-            } finally {
-                restores.forEach(function(fn) { fn(); });
-            }
+    // ── Share ────────────────────────────────────────────────────────────
+    // The images are drawn by the server, so the sheet has nothing to render.
+    // On a phone the file is fetched as the sheet opens: the share sheet only
+    // opens straight off a tap, and a fetch inside the tap would lose it.
+    function bindShare(dlg) {
+        var preview = dlg.querySelector('[data-preview]'), save = dlg.querySelector('[data-save]');
+        var shareBtn = dlg.querySelector('[data-share-file]'), segs = dlg.querySelectorAll('[data-fmt]');
+        var fileFor = {}, current = 'post', base = dlg.dataset.file;
+        var canShare = !!(navigator.canShare && window.File &&
+            navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] }));
+        function src(fmt) { return dlg.querySelector('[data-fmt="' + fmt + '"]').dataset.src; }
+        function prefetch(fmt) {
+            if (!canShare || fileFor[fmt]) return;
+            fileFor[fmt] = fetch(src(fmt)).then(function (r) { return r.blob(); })
+                .then(function (b) { return new File([b], base + '-' + fmt + '.png', { type: 'image/png' }); });
         }
-
-        // The share sheet only opens straight off a tap, and a render takes
-        // longer than Safari allows between the two. So on a phone the image
-        // is drawn once the page is idle and the tap just hands it over.
-        let ready = null;
-        if (canShareFiles) {
-            const warm = function() { ready = render().catch(function() { ready = null; }); };
-            window.addEventListener('load', function() {
-                (window.requestIdleCallback || function(f) { setTimeout(f, 800); })(warm);
-            });
+        function pick(fmt) {
+            current = fmt;
+            segs.forEach(function (b) { var on = b.dataset.fmt === fmt; b.classList.toggle('is-on', on); b.setAttribute('aria-checked', on); });
+            preview.loading = 'eager';      // lazy until the sheet is opened, then wanted now
+            preview.src = src(fmt);
+            preview.classList.toggle('is-wide', fmt === 'wide');
+            preview.classList.toggle('is-story', fmt === 'story');
+            save.href = src(fmt);
+            save.setAttribute('download', base + '-' + fmt + '.png');
+            prefetch(fmt);
         }
-
-        downloadBtn.addEventListener('click', async function() {
-            downloadBtn.disabled = true;
-            label.textContent = 'Rendering…';
-            try {
-                const file = (ready && await ready) || await render();
-                if (canShareFiles && file) {
-                    try {
-                        await navigator.share({ files: [file], title: document.title, url: location.href });
-                        reset('Shared ✓', 2200);
-                    } catch (e) {
-                        label.textContent = original;   // closing the sheet is not an error
-                    }
-                } else {
-                    const link = document.createElement('a');
-                    link.download = name;
-                    link.href = URL.createObjectURL(file);
-                    link.click();
-                    setTimeout(function() { URL.revokeObjectURL(link.href); }, 4000);
-                    reset('Saved ✓', 2200);
-                }
-            } catch (err) {
-                console.error('Compare image export failed:', err);
-                reset('Could not render. Try again', 3000);
-            } finally {
-                downloadBtn.disabled = false;
-            }
+        segs.forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.fmt); }); });
+        if (canShare) shareBtn.hidden = false;
+        shareBtn.addEventListener('click', function () {
+            Promise.resolve(fileFor[current]).then(function (file) {
+                if (file) return navigator.share({ files: [file], title: document.title, url: absolute(body().dataset.url) });
+            }).catch(function () { /* closing the sheet is not an error */ });
+        });
+        dlg.querySelector('[data-close]').addEventListener('click', function () { dlg.close(); });
+        dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+        root.querySelectorAll('[data-share-open]').forEach(function (b) {
+            b.addEventListener('click', function () { pick(current); dlg.showModal(); });
         });
     }
 
-    // ── Copy link — this comparison's own URL is the shareable version ────
-    const shareBtn = document.getElementById('cmpShare');
-    if (shareBtn) {
-        const label = shareBtn.querySelector('span');
-        const original = label.textContent;
-        let resetTimer;
-        shareBtn.addEventListener('click', function() {
-            const url = window.location.href;
-            const done = function(ok) {
-                label.textContent = ok ? 'Link copied ✓' : 'Press Ctrl/⌘+C to copy';
-                clearTimeout(resetTimer);
-                resetTimer = setTimeout(function() { label.textContent = original; }, 2200);
+    function bindCopy(btn) {
+        var label = btn.querySelector('span'), original = label.textContent, t;
+        btn.addEventListener('click', function () {
+            var url = absolute(body().dataset.url);
+            var done = function (ok) {
+                label.textContent = ok ? 'Link copied' : 'Copy the address bar';
+                clearTimeout(t); t = setTimeout(function () { label.textContent = original; }, 2200);
             };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(function() { done(true); }, function() { done(false); });
-            } else {
-                const ta = document.createElement('textarea');
-                ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
-                document.body.appendChild(ta); ta.select();
-                let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
-                document.body.removeChild(ta); done(ok);
-            }
+            if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+            else done(false);
         });
     }
+
+    // ── The last comparison, for the empty page ──────────────────────────
+    function recent() {
+        var b = body();
+        try {
+            if (b.dataset.recent) localStorage.setItem('cmp-last', b.dataset.recent);
+            var slot = root.querySelector('[data-recent-slot]');
+            var last = slot && JSON.parse(localStorage.getItem('cmp-last') || 'null');
+            if (!last) return;
+            slot.href = last.url;
+            slot.querySelector('[data-title]').textContent = last.title;
+            slot.querySelector('[data-faces]').innerHTML = (last.faces || []).map(function (f) {
+                return f ? '<img' + (last.teams ? ' class="is-logo"' : '') + ' src="' + esc(f) + '" alt="" width="40" height="30">' : '<span></span>';
+            }).join('');
+            slot.hidden = false;
+        } catch (e) { /* private browsing: no memory, nothing lost */ }
+    }
+
+    function bind() {
+        root.querySelectorAll('[data-search]').forEach(bindSearch);
+        root.querySelectorAll('dialog.fo-share').forEach(bindShare);
+        root.querySelectorAll('[data-copy]').forEach(bindCopy);
+        // Teams have 37 rows: on a phone only the first section starts open.
+        if (matchMedia('(max-width: 767.98px)').matches) {
+            root.querySelectorAll('details[data-fold-phone]').forEach(function (d) { d.open = false; });
+        }
+        recent();
+    }
+    bind();
 })();
 </script>
 {% endblock %}
