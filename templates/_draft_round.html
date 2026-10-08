@@ -1,39 +1,41 @@
-{# One round of the draft board. Extracted so rounds after the first are
-   fetched when asked for: the page rendered all seven at once, 457KB and
-   793 images for a reader who usually wants round 1. Rendered standalone by
-   /draft/<year>?round=<n>, and inline when ?open=<n> asks for it. #}
-<ol class="dr-picks" start="{{ rd.picks[0].overall if rd.picks else 1 }}">
-            {% for p in rd.picks %}
-            <li class="dr-pick" style="--pc: {{ p.college_color }}">
-                <a class="dr-pick-link" href="/player/{{ p.id }}">
-                    <span class="dr-num">
-                        <span class="dr-num-overall">{{ p.overall }}</span>
-                        <span class="dr-num-rp">{{ p.round }}.{{ '%02d' % p.pick }}</span>
-                    </span>
-
-                    {% if p.headshot %}
-                    <img class="dr-shot" src="{{ p.headshot }}" alt="" aria-hidden="true" loading="lazy" width="46" height="46">
-                    {% else %}
-                    <span class="dr-shot dr-shot-blank" aria-hidden="true">{{ p.name[0] }}</span>
-                    {% endif %}
-
-                    <span class="dr-who">
-                        <span class="dr-name">{{ p.name }}</span>
-                        <span class="dr-pos">{{ p.pos or '—' }}</span>
-                    </span>
-
-                    <span class="dr-move">
-                        <span class="dr-side dr-from">
-                            {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
-                            <span class="dr-side-name">{{ p.college or '—' }}</span>
-                        </span>
-                        <span class="dr-arrow" aria-hidden="true">→</span>
-                        <span class="dr-side dr-to">
-                            {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" aria-hidden="true" loading="lazy" width="22" height="22">{% endif %}
-                            <span class="dr-side-name">{{ p.nfl or '—' }}</span>
-                        </span>
-                    </span>
-                </a>
-            </li>
-            {% endfor %}
-        </ol>
+{# One round of the draft board. Extracted so rounds are fetched when asked
+   for: the page rendered all seven at once, 457KB and 793 images for a reader
+   who usually wants one. Rendered standalone by /draft/<year>?round=<n>, and
+   inline for the open round. #}
+<div class="dr-list" data-round="{{ rd.round }}">
+    <ol class="dr-rows" start="{{ rd.picks[0].overall if rd.picks else 1 }}">
+        {% for p in rd.picks %}
+        <li>
+            <a class="dr-row" href="/player/{{ p.id }}">
+                <span class="dr-n"><b>{{ p.overall }}</b><small>{{ p.round }}.{{ '%02d' % p.pick }}</small></span>
+                <span class="dr-tile{{ ' is-dark' if p.dark }}" style="--c: {{ p.college_color }}" aria-hidden="true">
+                    {% if p.shot %}<img src="{{ p.shot }}" alt="" loading="lazy" width="128" height="93">
+                    {% else %}<span>{{ p.name[:1] }}</span>{% endif %}
+                </span>
+                {# The position sits beside the name on a wide row and beside
+                   the college on a phone, where the name needs the width; the
+                   copy that is not shown is display:none, so it is read once. #}
+                <span class="dr-who">
+                    <b>{{ p.name }}</b>
+                    {% if p.pos %}<span class="dr-pos dr-pos-wide">{{ p.pos }}</span>{% endif %}
+                </span>
+                <span class="dr-side dr-from">
+                    {% if p.pos %}<span class="dr-pos dr-pos-narrow">{{ p.pos }}</span>{% endif %}
+                    {% if p.college_logo %}<img src="{{ p.college_logo }}" alt="" loading="lazy" width="22" height="22">{% endif %}
+                    <span>{{ p.college or '—' }}</span>
+                </span>
+                <svg class="dr-chev" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 3 11 8 6 13"/></svg>
+                <span class="dr-side dr-to">
+                    {% if p.nfl_logo %}<img src="{{ p.nfl_logo }}" alt="" loading="lazy" width="22" height="22" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
+                    <span>{{ p.nfl or '—' }}</span>
+                </span>
+            </a>
+        </li>
+        {% endfor %}
+    </ol>
+    {% if rd.picks|length > 8 %}
+    <button class="dr-more" type="button" hidden>Show all {{ rd.picks|length }} picks in round {{ rd.round }}
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 8 11 13 6"/></svg>
+    </button>
+    {% endif %}
+</div>

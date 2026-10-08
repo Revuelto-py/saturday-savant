@@ -252,7 +252,7 @@ def _is_asset_path(p):
     The image proxies are host-allowlisted and memory-cached, and one Stat
     Explorer view asks them for ~150 headshots — through a page budget that
     half-draws the chart and locks the visitor out for a minute."""
-    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith('/img/c/')
+    return p == '/healthz' or p.startswith('/static') or p == '/img-proxy' or p.startswith(('/img/c/', '/img/r/'))
 
 
 @app.before_request
@@ -10727,8 +10727,8 @@ def draft(year=None):
         years = [r[0] for r in cursor.fetchall()]
         if not years:
             return render_template('draft.html', years=[], year=None, rounds=[],
-                                   schools=[], total=0, school_count=0,
-                                   open_round=None)
+                                   wall=[], later=[], active=None,
+                                   schools=[], total=0, school_count=0)
         year = year if year in years else years[0]
 
         cursor.execute("""
@@ -10763,22 +10763,34 @@ def draft(year=None):
         rounds, by_school = [], {}
         for (pid, fn, ln, pos, shot, college, clogo, ccolor, cslug,
              nfl, nfl_logo, rnd, pick, overall) in cursor.fetchall():
+            # Guard the inline colour the photo tiles use — a malformed value
+            # would otherwise emit broken CSS on every affected pick.
+            color = ccolor if (ccolor and ccolor[0] == '#' and len(ccolor) == 7) else '#2b3a55'
+            name = f'{fn or ""} {ln or ""}'.strip()
+            # The phone wall has room for a surname; "Jr." is not one.
+            words = [w for w in name.split() if w.rstrip('.') not in ('Jr', 'Sr', 'II', 'III', 'IV')]
             row = {
-                'id': pid, 'name': f'{fn} {ln}'.strip(), 'pos': pos,
-                'headshot': shot, 'college': college, 'college_logo': clogo,
-                'college_slug': cslug,
-                # Guard the inline colour the row border uses — a malformed value
-                # would otherwise emit broken CSS on every affected pick.
-                'college_color': ccolor if (ccolor and ccolor[0] == '#' and len(ccolor) == 7) else '#2b3a55',
-                'nfl': nfl, 'nfl_logo': nfl_logo,
+                'id': pid, 'name': name, 'last': words[-1] if words else name, 'pos': pos,
+                # Stored headshots are ~275KB 600px PNGs; a round is 32-40 of
+                # them, so both sizes come through the resizing route.
+                'shot': explorer_face_url(shot, 128, circle=False) if shot else None,
+                'face': explorer_face_url(shot, 400, circle=False) if shot else None,
+                'college': college, 'college_logo': clogo, 'college_slug': cslug,
+                'college_color': color, 'dark': landscape._dark(color),
+                # ESPN's light-ground NFL marks (navy Giants, Titans) vanish on
+                # this black; the 500-dark set carries a light outline. ESPN's edge
+                # now and then 404s one, so the templates fall back to the light mark.
+                'nfl': nfl, 'nfl_logo': (nfl_logo or '').replace('/nfl/500/', '/nfl/500-dark/') or None,
                 'round': rnd, 'pick': pick, 'overall': overall,
             }
             if not rounds or rounds[-1]['round'] != rnd:
                 rounds.append({'round': rnd, 'picks': []})
             rounds[-1]['picks'].append(row)
             if college:
-                by_school.setdefault(college, {'name': college, 'logo': clogo,
-                                               'slug': cslug, 'n': 0})['n'] += 1
+                sch = by_school.setdefault(college, {'name': college, 'logo': clogo, 'slug': cslug,
+                                                     'color': color, 'dark': row['dark'], 'n': 0, 'r1': 0})
+                sch['n'] += 1
+                sch['r1'] += rnd == 1
 
         # The college angle is the point of this page — an NFL draft board
         # anywhere else leads with the teams doing the picking.
@@ -10799,10 +10811,17 @@ def draft(year=None):
         if rd is not None:
             return render_template('_draft_round.html', rd=rd)
 
+    # Round 1 is the photo wall; the rest are a tabbed list with one round
+    # rendered and the others fetched when asked for.
+    wall = rounds[0]['picks'] if rounds and _rnum(rounds[0]) == 1 else []
+    later = rounds[1:] if wall else rounds
+    opened = request.args.get('open', type=int)
+    active = next((r for r in later if _rnum(r) == opened), later[0] if later else None)
+
     return render_template('draft.html', years=years, year=year, rounds=rounds,
+                           wall=wall, later=later, active=active,
                            schools=schools[:12], total=total,
-                           school_count=len(by_school),
-                           open_round=request.args.get('open', type=int))
+                           school_count=len(by_school))
 
 
 @app.route('/transfers')
@@ -11759,15 +11778,16 @@ def img_proxy():
     return Response(body, content_type=ctype, headers=headers)
 
 
-def explorer_face_url(src, width=128):
-    """Cacheable URL for a circular, downscaled headshot (see explorer_face)."""
+def explorer_face_url(src, width=128, circle=True):
+    """Cacheable URL for a downscaled headshot (see explorer_face): circular
+    for the explorer's markers, the plain cutout with circle=False."""
     from base64 import urlsafe_b64encode
     key = urlsafe_b64encode(src.encode()).decode().rstrip('=')
-    return f'/img/c/{width}/{key}.webp'
+    return f'/img/{"c" if circle else "r"}/{width}/{key}.webp'
 
 
-@app.route('/img/c/<int:width>/<key>.webp')
-def explorer_face(width, key):
+@app.route('/img/<any(c, r):shape>/<int:width>/<key>.webp')
+def explorer_face(shape, width, key):
     """The Stat Explorer's headshots, at a URL Cloudflare will cache.
 
     /img-proxy?url=... is extensionless, and Cloudflare only edge-caches paths
@@ -11788,7 +11808,7 @@ def explorer_face(width, key):
     netloc = urlparse(url).netloc.lower()
     if not (netloc.endswith('.r2.dev') or netloc.endswith('espncdn.com')):
         return 'Forbidden', 403
-    hit = _img_variant(url, min(max(width, 16), IMG_MAX_WIDTH), True, True)
+    hit = _img_variant(url, min(max(width, 16), IMG_MAX_WIDTH), True, shape == 'c')
     if hit is None:
         return '', 502
     body, ctype = hit

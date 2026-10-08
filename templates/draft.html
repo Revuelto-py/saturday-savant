@@ -4,35 +4,36 @@
 {% block og_description %}Every pick of the {{ year }} NFL Draft, organised by the college programs that produced them — round, position, and NFL team for each selection.{% endblock %}
 {% block content %}
 
-{# Every pick of a class, in order.
+{# Every pick of a class.
 
    The page leads with the PROGRAMS rather than the NFL teams. A draft board
    anywhere else is organised around who did the picking; on a college site the
-   useful question is which programs produced them, so that strip sits above the
-   board and each pick row carries its college's colour rather than its NFL
-   team's. #}
+   useful question is who produced them, so round 1 is a wall of faces, each on
+   its college's colour, and the programme count sits right under it. Later
+   rounds are a list, one round at a time. #}
 
-<div class="page-wrapper" style="padding-top:32px">
+<div class="page-wrapper dr" style="padding-top:32px">
 
-    <div class="tp-head">
-        <h1 class="tp-title">{{ year }} NFL Draft</h1>
-        {% if total %}
-        <div class="tp-meta">
-            <span><strong>{{ '{:,}'.format(total) }}</strong> picks</span>
-            <span class="tp-meta-dot"></span><span><strong>{{ rounds|length }}</strong> rounds</span>
-            <span class="tp-meta-dot"></span><span><strong>{{ school_count }}</strong> programs</span>
+    <header class="dr-head">
+        <div>
+            <h1 class="dr-title">{{ year }} NFL Draft</h1>
+            {% if total %}
+            <p class="dr-meta">
+                <span><b>{{ '{:,}'.format(total) }}</b> picks</span>
+                <span><b>{{ rounds|length }}</b> rounds</span>
+                <span><b>{{ school_count }}</b> programs</span>
+            </p>
+            {% endif %}
         </div>
+        {% if years %}
+        <nav class="dr-years" aria-label="Draft class">
+            {% for yr in years|sort %}
+            <a href="/draft/{{ yr }}" class="dr-year{{ ' is-on' if yr == year }}"
+               {% if yr == year %}aria-current="page"{% endif %}>{{ yr }}</a>
+            {% endfor %}
+        </nav>
         {% endif %}
-    </div>
-
-    {% if years %}
-    <nav class="tp-years" aria-label="Draft class">
-        {% for yr in years %}
-        <a href="/draft/{{ yr }}" class="tp-year{{ ' active' if yr == year }}"
-           {% if yr == year %}aria-current="page"{% endif %}>{{ yr }}</a>
-        {% endfor %}
-    </nav>
-    {% endif %}
+    </header>
 
     {% if not rounds %}
     <div class="pending-panel">
@@ -40,42 +41,72 @@
     </div>
     {% else %}
 
+    {# ── Round 1, face by face ─────────────────────────────────────────── #}
+    {% if wall %}
+    <section class="dr-wall" aria-label="First-round picks">
+        {% for p in wall %}
+        <a class="dr-wt{{ ' is-dark' if p.dark }}" href="/player/{{ p.id }}" style="--c: {{ p.college_color }}"
+           aria-label="Pick {{ p.overall }}, {{ p.name }}, {{ p.pos or 'position unknown' }}, {{ p.college or 'college unknown' }}{% if p.nfl %}, to the {{ p.nfl }}{% endif %}">
+            {% if p.face %}<img class="dr-wt-ph" src="{{ p.face }}" alt="" width="400" height="291"{% if loop.index > 8 %} loading="lazy"{% endif %}>
+            {% else %}<span class="dr-wt-i" aria-hidden="true">{{ p.name[:1] }}</span>{% endif %}
+            <span class="dr-wt-n" aria-hidden="true">{{ p.overall }}</span>
+            {% if p.nfl_logo %}<img class="dr-wt-nfl" src="{{ p.nfl_logo }}" alt="" width="22" height="22" onerror="this.onerror=null;this.src=this.src.replace('/500-dark/','/500/')">{% endif %}
+            <span class="dr-wt-b" aria-hidden="true">
+                <b class="dr-wt-full">{{ p.name }}</b><b class="dr-wt-last">{{ p.last }}</b>
+                <small>{% if p.pos %}<span class="dr-pos">{{ p.pos }}</span>{% endif %}{{ p.college or '' }}</small>
+            </span>
+        </a>
+        {% endfor %}
+    </section>
+    {% endif %}
+
     {# ── Programs that produced the class ───────────────────────────────── #}
-    <section class="dr-schools" aria-label="Programs with the most picks">
-        <div class="dr-schools-head">
-            <h2 class="section-label" style="margin:0">Most picks produced</h2>
-            <span class="dr-schools-note">{{ school_count }} programs represented</span>
+    {% if schools %}
+    <section class="dr-sec" aria-labelledby="dr-sc-h">
+        <div class="dr-sec-h">
+            <h2 class="section-label" id="dr-sc-h">Most picks produced</h2>
+            <span class="dr-note">{{ school_count }} programs had a player drafted</span>
         </div>
-        <div class="dr-school-rail">
-            {% set top = schools[0].n if schools else 1 %}
+        {% set top = schools[0].n %}
+        <div class="dr-sch">
             {% for s in schools %}
-            <a class="dr-school" href="/team/{{ s.slug }}"{% if not s.slug %} aria-disabled="true"{% endif %}>
-                {% if s.logo %}<img src="{{ s.logo }}" alt="" aria-hidden="true" loading="lazy" width="26" height="26">{% endif %}
-                <span class="dr-school-name">{{ s.name }}</span>
-                <span class="dr-school-n">{{ s.n }}</span>
-                {# The bar is the count against the class leader, so the rail
-                   reads as a ranking at a glance rather than a list of numbers. #}
-                <span class="dr-school-bar"><i style="width: {{ '%.0f' % (s.n / top * 100) }}%"></i></span>
-            </a>
+            {% set tag = 'a' if s.slug else 'div' %}
+            <{{ tag }} class="dr-sc"{% if s.slug %} href="/team/{{ s.slug }}"{% endif %}>
+                <span class="dr-sc-top">
+                    {% if s.logo %}<img src="{{ s.logo }}" alt="" width="34" height="34" loading="lazy">{% else %}<span></span>{% endif %}
+                    <span class="dr-sc-n">{{ s.n }}</span>
+                </span>
+                <span>
+                    <span class="dr-sc-name">{{ s.name }}</span>
+                    <span class="dr-sc-r1">{{ s.r1 }} in round 1</span>
+                </span>
+                {# The bar is the count against the class leader, in the
+                   programme's own colour, so the row reads as a ranking. #}
+                <span class="dr-sc-bar"><i{% if s.dark %} class="is-dark"{% endif %} style="--c: {{ s.color }}; width: {{ '%.0f' % (s.n / top * 100) }}%"></i></span>
+            </{{ tag }}>
             {% endfor %}
         </div>
     </section>
+    {% endif %}
 
-    {# ── The board ──────────────────────────────────────────────────────── #}
-    {% for rd in rounds %}
-    <section class="dr-round" id="round-{{ rd.round }}">
-        <div class="dr-round-head">
-            <h2 class="dr-round-label">Round {{ rd.round }}</h2>
-            <span class="dr-round-line" aria-hidden="true"></span>
-            <span class="dr-round-n">{{ rd.picks|length }} picks</span>
+    {# ── Later rounds: one at a time ────────────────────────────────────── #}
+    {% if later %}
+    <section class="dr-sec" id="rounds" aria-labelledby="dr-rl-h">
+        <div class="dr-sec-h">
+            <h2 class="section-label" id="dr-rl-h">Round{{ 's' if later|length > 1 }} {{ later[0].round }}{% if later|length > 1 %}–{{ later[-1].round }}{% endif %}</h2>
+            {% if later|length > 1 %}<span class="dr-note">Tap a round to load it</span>{% endif %}
         </div>
-
-        {% if loop.first or open_round == rd.round %}{% include "_draft_round.html" %}
-        {% else %}<div class="pane-lazy" data-round="{{ rd.round }}">
-            <a class="pane-lazy-link" href="?open={{ rd.round }}#round-{{ rd.round }}">Show round {{ rd.round }} &middot; {{ rd.picks|length }} picks</a>
-        </div>{% endif %}
+        {% if later|length > 1 %}
+        <nav class="dr-tabs" aria-label="Round">
+            {% for rd in later %}
+            <a class="dr-tab{{ ' is-on' if rd.round == active.round }}" href="?open={{ rd.round }}#rounds" data-round="{{ rd.round }}"
+               aria-label="Round {{ rd.round }}, {{ rd.picks|length }} picks"{% if rd.round == active.round %} aria-current="true"{% endif %}>Round {{ rd.round }}<small>{{ rd.picks|length }}</small></a>
+            {% endfor %}
+        </nav>
+        {% endif %}
+        <div class="dr-pane" id="dr-pane" aria-live="polite">{% with rd = active %}{% include "_draft_round.html" %}{% endwith %}</div>
     </section>
-    {% endfor %}
+    {% endif %}
     {% endif %}
 
 </div>
@@ -83,26 +114,57 @@
 
 {% block scripts %}
 <script>
-/* Rounds after the first arrive when the reader asks for one. Without JS the
-   placeholder is a link to the same round rendered server-side. */
+/* Later rounds: the open one is in the page; the others arrive when their tab
+   is picked, and each is kept once fetched. Without JS every tab is a link to
+   the same round rendered server-side (?open=<n>). A long round shows its first
+   eight picks behind a "Show all" button, which only exists with JS. */
 (function () {
-    document.querySelectorAll('.pane-lazy[data-round]').forEach(function (box) {
-        var link = box.querySelector('.pane-lazy-link');
-        if (!link) return;
+    var pane = document.getElementById('dr-pane');
+    if (!pane) return;
+    var tabs = document.querySelectorAll('.dr-tab[data-round]');
+    var held = {};
+
+    function clip() {
+        var list = pane.querySelector('.dr-list');
+        var more = list && list.querySelector('.dr-more');
+        if (!more) return;
+        list.classList.add('is-clipped');
+        more.hidden = false;
+        more.addEventListener('click', function () {
+            list.classList.remove('is-clipped');
+            more.remove();
+        });
+    }
+
+    function show(link, html) {
+        pane.innerHTML = html;
+        clip();
+        tabs.forEach(function (t) {
+            var on = t === link;
+            t.classList.toggle('is-on', on);
+            if (on) t.setAttribute('aria-current', 'true'); else t.removeAttribute('aria-current');
+        });
+        history.replaceState(null, '', link.getAttribute('href'));
+    }
+
+    var first = pane.querySelector('.dr-list');
+    if (first) held[first.dataset.round] = pane.innerHTML;
+    clip();
+
+    tabs.forEach(function (link) {
         link.addEventListener('click', function (e) {
             e.preventDefault();
-            var round = box.dataset.round;
-            box.innerHTML = '<span class="pane-spinner" aria-hidden="true"></span>' +
-                            '<span class="pane-lazy-note">Loading round ' + round + '\u2026</span>';
+            var round = link.dataset.round;
+            if (held[round]) { show(link, held[round]); return; }
+            pane.innerHTML = '<div class="pane-lazy"><span class="pane-spinner" aria-hidden="true"></span>' +
+                             '<span class="pane-lazy-note">Loading round ' + round + '…</span></div>';
             var params = new URLSearchParams(location.search);
+            params.delete('open');
             params.set('round', round);
             fetch(location.pathname + '?' + params.toString())
                 .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
-                .then(function (html) { box.outerHTML = html; })
-                .catch(function () {
-                    box.innerHTML = '<a class="pane-lazy-link" href="?open=' + round +
-                        '#round-' + round + '">Show round ' + round + '</a>';
-                });
+                .then(function (html) { held[round] = html; show(link, html); })
+                .catch(function () { location.href = link.href; });
         });
     });
 })();
