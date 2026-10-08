@@ -7407,8 +7407,11 @@ def team(team_ref):
                        (all_seasons[-1], team_name, team_name))
         _in_progress = bool(cursor.fetchone()[0])
         _tc = team_hex(team_info[4], '#1c9cf0') if team_info and team_info[4] else '#1c9cf0'
+        # Charts draw in the team's own primary (landscape haloes a dark one so
+        # it still reads); the second series takes the team's alternate colour.
+        _alt = team_hex(team_info[5], None) if team_info and team_info[5] else None
         trend_view = landscape.team_trends(trends, _coaches, _post, team_name, season, _in_progress,
-                                           _tc, landscape.visible_on_black(_tc))
+                                           _tc, _tc, landscape.second_series(_tc, _alt))
 
         # Returning production — only when the prior season's data exists
         # (e.g. not computable for 2016, the earliest loaded year).

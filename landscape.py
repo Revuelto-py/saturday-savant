@@ -523,6 +523,61 @@ def _post_label(notes):
     return None
 
 
+
+# ── Team colour on the Trends charts ────────────────────────────────────────
+# Charts draw in the team's PRIMARY colour, unlightened. A dark primary (navy,
+# crimson, black) would sink into the black card, so its lines get a thin light
+# halo underneath and its dots and bars a light edge; bright primaries draw
+# plain. The second series takes the team's alternate colour when it reads on
+# black and stands apart from the primary, else near-white.
+HALO = 'rgba(255,255,255,.38)'
+
+
+def _lum(hex_color):
+    h = (hex_color or '').lstrip('#')
+    try:
+        r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return None
+
+    def ch(v):
+        v /= 255
+        return v / 12.92 if v <= .03928 else ((v + .055) / 1.055) ** 2.4
+    return .2126 * ch(r) + .7152 * ch(g) + .0722 * ch(b)
+
+
+def _dark(col):
+    lum = _lum(col)
+    # .12 = about 3:1 against the card, the floor for a chart mark to read.
+    return lum is not None and lum < .12
+
+
+def _line(d, col, w):
+    """A stroked path in `col`. A colour too dark to read gets a soft glow in a
+    lifted tint of itself underneath, which keeps it on-brand where a white
+    halo read as an outlined tube."""
+    under = (f'<path d="{d}" fill="none" stroke="{visible_on_black(col)}" stroke-opacity=".38" '
+             f'stroke-width="{w + 4:g}" stroke-linecap="round"></path>' if _dark(col) else '')
+    return under + f'<path d="{d}" fill="none" stroke="{col}" stroke-width="{w}" stroke-linecap="round"></path>'
+
+
+def _edge(col, w=1.2):
+    """Extra SVG attributes giving a dark-coloured shape a light edge."""
+    return f' stroke="{HALO}" stroke-width="{w}"' if _dark(col) else ''
+
+
+def second_series(primary, alt):
+    """The colour for a chart's second line: the team's alternate colour when
+    it reads on black (luminance .15+) and differs from the primary (2:1),
+    else near-white, else (for a near-white primary) the site blue."""
+    lp, la = _lum(primary), _lum(alt)
+    ratio = lambda a, b: (max(a, b) + .05) / (min(a, b) + .05)
+    if la is not None and lp is not None and la >= .15 and ratio(la, lp) >= 2:
+        return alt
+    if lp is not None and ratio(_lum('#e7e9ea'), lp) < 2:
+        return '#7cc9fb'
+    return '#e7e9ea'
+
 def _trend_hero(T, eras, conf_moves, marks, tc, light):
     yrs, net, rank = T['seasons'], T['savant']['net'], T['savant']['rank']
     rec_w, rec_l = T['record']['wins'], T['record']['losses']
@@ -566,13 +621,16 @@ def _trend_hero(T, eras, conf_moves, marks, tc, light):
         d = _smooth(pts) if len(pts) > 1 else ''
         if d:
             o.append(f'<path d="{d} L{pts[-1][0]:.1f},{Y(lo):.1f} L{pts[0][0]:.1f},{Y(lo):.1f} Z" fill="url(#trd-ag)"></path>'
-                     f'<path d="{d}" fill="none" stroke="{light}" stroke-width="4" stroke-linecap="round"></path>')
+                     + _line(d, light, 4))
     for i, v in enumerate(net):
         x = X(i)
         if v is not None:
             y = Y(v)
             last = i == n - 1
-            o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{8 if last else 6}" fill="{"#fff" if last else "#0b0c0e"}" stroke="{light}" stroke-width="3"></circle>')
+            r = 8 if last else 6
+            if _dark(light):
+                o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r + 2.2:.1f}" fill="none" stroke="{HALO}" stroke-width="1.2"></circle>')
+            o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r}" fill="{"#fff" if last else "#0b0c0e"}" stroke="{light}" stroke-width="3"></circle>')
             if rank[i]:
                 o.append(f'<text x="{x:.1f}" y="{y - 18:.1f}" class="trd-rk" text-anchor="middle">{_ordinal(rank[i])}</text>')
         o.append(f'<text x="{x:.1f}" y="{H - B + 30}" class="trd-yr" text-anchor="middle">{yrs[i]}</text>')
@@ -609,7 +667,7 @@ def _trend_spark(T, vals, invert=False, lo=None, hi=None, second=None, bars=None
                 continue
             x, base = X(i) - bw / 2, H - B
             hw, hl = w / mx * (H - Tp - B), (l or 0) / mx * (H - Tp - B)
-            o.append(f'<rect x="{x:.1f}" y="{base - hw:.1f}" width="{bw:.1f}" height="{hw:.1f}" rx="3" fill="{light}"></rect>'
+            o.append(f'<rect x="{x:.1f}" y="{base - hw:.1f}" width="{bw:.1f}" height="{hw:.1f}" rx="3" fill="{light}"{_edge(light)}></rect>'
                      f'<rect x="{x:.1f}" y="{base - hw - hl - 2:.1f}" width="{bw:.1f}" height="{hl:.1f}" rx="3" fill="rgba(255,255,255,.18)"></rect>')
     else:
         allv = [v for v in (vals or []) + (second or []) if v is not None]
@@ -625,12 +683,12 @@ def _trend_spark(T, vals, invert=False, lo=None, hi=None, second=None, bars=None
             for run in _runs(series):
                 pts = [(X(i), Y(v)) for i, v in run]
                 if len(pts) > 1:
-                    o.append(f'<path d="{_smooth(pts)}" fill="none" stroke="{col}" stroke-width="2.6" stroke-linecap="round"></path>')
+                    o.append(_line(_smooth(pts), col, 2.6))
                 else:
-                    o.append(f'<circle cx="{pts[0][0]:.1f}" cy="{pts[0][1]:.1f}" r="3" fill="{col}"></circle>')
+                    o.append(f'<circle cx="{pts[0][0]:.1f}" cy="{pts[0][1]:.1f}" r="3" fill="{col}"{_edge(col)}></circle>')
             last = [(i, v) for i, v in enumerate(series) if v is not None]
             if last:
-                o.append(f'<circle cx="{X(last[-1][0]):.1f}" cy="{Y(last[-1][1]):.1f}" r="4.5" fill="{col}"></circle>')
+                o.append(f'<circle cx="{X(last[-1][0]):.1f}" cy="{Y(last[-1][1]):.1f}" r="4.5" fill="{col}"{_edge(col)}></circle>')
         valid = [(i, v) for i, v in enumerate(vals or []) if v is not None]
         if valid:
             bi, bv = (min if invert else max)(valid, key=lambda t: t[1])
@@ -659,11 +717,13 @@ def _trend_weekly(wk, light):
     for run in _runs(vals):
         pts = [(X(i), Y(v)) for i, v in run]
         if len(pts) > 1:
-            o.append(f'<path d="{_smooth(pts)}" fill="none" stroke="{light}" stroke-width="3.5" stroke-linecap="round"></path>')
+            o.append(_line(_smooth(pts), light, 3.5))
     for i, v in enumerate(vals):
         if v is None:
             continue
         x, y = X(i), Y(v)
+        if _dark(light):
+            o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8.2" fill="none" stroke="{HALO}" stroke-width="1.2"></circle>')
         o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6" fill="#0b0c0e" stroke="{light}" stroke-width="3"></circle>')
         if ranks[i]:
             o.append(f'<text x="{x:.1f}" y="{y - 14:.1f}" class="trd-rk-s" text-anchor="middle">{_ordinal(ranks[i])}</text>')
@@ -673,7 +733,7 @@ def _trend_weekly(wk, light):
     return ''.join(o)
 
 
-def team_trends(T, coaches, post_games, team, season, in_progress, tc, light):
+def team_trends(T, coaches, post_games, team, season, in_progress, tc, light, second='#7cc9fb'):
     """Everything the Trends tab renders, or None when there is too little
     history to chart (fewer than two rated seasons).
 
@@ -735,7 +795,7 @@ def team_trends(T, coaches, post_games, team, season, in_progress, tc, light):
         sub = (f'Defense allows {abs(change):.1f} {"fewer" if change > 0 else "more"} points than in {yrs[fd[0]]}.'
                if fd[0] != ld[0] and abs(change) >= .1 else 'Defense: points allowed against an average offense.')
         cards.append(dict(k='Offense and defense', big=f'{off[ld[0]]:+.1f}', unit=f'offense, {dfn[ld[0]]:.1f} defense', sub=sub,
-                          svg=_trend_spark(T, off, second=dfn, light=light), key=[('Offense rating', light), ('Defense (lower is better)', '#7cc9fb')]))
+                          svg=_trend_spark(T, off, second=dfn, light=light, blue=second), key=[('Offense rating', light), ('Defense (lower is better)', second)]))
     a, b = first_last(sp)
     if b:
         top10 = sum(1 for x in sp[-5:] if x and x <= 10)
@@ -755,8 +815,8 @@ def team_trends(T, coaches, post_games, team, season, in_progress, tc, light):
     a, b = first_last(eo)
     if b:
         cards.append(dict(k='EPA per play', big=f'{eo[b[0]]:+.2f}', unit=f'offense, {ed[b[0]]:+.2f} defense' if ed[b[0]] is not None else 'offense',
-                          sub='Points added per snap, garbage time excluded.', svg=_trend_spark(T, eo, second=ed, light=light),
-                          key=[('Offense', light), ('Defense allowed', '#7cc9fb')]))
+                          sub='Points added per snap, garbage time excluded.', svg=_trend_spark(T, eo, second=ed, light=light, blue=second),
+                          key=[('Offense', light), ('Defense allowed', second)]))
 
     weekly = None
     wk = T.get('weekly')
