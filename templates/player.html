@@ -203,9 +203,12 @@
     {% if transfer_path | length > 1 %}
     <div class="pp-fact is-transfer">
         <span class="pp-fact-k">Transfer</span>
-        <span class="pp-fact-v">
+        {# One move reads on a line; two or more stack, one school per line, so
+           a hop never wraps onto a line that starts with a stray arrow. #}
+        {% set stack = transfer_path | length > 2 %}
+        <span class="pp-fact-v{{ ' is-stack' if stack }}">
         {% set lg = transfer_team_logos.get(transfer_path[0].school) %}
-        <span class="pp-hop">{% if lg %}<img src="{{ lg }}" alt="" aria-hidden="true">{% endif %}<b>{{ transfer_path[0].school }}</b></span>
+        <span class="pp-hop">{% if stack %}<span class="pp-arrow is-ghost" aria-hidden="true">→</span>{% endif %}{% if lg %}<img src="{{ lg }}" alt="" aria-hidden="true">{% endif %}<b>{{ transfer_path[0].school }}</b></span>
         {% for t in transfer_path[1:] %}
         {% set lg = transfer_team_logos.get(t.school) %}<span class="pp-hop"><span class="pp-arrow">→</span>{% if lg %}<img src="{{ lg }}" alt="" aria-hidden="true">{% endif %}<b{% if t.portal %} class="is-portal"{% endif %}>{{ t.school }}</b>{% if t.year %}<span class="pp-yr">’{{ (t.year | string)[2:] }}</span>{% endif %}{% if t.stars %}<span class="pp-stars" aria-label="{{ t.stars }}-star transfer">{{ '★' * t.stars }}</span>{% endif %}</span>
         {% endfor %}
