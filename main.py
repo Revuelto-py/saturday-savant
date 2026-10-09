@@ -7728,8 +7728,9 @@ def rankings():
 
     conn = get_db()
     teams, others, dropped = [], [], []
-    history, prev_poll, other_rows, river, streak = {}, {}, [], None, 0
+    prev_poll, other_rows, river, streak, sched = {}, [], None, 0, []
     sel_week = sel_type = None
+    is_post = False
     try:
         cursor = conn.cursor()
         # Every poll this season has, chronological (regular weeks, then final).
@@ -7772,16 +7773,14 @@ def rankings():
             ''', {'season': season, 'wk': sel_week, 'stype': sel_type, 'post': is_post})
             rows = cursor.fetchall()
 
-            # Rank in every poll up to this one, for the row sparklines and the
-            # season river, and the poll before this one for "dropped out".
+            # Rank in every poll up to this one, for the season river, and the
+            # poll before this one for "dropped out".
             upto = polls[:polls.index(chosen) + 1]
-            recent = upto
             cursor.execute('''SELECT team, week, season_type, rank FROM ap_rankings
                               WHERE season = %s''', (season,))
             by_poll = {}
             for team, wk, st, rk in cursor.fetchall():
                 by_poll.setdefault((wk, st), {})[team] = rk
-            history = {r[1]: [by_poll.get(p, {}).get(r[1]) for p in recent] for r in rows}
             prev_poll = by_poll.get(upto[-2], {}) if len(upto) > 1 else {}
             # How many polls in a row this No. 1 has held the spot.
             if rows:
@@ -7812,6 +7811,15 @@ def rankings():
             except Exception:
                 conn.rollback()
 
+            # Every ranked team's schedule, for its last result before this
+            # poll and its game in the week the poll covers.
+            names = [r[1] for r in rows]
+            cursor.execute('''SELECT home_team, away_team, home_points, away_points, completed, week,
+                                     season_type, start_date, COALESCE(start_time_tbd, 0), neutral_site
+                              FROM games WHERE season = %s AND (home_team = ANY(%s) OR away_team = ANY(%s))
+                              ORDER BY start_date''', (season, names, names))
+            sched = cursor.fetchall()
+
             # Others receiving votes (ESPN only; empty until the fetch has run).
             try:
                 cursor.execute('''
@@ -7827,27 +7835,57 @@ def rankings():
     finally:
         release_db(conn)
 
-    def spark(ranks):
-        """SVG polyline points on a 100x28 box: #1 at the top, unranked (26)
-        at the bottom. None when there is only one poll to draw."""
-        if len(ranks) < 2:
-            return None
-        step = 100 / (len(ranks) - 1)
-        return ' '.join(f'{i * step:.1f},{2 + (min(r or 26, 26) - 1) / 25 * 24:.1f}'
-                        for i, r in enumerate(ranks))
+    ranks = {r[1]: r[0] for r in rows}
+    now_et = datetime.datetime.now(ZoneInfo('America/New_York'))
+
+    def counted(g):
+        """Whether the voters had seen this game: the same rule as the record."""
+        return is_post or (g[6] == 'SeasonType.REGULAR' and sel_week > 1 and g[5] < sel_week)
+
+    def game(g, team):
+        home = g[0] == team
+        opp = g[1] if home else g[0]
+        out = {'ha': 'vs' if home or g[9] else 'at', 'opp': opp, 'ork': ranks.get(opp), 'done': False}
+        us, them = (g[2], g[3]) if home else (g[3], g[2])
+        if g[4] and us is not None and them is not None:
+            out.update(done=True, win=us > them, score=f'{us}–{them}')
+        else:
+            et = kickoff_et(g[7])
+            # A kickoff inside the coming week reads as a day and a time; one
+            # further out (after a bye, or a bowl) as a date.
+            if not et:
+                out['when'] = 'Date TBA'
+            elif et - now_et > datetime.timedelta(days=6):
+                out['when'] = et.strftime('%b %-d')
+            else:
+                out['when'] = et.strftime('%a, time TBA' if g[8] else '%a %-I:%M %p')
+        return out
+
+    def schedule(team):
+        """(last result the voters saw, this week's game, a bye before it)."""
+        games = [g for g in sched if team in (g[0], g[1])]
+        last = next((g for g in reversed(games) if g[4] and counted(g)), None)
+        nxt = None if is_post else next(
+            (g for g in games if not counted(g)
+             and (g[6] != 'SeasonType.REGULAR' or g[5] >= (sel_week if sel_week > 1 else 0))), None)
+        bye = bool(nxt and nxt[6] == 'SeasonType.REGULAR'
+                   and nxt[5] > (sel_week if sel_week > 1 else 1))
+        return (game(last, team) if last else None, game(nxt, team) if nxt else None, bye)
 
     for r in rows:
-        hist = history.get(r[1], [])
+        tc = team_hex(r[7], '#1c9cf0')
+        last, nxt, bye = schedule(r[1])
         teams.append({
             'rank': r[0], 'team': r[1], 'points': r[2], 'fpv': r[3],
             'logo': r[13] or r[5], 'conf': r[6],
             'c1': r[7] or '#1e3a5f', 'c2': r[14] or '#0f1e3a',
+            # Dark primaries vanish on the black track; they get a glow of
+            # their own colour rather than a lighter tint.
+            'tc': tc, 'dark': _srgb_lum(_to_rgb(tc)) < 0.06,
             'sp_rank': r[9], 'wins': r[10], 'losses': r[11],
             'move': (r[12] - r[0]) if r[12] is not None else None,
             'svr': svr.get(r[1]),
-            'spark': spark(hist),
-            'spark_label': 'Rank in the last {} polls: {}'.format(
-                len(hist), ', '.join(str(x) if x else 'unranked' for x in hist)),
+            'last': last, 'next': nxt, 'bye': bye,
         })
 
     # Teams in the previous poll that are not in this one: noted on their
@@ -7866,7 +7904,13 @@ def rankings():
     idx = next((i for i, p in enumerate(poll_options) if p['selected']), None)
     prev_opt = poll_options[idx - 1] if idx else None
     next_opt = poll_options[idx + 1] if idx is not None and idx + 1 < len(poll_options) else None
+    # Every voter's ballot gives 25 points to its No. 1, and every ballot has
+    # one, so first-place votes count the voters and voters x 25 is the most
+    # points a team can get.
+    voters = sum(t['fpv'] or 0 for t in teams)
+    max_pts = voters * 25 or max((t['points'] or 0 for t in teams), default=0)
     return render_template('rankings.html', teams=teams, river=river, streak=streak,
+                           voters=voters, max_pts=max_pts,
                            n_polls=len(poll_options),
                            others=others, dropped=dropped,
                            poll_options=poll_options, prev_opt=prev_opt, next_opt=next_opt,

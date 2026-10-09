@@ -4,9 +4,16 @@
 
 {% macro ordinal(n) -%}{{ n }}{{ 'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }}{%- endmacro %}
 
+{# One game in a cell: a result (badge, score / opponent) or an upcoming
+   game (opponent / kickoff). A ranked opponent carries its rank in this poll. #}
+{% macro opp(g) -%}{{ g.ha }}&nbsp;{% if g.ork %}<span class="rkp-ork"><span class="sr-only">No. </span>{{ g.ork }}</span>{% endif %}{{ g.opp }}{%- endmacro %}
+{% macro game_cell(g) -%}
+{% if g.done %}<span class="rkp-l1"><span class="rkp-res {{ 'is-w' if g.win else 'is-l' }}"><span aria-hidden="true">{{ 'W' if g.win else 'L' }}</span><span class="sr-only">{{ 'Won' if g.win else 'Lost' }}</span></span>{{ g.score }}</span><span class="rkp-l2">{{ opp(g) }}</span>
+{%- else %}<span class="rkp-l1">{{ opp(g) }}</span><span class="rkp-l2">{{ g.when }}</span>{% endif %}
+{%- endmacro %}
+
 {% block content %}
 {% set top = teams[0] if teams else none %}
-{% set maxpts = teams|map(attribute='points')|max if teams else 1 %}
 <div class="page-wrapper rkp-page">
 
 <header class="rkp-head">
@@ -47,39 +54,47 @@
 {% else %}
 
 <section aria-label="The poll">
-    <div class="rkp-card rkp-poll">
-        <div class="rkp-phead" aria-hidden="true"><span>Rank</span><span></span><span>Team</span><span>Poll points</span><span>Season</span><span>Savant, gap</span></div>
+    <div class="rkp-card rkp-ladder{{ ' no-next' if sel_is_final }}">
+        <div class="rkp-lhead" aria-hidden="true"><span>Rank</span><span></span><span>Team</span><span class="rkp-c-last">Last game</span>{% if not sel_is_final %}<span class="rkp-c-next">This week</span>{% endif %}<span>Poll points</span><span>Savant rank</span></div>
         <ol class="rkp-list" role="list">
             {% for t in teams %}
-            {% set gap = (t.rank - t.svr) if t.svr else none %}
+            {% set gap = (t.svr - t.rank) if t.svr else none %}
+            {% set gcls = (' is-over' if gap >= 5 else (' is-under' if gap <= -5 else '')) if gap is not none else '' %}
             <li>
-            <a class="rkp-row{{ ' is-one' if t.rank == 1 }}" href="{{ team_url(t.team, season) }}" style="--tc: {{ t.c1|team_hex('#1c9cf0') }}">
+            <a class="rkp-lrow" href="{{ team_url(t.team, season) }}">
                 <span class="rkp-rk">{{ t.rank }}</span>
                 <span class="rkp-mv">
-                    {% if t.move is none %}<span class="rkp-m is-new">New</span>
-                    {% elif t.move > 0 %}<span class="rkp-m is-up" aria-label="Up {{ t.move }}"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9 8H1z" fill="currentColor"/></svg>{{ t.move }}</span>
-                    {% elif t.move < 0 %}<span class="rkp-m is-down" aria-label="Down {{ t.move|abs }}"><svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 9 1 2h8z" fill="currentColor"/></svg>{{ t.move|abs }}</span>
-                    {% else %}<span class="rkp-m is-same" aria-label="No change">—</span>{% endif %}
+                    {% if t.move is none %}{% if prev_opt %}<span class="rkp-m is-new">New</span>{% endif %}
+                    {% elif t.move > 0 %}<span class="rkp-m is-up"><svg width="11" height="11" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1 9 8H1z" fill="currentColor"/></svg><span class="sr-only">Up </span>{{ t.move }}</span>
+                    {% elif t.move < 0 %}<span class="rkp-m is-down"><svg width="11" height="11" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 9 1 2h8z" fill="currentColor"/></svg><span class="sr-only">Down </span>{{ t.move|abs }}</span>
+                    {% else %}<span class="rkp-m is-same"><span aria-hidden="true">–</span><span class="sr-only">No change</span></span>{% endif %}
                 </span>
                 <span class="rkp-team">
-                    <span class="rkp-plate">{% if t.logo %}<img src="{{ t.logo }}" alt="" width="30" height="30" loading="lazy">{% endif %}</span>
-                    <span class="rkp-name"><b>{{ t.team }}</b><span>{% if t.wins is not none %}{{ t.wins }}-{{ t.losses }}{% if t.conf %}, {% endif %}{% endif %}{{ {'FBS Independents': 'Independent', 'American Athletic': 'American'}.get(t.conf, t.conf or '') }}</span></span>
+                    {% if t.logo %}<img src="{{ t.logo }}" alt="" width="36" height="36" loading="lazy">{% else %}<span class="rkp-nologo"></span>{% endif %}
+                    <span class="rkp-name"><b>{{ t.team }}</b><span>{% if t.wins is not none %}<span class="rkp-rec">{{ t.wins }}-{{ t.losses }}</span>{% if t.conf %}<span class="rkp-conf">, </span>{% endif %}{% endif %}<span class="rkp-conf">{{ {'FBS Independents': 'Independent', 'American Athletic': 'American'}.get(t.conf, t.conf or '') }}</span></span></span>
                 </span>
+                <span class="rkp-c-last">{% if t.last %}{{ game_cell(t.last) }}{% else %}<span class="rkp-l2">No games yet</span>{% endif %}</span>
+                {% if not sel_is_final %}
+                <span class="rkp-c-next">
+                    {% if t.bye %}<span class="rkp-l1 is-dim">Bye week</span><span class="rkp-l2"><span class="rkp-wide">Next: </span><span class="rkp-narrow">then </span>{{ t.next.ha }} {{ t.next.opp }}{% if not t.next.done %}, {{ t.next.when }}{% endif %}</span>
+                    {% elif t.next %}{{ game_cell(t.next) }}
+                    {% else %}<span class="rkp-l1 is-dim">–</span>{% endif %}
+                </span>
+                {% endif %}
                 <span class="rkp-pts">
-                    <span class="rkp-bar"><span style="width: {{ '%.1f'|format(t.points / maxpts * 100 if maxpts else 0) }}%"></span></span>
-                    <span class="rkp-ptn"><b>{{ '{:,}'.format(t.points or 0) }}</b>{% if t.fpv %}<span class="rkp-fpv">{{ t.fpv }} first</span>{% endif %}</span>
+                    <span class="rkp-ptn"><b>{{ '{:,}'.format(t.points or 0) }}</b>{% if t.fpv %}<span class="rkp-fpv">{{ t.fpv }} first-place vote{{ 's' if t.fpv != 1 }}</span>{% endif %}</span>
+                    <span class="rkp-bar"><i style="width: {{ '%.1f'|format((t.points or 0) / max_pts * 100 if max_pts else 0) }}%; background: {{ t.tc }}{% if t.dark %}; box-shadow: 0 0 8px 1px {{ t.tc }}{% endif %}"></i></span>
                 </span>
-                <span class="rkp-season">{% if t.spark %}<svg class="rkp-spark" viewBox="0 0 100 28" preserveAspectRatio="none" role="img" aria-label="{{ t.spark_label }}"><polyline points="{{ t.spark }}" vector-effect="non-scaling-stroke"/></svg>{% endif %}</span>
-                <span class="rkp-sv">
-                    <b>{{ t.svr or '—' }}</b>
-                    {% if gap is not none %}<span class="rkp-gap{{ ' is-over' if gap < -8 else (' is-under' if gap > 8) }}" aria-label="Gap {{ gap }}">{{ '%+d'|format(gap) if gap else '0' }}</span>{% endif %}
+                <span class="rkp-sv{{ gcls }}">
+                    <b>{{ ordinal(t.svr) if t.svr else '–' }}</b>
+                    {% if gap is not none %}<span class="rkp-gap">{{ ('Poll ' ~ gap ~ ' higher') if gap >= 5 else (('Poll ' ~ (-gap) ~ ' lower') if gap <= -5 else 'In line') }}</span>{% endif %}
                 </span>
             </a>
             </li>
             {% endfor %}
         </ol>
     </div>
-    <p class="rkp-foot">Savant is each team&#39;s Savant Rating rank as of this poll: ratings through the games the voters had seen. The gap is poll rank minus Savant rank. Orange: the voters are much higher on a team than the numbers. Blue: much lower.</p>
+    <p class="rkp-foot">{% if not sel_is_final %}Kickoffs in Eastern time. {% endif %}The bar is each team&#39;s share of the most points possible{% if voters %} ({{ '{:,}'.format(max_pts) }}: all {{ voters }} voters putting them first){% endif %}. Savant rank is the Savant Rating through the games the voters had seen; orange means the poll has a team 5 or more spots higher than the numbers do, blue 5 or more lower.</p>
 </section>
 
 {# ── This week's movers ─────────────────────────────────────────────────── #}
