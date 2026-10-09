@@ -10501,7 +10501,7 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
    Then the week's movers, the season river (landscape.rank_river), and the
    others receiving votes.
    ═══════════════════════════════════════════════════════════════════════════ */
-.rkp-page { max-width: 1280px; position: relative; isolation: isolate; padding-bottom: 96px; }
+.rkp-page { position: relative; isolation: isolate; padding-bottom: 96px; }
 .rkp-page::before {
     content: ''; position: absolute; inset: 0 0 auto; height: 800px; z-index: -1; pointer-events: none;
     background: radial-gradient(1000px 640px at 75% -8%, rgba(28,156,240,.12), transparent 60%);
@@ -10653,6 +10653,33 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 @media (max-width: 640px) {
     .rkp-head { padding-top: 28px; }
     .rkp-river { padding: 12px 6px 6px; }
+}
+@media (min-width: 1800px) {
+    /* The page takes the site's wide wrapper (up to 2040px); the rows grow
+       with it instead of spreading 16px type across a 2000px table. */
+    .rkp-lhead, .rkp-lrow { grid-template-columns: 56px 76px minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 160px; column-gap: 28px; padding: 0 32px; }
+    .rkp-ladder.no-next .rkp-lhead, .rkp-ladder.no-next .rkp-lrow { grid-template-columns: 56px 76px minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) 160px; }
+    .rkp-lhead { min-height: 54px; font-size: 14px; }
+    .rkp-lrow { min-height: 82px; }
+    .rkp-rk { font-size: 40px; }
+    .rkp-m { min-width: 54px; height: 34px; gap: 6px; padding: 0 11px; border-radius: 9px; font-size: 18px; }
+    .rkp-m svg { width: 13px; height: 13px; }
+    .rkp-m.is-same { font-size: 20px; }
+    .rkp-m.is-new { font-size: 14.5px; }
+    .rkp-team { gap: 16px; }
+    .rkp-team img, .rkp-nologo { width: 46px; height: 46px; }
+    .rkp-name b { font-size: 20px; }
+    .rkp-name > span { font-size: 15px; }
+    .rkp-l1 { font-size: 17px; line-height: 24px; }
+    .rkp-l2 { margin-top: 4px; font-size: 15px; }
+    .rkp-res { width: 24px; height: 24px; margin-right: 9px; border-radius: 6px; font-size: 13.5px; }
+    .rkp-ork { font-size: 13.5px; }
+    .rkp-ptn { gap: 2px 12px; font-size: 19px; }
+    .rkp-fpv { font-size: 16.5px; }
+    .rkp-bar { height: 5px; margin-top: 11px; }
+    .rkp-sv b { font-size: 19px; }
+    .rkp-gap { margin-top: 4px; font-size: 15px; }
+    .rkp-foot { font-size: 14.5px; }
 }
 
 /* ── Season simulator (/simulator) ─────────────────────────────────────────── */
