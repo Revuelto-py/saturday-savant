@@ -31,20 +31,22 @@
         </p>
         {% endif %}
     </div>
+    {# Season first, then every poll in one row that scrolls sideways when the
+       season has more polls than fit (a full season has 17). #}
     <div class="rkp-ctl">
-        {% if poll_options %}
-        <nav class="rkp-weeks" aria-label="Poll">
-            {% for p in poll_options %}
-            <a class="rkp-chip" href="?season={{ season }}&w={{ p.value }}" {{ 'aria-current=page' if p.selected }}>{{ p.label }}</a>
-            {% endfor %}
-        </nav>
-        {% endif %}
         {% if available_seasons and available_seasons|length > 1 %}
         <label class="rkp-sel"><span class="sr-only">Season</span>
             <select onchange="location='?season='+this.value">
                 {% for s in available_seasons %}<option value="{{ s }}" {{ 'selected' if s == season }}>{{ s }}</option>{% endfor %}
             </select>
         </label>
+        {% endif %}
+        {% if poll_options %}
+        <nav class="rkp-weeks" aria-label="Poll">
+            {% for p in poll_options %}
+            <a class="rkp-chip" href="?season={{ season }}&w={{ p.value }}" {{ 'aria-current=page' if p.selected }}>{{ p.label }}</a>
+            {% endfor %}
+        </nav>
         {% endif %}
     </div>
 </header>
@@ -149,4 +151,24 @@
 
 {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// The week strip scrolls: open on the selected poll, and fade whichever edge
+// has more weeks past it.
+(function () {
+    var strip = document.querySelector('.rkp-weeks');
+    if (!strip) return;
+    var on = strip.querySelector('[aria-current]');
+    if (on) strip.scrollLeft = on.offsetLeft + on.offsetWidth - strip.clientWidth + 32;
+    function edges() {
+        strip.classList.toggle('fade-l', strip.scrollLeft > 2);
+        strip.classList.toggle('fade-r', strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 2);
+    }
+    edges();
+    strip.addEventListener('scroll', edges, { passive: true });
+    window.addEventListener('resize', edges);
+})();
+</script>
 {% endblock %}
