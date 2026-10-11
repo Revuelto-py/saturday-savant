@@ -4028,11 +4028,18 @@ def top_games(games, forecasts, limit=TOP_GAMES_N, season=None):
     scored.sort(key=lambda x: (-x[0], x[1].get('day_key') or '', x[1]['id']))
     return [g for _, g in scored[:limit]]
 
-def _home_briefing(cursor, season, games, forecasts, top):
+def _home_briefing(cursor, season, games, forecasts, top, pregame):
     """The home page's "week in one screen" panels. Every panel is optional:
     each is None/empty until its data exists (no ratings before week 1, no
-    simulation before the first forecasts, no upcoming games once a week ends),
-    and the template drops what is missing."""
+    simulation before the first forecasts), and the template drops what is
+    missing.
+
+    The page stays on a finished week until the next slate is nearer (Sunday
+    to about Tuesday), so once nothing with a forecast is left to play the game
+    of the week and the upsets look back at the finished games, on the forecast
+    each had before kickoff (`pregame`), instead of vanishing."""
+    done = not any(not g['completed'] and g['id'] in forecasts for g in games)
+    probs = pregame if done else forecasts
     cursor.execute('''SELECT s.team, s.net_rating, s.net_ranking, s.off_ranking, s.def_ranking,
                              COALESCE(t.logo_dark, t.logo)
                         FROM savant_ratings s JOIN teams t ON t.name = s.team
@@ -4045,23 +4052,26 @@ def _home_briefing(cursor, season, games, forecasts, top):
                  sub=f'Offense {landscape.ordinal(r[3])}, defense {landscape.ordinal(r[4])}' if r[3] and r[4] else '')
             for r in sv_rows[:8]]
 
-    # Game of the week: the top-ranked game still to be played, with a forecast.
-    gotw = next((g for g in top if not g['completed'] and g['id'] in forecasts), None)
+    # Game of the week: the top-ranked game still to be played, with a forecast
+    # (or, once the slate is done, the top-ranked finished one).
+    gotw = next((g for g in top if bool(g['completed']) == done and g['id'] in probs), None)
     if gotw:
         # The same pair the game card's edge draws, so the two never disagree.
         a, h = forecast_pair(team_hex(gotw.get('away_color'), '#5a2b2b'),
                              team_hex(gotw.get('home_color'), '#2b3a55'))
-        hp = forecasts[gotw['id']]
+        hp = probs[gotw['id']]
         gotw = dict(gotw, a_col=a, h_col=h, home_p=hp, away_p=1 - hp)
 
     # Upset watch: the best chance to beat a team ranked above you, by the AP
     # poll (ranked beats unranked) or, against a Savant top-25 team, by Savant
     # Rating. A game counts once, under whichever ranking gives the underdog
     # the bigger chance, so a favourite by both rankings is never the "upset".
+    # Once the slate is done it lists the games the underdog actually won,
+    # biggest upset (smallest pre-game chance) first.
     upsets = []
     for g in games:
-        p = forecasts.get(g['id'])
-        if p is None or g['completed']:
+        p = probs.get(g['id'])
+        if p is None or bool(g['completed']) != done:
             continue
         favs = []
         rh, ra = g.get('home_rank'), g.get('away_rank')
@@ -4080,10 +4090,15 @@ def _home_briefing(cursor, season, games, forecasts, top):
                             dog_logo=g.get(dog + '_logo'), id=g['id'],
                             sv=(f'Savant {landscape.ordinal(sv[g[dog]])} vs {landscape.ordinal(sv[g[fav]])}, '
                                 if g[dog] in sv and g[fav] in sv else ''),
-                            when=f"{(g.get('kickoff_date') or '').split(', ')[0]} {g.get('kickoff_time') or ''}".strip())
+                            when=f"{(g.get('kickoff_date') or '').split(', ')[0]} {g.get('kickoff_time') or ''}".strip(),
+                            pts=(g.get(dog + '_pts') or 0, g.get(fav + '_pts') or 0))
+        if best and done:
+            if best['pts'][0] <= best['pts'][1]:
+                continue
+            best['when'] = 'won {}–{}'.format(*best['pts'])
         if best:
             upsets.append(best)
-    upsets.sort(key=lambda u: -u['chance'])
+    upsets.sort(key=lambda u: u['chance'] if done else -u['chance'])
 
     # Polls vs. the numbers: AP teams the rating rates lowest relative to their
     # poll spot, and Savant top-25 teams the poll has well below their rating.
@@ -4109,7 +4124,7 @@ def _home_briefing(cursor, season, games, forecasts, top):
         for k in ('up', 'down'):
             for m in movers[k]:
                 m['move'] = f"{landscape.ordinal(m['prev_rank'])} to {landscape.ordinal(m['rank'])}"
-    return dict(top8=top8, n_rated=len(sv_rows), gotw=gotw, upsets=upsets[:5],
+    return dict(top8=top8, n_rated=len(sv_rows), gotw=gotw, upsets=upsets[:5], slate_done=done,
                 polls_over=over, polls_under=under if over else [], odds=odds,
                 movers=movers, record=forecast_record(season))
 
@@ -4192,15 +4207,20 @@ def home(week=None, season_type='regular'):
         # makes. The card reserves a slot for the forecast in every state, so
         # without this the home grid would render that slot empty on every card
         # and the two pages would disagree about what a game card shows.
-        forecasts = {}
-        upcoming_ids = [g['id'] for g in games if not g['completed']]
-        if upcoming_ids:
+        # `pregame` keeps the finished games' forecasts too, graded or not (the
+        # Sunday cron grades them hours after the last game ends), for the
+        # briefing's look back at a finished slate.
+        pregame = {}
+        if games:
             try:
                 cursor.execute('SELECT game_id, home_prob FROM game_predictions '
-                               'WHERE game_id = ANY(%s) AND scored = 0', (upcoming_ids,))
-                forecasts = {gid: p for gid, p in cursor.fetchall() if p is not None}
+                               'WHERE game_id = ANY(%s) AND home_prob IS NOT NULL',
+                               ([g['id'] for g in games],))
+                pregame = dict(cursor.fetchall())
             except Exception:
                 conn.rollback()   # table absent on a fresh DB — no chips
+        forecasts = {g['id']: pregame[g['id']] for g in games
+                     if not g['completed'] and g['id'] in pregame}
         completed_forecasts = get_frozen_forecasts(cursor, [g['id'] for g in games if g['completed']])
 
         # The home page shows the week's most important games rather than all
@@ -4215,7 +4235,7 @@ def home(week=None, season_type='regular'):
         # Drive tracking lives on the game page (Drives tab); point the hero
         # pill at the most prominent recent game rather than an unrelated page.
         featured_game_id = top[0]['id'] if top else None
-        briefing = _home_briefing(cursor, home_season, games, forecasts, top)
+        briefing = _home_briefing(cursor, home_season, games, forecasts, top, pregame)
         # Regular season only: the postseason view is already grouped by round,
         # which is a stronger ordering than anything this would compute.
 

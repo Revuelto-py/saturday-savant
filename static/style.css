@@ -3719,7 +3719,10 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .hp-dim { color: var(--text-dim); }
 .hp-grid2 { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: 14px; }
 .hp-grid2.is-solo { grid-template-columns: minmax(0,1fr); }
-.hp-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; margin-top: 14px; }
+/* One equal column per card: a panel with no data (no upsets, no simulation yet)
+   leaves no empty slot behind. */
+.hp-grid3 { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0,1fr); gap: 14px; }
+.hp-grid2 + .hp-grid3 { margin-top: 14px; }
 
 /* game of the week: each team's colour glows on its own half */
 .hp-gotw {
@@ -3744,6 +3747,9 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 .hp-side b { display: block; font-family: var(--font-display); font-size: 40px; font-weight: 850; font-stretch: 78%; line-height: 1; letter-spacing: -.02em; color: var(--text-primary); }
 .hp-side span { display: block; margin-top: 4px; font-size: 13.5px; color: #c4c8cc; }
 .hp-at { font-size: 15px; color: #7d8388; }
+.hp-fin { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 48px; font-weight: 850; font-stretch: 78%; line-height: 1; font-variant-numeric: tabular-nums; color: #7d8388; }
+.hp-fin i { font-style: normal; font-size: .6em; }
+.hp-fin .is-w { color: var(--text-primary); }
 .hp-wp-bar { display: flex; gap: 3px; height: 14px; border-radius: var(--r-pill); overflow: hidden; }
 .hp-wp-bar i { display: block; height: 100%; background: rgba(255,255,255,.16); }
 .hp-wp-bar i.is-fav { background: var(--accent); }
@@ -3814,6 +3820,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
 @media (max-width: 991.98px) {
     .hp-grid2 { grid-template-columns: minmax(0,1fr); }
     .hp-grid3, .hp-explore, .hp-gcards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .hp-grid3 { grid-auto-flow: row; }
     .hp-grid3 > :last-child:nth-child(odd) { grid-column: 1 / -1; }
     .hp-gcards > :nth-child(n+9) { display: none; }
 }
@@ -3829,7 +3836,8 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     .hp-card { border-radius: 16px; }
     .hp-pad { padding: 12px; }
     .hp-grid2, .hp-grid3 { gap: 10px; }
-    .hp-grid3 { grid-template-columns: minmax(0,1fr); margin-top: 10px; }
+    .hp-grid3 { grid-template-columns: minmax(0,1fr); }
+    .hp-grid2 + .hp-grid3 { margin-top: 10px; }
     /* game of the week */
     .hp-gotw { padding: 14px; border-radius: 16px; }
     .hp-gotw-k { flex-direction: column; gap: 2px; font-size: 12px; }
@@ -3840,6 +3848,7 @@ table, .data-table { font-variant-numeric: tabular-nums; }
     .hp-side b { font-size: 19px; }
     .hp-side span { font-size: 12px; margin-top: 1px; }
     .hp-at { font-size: 12px; }
+    .hp-fin { gap: 5px; font-size: 24px; }
     .hp-wp-bar { height: 8px; }
     .hp-wp-l { margin-top: 6px; font-size: 12px; }
     .hp-wp-l b { font-size: 15px; }

@@ -39,31 +39,9 @@
         <span>Updated after every game</span>
     </div>
 
-    <div class="hp-grid2{{ ' is-solo' if not gotw }}">
-        {% if gotw %}{% set g = gotw %}{% set a_fav = g.away_p >= 0.5 %}
-        <article class="hp-gotw" style="--a: {{ g.a_col }}; --h: {{ g.h_col }}" aria-labelledby="hpGotwH">
-            <div class="hp-gotw-k"><span><b id="hpGotwH">Game of the week</b>, the best matchup on the slate by ranks and forecast</span><span>{{ g.kickoff_date }}, {{ g.kickoff_time }}</span></div>
-            <div class="hp-gotw-mid">
-                <div class="hp-gotw-m">
-                    <div class="hp-side">{{ logo(g.away_logo, 84) }}<div><b>{{ g.away }}</b>{% if g.away_rank %}<span>No. {{ g.away_rank }} AP</span>{% endif %}</div></div>
-                    <span class="hp-at">{{ 'vs' if g.neutral_site else 'at' }}</span>
-                    <div class="hp-side is-r"><div><b>{{ g.home }}</b>{% if g.home_rank %}<span>No. {{ g.home_rank }} AP</span>{% endif %}</div>{{ logo(g.home_logo, 84) }}</div>
-                </div>
-                <div class="hp-wp">
-                    <div class="hp-wp-bar" role="img" aria-label="Savant Forecast: {{ g.away }} {{ pct(g.away_p) }}, {{ g.home }} {{ pct(g.home_p) }}">
-                        <i class="{{ 'is-fav' if a_fav }}" style="width: {{ '%.1f'|format(g.away_p * 100) }}%"></i><i class="{{ 'is-fav' if not a_fav }}" style="width: {{ '%.1f'|format(g.home_p * 100) }}%"></i>
-                    </div>
-                    <div class="hp-wp-l"><span class="{{ 'is-fav' if a_fav }}"><b>{{ pct(g.away_p) }}</b>{{ g.away }}</span><span class="hp-dim">Savant Forecast</span><span class="{{ 'is-fav' if not a_fav }}"><b>{{ pct(g.home_p) }}</b>{{ g.home }}</span></div>
-                </div>
-            </div>
-            <div class="hp-gotw-a">
-                <a class="hp-btn is-p" href="/game/{{ g.id }}">Game preview</a>
-                <a class="hp-btn" href="/rivalry/{{ g.away|team_slug }}/{{ g.home|team_slug }}">Head-to-head history</a>
-            </div>
-        </article>
-        {% endif %}
-
-        {% if top8 %}
+    {# The Savant top sits beside the game of the week, or joins the card row
+       below when there is none, so it never stretches across the page. #}
+    {% set top8_card %}{% if top8 %}
         <section class="hp-card hp-pad" aria-labelledby="hpTopH">
             <div class="hp-card-h"><h3 id="hpTopH">Savant Top {{ top8|length }}</h3><a href="/rankings">All {{ n_rated }}</a></div>
             {% for t in top8 %}
@@ -74,11 +52,40 @@
             </a>
             {% endfor %}
         </section>
-        {% endif %}
-    </div>
+    {% endif %}{% endset %}
 
-    {% if odds or upsets or polls_over %}
+    {% if gotw %}
+    <div class="hp-grid2{{ ' is-solo' if not top8 }}">
+        {% set g = gotw %}{% set a_fav = g.away_p >= 0.5 %}{% set fc = 'Savant Forecast before kickoff' if g.completed else 'Savant Forecast' %}
+        <article class="hp-gotw" style="--a: {{ g.a_col }}; --h: {{ g.h_col }}" aria-labelledby="hpGotwH">
+            <div class="hp-gotw-k"><span><b id="hpGotwH">Game of the week</b>, the best matchup on the slate by ranks and forecast</span><span>{% if g.completed %}Final, {{ g.kickoff_date }}{% else %}{{ g.kickoff_date }}, {{ g.kickoff_time }}{% endif %}</span></div>
+            <div class="hp-gotw-mid">
+                <div class="hp-gotw-m">
+                    <div class="hp-side">{{ logo(g.away_logo, 84) }}<div><b>{{ g.away }}</b>{% if g.away_rank %}<span>No. {{ g.away_rank }} AP</span>{% endif %}</div></div>
+                    {% if g.completed %}{% set a_won = (g.away_pts or 0) > (g.home_pts or 0) %}
+                    <span class="hp-fin"><b class="{{ 'is-w' if a_won }}">{{ g.away_pts }}</b><i>–</i><b class="{{ 'is-w' if not a_won }}">{{ g.home_pts }}</b></span>
+                    {% else %}<span class="hp-at">{{ 'vs' if g.neutral_site else 'at' }}</span>{% endif %}
+                    <div class="hp-side is-r"><div><b>{{ g.home }}</b>{% if g.home_rank %}<span>No. {{ g.home_rank }} AP</span>{% endif %}</div>{{ logo(g.home_logo, 84) }}</div>
+                </div>
+                <div class="hp-wp">
+                    <div class="hp-wp-bar" role="img" aria-label="{{ fc }}: {{ g.away }} {{ pct(g.away_p) }}, {{ g.home }} {{ pct(g.home_p) }}">
+                        <i class="{{ 'is-fav' if a_fav }}" style="width: {{ '%.1f'|format(g.away_p * 100) }}%"></i><i class="{{ 'is-fav' if not a_fav }}" style="width: {{ '%.1f'|format(g.home_p * 100) }}%"></i>
+                    </div>
+                    <div class="hp-wp-l"><span class="{{ 'is-fav' if a_fav }}"><b>{{ pct(g.away_p) }}</b>{{ g.away }}</span><span class="hp-dim">{{ fc }}</span><span class="{{ 'is-fav' if not a_fav }}"><b>{{ pct(g.home_p) }}</b>{{ g.home }}</span></div>
+                </div>
+            </div>
+            <div class="hp-gotw-a">
+                <a class="hp-btn is-p" href="/game/{{ g.id }}">{{ 'Box score' if g.completed else 'Game preview' }}</a>
+                <a class="hp-btn" href="/rivalry/{{ g.away|team_slug }}/{{ g.home|team_slug }}">Head-to-head history</a>
+            </div>
+        </article>
+        {{ top8_card }}
+    </div>
+    {% endif %}
+
+    {% if odds or upsets or polls_over or (top8 and not gotw) %}
     <div class="hp-grid3">
+        {% if not gotw %}{{ top8_card }}{% endif %}
         {% if odds %}
         <section class="hp-card hp-pad" aria-labelledby="hpOddsH">
             <div class="hp-card-h"><h3 id="hpOddsH">Playoff odds</h3><a href="/simulator">Season simulator</a></div>
@@ -90,7 +97,7 @@
 
         {% if upsets %}
         <section class="hp-card hp-pad" aria-labelledby="hpUpsetH">
-            <div class="hp-card-h"><h3 id="hpUpsetH">Upset watch</h3><span>Best chance to beat a higher-ranked team, by AP or Savant</span></div>
+            <div class="hp-card-h"><h3 id="hpUpsetH">{{ 'Upsets' if slate_done else 'Upset watch' }}</h3><span>{% if slate_done %}Beat a higher-ranked team, with their chance before kickoff{% else %}Best chance to beat a higher-ranked team, by AP or Savant{% endif %}</span></div>
             {% for u in upsets %}
             <a class="hp-risk" href="/game/{{ u.id }}">{{ logo(u.dog_logo, 30) }}
                 <span class="hp-nm">{% if u.dog_rank %}No. {{ u.dog_rank }} {% endif %}{{ u.dog }} over {% if u.fav_rank %}No. {{ u.fav_rank }} {% endif %}{{ u.fav }}<span>{{ u.sv }}{{ u.when }}, {{ 'home' if u.dog_home else 'away' }}</span></span>
