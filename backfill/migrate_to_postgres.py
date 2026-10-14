@@ -41,7 +41,7 @@ def pg_connect():
             time.sleep(3)
     raise RuntimeError("Could not connect to Postgres after 5 attempts")
 
-sqlite_conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+sqlite_conn = sqlite3.connect(os.path.join(BASE_DIR, 'data', 'cfb_data.db'))
 sqlite_conn.row_factory = sqlite3.Row
 sqlite_cursor = sqlite_conn.cursor()
 

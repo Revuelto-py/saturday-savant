@@ -9,8 +9,8 @@ import psycopg2
 import os
 from dotenv import load_dotenv
 from cfbd_retry import call_with_retry
-from divisions import fbs_team_names, keep_stat_row, tracked_player_ids
-from season_util import current_cfb_season
+from lib.divisions import fbs_team_names, keep_stat_row, tracked_player_ids
+from lib.season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
 
@@ -216,7 +216,7 @@ print("\nDone!")
 # Data changed — tell the live site to drop its in-memory page cache so the
 # update is visible immediately instead of after the cache TTL.
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

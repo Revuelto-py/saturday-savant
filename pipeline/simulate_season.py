@@ -17,8 +17,8 @@ import time
 
 _os.environ.setdefault('POOL_BACKFILL', '1')
 import main
-import season_sim
-from season_util import current_cfb_season
+from lib import season_sim
+from lib.season_util import current_cfb_season
 
 N = 10000
 
@@ -42,7 +42,7 @@ print(f'{season}: simulated {N:,} seasons over {len(data["games"])} games in {ti
 for r in result['teams'][:12]:
     print(f"  {r['team']:<18}{r['cfp']:>7.1%}{r['bye']:>7.1%}{r['title']:>7.1%}")
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

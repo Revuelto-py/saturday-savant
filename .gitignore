@@ -10,7 +10,7 @@ venv/
 env/
 .venv/
 
-# Database (optional - see note below)
+# Database: data/cfb_data.db is the legacy SQLite copy, local only
 *.db
 *.sqlite
 static/headshots/
@@ -28,3 +28,6 @@ static/headshots/
 # Local-only: Claude Code project instructions
 CLAUDE.md
 claude.md
+
+# Local-only: throwaway probes and experiments
+scratch/

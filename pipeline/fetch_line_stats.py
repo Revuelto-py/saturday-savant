@@ -30,7 +30,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 from cfbd_retry import call_with_retry
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
 
@@ -119,7 +119,7 @@ conn.close()
 print(f'Saved {total} line game rows')
 
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

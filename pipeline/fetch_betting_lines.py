@@ -29,7 +29,7 @@ import cfbd
 import psycopg2
 from dotenv import load_dotenv
 
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # No override: a DATABASE_URL already in the environment wins, matching the rest
 # of the weekly chain (a stale .env otherwise redirects this step alone to a

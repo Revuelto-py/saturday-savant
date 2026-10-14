@@ -17,7 +17,7 @@ import os
 import requests
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'), override=True)
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'), override=True)
 
 SITE_URL = os.getenv('SITE_URL', 'https://saturdaysavant.com').rstrip('/')
 

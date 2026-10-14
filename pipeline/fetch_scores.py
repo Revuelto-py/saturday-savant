@@ -51,14 +51,14 @@ import subprocess
 import sys
 
 import cfbd
-import espn_board
+from lib import espn_board
 import psycopg2
 import requests
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 from cfbd_retry import UpstreamUnavailable, call_with_retry
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # No override: an exported DATABASE_URL wins, matching run_weekly.sh's chain.
 load_dotenv(os.path.join(ROOT, '.env'))
@@ -416,7 +416,7 @@ def main():
     # tight loop during game days and a no-op run should cost the site nothing.
     if changed or summaries:
         try:
-            from cache_notify import notify_cache_clear
+            from lib.cache_notify import notify_cache_clear
             # A game FINISHING ripples much wider than a score moving: team
             # records, its own page's layout, standings. That is rare enough
             # (tens of times a week) to justify the full clear. A score merely

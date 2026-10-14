@@ -58,8 +58,8 @@
 
 import cfbd
 import psycopg2
-import landscape
-import compare_card as compare_card_mod
+from lib import landscape
+from lib import compare_card as compare_card_mod
 from psycopg2 import pool as pg_pool
 import gzip
 import io
@@ -81,12 +81,12 @@ from flask import Flask, render_template, request, jsonify, Response, redirect, 
 from flask_caching import Cache
 # Labels/units for the stored Savant Forecast feature breakdown. The DB holds
 # only the model's numbers; the wording is applied here at render time.
-from forecast_explain import describe as describe_contrib
+from lib.forecast_explain import describe as describe_contrib
 # Date-derived active season (rolls over in February) — the pipeline's notion of
 # which year it is ingesting. Used by forward_season() for pages that should
 # follow the new season before it has produced any stats.
-from season_util import current_cfb_season
-import espn_board
+from lib.season_util import current_cfb_season
+from lib import espn_board
 from collections import OrderedDict, defaultdict
 from itertools import groupby
 
@@ -583,7 +583,7 @@ SEARCH_INDEXED = ensure_search_indexes()
 # because _newest_stats_season() runs at import time, well before them — left
 # below, it raised NameError, was swallowed by the except, and the season would
 # have silently never advanced.
-from divisions import FCS_CONFS
+from lib.divisions import FCS_CONFS
 
 # A season only counts once it has a real week of FBS stats behind it. MAX(season)
 # alone is not enough: CFBD publishes lower-division box scores before the FBS

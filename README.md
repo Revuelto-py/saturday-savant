@@ -82,7 +82,7 @@ once on 2025, then refit on every season through 2025. The numbers above are sti
 ones.
 
 The part that keeps it honest is the **leakage contract**, stated at the top of
-[`forecast_features.py`](forecast_features.py): only information knowable before kickoff goes in.
+[`lib/forecast_features.py`](lib/forecast_features.py): only information knowable before kickoff goes in.
 That means an Elo-style rating that reflects only games already finished, prior-season Savant
 Rating and SP+, preseason roster signals (returning production, recruiting, net transfer stars),
 and game context. Same-season aggregates and AP polls are explicitly excluded. So is a
@@ -173,33 +173,38 @@ URLs `robots.txt` disallows, and a cap on concurrent page renders.
 ## Repo layout
 
 ```
-main.py                 the Flask app: every route
-season_util.py          which season the pipeline ingests (deliberately not the display default)
-divisions.py            who counts as FBS, shared by the site and the pipeline
-forecast_features.py    the Savant Forecast feature pipeline + leakage contract
-forecast_explain.py     per-game "why" breakdown, imported by the app at render time
-season_sim.py           the season simulator (run by the weekly chain, read by /simulator)
-landscape.py            the Stat Explorer's server-rendered SVG charts
-compare_card.py         /compare share images, drawn with Pillow
-espn_board.py           ESPN's scoreboard as a second opinion on which games are live
-espn_rankings.py        ESPN's AP poll for the weeks CFBD hasn't posted yet
-headshot_thumbs.py      small WebP copies of every headshot, kept beside the originals in R2
-cache_notify.py         tells the live site to drop its page cache after a data write
-forecast_model.json     trained artifacts, loaded at serve time
-fcs_forecast_model.json
-run_weekly.sh           the weekly cron chain, in order
+main.py                 the Flask app: every route (Procfile runs main:app)
+run_weekly.sh           the weekly cron chain, in order (Render runs it from the root)
+
+lib/                    shared modules, imported by the app and the scripts
+  season_util.py          which season the pipeline ingests (deliberately not the display default)
+  divisions.py            who counts as FBS, shared by the site and the pipeline
+  forecast_features.py    the Savant Forecast feature pipeline + leakage contract
+  forecast_explain.py     per-game "why" breakdown, imported by the app at render time
+  season_sim.py           the season simulator (run by the weekly chain, read by /simulator)
+  landscape.py            the Stat Explorer's server-rendered SVG charts
+  compare_card.py         /compare share images, drawn with Pillow
+  espn_board.py           ESPN's scoreboard as a second opinion on which games are live
+  espn_rankings.py        ESPN's AP poll for the weeks CFBD hasn't posted yet
+  headshot_thumbs.py      small WebP copies of every headshot, kept beside the originals in R2
+  cache_notify.py         tells the live site to drop its page cache after a data write
 
 pipeline/               the automated jobs: CFBD fetches → ratings → pools → precompute → forecast → simulator
-forecast/               model training and feature research (local only; sklearn never deploys)
+forecast/               model training and feature research (local only; sklearn never deploys),
+                        plus the trained artifacts the pipeline serves: forecast_model.json,
+                        fcs_forecast_model.json
 tools/                  event-driven jobs: transfer windows, signing day, post-draft, logos
 backfill/               one-shot historical loads and completed migrations
-docs/                   cron setup and the forecast retrain log
+data/                   us_outline.json (the explorer's US map); the legacy SQLite copy lives
+                        here locally and is gitignored
+docs/                   cron setup, the forecast retrain log, README images
 templates/  static/     Jinja templates and the stylesheet (design tokens at the top)
 ```
 
-The modules at the root are the ones **imported by others**. Everything under `pipeline/`, `tools/`
-and `backfill/` is an entry point you run directly. Each of those scripts puts the repo root on
-`sys.path` and resolves `.env` against it, so they behave the same from any working directory.
+`lib/` holds the modules **imported by others** (`from lib import season_util`). Everything under
+`pipeline/`, `tools/`, `backfill/` and `forecast/` is an entry point you run directly. Each of those
+scripts puts the repo root on `sys.path` and resolves `.env` against it, so they behave the same
+from any working directory.
 
 ## Running locally
 

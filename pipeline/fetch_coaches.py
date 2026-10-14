@@ -42,7 +42,7 @@ from psycopg2.extras import execute_values
 load_dotenv(_os.path.join(ROOT, '.env'))
 
 import main
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # ── Manual current-season hire overrides ────────────────────────────────────
 # CFBD's coaches endpoint is record-based and has nothing for an upcoming season

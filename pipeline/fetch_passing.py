@@ -51,7 +51,7 @@ import requests
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # No override: a DATABASE_URL already in the environment wins, matching the rest
 # of the weekly chain.
@@ -218,7 +218,7 @@ def main():
     # Only poke the cache when something landed; an off-season no-op costs nothing.
     if total:
         try:
-            from cache_notify import notify_cache_clear
+            from lib.cache_notify import notify_cache_clear
             notify_cache_clear()
         except Exception:
             pass

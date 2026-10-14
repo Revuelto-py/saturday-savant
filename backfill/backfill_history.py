@@ -38,7 +38,7 @@ from psycopg2.extras import execute_values
 import os
 from dotenv import load_dotenv
 
-from divisions import fbs_team_names, keep_stat_row, tracked_player_ids
+from lib.divisions import fbs_team_names, keep_stat_row, tracked_player_ids
 
 load_dotenv(os.path.join(ROOT, '.env'), override=True)
 
@@ -377,7 +377,7 @@ if __name__ == '__main__':
 # Data changed — tell the live site to drop its in-memory page cache so the
 # update is visible immediately instead of after the cache TTL.
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

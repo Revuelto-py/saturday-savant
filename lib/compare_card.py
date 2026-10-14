@@ -19,9 +19,9 @@ from functools import lru_cache
 import requests
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-FONT = os.path.join(HERE, 'static', 'fonts', 'MonaSans.ttf')
-MARK = os.path.join(HERE, 'static', 'logo-mark-256.png')
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FONT = os.path.join(ROOT, 'static', 'fonts', 'MonaSans.ttf')
+MARK = os.path.join(ROOT, 'static', 'logo-mark-256.png')
 SIZES = {'post': (1080, 1350), 'story': (1080, 1920), 'wide': (1200, 630)}
 BG = (8, 9, 11)
 WHITE, SOFT, DIM, FAINT = (255, 255, 255), (231, 233, 234), (169, 175, 180), (143, 150, 156)
@@ -243,7 +243,7 @@ def png(img):
 
 
 if __name__ == '__main__':
-    # Smoke test: python3 compare_card.py OUT_DIR -> post.png, story.png, wide.png
+    # Smoke test: python3 lib/compare_card.py OUT_DIR -> post.png, story.png, wide.png
     import sys
     R2 = 'https://pub-1d0241430ed04c3591fd11c3b2cef4c3.r2.dev'
     card = {

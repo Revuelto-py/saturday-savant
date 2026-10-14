@@ -13,7 +13,7 @@ load_dotenv(_os.path.join(ROOT, '.env'))
 
 configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
 BASE_DIR = ROOT
-conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+conn = sqlite3.connect(os.path.join(BASE_DIR, 'data', 'cfb_data.db'))
 cursor = conn.cursor()
 
 try:
@@ -46,7 +46,7 @@ conn.close()
 print(f"Updated {updated} players")
 
 # Verify
-conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+conn = sqlite3.connect(os.path.join(BASE_DIR, 'data', 'cfb_data.db'))
 cursor = conn.cursor()
 cursor.execute("SELECT first_name, last_name, position, height, weight, year FROM players WHERE team='Penn State' LIMIT 5")
 for r in cursor.fetchall():

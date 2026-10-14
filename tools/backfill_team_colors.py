@@ -155,7 +155,7 @@ def main():
         conn.close()
 
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         if WRITE:
             notify_cache_clear()
     except Exception:

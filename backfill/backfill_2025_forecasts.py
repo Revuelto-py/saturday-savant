@@ -33,10 +33,10 @@ import sys
 
 os.environ.setdefault('POOL_BACKFILL', '1')
 import main
-from forecast_features import build_dataset
+from lib.forecast_features import build_dataset
 
 SEASON = 2025
-MODEL_PATH = os.path.join(ROOT, 'forecast_model.json')
+MODEL_PATH = os.path.join(ROOT, 'forecast', 'forecast_model.json')
 
 
 def _apply(mdl, feats):
@@ -124,7 +124,7 @@ if __name__ == '__main__':
 # Data changed — refresh the live cache so 2025 game pages/hub show the fills.
 if '--write' in sys.argv:
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         notify_cache_clear()
     except Exception:
         pass

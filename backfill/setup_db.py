@@ -18,7 +18,7 @@ configuration = cfbd.Configuration(
 )
 
 BASE_DIR = ROOT
-conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+conn = sqlite3.connect(os.path.join(BASE_DIR, 'data', 'cfb_data.db'))
 cursor = conn.cursor()
 
 cursor.execute('''

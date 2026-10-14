@@ -33,7 +33,7 @@ from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import brier_score_loss, log_loss
 
-from forecast_features import build_dataset, FEATURE_NAMES, \
+from lib.forecast_features import build_dataset, FEATURE_NAMES, \
     ELO_START, ELO_NEW_TEAM, ELO_CARRY, ELO_K, ELO_HFA
 
 TRAIN_SEASONS = list(range(2017, 2024))
@@ -247,9 +247,9 @@ def main():
         'elo': {'start': ELO_START, 'new_team': ELO_NEW_TEAM, 'carry': ELO_CARRY,
                 'k': ELO_K, 'hfa': ELO_HFA},
     }
-    with open(_os.path.join(ROOT, 'forecast_model.json'), 'w') as f:
+    with open(_os.path.join(ROOT, 'forecast', 'forecast_model.json'), 'w') as f:
         json.dump(artifact, f, indent=1)
-    print("\nwrote forecast_model.json")
+    print("\nwrote forecast/forecast_model.json")
 
 
 if __name__ == '__main__':

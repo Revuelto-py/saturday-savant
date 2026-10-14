@@ -23,7 +23,7 @@ FAMILIES = {
 }
 
 path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                    'forecast_model.json')
+                    'forecast', 'forecast_model.json')
 model = json.load(open(path))
 coef = model['coef']
 coef = coef[0] if isinstance(coef[0], list) else coef

@@ -120,7 +120,7 @@ def backfill_season(apis, cur, conn, season):
     week_rows = cur.fetchall()
 
     import main as _m  # shorten_game_label lives in main
-    from season_util import cfbd_week
+    from lib.season_util import cfbd_week
     logs = {}  # player_id -> [(start_date, entry)]
 
     # Week 0 and week 1 both resolve to CFBD week 1, so de-duplicate before
@@ -205,7 +205,7 @@ def run():
     # rebuilt after each week's games, and re-doing all eleven seasons every
     # Sunday would be pointless (completed seasons never change).
     if '--current' in sys.argv:
-        from season_util import current_cfb_season
+        from lib.season_util import current_cfb_season
         seasons = [current_cfb_season()]
     else:
         seasons = [int(a) for a in sys.argv[1:] if not a.startswith('-')]
@@ -240,7 +240,7 @@ if __name__ == '__main__':
 # Data changed — tell the live site to drop its in-memory page cache so the
 # update is visible immediately instead of after the cache TTL.
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

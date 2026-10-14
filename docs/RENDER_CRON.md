@@ -306,7 +306,7 @@ scores job's back:
 **CFBD is not the only source any more.** On 2026-09-08 the AP released its Week
 2 poll at 07:00 UTC and CFBD still had only the preseason poll hours later, so
 `fetch_rankings.py` now falls back to ESPN for any week CFBD has nothing for
-(`espn_rankings.py`, the same idea as `espn_board.py` for scores). CFBD keeps
+(`lib/espn_rankings.py`, the same idea as `lib/espn_board.py` for scores). CFBD keeps
 precedence on every week it does have.
 
 One trap is baked into that module: ESPN's two APIs disagreed. The familiar

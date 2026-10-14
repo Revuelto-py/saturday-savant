@@ -34,10 +34,10 @@ import sys
 
 os.environ.setdefault('POOL_BACKFILL', '1')
 import main
-from forecast_features import build_dataset
-from forecast_explain import explain
+from lib.forecast_features import build_dataset
+from lib.forecast_explain import explain
 
-MODEL_PATH = os.path.join(ROOT, 'forecast_model.json')
+MODEL_PATH = os.path.join(ROOT, 'forecast', 'forecast_model.json')
 # Stored probabilities are rounded to 4dp on write, so anything at or under
 # half a unit in the last place is rounding, not drift.
 TOL = 1e-4
@@ -98,7 +98,7 @@ if __name__ == '__main__':
 
     if '--write' in sys.argv:
         try:
-            from cache_notify import notify_cache_clear
+            from lib.cache_notify import notify_cache_clear
             notify_cache_clear()
         except Exception:
             pass

@@ -17,7 +17,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # No override: a DATABASE_URL already in the environment wins (see
 # compute_savant_ratings.py for the incident this avoids).

@@ -34,7 +34,7 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-from season_util import week_zero_dates
+from lib.season_util import week_zero_dates
 
 load_dotenv(_os.path.join(ROOT, '.env'))
 
@@ -160,7 +160,7 @@ print('week 0 pass complete')
 
 if total_moved and not DRY:
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         notify_cache_clear()
         print('cache cleared', flush=True)
     except Exception:

@@ -36,7 +36,7 @@ import requests
 import boto3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
-from headshot_thumbs import upload_thumb
+from lib.headshot_thumbs import upload_thumb
 
 BASE_DIR = ROOT
 load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     # Data changed — tell the live site to drop its in-memory page cache so the
     # update is visible immediately instead of after the cache TTL.
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         notify_cache_clear()
     except Exception:
         pass

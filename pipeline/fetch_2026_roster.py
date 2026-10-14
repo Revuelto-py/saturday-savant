@@ -12,7 +12,7 @@ from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 from cfbd_retry import call_with_retry
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # Every CFBD call below uses SEASON, so this script follows the season on its
 # own — it runs weekly and must not still be pulling 2026 rosters in 2027.
@@ -234,7 +234,7 @@ print("\nDone!")
 # Data changed — tell the live site to drop its in-memory page cache so the
 # update is visible immediately instead of after the cache TTL.
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

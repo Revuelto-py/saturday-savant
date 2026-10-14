@@ -158,7 +158,7 @@ def main():
             print('\ndone — clearing the live page cache')
             sys.modules.pop('cache_notify', None)
             try:
-                from cache_notify import notify_cache_clear
+                from lib.cache_notify import notify_cache_clear
                 notify_cache_clear()
             except Exception as exc:
                 print(f'cache clear failed ({exc.__class__.__name__}) — '

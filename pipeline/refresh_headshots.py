@@ -47,7 +47,7 @@ import requests
 from psycopg2.extras import execute_values
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
-from headshot_thumbs import upload_thumb
+from lib.headshot_thumbs import upload_thumb
 
 BASE_DIR = ROOT
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -219,7 +219,7 @@ def main():
     conn.close()
 
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         notify_cache_clear()
     except Exception:
         pass

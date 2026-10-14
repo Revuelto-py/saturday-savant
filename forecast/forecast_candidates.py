@@ -27,7 +27,7 @@ from collections import defaultdict
 
 os.environ.setdefault('POOL_BACKFILL', '1')
 import main
-from forecast_features import build_dataset, FEATURE_NAMES, _parse_dt
+from lib.forecast_features import build_dataset, FEATURE_NAMES, _parse_dt
 
 EARTH_MI = 3958.8
 

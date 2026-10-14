@@ -23,7 +23,7 @@ import cfbd
 import psycopg2
 from dotenv import load_dotenv
 
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 load_dotenv(os.path.join(ROOT, '.env'), override=True)
 

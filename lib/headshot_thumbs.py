@@ -11,8 +11,8 @@ new URL for the thumbnail too.
 pipeline/refresh_headshots.py writes the thumbnail whenever it uploads an
 original. This file's __main__ backfills the rest (skipping what exists):
 
-    python3 headshot_thumbs.py            # every player with a headshot
-    python3 headshot_thumbs.py --force    # rebuild even existing thumbnails
+    python3 lib/headshot_thumbs.py            # every player with a headshot
+    python3 lib/headshot_thumbs.py --force    # rebuild even existing thumbnails
 """
 import hashlib
 import io
@@ -51,7 +51,7 @@ def backfill(force=False):
     import psycopg2
     import requests
     from concurrent.futures import ThreadPoolExecutor
-    root = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     local_dir = os.path.join(root, 'static', 'headshots')
     s3, bucket = r2_client(), os.getenv('R2_BUCKET_NAME')
 
@@ -111,5 +111,5 @@ def backfill(force=False):
 
 if __name__ == '__main__':
     from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
     backfill(force='--force' in sys.argv)

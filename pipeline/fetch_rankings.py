@@ -39,9 +39,9 @@ import cfbd
 import psycopg2
 from dotenv import load_dotenv
 
-import espn_rankings
+from lib import espn_rankings
 from cfbd_retry import call_with_retry
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
 
@@ -299,7 +299,7 @@ print("AP rankings fetch complete")
 # six days a week when the poll doesn't change.
 if changed_seasons:
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         notify_cache_clear()
         print(f"cache cleared for {changed_seasons}", flush=True)
     except Exception:

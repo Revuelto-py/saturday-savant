@@ -7,7 +7,7 @@ for the interactive scatter above them. `build(cursor, season)` returns a dict
 the template drops in with |safe; every finding is computed from the same rows
 the chart draws, so the sentence and the picture cannot disagree.
 
-The map outline (us_outline.json) is us-atlas's states-albers-10m, already
+The map outline (data/us_outline.json) is us-atlas's states-albers-10m, already
 projected with d3's geoAlbersUsa (scale 1300, translate [487.5, 305]); stadium
 coordinates are pushed through the same projection in albers() so the dots
 land on it.
@@ -35,7 +35,7 @@ def ordinal(n):
 
 @lru_cache(maxsize=1)
 def outline():
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'us_outline.json')) as f:
+    with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'us_outline.json')) as f:
         return json.load(f)
 
 

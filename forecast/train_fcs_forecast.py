@@ -29,7 +29,7 @@ import numpy as np
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.metrics import brier_score_loss, log_loss
 
-from forecast_features import build_dataset, FCS_FEATURE_NAMES
+from lib.forecast_features import build_dataset, FCS_FEATURE_NAMES
 
 TRAIN = list(range(2017, 2024))
 VAL, TEST = 2024, 2025
@@ -121,9 +121,9 @@ def main():
         'margin_coef': ridge.coef_.tolist(), 'margin_intercept': float(ridge.intercept_),
         'C': C,
     }
-    with open(_os.path.join(ROOT, 'fcs_forecast_model.json'), 'w') as f:
+    with open(_os.path.join(ROOT, 'forecast', 'fcs_forecast_model.json'), 'w') as f:
         json.dump(artifact, f, indent=1)
-    print("\nwrote fcs_forecast_model.json")
+    print("\nwrote forecast/fcs_forecast_model.json")
 
 
 if __name__ == '__main__':

@@ -30,15 +30,15 @@ import os
 
 os.environ.setdefault('POOL_BACKFILL', '1')
 import main
-from season_util import current_cfb_season
-from forecast_features import (build_dataset, _feature_vector, _fcs_feature_vector,
+from lib.season_util import current_cfb_season
+from lib.forecast_features import (build_dataset, _feature_vector, _fcs_feature_vector,
                                _parse_dt, team_values, FEATURE_NAMES, ELO_START, ELO_CARRY,
                                ELO_NEW_TEAM)
-from forecast_explain import explain, explain_sheet
+from lib.forecast_explain import explain, explain_sheet
 
 _HERE = ROOT
-MODEL_PATH = os.path.join(_HERE, 'forecast_model.json')
-FCS_MODEL_PATH = os.path.join(_HERE, 'fcs_forecast_model.json')
+MODEL_PATH = os.path.join(_HERE, 'forecast', 'forecast_model.json')
+FCS_MODEL_PATH = os.path.join(_HERE, 'forecast', 'fcs_forecast_model.json')
 
 
 def _predict(mdl, feats):
@@ -233,7 +233,7 @@ if __name__ == '__main__':
 # Data changed — tell the live site to drop its in-memory page cache so the
 # update is visible immediately instead of after the cache TTL.
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
 except Exception:
     pass

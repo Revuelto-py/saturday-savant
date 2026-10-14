@@ -73,7 +73,7 @@ with cfbd.ApiClient(cfg) as api:
 conn.close()
 
 try:
-    from cache_notify import notify_cache_clear
+    from lib.cache_notify import notify_cache_clear
     notify_cache_clear()
     print("live page cache cleared")
 except Exception as e:

@@ -74,9 +74,9 @@ from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
 from cfbd_retry import call_with_retry
-from divisions import (count_stored, fbs_team_names, keep_stat_row,
+from lib.divisions import (count_stored, fbs_team_names, keep_stat_row,
                        tracked_player_ids)
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 load_dotenv(_os.path.join(ROOT, '.env'))
 
@@ -414,7 +414,7 @@ else:
 # first reader after a clear gets fresh values rather than recomputing them.
 if changed or ppa_changed or team_changed:
     try:
-        from cache_notify import notify_cache_clear
+        from lib.cache_notify import notify_cache_clear
         notify_cache_clear()
         print('cache cleared')
     except Exception as e:

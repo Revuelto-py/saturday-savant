@@ -119,7 +119,7 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-from season_util import current_cfb_season
+from lib.season_util import current_cfb_season
 
 # Load .env WITHOUT override: a DATABASE_URL already in the environment wins.
 # This was the only script of the thirteen in run_weekly.sh that overrode the
@@ -162,7 +162,7 @@ MIN_GAMES = 20
 # rated in 2026 (Tarleton State 81st off one game) and their FBS opponents were
 # opponent-adjusted against an FCS team anchored at the national average.
 # Backtest 2023-26: +0.8 pts straight-up (p=0.04); 2019-22 unchanged.
-from divisions import FCS_CONFS
+from lib.divisions import FCS_CONFS
 
 # Garbage time: margin at drive start beyond which the drive is excluded
 GARBAGE_MARGIN = {1: None, 2: 38, 3: 28, 4: 21}
@@ -781,7 +781,7 @@ def main():
     # still reached out and cleared the live site's cache.
     if wrote:
         try:
-            from cache_notify import notify_cache_clear
+            from lib.cache_notify import notify_cache_clear
             notify_cache_clear()
         except Exception:
             pass

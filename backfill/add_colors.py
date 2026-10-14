@@ -13,7 +13,7 @@ load_dotenv(_os.path.join(ROOT, '.env'))
 
 configuration = cfbd.Configuration(access_token=os.getenv("CFBD_API_KEY"))
 BASE_DIR = ROOT
-conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+conn = sqlite3.connect(os.path.join(BASE_DIR, 'data', 'cfb_data.db'))
 cursor = conn.cursor()
 
 with cfbd.ApiClient(configuration) as api_client:
@@ -33,7 +33,7 @@ conn.close()
 print(f"Updated {updated} teams")
 
 # Verify a few
-conn = sqlite3.connect(os.path.join(BASE_DIR, 'cfb_data.db'))
+conn = sqlite3.connect(os.path.join(BASE_DIR, 'data', 'cfb_data.db'))
 cursor = conn.cursor()
 cursor.execute("SELECT name, color, alt_color FROM teams WHERE name IN ('Alabama', 'Florida', 'Penn State') ")
 for row in cursor.fetchall():

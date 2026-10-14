@@ -1,15 +1,15 @@
 # Savant Forecast — retrain plan & experiment log
 
-The production model (`forecast_model.json`, v3, 21 features — the 16 inputs
+The production model (`forecast/forecast_model.json`, v3, 21 features — the 16 inputs
 plus five early-season twins, see "Shipped 2026-09-28" below) is trained
 **locally only** by `forecast/train_forecast.py`; sklearn never deploys. Serving is a dot
 product in `pipeline/predict_games.py`.
 
 ## Two models
 
-- **FBS vs FBS** — `forecast_model.json` (16 features), trained by
+- **FBS vs FBS** — `forecast/forecast_model.json` (16 features), trained by
   `forecast/train_forecast.py`. The main model; everything above refers to it.
-- **FBS vs FCS** — `fcs_forecast_model.json`, trained by `forecast/train_fcs_forecast.py`
+- **FBS vs FCS** — `forecast/fcs_forecast_model.json`, trained by `forecast/train_fcs_forecast.py`
   (2026-07-21). The main model can't rate an FCS opponent, so these games use a
   4-feature logistic keyed only on the FBS team's strength (Elo as-of, prior
   SP+, prior Savant, home). FBS wins ~93% regardless, so accuracy ≈ the
@@ -33,7 +33,7 @@ shipped artifact on 2017–2026; the reported numbers stay the held-out ones.
 
 ```bash
 python3 forecast/train_forecast.py          # prints the full protocol report
-git add forecast_model.json && git commit   # ship only if it clears the bars
+git add forecast/forecast_model.json && git commit   # ship only if it clears the bars
 ```
 
 Ship bars (unchanged): must beat the **prior-SP+** and **Elo-alone** baselines on
@@ -55,7 +55,7 @@ breakthrough).
 > still writes v1. v2 needs no PUBLIC_FEATURES review; its groups are
 > `forecast_explain.SHEET_GROUPS`.
 
-The game page's "Why Savant favors X" breakdown (`forecast_explain.py`) is
+The game page's "Why Savant favors X" breakdown (`lib/forecast_explain.py`) is
 derived from the model, so a retrain invalidates two things that do **not**
 update themselves:
 

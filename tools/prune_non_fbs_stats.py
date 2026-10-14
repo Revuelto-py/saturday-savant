@@ -31,7 +31,7 @@ import sys
 import psycopg2
 from dotenv import load_dotenv
 
-from divisions import FCS_CONFS
+from lib.divisions import FCS_CONFS
 
 load_dotenv(_os.path.join(ROOT, '.env'), override=True)
 
