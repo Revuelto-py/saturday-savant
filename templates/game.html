@@ -313,7 +313,7 @@
                     {% if forecast.correct %}
                     <span class="gx-grade is-hit"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>Called it</span>
                     {% else %}
-                    <span class="gx-grade is-miss"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Upset</span>
+                    <span class="gx-grade is-miss"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>{{ 'Upset' if forecast.is_upset else 'Miss' }}</span>
                     {% endif %}
                     <span class="gx-bar" aria-hidden="true"></span>
                     <span class="gx-verdict-text">Savant Forecast had <b>{{ forecast.favorite }}</b> at <b>{{ '%.0f' % (forecast.fav_prob * 100) }}%</b></span>

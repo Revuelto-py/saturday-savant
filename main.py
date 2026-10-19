@@ -1908,7 +1908,7 @@ def _last_game_panel(g, game_log, pos, team_abbrevs, team_logo):
     if fc:
         fav = fc['favorite']
         chip = {'fav': team_abbrevs.get(fav) or fav, 'pct': round(fc['fav_prob'] * 100),
-                'upset': fc['is_upset']}
+                'hit': fc['correct'], 'upset': fc['is_upset']}
     return {'away': away, 'home': home, 'stats': stats, 'trend': trend, 'forecast': chip,
             'game_id': g.get('game_id'), 'label': g.get('game_label'), 'week': g.get('week')}
 
@@ -2111,6 +2111,12 @@ def forecast_trust(fav_prob):
             'near_n': len(near), 'near_won': sum(t[1] for t in near)}
 
 
+# A miss only counts as an upset when the loser was a real favourite. The
+# 50-60% calibration bucket is a coin flip (2026: right 52% of the time), so a
+# 51% favourite losing is a miss, not an upset badge.
+UPSET_MIN_FAV = 0.60
+
+
 def get_frozen_forecasts(cursor, game_ids):
     """Frozen pre-kickoff Savant Forecast + graded outcome for completed games
     that carry a scored prediction — the SAME rows the upset badge and accuracy
@@ -2142,7 +2148,7 @@ def get_frozen_forecasts(cursor, game_ids):
             'fav_prob': prob if home_fav else 1 - prob,
             'margin': margin,
             'correct': bool(correct),
-            'is_upset': not correct,
+            'is_upset': not correct and max(prob, 1 - prob) >= UPSET_MIN_FAV,
             # Per-feature breakdown stored with the prediction (JSONB, so it
             # arrives already decoded); labelled here at render time. Absent on
             # FBS-vs-FCS rows and on any row written before the column existed

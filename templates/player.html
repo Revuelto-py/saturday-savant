@@ -335,7 +335,7 @@
             </div>
             <div class="pp-lg-chips">
                 <span class="pp-lg-chip is-state">Final · {{ wk }}</span>
-                {% if lgc.forecast %}<span class="pp-lg-chip">{{ lgc.forecast.fav }} {{ lgc.forecast.pct }}% fav<b class="{{ 'is-miss' if lgc.forecast.upset else 'is-hit' }}">{{ 'Upset' if lgc.forecast.upset else 'Hit' }}</b></span>{% endif %}
+                {% if lgc.forecast %}<span class="pp-lg-chip">{{ lgc.forecast.fav }} {{ lgc.forecast.pct }}% fav<b class="{{ 'is-hit' if lgc.forecast.hit else 'is-miss' }}">{{ 'Hit' if lgc.forecast.hit else 'Upset' if lgc.forecast.upset else 'Miss' }}</b></span>{% endif %}
             </div>
         </div>
         <div class="pp-lg-body{{ '' if lgc.trend else ' no-trend' }}">
