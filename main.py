@@ -88,6 +88,7 @@ from lib.forecast_explain import describe as describe_contrib
 # follow the new season before it has produced any stats.
 from lib.season_util import current_cfb_season
 from lib import espn_board
+from lib import live_feed
 from collections import OrderedDict, defaultdict
 from itertools import groupby
 
@@ -8695,7 +8696,8 @@ def game_detail(game_id):
             # As-of-week ranks (per-season now) — empty until that week's poll
             # exists, so upcoming games show ranks once the poll is out.
             ap_rankings=ap_rankings, rivalry_name=rivalry_name,
-            is_scheduled=True, is_live=is_live, game_passing=None,
+            is_scheduled=True, is_live=is_live, game_passing=None, hero_date=kick_date,
+            live_state=None, live_cards=[], live_version=None,
             kickoff_date=kick_date, kickoff_time=kick_time,
             season_type_display='Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season',
             season_year=game_info[17], game_season=game_season,
@@ -8746,6 +8748,7 @@ def game_detail(game_id):
     away_stats = {}
     game_player_ids = {}   # name(lower) -> validated player id, for leader linking
     live_version = live_asof = live_status = None
+    mirror_by_aid = {}     # ESPN athlete id -> our mirrored headshot (filled with the box score)
 
     try:
         data = {}
@@ -9618,6 +9621,18 @@ def game_detail(game_id):
     top_wpa.sort(key=lambda p: p['swing_pct'], reverse=True)
     top_wpa = [p for p in top_wpa if p['swing_pct'] >= 1][:5]
 
+    # Live: the hero's situation line and the phone's key-play feed, from the same
+    # in-memory ESPN copy as the rest of the page. A parsing surprise in ESPN's
+    # live payload costs those two pieces, never the page.
+    abbrs = _team_abbrs(away_team, home_team)
+    live_state, live_cards = None, []
+    if live_version:
+        try:
+            live_state = live_feed.situation(data, abbrs)
+            live_cards = live_feed.key_plays(data, abbrs, mirror_by_aid)
+        except Exception:
+            app.logger.exception('live feed for game %s', game_id)
+
     # Date + season type formatting
     # start_date is stored in UTC; convert to Eastern before formatting the
     # date and kickoff time. Previously the tz was stripped and the raw UTC
@@ -9632,10 +9647,13 @@ def game_detail(game_id):
         game_date = et.strftime('%A, %B %-d, %Y')
         game_time = et.strftime('%-I:%M %p ET')
         game_iso_date = et.isoformat()   # schema.org SportsEvent.startDate
+        # The hero's short date; the year only when it isn't this season.
+        hero_date = et.strftime('%a, %b %-d') + (et.strftime(', %Y') if game_season != CURRENT_SEASON else '')
     except Exception:
         game_date = start_date_raw[:10] if start_date_raw else 'TBD'
         game_time = ''
         game_iso_date = None
+        hero_date = game_date
 
     season_type_raw = game_info[6] or ''
     season_type_display = 'Postseason' if 'POST' in str(season_type_raw).upper() else 'Regular Season'
@@ -9675,6 +9693,7 @@ def game_detail(game_id):
                        datetime.datetime.now(ZoneInfo('America/New_York')).strftime('%-I:%M %p'))
                       if is_live else None),
         live_version=live_version, live_status=live_status,
+        live_state=live_state, live_cards=live_cards, hero_date=hero_date,
         game_passing=get_game_passing_profile(game_id),
         home_team=home_team,
         away_team=away_team,
@@ -9703,7 +9722,7 @@ def game_detail(game_id):
         structured_leaders=structured_leaders,
         # Only the upcoming-game branch passed these, so a played game fell back
         # to full team names where the layout wants WIS / ALA.
-        team_abbr=_team_abbrs(away_team, home_team),
+        team_abbr=abbrs,
         win_prob=win_prob,
         top_wpa=top_wpa,
         records=records,

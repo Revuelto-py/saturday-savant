@@ -9396,81 +9396,153 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 }
 .pp-lg-foot:focus-visible, .pp-lg-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* ── Game hero: split halves ─────────────────────────────────────────── */
-.gx{--gx-h:450px;position:relative;overflow:hidden;background:#060607;border-bottom:1px solid var(--border);color:#fff}
-.gx-half{position:absolute;top:0;bottom:0;overflow:hidden}
-.gx-half--away{left:0;right:50%;background:radial-gradient(ellipse 110% 130% at 0% 45%,var(--c0) 0%,var(--c1) 38%,var(--c2) 78%,#060607 100%)}
-.gx-half--home{left:50%;right:0;background:radial-gradient(ellipse 110% 130% at 100% 45%,var(--c0) 0%,var(--c1) 38%,var(--c2) 78%,#060607 100%)}
-.gx-half.is-muted{filter:saturate(.55) brightness(.7)}
-.gx-mark{position:absolute;top:-90px;width:440px;height:440px;object-fit:contain;opacity:.1}
-.gx-half--away .gx-mark{left:-90px}.gx-half--home .gx-mark{right:-90px}
-.gx-half.is-muted .gx-mark{opacity:.06}
-.gx-rule{position:absolute;left:50%;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent 0%,rgba(255,255,255,.18) 20%,rgba(255,255,255,.18) 62%,transparent 72%)}
-.gx-inner{position:relative;max-width:1280px;margin:0 auto;padding:20px 40px 22px;display:flex;flex-direction:column;min-height:var(--gx-h,0)}
-.gx-top{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
-.gx-state{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:800;letter-spacing:.3em;text-transform:uppercase}
-.gx-state::before,.gx-state::after{content:"";width:28px;height:1px;background:rgba(255,255,255,.4)}
+/* Live dot and the live note under the hero. */
 .gx-dot{width:8px;height:8px;border-radius:50%;background:#ff4d4d;animation:gxPulse 1.6s ease-out infinite}
 .gx-live-note{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:var(--text-sm);color:var(--text-secondary)}
 @keyframes gxPulse{0%{box-shadow:0 0 0 0 rgba(255,77,77,.6)}70%{box-shadow:0 0 0 10px rgba(255,77,77,0)}100%{box-shadow:0 0 0 0 rgba(255,77,77,0)}}
-.gx-sub{font-size:13px;color:#aab1b7}
-.gx--live .gx-sub{color:#fff;font-weight:600}
-.gx-teams{display:grid;grid-template-columns:1fr 1fr;column-gap:112px;margin-top:auto;padding-top:18px}
-.gx-side{display:flex;flex-direction:column;min-width:0}
-.gx-side--away{align-items:flex-end;text-align:right}
-.gx-side--home{align-items:flex-start}
-.gx-logo{width:92px;height:92px;object-fit:contain;display:block}
-.gx-meta{margin-top:8px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.72)}
-.gx-name{margin-top:2px;font-size:48px;line-height:.92;font-weight:800;font-stretch:78%;text-transform:uppercase;letter-spacing:-.01em;color:#fff;text-decoration:none;overflow-wrap:anywhere}
-a.gx-name:hover{opacity:.85}
-a.gx-name:focus-visible,.gx a:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:2px}
-.gx-num{margin-top:6px;font-size:104px;line-height:.82;font-weight:850;font-stretch:78%;color:#fff}
-.gx-side.is-lost .gx-num{font-weight:600;color:#8c8487}
-.gx-side.is-lost .gx-name{color:#a99ea0}
-.gx-side.is-lost .gx-logo{opacity:.75}
-.gx-chance{display:flex;align-items:baseline;gap:10px;margin-top:10px}
-.gx-chance-k,.gx-k,.gx-cap{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#8a9096}
-.gx-num--pct{font-size:80px;margin-top:0}
-.gx-num--pct small{font-size:.5em}
-.gx-num--pct.is-dog{font-weight:600;color:#9a94a8}
-.gx-band{margin:auto -40px 0;padding:20px 40px 0}
-.gx-verdict{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px 16px;margin:0;text-align:center}
-.gx-grade{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
-.gx-grade.is-miss{color:#ff8a90}.gx-grade.is-hit{color:#6fdc9a}
-.gx-bar{width:1px;height:18px;background:rgba(255,255,255,.25)}
-.gx-verdict-text{font-size:18px;font-weight:600;font-stretch:90%}
-.gx-verdict-text b{font-weight:800}
-.gx-verdict-text--sm{font-size:14px;font-weight:500;color:#c4ccd4}
-.gx-verdict-text--sm b{color:#fff}
-.gx-cap{display:flex;justify-content:space-between;gap:12px}
-.gx-cap a{color:#7cc4f7;text-transform:none;letter-spacing:0;font-weight:500}
-.gx-split{display:flex;gap:3px;height:6px;margin-top:12px}
-.gx-split span{border-radius:3px}
-.gx-facts{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 44px;margin-top:18px;padding-bottom:10px;font-size:15px;color:#c4ccd4}
-.gx-facts b{color:#fff}
-@media (max-width:760px){
-  .gx{--gx-h:416px}
-  .gx-inner{padding:18px 16px 12px}
-  .gx-band{margin:auto -16px 0;padding:16px 16px 0}
-  .gx-state{font-size:11px;letter-spacing:.24em;gap:8px}
-  .gx-state::before,.gx-state::after{width:16px}
-  .gx-teams{column-gap:36px;padding-top:16px}
-  .gx-logo{width:64px;height:64px}
-  .gx-meta{margin-top:10px;font-size:10px;letter-spacing:.12em}
-  .gx-name{font-size:28px}
-  .gx-num{font-size:78px}
-  .gx-num--pct{font-size:64px}
-  .gx-chance{flex-direction:column;gap:2px}
-  .gx-side--away .gx-chance{align-items:flex-end}
-  .gx-chance .gx-chance-k{order:2}
-  .gx-mark{width:260px;height:260px;top:30px}
-  .gx-half--away .gx-mark{left:-70px}.gx-half--home .gx-mark{right:-70px}
-  .gx-verdict-text{font-size:15px}
-  .gx-facts{gap:8px 20px;font-size:13px}
-}
 @media (prefers-reduced-motion:reduce){.gx-dot{animation:none}}
-.gx-cap-aside{text-transform:none;letter-spacing:0;font-weight:500}
-@media (max-width:760px){.gx-hide-sm{display:none}}
+
+/* ── Game hero: one shape for every state ────────────────────────────────
+   Each team's colour at its own edge (white_knob: dark enough for white type),
+   falling to near-black in the middle; logos as watermarks. Desktop first;
+   tablets shrink the numbers; phones get a fixed 220px version of the same
+   slots so nothing below moves between states. */
+.hx{position:relative;overflow:hidden;color:#fff;background:linear-gradient(110deg,var(--hx-a) 0%,var(--hx-a2) 46%,var(--hx-h2) 54%,var(--hx-h) 100%)}
+.hx-mark{position:absolute;top:-40px;width:420px;height:420px;object-fit:contain;opacity:.07;pointer-events:none}
+.hx-mark--away{left:-60px}.hx-mark--home{right:-60px}
+.hx-in{position:relative;max-width:1200px;margin:0 auto;padding:20px 24px 26px}
+.hx-sm{display:none}
+.hx-top{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:22px;font-size:13px;color:#c4c8cc}
+.hx-back{display:inline-flex;align-items:center;gap:4px;color:#c4c8cc;text-decoration:none}
+.hx-back svg{width:14px;height:14px;flex:none}
+.hx-back:hover{color:#fff}
+.hx-back:active{opacity:.72}
+.hx-back:focus-visible,.hx-name:focus-visible,.hx-bar-mid a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.hx-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:24px;margin-top:8px}
+.hx-side{display:flex;align-items:center;gap:22px;min-width:0}
+.hx-side--away{justify-content:flex-end}
+.hx-team{display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.hx-side--away .hx-team{align-items:flex-end;text-align:right}
+.hx-logo{width:56px;height:56px;object-fit:contain}
+.hx-name{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:26px;font-weight:800;line-height:1.2;color:#fff;text-decoration:none}
+a.hx-name:hover{color:#cfe8fb}
+a.hx-name:active{opacity:.72}
+.hx-meta{font-size:13px;color:#c4c8cc;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-num{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:120px;font-weight:800;line-height:.9;letter-spacing:-.02em}
+.hx-num small{font-size:.43em}
+.hx-num.is-dog,.hx-side.is-lost .hx-num{color:#8a9096}
+.hx-side.is-lost .hx-name{color:#c4c8cc}
+.hx-side.is-lost .hx-logo{opacity:.7}
+.hx-mid{display:flex;flex-direction:column;align-items:center}
+.hx-state{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:150px;text-align:center}
+.hx-live{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:750;color:#ff8a8a;letter-spacing:.05em;text-transform:uppercase}
+.hx-big{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:30px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-final{letter-spacing:.04em;text-transform:uppercase}
+.hx-small{font-size:13px;color:#c4c8cc}
+.hx-foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr);gap:24px;align-items:end;min-height:47px;margin-top:22px}
+.hx-detail{display:flex;flex-direction:column;min-width:0}
+.hx-detail b{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:20px;font-weight:800;line-height:1.25}
+.hx-detail span{font-size:13px;color:#c4c8cc}
+.hx-detail--r{align-items:flex-end;text-align:right}
+.hx-bar-k{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-bar-mid{display:inline-flex;align-items:center;gap:8px;min-width:0;overflow:hidden;font-weight:500;color:#c4c8cc}
+.hx-bar-t{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hx-bar-mid a{color:inherit;text-decoration:none}
+.hx-bar-mid a:hover{color:#fff;text-decoration:underline}
+.hx-split{display:flex;gap:3px;height:10px;border-radius:999px;overflow:hidden}
+.hx-chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:750;flex:none}
+.hx-chip.is-miss{background:rgba(255,107,107,.16);color:#ff9a9a}
+.hx-chip.is-hit{background:rgba(0,184,122,.16);color:#6fdc9a}
+
+/* Score by quarter, the band under the hero. */
+.gls{background:#0a0b0d;border-bottom:1px solid var(--border)}
+.gls-in{max-width:1200px;margin:0 auto;padding:14px 24px;overflow-x:auto}
+.gls-grid{display:grid;grid-template-columns:160px repeat(var(--n),52px) 60px;row-gap:8px;align-items:center;width:max-content;font-size:15px;font-variant-numeric:tabular-nums;color:#e7e9ea}
+.gls-grid>*{text-align:center}
+.gls-h{font-size:13px;color:#9aa0a6}
+.gls-h.is-now{color:#e7e9ea;font-weight:700}
+.gls-team{display:flex;align-items:center;gap:10px;min-width:0;text-align:left!important;font-family:var(--font-display);font-stretch:var(--display-stretch);font-weight:750}
+.gls-team img{width:22px;height:22px;object-fit:contain}
+.gls-ab{display:none}
+.gls-t{font-weight:700}
+.gls-grid .is-lost{color:#c4c8cc}
+.gls-t.is-lost{color:#9aa0a6}
+.gls-team.is-lost img{opacity:.7}
+
+@media (min-width:761px) and (max-width:1000px){
+    .hx-num{font-size:84px}
+    .hx-name{font-size:20px}
+    .hx-logo{width:44px;height:44px}
+    .hx-side{gap:14px}
+    .hx-teams{gap:16px}
+    .hx-state{min-width:120px}
+    .hx-big{font-size:24px}
+    .hx-mark{width:300px;height:300px}
+}
+@media (max-width:760px){
+    .hx-lg{display:none}
+    .hx-sm{display:revert}
+    .hx{background:linear-gradient(115deg,var(--hx-a) 0%,var(--hx-a2) 45%,var(--hx-h2) 55%,var(--hx-h) 100%)}
+    .hx-mark{top:30px;width:150px;height:150px;opacity:.08}
+    .hx-mark--away{left:-34px}.hx-mark--home{right:-36px}
+    .hx-in{display:flex;flex-direction:column;height:220px;padding:8px 14px 14px}
+    .hx-top{gap:8px;min-height:0}
+    .hx-back{justify-content:center;width:44px;height:44px;margin-left:-12px;flex:none;color:#e7e9ea}
+    .hx-back svg{width:18px;height:18px}
+    .hx-now{display:inline-flex;align-items:center;gap:6px;min-width:0;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:14px;font-weight:750;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .hx-now .hx-live{font-family:var(--font-body,inherit);font-stretch:100%;font-size:11.5px;gap:6px}
+    .hx-now .gx-dot{width:6px;height:6px}
+    .hx-wk{width:44px;flex:none;text-align:right;font-size:12px;color:#c4c8cc}
+    .hx-teams{grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);gap:0;margin-top:6px}
+    .hx-side,.hx-side--away{justify-content:space-between;gap:8px}
+    .hx-team,.hx-side--away .hx-team{align-items:center;gap:3px;text-align:center}
+    .hx-logo{width:28px;height:28px}
+    .hx-name{font-size:15px;font-weight:750;line-height:1.05;white-space:nowrap}
+    a.hx-name{padding-block:6px;margin-block:-6px}
+    .hx-meta{font-size:12px}
+    .hx-num{font-size:54px}
+    .hx-num small{font-size:.48em}
+    .hx-at{font-size:12px;color:#c4c8cc}
+    .hx-line{margin:12px 0 0;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:15px;font-weight:800}
+    .hx-foot{display:block;min-height:0;margin-top:auto}
+    .hx-bar-k{align-items:baseline;gap:6px;margin-bottom:4px;font-size:12px}
+    .hx-bar-mid{gap:6px;text-overflow:ellipsis}
+    .hx-split{gap:2px;height:6px}
+    .hx-chip{height:18px;padding:0 7px;font-size:11.5px}
+    .gls-in{padding:10px 16px}
+    .gls-grid{grid-template-columns:minmax(0,1fr) repeat(var(--n),34px) 40px;width:100%;font-size:14px}
+    .gls-full{display:none}
+    .gls-ab{display:inline}
+}
+
+/* ── Key plays: the phone's live feed ─────────────────────────────────────── */
+.kp{display:none}
+@media (max-width:760px){
+    .kp{display:block;margin:0 0 24px}
+    .sp-wrap.has-kp{display:none}
+    .kp-h{margin:0 0 4px;font-size:12px;font-weight:500;color:#9aa0a6}
+    .kp-card{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+    .kp-card:first-of-type{border-top:0}
+    .kp-av{position:relative;flex:none;width:46px;height:46px;margin-top:2px}
+    .kp-face{display:block;width:46px;height:46px;border-radius:50%;object-fit:cover;object-position:top;background:#202127}
+    .kp-badge{position:absolute;right:-5px;bottom:-4px;width:20px;height:20px;padding:2px;border-radius:50%;background:#000;object-fit:contain}
+    .kp-bd{flex:1;min-width:0}
+    .kp-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .kp-sc{display:inline-flex;align-items:center;gap:5px;min-width:0;font-size:12.5px;color:#9aa0a6;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .kp-sc img,.kp-chip img{width:15px;height:15px;object-fit:contain}
+    .kp-sc b{font-weight:700;color:#c4c8cc}
+    .kp-chip{display:inline-flex;align-items:center;gap:5px;flex:none;height:22px;padding:0 8px 0 5px;border-radius:999px;background:rgba(255,255,255,.09);font-size:12.5px;font-weight:750;color:#e7e9ea;font-variant-numeric:tabular-nums}
+    .kp-hl{margin:4px 0 3px;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:16.5px;font-weight:750;line-height:1.2;color:#e7e9ea}
+    .kp-hl.is-score{color:#4ab1f4}
+    .kp-p1,.kp-p2,.kp-ln{margin:0;line-height:1.4}
+    .kp-p1{font-size:14px;color:#9aa0a6}
+    .kp-p1 b{font-weight:650;color:#e7e9ea}
+    .kp-p2{font-size:13.5px;color:#8a9096}
+    .kp-ln{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:13.5px;color:#c4c8cc}
+    .kp-ln svg{width:14px;height:14px;flex:none;color:#4ab1f4}
+    .kp-dot{flex:none;width:11px;height:11px;margin:0 1px;border-radius:50%}
+    .kp-dot.is-g{background:#00b87a}.kp-dot.is-r{background:#f4212e}
+}
 
 /* ── Team page: hero ─────────────────────────────────────────────────────
    Identity left, stats right. Net Savant is the one big tile, spanning both
@@ -9702,22 +9774,9 @@ a.ttx-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px
 
 /* Game page: phone targets and legibility (critique fixes). */
 @media (max-width: 760px) {
-    a.gx-name { padding-block: 9px; margin-block: -7px; }
-    .gx-cap a { display: inline-flex; align-items: center; min-height: 44px; }
-    .gx-bar { display: none; }
     .gl2-name { padding-block: 12px; margin-block: -10px; }
 }
 .gpv-sum-a, .gpv-sum-h { font-variant-numeric: proportional-nums; }
-/* Quarter table: full names where they fit; on a phone the abbreviation, so
-   the final-score column stays in view instead of scrolling off. */
-.qs-abbr { display: none; }
-.qs-team-h { min-width: 160px; }
-@media (max-width: 575.98px) {
-    .qs-full { display: none; }
-    .qs-abbr { display: inline; white-space: nowrap; }
-    .qs-team-h { min-width: 0; }
-    .qs-table th, .qs-table td { padding-left: 8px !important; padding-right: 8px !important; }
-}
 
 /* ── CFP bracket: the rounds rail ─────────────────────────────────────────
    Rounds left to right, then the champion. Columns share one height and each
