@@ -372,7 +372,7 @@
             </li>
             {% endfor %}
         </ol>
-        <a class="xe-link" href="/rivalry/{{ mu_a|urlencode }}/{{ mu_b|urlencode }}">Full series page</a>
+        <a class="xe-link" href="/rivalry/{{ mu_a|team_slug }}/{{ mu_b|team_slug }}">Full series page</a>
 
     {% elif mu_a and mu_b and not mu_error %}
         <div class="mu-empty">

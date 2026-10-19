@@ -76,7 +76,7 @@
                     {# Stretched link: the whole card is the target, but only this
                        one anchor is in the tab order and it carries the label a
                        screen reader announces. #}
-                    <a class="rv-stretch" href="/rivalry/{{ r.ta|urlencode }}/{{ r.tb|urlencode }}">
+                    <a class="rv-stretch" href="/rivalry/{{ r.ta|team_slug }}/{{ r.tb|team_slug }}">
                         {{ r.name }}
                     </a>
                 </h2>

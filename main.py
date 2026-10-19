@@ -10256,9 +10256,13 @@ def _player_detail_cached(player_id, season):
         }
 
         # ── Transfer history + stats/current-team mismatch detection ──────────
-        # player_id resolved at ingest; name match kept for unresolved rows.
+        # player_id resolved at ingest; name match kept for unresolved rows,
+        # but only when one of its schools is a team this player (by id) has
+        # been on. A bare name match put a 2023 Georgia Tech safety's portal
+        # entry on Ohio State's Jeremiah Smith, and ~570 pages like it.
         cursor.execute('''
-            SELECT origin, destination, transfer_date, year, stars, rating
+            SELECT origin, destination, transfer_date, year, stars, rating,
+                   player_id IS NOT NULL
             FROM transfers
             WHERE player_id = %s
                OR (player_id IS NULL AND LOWER(first_name) = LOWER(%s)
@@ -10266,6 +10270,16 @@ def _player_detail_cached(player_id, season):
             ORDER BY year ASC, transfer_date ASC
         ''', (player_id, player['first_name'], player['last_name']))
         transfer_rows = cursor.fetchall()
+        if not all(r[6] for r in transfer_rows):
+            cursor.execute('''
+                SELECT team FROM rosters WHERE player_id = %s
+                UNION SELECT team FROM player_stats WHERE player_id = %s
+                UNION SELECT team FROM players WHERE id = %s
+            ''', (player_id, str(player_id), player_id))
+            own_teams = {r[0] for r in cursor.fetchall() if r[0]}
+            transfer_rows = [r for r in transfer_rows
+                             if r[6] or r[0] in own_teams or r[1] in own_teams]
+        transfer_rows = [r[:6] for r in transfer_rows]
         transfers_history = []
         for origin, destination, transfer_date, t_year, stars, rating in transfer_rows:
             if not origin or not destination:
@@ -11424,8 +11438,24 @@ def rivalry_history(team_a, team_b):
     try:
         cursor = conn.cursor()
 
-        cursor.execute('SELECT rivalry_name FROM rivalries WHERE team1=%s AND team2=%s LIMIT 1',
-                       (team_a, team_b))
+        # Canonical URLs use slugs (/rivalry/michigan/ohio-state), like /team.
+        # A segment that is a team's name 301s to its slug, and one that is
+        # neither is a 404: matching raw segments against games.home_team used
+        # to turn every slug link into a confident "0-0, haven't met since 2016".
+        refs = []
+        for ref in (team_a, team_b):
+            cursor.execute('SELECT name, slug FROM teams WHERE slug = %s OR name = %s '
+                           'ORDER BY (slug = %s) DESC LIMIT 1', (ref, ref, ref))
+            refs.append(cursor.fetchone())
+        if not all(refs):
+            missing = team_a if not refs[0] else team_b
+            return render_template('404.html', message=f'Team "{missing}" not found.'), 404
+        (team_a, slug_a), (team_b, slug_b) = refs
+        if request.view_args['team_a'] != slug_a or request.view_args['team_b'] != slug_b:
+            return redirect(f'/rivalry/{slug_a}/{slug_b}', code=301)
+
+        cursor.execute('SELECT rivalry_name FROM rivalries WHERE (team1=%s AND team2=%s) '
+                       'OR (team1=%s AND team2=%s) LIMIT 1', (team_a, team_b, team_b, team_a))
         row = cursor.fetchone()
         rivalry_name = row[0] if row else f"{team_a} vs {team_b}"
 
@@ -13646,12 +13676,11 @@ def sitemap():
         paths += [f'/team/{r[0]}' for r in cur.fetchall()]
         # Named rivalries — a bounded set of pages reachable only through
         # internal links otherwise. Ordered pair, matching the page's own URLs.
-        from urllib.parse import quote as _q
         cur.execute('''SELECT DISTINCT
                          CASE WHEN team1 < team2 THEN team1 ELSE team2 END,
                          CASE WHEN team1 < team2 THEN team2 ELSE team1 END
                        FROM rivalries WHERE team1 IS NOT NULL AND team2 IS NOT NULL''')
-        paths += [f"/rivalry/{_q(a)}/{_q(b)}" for a, b in cur.fetchall()]
+        paths += [f"/rivalry/{slugify_team(a)}/{slugify_team(b)}" for a, b in cur.fetchall()]
         # Current season's games and current-roster players only. The
         # historical expansion made every past player/game a real page, but
         # advertising all ~60k of them sent crawlers into a sustained frenzy
