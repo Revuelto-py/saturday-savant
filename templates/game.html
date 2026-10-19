@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_passing_chart.html" as pc %}
 {% block title %}{{ away_team }} vs {{ home_team }} · Saturday Savant{% endblock %}
-{% block og_title %}{{ away_team }} {{ game[4] if game[4] is not none else '' }} – {{ game[3] if game[3] is not none else '' }} {{ home_team }}{% if game[3] is not none %} (Final){% endif %} · Saturday Savant{% endblock %}
+{% block og_title %}{{ away_team }} {{ game[4] if game[4] is not none else '' }} – {{ game[3] if game[3] is not none else '' }} {{ home_team }}{% if game[3] is not none and not is_live %} (Final){% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ away_team }} at {{ home_team }}{% if notes %} · {{ notes }}{% endif %}{% if game_date %} · {{ game_date }}{% endif %}. Box score, win probability, drives, and play-by-play on Saturday Savant.{% endblock %}
 
 {# team_hex rejects a colour that cannot show on this page, not merely a
@@ -20,7 +20,7 @@
 {% set away_rank  = ap_rankings.get(away_team) %}
 {% set is_post    = game[6] and 'postseason' in game[6].lower() %}
 {% set home_won   = game[3] is not none and game[4] is not none and game[3] > game[4] %}
-{% set game_final = game[3] is not none and game[4] is not none %}
+{% set game_final = game[3] is not none and game[4] is not none and not is_live %}
 {% set away_won_final = game_final and not home_won %}
 {% set home_won_final = game_final and home_won %}
 
@@ -326,7 +326,7 @@
 </header>
 
 {# ── MAIN PAGE CONTENT ─────────────────────────────────────────────────────── #}
-<div class="page-wrapper" style="padding-top:24px">
+<div class="page-wrapper" style="padding-top:24px"{% if is_live %} data-live-page{% endif %}>
 
 {# Weather, shared by the upcoming and completed layouts. CFBD's row for an
    unplayed game is a forecast refreshed weekly by the pipeline — labelled as
@@ -591,6 +591,9 @@
 </div>
 {% endif %}
 
+{% if is_live %}
+<p class="gx-live-note"><span class="gx-dot" aria-hidden="true"></span>Live · stats as of {{ live_updated }} ET, via ESPN · this page updates every minute</p>
+{% endif %}
 {# ── QUARTER SCORE TABLE ───────────────────────────────────────────────────── #}
 {% if home_q or away_q %}
 {% set num_periods = [home_q|length, away_q|length]|max %}
@@ -1684,6 +1687,42 @@ function switchTab(name, keepHash) {
         next.focus(); next.click(); e.preventDefault();
     });
 })();
+
+{% if is_live %}
+// Live: re-read this page every minute and swap the body in place, keeping the
+// open tab. The score in the header is patched separately by /api/live (base.html);
+// at the final whistle that script reloads into the full recap.
+(function () {
+    function openTab() {
+        var b = document.querySelector('.tab-btn[aria-selected="true"]');
+        return b ? b.id.replace('tab-btn-', '') : null;
+    }
+    function refresh() {
+        if (document.visibilityState !== 'visible') return;
+        fetch(location.pathname, { headers: { 'Accept': 'text/html' }, cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.text() : null; })
+            .then(function (html) {
+                if (!html) return;
+                var fresh = new DOMParser().parseFromString(html, 'text/html').querySelector('.page-wrapper');
+                var old = document.querySelector('.page-wrapper');
+                if (!fresh || !old) return;
+                if (!fresh.hasAttribute('data-live-page')) { location.reload(); return; }
+                var tab = openTab();
+                old.innerHTML = fresh.innerHTML;
+                // innerHTML never runs scripts; re-create the chart scripts so they draw.
+                old.querySelectorAll('script').forEach(function (s) {
+                    if (s.type && s.type !== 'text/javascript') return;   // JSON data blocks
+                    var n = document.createElement('script');
+                    n.textContent = s.textContent;
+                    s.replaceWith(n);
+                });
+                if (tab) switchTab(tab, true);
+            })
+            .catch(function () { /* the next minute tries again */ });
+    }
+    setInterval(refresh, 60000);
+})();
+{% endif %}
 
 function showDriveTooltip(e, text) {
     var tip = document.getElementById('drive-tip');

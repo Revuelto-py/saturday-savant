@@ -8424,9 +8424,78 @@ def _game_boxstats(game_id):
     return out
 
 
+# A game between kickoff and its final is rebuilt from ESPN's live summary on a
+# short, in-process cache instead of the hour-long page cache. Nothing from a live
+# game is written to Postgres: game_summaries only ever stores a completed game's
+# summary, once it carries drives and scoring plays.
+LIVE_PAGE_TTL = 30
+
+
+@data_cache.memoize(timeout=45)     # LIVE_TTL, defined with /api/live below
+def _live_window_ids():
+    """Ids of games past kickoff (within 8 hours) and not yet final.
+
+    Read from the games table alone, never the CFBD board: crawlers request
+    thousands of game pages, and an external call behind each would spend the
+    API quota. The score cron marks a game final within minutes of the end."""
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id FROM games
+             WHERE completed = 0 AND start_date IS NOT NULL AND start_date <> ''
+               AND start_date::timestamptz <= now()
+               AND start_date::timestamptz > now() - interval '8 hours'
+        """)
+        return frozenset(r[0] for r in cur.fetchall())
+    except Exception:
+        conn.rollback()
+        return frozenset()
+    finally:
+        release_db(conn)
+
+
+def _game_in_live_window(f=None, game_id=None, **_):
+    """cache.cached `unless` hook: True keeps a live game out of the page cache,
+    so a page rendered before kickoff can't be served for an hour into it."""
+    return game_id in _live_window_ids()
+
+
+def _pregame_forecast(game_id, home_team, away_team):
+    """The forecast as it stood before kickoff, from the unscored prediction row
+    (it is graded and frozen only once the game is final). None when the game
+    has no prediction (e.g. an FCS opponent)."""
+    conn = get_db()
+    try:
+        c = conn.cursor()
+        c.execute('SELECT home_prob, predicted_margin, contrib FROM game_predictions '
+                  'WHERE game_id = %s AND scored = 0', (game_id,))
+        fr = c.fetchone()
+    except Exception:
+        conn.rollback()   # table absent on a fresh DB — degrade to no block
+        fr = None
+    finally:
+        release_db(conn)
+    if not fr or fr[0] is None:
+        return None
+    # favorite/fav_prob match the completed-game shape; the live verdict line
+    # ("had X at N% before kickoff") reads them.
+    home_fav = fr[0] >= 0.5
+    return {'home_prob': fr[0], 'margin': fr[1],
+            'favorite': home_team if home_fav else away_team,
+            'fav_prob': fr[0] if home_fav else 1 - fr[0],
+            'contrib': describe_contrib(fr[2]) or None}
+
+
 @app.route('/game/<int:game_id>')
-@cache.cached(timeout=3600)
+@cache.cached(timeout=3600, unless=_game_in_live_window)
 def game_detail(game_id):
+    in_window = game_id in _live_window_ids()
+    live_key = f'live-game/{game_id}'
+    if in_window:
+        hit = cache.get(live_key)
+        if hit is not None:
+            return hit
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -8469,6 +8538,9 @@ def game_detail(game_id):
         # wrote them. The page keeps the compact pre-kickoff body (there is no
         # box score yet) but shows the running score instead of a kickoff time.
         is_live = is_scheduled and game_info[3] is not None and game_info[4] is not None
+        # A live game renders like a finished one (box score, drives, win
+        # probability) from ESPN's live summary, held only in memory.
+        is_scheduled = is_scheduled and not is_live
 
         records = {}
         name_to_player_id = {}
@@ -8487,7 +8559,7 @@ def game_detail(game_id):
                         SUM(CASE WHEN (home_team=%s AND home_points<away_points) OR (away_team=%s AND away_points<home_points) THEN 1 ELSE 0 END)
                     FROM games
                     WHERE (home_team=%s OR away_team=%s) AND home_points IS NOT NULL AND away_points IS NOT NULL
-                      AND season = %s
+                      AND completed = 1 AND season = %s
                       AND (start_date, id) <= (SELECT start_date, id FROM games WHERE id = %s)
                 ''', (team, team, team, team, team, team, game_season, game_id))
                 row = cursor.fetchone()
@@ -8509,10 +8581,12 @@ def game_detail(game_id):
                     name_to_position[_pk] = _ppos
 
             # Stored ESPN summary (pipeline/fetch_game_summaries.py) — completed games are
-            # immutable, so pages render from Postgres with no ESPN call
+            # immutable, so pages render from Postgres with no ESPN call. A live
+            # game always asks ESPN.
             try:
-                cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
-                summary_row = cursor.fetchone()
+                if not is_live:
+                    cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
+                    summary_row = cursor.fetchone()
             except Exception:
                 conn.rollback()  # table not created yet — fall back to live fetch
     finally:
@@ -8525,26 +8599,8 @@ def game_detail(game_id):
         season_type_raw = game_info[6] or ''
         # Savant Forecast — precomputed weekly by pipeline/predict_games.py; a game
         # without a row (e.g. FCS opponent) simply shows no forecast block.
-        forecast = None
-        conn2 = get_db()
-        try:
-            c2 = conn2.cursor()
-            c2.execute('SELECT home_prob, predicted_margin, contrib FROM game_predictions '
-                       'WHERE game_id = %s AND scored = 0', (game_id,))
-            fr = c2.fetchone()
-            if fr and fr[0] is not None:
-                # favorite/fav_prob match the completed-game shape; the live
-                # verdict line ("had X at N% before kickoff") reads them.
-                _home_fav = fr[0] >= 0.5
-                forecast = {'home_prob': fr[0], 'margin': fr[1],
-                            'favorite': home_team if _home_fav else away_team,
-                            'fav_prob': fr[0] if _home_fav else 1 - fr[0],
-                            'contrib': describe_contrib(fr[2]) or None}
-        except Exception:
-            conn2.rollback()   # table absent on a fresh DB — degrade to no block
-        finally:
-            release_db(conn2)
-        return render_template('game.html',
+        forecast = _pregame_forecast(game_id, home_team, away_team)
+        html = render_template('game.html',
             game=game_info, home_team=home_team, away_team=away_team,
             forecast=forecast,
             fc_trust=forecast_trust(forecast['fav_prob']) if forecast else None,
@@ -8580,6 +8636,9 @@ def game_detail(game_id):
             plays=[], team_stats=[], home_stats={}, away_stats={},
             player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
             structured_leaders={}, win_prob=[], top_wpa=[])
+        if in_window:
+            cache.set(live_key, html, timeout=LIVE_PAGE_TTL)
+        return html
 
     espn_game_id = None
     quarters = {'home': [], 'away': []}
@@ -8639,7 +8698,9 @@ def game_detail(game_id):
                 # 5 scoring plays sitting in ESPN's response.
                 _has_detail = bool(data.get('scoringPlays')
                                    or (data.get('drives') or {}).get('previous'))
-                if game_info[15] and data.get('header', {}).get('competitions') and _has_detail:
+                # completed (game_info[15]) is the guard that keeps every live
+                # summary out of the table: a live game is never written.
+                if game_info[15] and not is_live and data.get('header', {}).get('competitions') and _has_detail:
                     connS = get_db()
                     try:
                         curS = connS.cursor()
@@ -8658,7 +8719,7 @@ def game_detail(game_id):
                         release_db(connS)
         if data.get('header', {}).get('competitions'):
             espn_game_id = str(game_id)
-        else:
+        elif not is_live:
             # Fallback for ids ESPN doesn't recognize: scan the scoreboard
             # across the game's UTC date and the day before (to cover the
             # UTC-midnight boundary), matching by team name.
@@ -9483,11 +9544,14 @@ def game_detail(game_id):
     # Frozen pre-kickoff Savant Forecast for this completed game (drives both
     # the recap line and, when it was a miss, the upset badge). None when the
     # game predates Forecast or was never predicted.
-    conn_u = get_db()
-    try:
-        forecast = get_frozen_forecasts(conn_u.cursor(), [game_id]).get(game_id)
-    finally:
-        release_db(conn_u)
+    if is_live:
+        forecast = _pregame_forecast(game_id, home_team, away_team)
+    else:
+        conn_u = get_db()
+        try:
+            forecast = get_frozen_forecasts(conn_u.cursor(), [game_id]).get(game_id)
+        finally:
+            release_db(conn_u)
 
     # The team-stats card above is filled from the ESPN summary. When that came
     # back without a boxscore — common for older seasons — game_boxstats holds
@@ -9501,11 +9565,13 @@ def game_detail(game_id):
             away_stats = _bx.get('away', {})
             stored_stats = True
 
-    return render_template('game.html',
+    html = render_template('game.html',
         game=game_info,
         forecast=forecast,
         fc_trust=forecast_trust(forecast['fav_prob']) if forecast else None,
-        is_scheduled=False, is_live=False,
+        is_scheduled=False, is_live=is_live,
+        live_updated=(datetime.datetime.now(ZoneInfo('America/New_York')).strftime('%-I:%M %p')
+                      if is_live else None),
         game_passing=get_game_passing_profile(game_id),
         home_team=home_team,
         away_team=away_team,
@@ -9546,6 +9612,9 @@ def game_detail(game_id):
         rivalry_name=rivalry_name,
         game_season=game_season,
     )
+    if in_window:
+        cache.set(live_key, html, timeout=LIVE_PAGE_TTL)
+    return html
 
 
 # Conference championship games are tagged 'SeasonType.REGULAR' in this
