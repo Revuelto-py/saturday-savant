@@ -62,6 +62,7 @@ from lib import landscape
 from lib import compare_card as compare_card_mod
 from psycopg2 import pool as pg_pool
 import gzip
+import hashlib
 import io
 import colorsys
 from functools import lru_cache
@@ -331,7 +332,7 @@ def _rate_limit():
     if _RL_MAX <= 0:
         return
     path = request.path
-    if _is_asset_path(path):
+    if _is_asset_path(path) or _live_poll_unchanged():
         return
     ip = _client_ip()
     now = _time.monotonic()
@@ -3689,7 +3690,8 @@ def add_cache_headers(resp):
     # so back/forward and prefetched clicks render instantly. Data updates are
     # hourly at most, so 3 minutes of staleness is invisible.
     if request.method == 'GET' and resp.status_code == 200 \
-            and resp.mimetype == 'text/html' and not request.path.startswith('/admin'):
+            and resp.mimetype == 'text/html' and not request.path.startswith('/admin') \
+            and 'X-Live-Version' not in resp.headers:     # a live page is no-store
         resp.cache_control.public = True
         resp.cache_control.max_age = 180
     return resp
@@ -8428,7 +8430,87 @@ def _game_boxstats(game_id):
 # short, in-process cache instead of the hour-long page cache. Nothing from a live
 # game is written to Postgres: game_summaries only ever stores a completed game's
 # summary, once it carries drives and scoring plays.
-LIVE_PAGE_TTL = 30
+#
+# The open page asks for itself every 5 seconds, carrying the version it shows.
+# Each worker re-reads ESPN at most every LIVE_FETCH_TTL seconds (ESPN's own CDN
+# holds the summary for 5, so asking sooner gets the same bytes) and re-renders
+# only when the version changes, about once a play. Every other poll is an empty
+# 204.
+LIVE_PAGE_TTL = 30      # in-window page with no ESPN data on it (before the first score)
+LIVE_FETCH_TTL = 5
+LIVE_HTML_TTL = 120     # a rendered live page, reused while its version holds
+LIVE_ASOF = '__LIVE_AS_OF__'   # the as-of clock, filled in per response
+_LIVE_PATH = re.compile(r'^/game/(\d+)$')
+_live_espn = {}         # game_id -> (fetched at, raw JSON, version, as-of); this worker's memory only
+
+
+def _live_version(d):
+    """Fingerprint of what the page draws from ESPN's live summary: the clock and
+    status, both scores, who has the ball, and every play (its id and ESPN's
+    'modified' stamp, so a corrected play counts as a change). Odds, news and the
+    rest of the payload stay out, so they can't trigger a re-send."""
+    comp = ((d.get('header') or {}).get('competitions') or [{}])[0]
+    st = comp.get('status') or {}
+    dr = d.get('drives') or {}
+    drives = (dr.get('previous') or []) + ([dr['current']] if dr.get('current') else [])
+    key = [st.get('displayClock'), st.get('period'), (st.get('type') or {}).get('detail'),
+           [(c.get('score'), c.get('possession')) for c in comp.get('competitors') or []],
+           [(p.get('id'), p.get('modified')) for x in drives for p in x.get('plays') or []],
+           len(d.get('winprobability') or [])]
+    return hashlib.md5(json.dumps(key).encode()).hexdigest()[:12]
+
+
+def _live_summary(game_id):
+    """ESPN's live summary for one game as (raw JSON, version, as-of clock), read at
+    most every LIVE_FETCH_TTL seconds per worker and never stored. A failed fetch
+    keeps the last good copy and its as-of time, so an ESPN blip doesn't blank the
+    page; (None, None, None) until the first success."""
+    now = _time.monotonic()
+    got = _live_espn.get(game_id)
+    if got and now - got[0] < LIVE_FETCH_TTL:
+        return got[1:]
+    # ponytail: no per-game lock, so threads arriving as the copy expires may each
+    # fetch once; a lock per game if ESPN ever objects.
+    entry = (now,) + (got[1:] if got else (None, None, None))
+    try:
+        s = req.get('https://site.api.espn.com/apis/site/v2/sports/football/college-football/summary',
+                    params={'event': game_id}, timeout=4)
+        data = s.json() if s.ok else None
+        if data and (data.get('header') or {}).get('competitions'):
+            entry = (now, s.content, _live_version(data),
+                     datetime.datetime.now(ZoneInfo('America/New_York')).strftime('%-I:%M:%S %p'))
+    except (req.RequestException, ValueError):
+        pass
+    _live_espn[game_id] = entry
+    for k, v in list(_live_espn.items()):     # games nobody is watching any more
+        if now - v[0] > 600:
+            _live_espn.pop(k, None)
+    return entry[1:]
+
+
+def _live_page(html, version, as_of):
+    """A live game page, or an empty 204 when the asking page already shows this
+    version. Never cached: the page polls for itself."""
+    if request.headers.get('X-Live-Version') == version:
+        resp = Response(status=204)
+    else:
+        resp = Response(html.replace(LIVE_ASOF, as_of), mimetype='text/html')
+    resp.headers['X-Live-Version'] = version
+    resp.headers['X-Live-As-Of'] = as_of
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+def _live_poll_unchanged():
+    """A live page asking "anything new?" when nothing is: a 204 from memory, so it
+    skips the per-IP limit (a stadium's phones share one address). Checked against
+    the live window first, so the header can't lift the limit anywhere else."""
+    v = request.headers.get('X-Live-Version')
+    m = v and _LIVE_PATH.match(request.path)
+    if not m:
+        return False
+    gid = int(m.group(1))
+    return gid in _live_window_ids() and _live_summary(gid)[1] == v
 
 
 @data_cache.memoize(timeout=45)     # LIVE_TTL, defined with /api/live below
@@ -8493,9 +8575,14 @@ def game_detail(game_id):
     in_window = game_id in _live_window_ids()
     live_key = f'live-game/{game_id}'
     if in_window:
-        hit = cache.get(live_key)
+        hit = cache.get(live_key)       # (version, html); no version = nothing from ESPN on it
         if hit is not None:
-            return hit
+            version, html = hit
+            if version is None:
+                return html
+            _, now_version, as_of = _live_summary(game_id)
+            if now_version == version:
+                return _live_page(html, version, as_of)
     conn = get_db()
     try:
         cursor = conn.cursor()
@@ -8637,7 +8724,7 @@ def game_detail(game_id):
             player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
             structured_leaders={}, win_prob=[], top_wpa=[])
         if in_window:
-            cache.set(live_key, html, timeout=LIVE_PAGE_TTL)
+            cache.set(live_key, (None, html), timeout=LIVE_PAGE_TTL)
         return html
 
     espn_game_id = None
@@ -8658,6 +8745,7 @@ def game_detail(game_id):
     home_stats = {}
     away_stats = {}
     game_player_ids = {}   # name(lower) -> validated player id, for leader linking
+    live_version = live_asof = live_status = None
 
     try:
         data = {}
@@ -8672,7 +8760,20 @@ def game_detail(game_id):
         if not (data.get('scoringPlays') or (data.get('drives') or {}).get('previous')):
             data = {}
             summary_row = None
-        if not summary_row:
+        if not summary_row and is_live and in_window:
+            # Live: this worker's 5-second copy of ESPN's summary, parsed afresh
+            # so nothing below can alter the shared copy.
+            raw, live_version, live_asof = _live_summary(game_id)
+            data = json.loads(raw) if raw else {}
+            if live_version:
+                # The hero and the line score follow the same feed as the plays;
+                # the games row only learns the score from the 10-minute cron.
+                comp = data['header']['competitions'][0]
+                sc = {c.get('homeAway'): str(c.get('score', '')) for c in comp.get('competitors') or []}
+                if sc.get('home', '').isdigit() and sc.get('away', '').isdigit():
+                    game_info = game_info[:3] + (int(sc['home']), int(sc['away'])) + game_info[5:]
+                live_status = ((comp.get('status') or {}).get('type') or {}).get('shortDetail')
+        elif not summary_row:
             # Not stored yet (e.g. game just completed) — fetch live. CFBD
             # game ids are ESPN event ids, so ask the summary endpoint
             # directly rather than scanning the scoreboard by date, which
@@ -9570,8 +9671,10 @@ def game_detail(game_id):
         forecast=forecast,
         fc_trust=forecast_trust(forecast['fav_prob']) if forecast else None,
         is_scheduled=False, is_live=is_live,
-        live_updated=(datetime.datetime.now(ZoneInfo('America/New_York')).strftime('%-I:%M %p')
+        live_updated=((LIVE_ASOF if live_version else
+                       datetime.datetime.now(ZoneInfo('America/New_York')).strftime('%-I:%M %p'))
                       if is_live else None),
+        live_version=live_version, live_status=live_status,
         game_passing=get_game_passing_profile(game_id),
         home_team=home_team,
         away_team=away_team,
@@ -9612,8 +9715,11 @@ def game_detail(game_id):
         rivalry_name=rivalry_name,
         game_season=game_season,
     )
+    if live_version:
+        cache.set(live_key, (live_version, html), timeout=LIVE_HTML_TTL)
+        return _live_page(html, live_version, live_asof)
     if in_window:
-        cache.set(live_key, html, timeout=LIVE_PAGE_TTL)
+        cache.set(live_key, (None, html), timeout=LIVE_PAGE_TTL)
     return html
 
 

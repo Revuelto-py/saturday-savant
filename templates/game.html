@@ -258,7 +258,9 @@
     {{ caller() }}
 </div>
 {% endmacro %}
-<header class="gx gx--{{ gx_state }}"{% if is_live %} data-gid="{{ game[0] }}"{% endif %}>
+{# data-live-self: this page refreshes its own hero from ESPN (script at the end),
+   so the ticker's slower /api/live board only watches it for the final. #}
+<header class="gx gx--{{ gx_state }}"{% if is_live %} data-gid="{{ game[0] }}" data-live-self{% endif %}>
     {{ gx_half('away', away_color, game[10], home_won_final) }}
     {{ gx_half('home', home_color, game[9], away_won_final) }}
     <span class="gx-rule" aria-hidden="true"></span>
@@ -271,7 +273,7 @@
                 {%- else %}Final{% endif -%}
             </span>
             <span class="gx-sub">
-                {%- if is_live %}<span data-live-status>In progress</span> · {{ gx_week }}
+                {%- if is_live %}<span data-live-status>{{ live_status or 'In progress' }}</span> · {{ gx_week }}
                 {%- elif is_scheduled %}{% if game_date and game_date != 'TBD' %}{{ game_date }} · {% endif %}{{ gx_week }}
                 {%- else %}{{ gx_week }}{% if game_date and game_date != 'TBD' %} · {{ game_date }}{% endif %}{% endif -%}
                 {%- if rivalry_name %} · {{ rivalry_name }}{% endif -%}
@@ -326,7 +328,7 @@
 </header>
 
 {# ── MAIN PAGE CONTENT ─────────────────────────────────────────────────────── #}
-<div class="page-wrapper" style="padding-top:24px"{% if is_live %} data-live-page{% endif %}>
+<div class="page-wrapper" style="padding-top:24px"{% if is_live %} data-live-page data-live-version="{{ live_version or '' }}"{% endif %}>
 
 {# Weather, shared by the upcoming and completed layouts. CFBD's row for an
    unplayed game is a forecast refreshed weekly by the pipeline — labelled as
@@ -592,7 +594,7 @@
 {% endif %}
 
 {% if is_live %}
-<p class="gx-live-note"><span class="gx-dot" aria-hidden="true"></span>Live · stats as of {{ live_updated }} ET, via ESPN · this page updates every minute</p>
+<p class="gx-live-note"><span class="gx-dot" aria-hidden="true"></span><span>Live · stats as of <span data-live-asof>{{ live_updated }}</span> ET, via ESPN · new plays appear within seconds</span></p>
 {% endif %}
 {# ── QUARTER SCORE TABLE ───────────────────────────────────────────────────── #}
 {% if home_q or away_q %}
@@ -1689,24 +1691,38 @@ function switchTab(name, keepHash) {
 })();
 
 {% if is_live %}
-// Live: re-read this page every minute and swap the body in place, keeping the
-// open tab. The score in the header is patched separately by /api/live (base.html);
-// at the final whistle that script reloads into the full recap.
+// Live: ask for this page every 5 seconds while the tab is visible, sending the
+// version it shows. Until ESPN's data changes the answer is an empty 204 carrying
+// only the as-of time; on a change the hero and body are swapped in place, keeping
+// the open tab. At the final whistle /api/live (base.html) reloads into the recap.
 (function () {
+    var wrap = document.querySelector('.page-wrapper');
+    var version = wrap ? wrap.getAttribute('data-live-version') || '' : '';
+    var busy = false;
     function openTab() {
         var b = document.querySelector('.tab-btn[aria-selected="true"]');
         return b ? b.id.replace('tab-btn-', '') : null;
     }
     function refresh() {
-        if (document.visibilityState !== 'visible') return;
-        fetch(location.pathname, { headers: { 'Accept': 'text/html' }, cache: 'no-store' })
-            .then(function (r) { return r.ok ? r.text() : null; })
+        if (busy || document.visibilityState !== 'visible') return;
+        busy = true;
+        fetch(location.pathname, { headers: { 'Accept': 'text/html', 'X-Live-Version': version }, cache: 'no-store' })
+            .then(function (r) {
+                var asOf = r.headers.get('X-Live-As-Of');
+                if (asOf) document.querySelectorAll('[data-live-asof]').forEach(function (el) { el.textContent = asOf; });
+                if (r.status !== 200) return null;            // 204: nothing new
+                version = r.headers.get('X-Live-Version') || '';
+                return r.text();
+            })
             .then(function (html) {
                 if (!html) return;
-                var fresh = new DOMParser().parseFromString(html, 'text/html').querySelector('.page-wrapper');
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var fresh = doc.querySelector('.page-wrapper');
                 var old = document.querySelector('.page-wrapper');
                 if (!fresh || !old) return;
                 if (!fresh.hasAttribute('data-live-page')) { location.reload(); return; }
+                var hero = document.querySelector('header.gx .gx-inner'), freshHero = doc.querySelector('header.gx .gx-inner');
+                if (hero && freshHero) hero.innerHTML = freshHero.innerHTML;
                 var tab = openTab();
                 old.innerHTML = fresh.innerHTML;
                 // innerHTML never runs scripts; re-create the chart scripts so they draw.
@@ -1718,9 +1734,11 @@ function switchTab(name, keepHash) {
                 });
                 if (tab) switchTab(tab, true);
             })
-            .catch(function () { /* the next minute tries again */ });
+            .catch(function () { /* the next poll tries again */ })
+            .then(function () { busy = false; });
     }
-    setInterval(refresh, 60000);
+    setInterval(refresh, 5000);
+    document.addEventListener('visibilitychange', refresh);   // catch up on return
 })();
 {% endif %}
 

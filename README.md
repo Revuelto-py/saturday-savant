@@ -160,7 +160,9 @@ Caching comes in three layers, because the expensive pages are genuinely expensi
 `SimpleCache` is per process, so `/admin/clear-cache` also records the flush in `pool_store` for the
 *other* worker to pick up. Every data-writing script calls `cache_notify` when it finishes. Live
 scores never invalidate a page: cached HTML stays cached, and a small `/api/live` payload patches
-the scores in place.
+the scores in place. A game page in progress polls itself every 5 seconds with the version it
+shows; each worker re-reads ESPN's summary at most every 5 seconds (held in memory, never stored),
+re-renders only when a play changes it, and answers every other poll with an empty 204.
 
 Images are served at the size they are drawn. Headshots are mirrored to R2 with small WebP
 thumbnails beside the originals, logos go through ESPN's resizer, and every rendered page rewrites

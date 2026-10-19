@@ -719,9 +719,13 @@
                 var away = el.querySelector('[data-live-away]'),
                     home = el.querySelector('[data-live-home]'),
                     status = el.querySelector('[data-live-status]');
-                if (away && g.away !== null) away.textContent = g.away;
-                if (home && g.home !== null) home.textContent = g.home;
-                if (status && g.status) status.textContent = g.status;
+                // A live game page refreshes its own hero from ESPN every few
+                // seconds; this board runs behind that, so it only writes elsewhere.
+                if (!el.hasAttribute('data-live-self')) {
+                    if (away && g.away !== null) away.textContent = g.away;
+                    if (home && g.home !== null) home.textContent = g.home;
+                    if (status && g.status) status.textContent = g.status;
+                }
                 var live = g.state === 'live';
                 if (live) anyLive = true;
                 el.classList.toggle('is-live', live);
@@ -733,12 +737,13 @@
                 // A card just becomes "Final" with its score, which we have already
                 // written — reloading the home page every time any of 99 games ended
                 // would reload it all afternoon.
-                if (g.state === 'final' && status && status.dataset.wasLive === '1'
+                if (g.state === 'final' && el.dataset.wasLive === '1'
                     && location.pathname === '/game/' + el.getAttribute('data-gid')) {
                     location.reload();
                     return;
                 }
-                if (status) status.dataset.wasLive = live ? '1' : '0';
+                // On the element itself: a live game page swaps its hero's insides.
+                el.dataset.wasLive = live ? '1' : '0';
             });
             return anyLive;
         }
