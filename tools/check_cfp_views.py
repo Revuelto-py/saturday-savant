@@ -39,12 +39,13 @@ c = main.app.test_client()
 body = c.get(f'/rankings?season={season}&poll=cfp').get_data(as_text=True)
 ap_now = c.get(f'/rankings?season={season}&poll=ap').get_data(as_text=True)
 for view, html in (('cfp', body), ('ap', ap_now)):
-    rows = html.count('<li style="--i:')
+    rows = len(re.findall(r'<li id="rk-[a-z0-9-]+" style="--i:', html))
     assert rows and html.count('class="rkp-trio"') == rows + 1, f'{view}: every row and the header carry the trio'
     assert html.count('rkp-tri is-on') == rows + 1, f'{view}: one banded column per row'
     assert html.count('<span class="rkp-tl">CFP</span>') == rows, f'{view}: the CFP column is there in both views'
     names = re.findall(r'view-transition-name: (rk-[a-z0-9-]+)', html)
     assert len(names) == rows == len(set(names)), f'{view}: one transition name per team'
+    assert len(re.findall(r'<span class="rkp-seed">Seed \d+', html)) == 12, f'{view}: each team in the field carries its seed'
     assert 'Others receiving votes' not in html and 'rkp-lede' not in html, f'{view}: no AP-only section, no lede'
 assert 'CFP Rankings</span>' in body and 'cfp-mark.webp' in body, 'committee view, with its mark'
 assert len(re.findall(r'view-transition-name: rk-', body)) == len(board), 'the committee ranks 25'

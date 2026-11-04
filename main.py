@@ -7761,6 +7761,7 @@ def rankings():
     sel_week = sel_type = None
     is_post = False
     ap_cmp, cfp_cmp, strip = {}, {}, None
+    field_seeds, first_out, is_latest = {}, set(), False
     try:
         cursor = conn.cursor()
         # Every poll this season has, chronological (regular weeks, then final).
@@ -7823,6 +7824,7 @@ def rankings():
                 ORDER BY a.rank
             ''', {'season': season, 'wk': sel_week, 'stype': sel_type, 'post': is_post})
             rows = cursor.fetchall()
+            is_latest = chosen == polls[-1]
 
             # Rank in every poll up to this one, for the season river, and the
             # poll before this one for "dropped out".
@@ -7902,19 +7904,24 @@ def rankings():
         # The playoff the latest ranking would make, the strip that leads to
         # the bracket. Only while the field is a projection: a season the
         # committee has seeded has a real bracket (the same rule as /bracket).
-        if season == CURRENT_SEASON and not is_post:
-            try:
-                cursor.execute('SELECT 1 FROM cfp_seeds WHERE season = %s LIMIT 1', (season,))
-                seeded = cursor.fetchone()
-            except Exception:
-                conn.rollback()
-                seeded = None
+        # Each team's place in the field, for the seed beside its record: the
+        # stored seeds once a season is seeded, the projection while it is not.
+        try:
+            cursor.execute('SELECT team, seed FROM cfp_seeds WHERE season = %s', (season,))
+            field_seeds = dict(cursor.fetchall())
+        except Exception:
+            conn.rollback()
+        if season == CURRENT_SEASON and not is_post and not field_seeds:
             try:
                 # A strip, not the page: a projection that fails just leaves it out.
-                seeds, entries, _ = _project_cfp_field(cursor, season) if not seeded else ({}, [], [])
+                seeds, entries, board = _project_cfp_field(cursor, season)
             except Exception:
                 conn.rollback()
-                seeds, entries = {}, []
+                seeds, entries, board = {}, [], []
+            # The projection follows the latest ranking, so an older week's rows don't wear it.
+            if is_latest:
+                field_seeds = seeds
+                first_out = {b['team'] for b in board if b['first_out']}
             if len(seeds) == CFP_FIELD_SIZE:
                 by_seed = {s: tm for tm, s in seeds.items()}
                 cursor.execute('SELECT name, COALESCE(logo_dark, logo) FROM teams WHERE name = ANY(%s)',
@@ -7984,6 +7991,8 @@ def rankings():
             'sp_rank': r[9], 'wins': r[10], 'losses': r[11],
             'move': (prev - r[0]) if prev is not None else None,
             'svr': svr.get(r[1]), 'cfp': cfp_rk, 'ap': ap_rk, 'pts': pts,
+            # Seeds only on the latest ranking: an older week's rows don't wear the final field.
+            'seed': field_seeds.get(r[1]) if is_latest else None, 'first_out': r[1] in first_out,
             'last': last, 'next': nxt, 'bye': bye,
             # Each row keeps one name across the CFP and AP views (and across
             # weeks), so the page change can carry it to its new place.
@@ -8033,6 +8042,7 @@ def rankings():
                            voters=voters, max_pts=max_pts,
                            others=others, dropped=dropped, outside=outside, strip=strip,
                            show_cfp=poll == 'cfp' or bool(cfp_cmp),
+                           four_team_season=season < FIRST_12_TEAM_SEASON,
                            poll_options=poll_options, prev_opt=prev_opt, next_opt=next_opt,
                            sel_label=poll_label(sel_week, sel_type) if sel_week else None,
                            sel_is_final=(sel_type == 'postseason'),
@@ -13157,6 +13167,132 @@ def _project_cfp_field(cursor, season):
     return {e['team']: e['seed'] for e in entries}, entries, board
 
 
+def _bracket_field(cursor, season, seeds, four_team, projection, cfp_board):
+    """How a season's field was built, grouped the way its rules picked it: the
+    bracket page's "How the field was built" and the strip that says where the
+    field comes from.
+
+    The ranking behind it is the committee's latest while the field is a
+    projection, else its final (selection-day) one; a season without committee
+    rows still gets its seeds, just no ranks and no first four out. The rules by
+    era: 2014-23 the top four, 1 v 4 and 2 v 3; 2024 the five highest-ranked
+    conference champions plus seven at-large, byes to the four best champions;
+    2025 on, the same field with byes to the four highest-ranked teams; the
+    2026 protocol is _project_cfp_field's.
+    """
+    if not seeds:
+        return None
+    nth = lambda n: f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+    rk, rk_week = {}, None
+    try:
+        cursor.execute('''SELECT team, rank, week FROM cfp_rankings WHERE season = %s
+                          AND week = (SELECT MAX(week) FROM cfp_rankings WHERE season = %s)''', (season, season))
+        rows = cursor.fetchall()
+        rk = {t: r for t, r, _ in rows}
+        rk_week = rows[0][2] if rows else None
+    except Exception:
+        cursor.connection.rollback()
+    if projection:
+        rk = {b['team']: b['rank'] for b in cfp_board} or {e['team']: e['rank'] for e in projection if e['rank']}
+    field = sorted(seeds, key=seeds.get)
+    out = ([b['team'] for b in cfp_board if b['first_out']] if projection
+           else [t for t in sorted(rk, key=rk.get) if t not in seeds][:4])
+    names = field + out
+    # Records at selection: the regular season, conference title games included.
+    cursor.execute('''SELECT t, SUM(w), SUM(l) FROM (
+                        SELECT home_team AS t, (home_points > away_points)::int AS w, (home_points < away_points)::int AS l
+                          FROM games WHERE season = %(s)s AND season_type = 'SeasonType.REGULAR' AND completed = 1 AND home_team = ANY(%(n)s)
+                        UNION ALL
+                        SELECT away_team, (away_points > home_points)::int, (away_points < home_points)::int
+                          FROM games WHERE season = %(s)s AND season_type = 'SeasonType.REGULAR' AND completed = 1 AND away_team = ANY(%(n)s)
+                      ) g GROUP BY t''', {'s': season, 'n': names})
+    rec = {t: f'{w}-{l}' for t, w, l in cursor.fetchall()}
+    cursor.execute('SELECT name, COALESCE(logo_dark, logo) FROM teams WHERE name = ANY(%s)', (names,))
+    logos = dict(cursor.fetchall())
+    standings = _compute_conference_standings(cursor, season)
+    conf = {r['name']: SIM_CONF_SHORT.get(r['conf'], r['conf']) for c, rs in standings.items() for r in rs}
+    champ = {r['name'] for rs in standings.values() for r in rs if r.get('is_champion')}
+    basis = {e['team']: e['basis'] for e in projection}
+
+    def why(t):
+        if t in basis and basis[t] != 'At-large':
+            return basis[t]
+        if t in champ:
+            return f"{conf.get(t, '')} champion · {rec.get(t, '')}"
+        return f"{rec.get(t, '')}, {conf.get(t, '')}".strip(', ')
+
+    def row(t, pill='', note=None):
+        return {'team': t, 'seed': seeds.get(t), 'rank': rk.get(t), 'logo': logos.get(t), 'pill': pill,
+                'why': note or why(t), 'slug': re.sub(r'[^a-z0-9]+', '-', t.lower()).strip('-')}
+
+    outs = {'t': 'First four out', 'sub': 'Next in line', 'note': '',
+            'rows': [row(t, note=f"{nth(i + 1)} in line · {rec.get(t, '')}, {conf.get(t, '')}") for i, t in enumerate(out)]}
+    if four_team:
+        groups = [{'t': 'The top four', 'sub': 'Seeded by rank', 'note': '', 'rows': [row(t) for t in field]}, outs]
+        lede = 'The committee’s top four make the playoff and are seeded in order.'
+    else:
+        if projection:
+            autos = [t for t in field if basis.get(t, 'At-large') != 'At-large']
+        else:
+            autos = sorted((t for t in field if t in champ), key=lambda t: rk.get(t, 99))[:5]
+        at = [t for t in field if t not in autos]
+        last_in = set(sorted(at, key=lambda t: rk.get(t, 99))[-4:]) if rk else set()
+        notes = []
+        byes = [t for t in field if seeds[t] <= 4]
+        if projection:
+            pushed = [b for b in cfp_board if b['auto']]
+            if pushed and out:
+                a, d = pushed[0]['team'], out[0]
+                notes.append(f"{d} is ranked {nth(rk[d])} but misses out: {a}, ranked {nth(rk[a])}, "
+                             f"takes the last spot with an automatic bid.")
+        elif season < 2025 and rk:
+            low = [t for t in byes if rk.get(t, 0) > 4]
+            above = [t for t in at if rk.get(t, 99) <= 4]
+            if low and above:
+                notes.append('Byes went to the four highest-ranked conference champions: '
+                             + ' and '.join(f'{t} ({nth(rk[t])})' for t in low) + ' got them ahead of '
+                             + ' and '.join(f'{t} ({nth(rk[t])})' for t in above) + '.')
+        else:
+            plain = [t for t in byes if t not in autos]
+            if plain:
+                notes.append('From 2025 the byes go to the four highest-ranked teams, champions or not: '
+                             + ' and '.join(plain) + (' got one' if len(plain) == 1 else ' got them') + ' without a title.')
+        low_champs = [t for t in autos if rk.get(t, 0) > 12 and not projection]
+        if low_champs:
+            notes.append(' and '.join(f'{t} ({nth(rk[t])})' for t in low_champs)
+                         + (' is in as one' if len(low_champs) == 1 else ' are in as two' if len(low_champs) == 2 else ' are in as some')
+                         + ' of the five highest-ranked conference champions.')
+        groups = [{'t': 'Automatic bids', 'sub': f'{len(autos)} teams' if projection else 'Five highest-ranked conference champions',
+                   'note': ' '.join(n for n in notes if 'misses out' not in n), 'rows': [row(t) for t in autos]},
+                  {'t': 'At-large', 'sub': f'{len(at)} teams', 'note': '',
+                   'rows': [row(t, 'Last four in' if t in last_in else '') for t in at]}]
+        outs['note'] = ' '.join(n for n in notes if 'misses out' in n)
+        groups.append(outs)
+        lede = ('Conference champions and Notre Dame earn automatic bids, the next highest-ranked teams fill the field, and seeding follows the ranking.'
+                if projection else 'The five highest-ranked conference champions earn automatic bids and the next seven highest-ranked teams are at-large.')
+    groups = [g for g in groups if g['rows']]
+    if rk:
+        lede += (' Each team’s committee rank links to its row in the CFP rankings.' if projection
+                 else ' Each team’s committee rank links to its row in that season’s CFP rankings.')
+    if projection:
+        src_h = (f"Seeded from the committee’s Week {rk_week} ranking" if projection[0]['poll'] == 'CFP' and rk_week
+                 else 'Seeded from the AP poll until the committee ranks')
+        src_s = ('Nobody has been seeded yet. This is the field that ranking would make under the 2026 protocol; '
+                 'the first round is set and every round after it stays open.')
+    elif four_team:
+        src_h = f"Picked by the committee’s final {season} ranking"
+        src_s = ('The four-team playoff, 2014 to 2023: the top four ranked teams met in the semifinals, '
+                 '1 v 4 and 2 v 3, and the winners played for the title.')
+    else:
+        src_h = f"Seeded by the committee’s final {season} ranking"
+        src_s = ('Twelve teams: the five highest-ranked conference champions and the next seven highest-ranked teams. '
+                 + ('The four highest-ranked champions took the byes.' if season < 2025 else 'The four highest-ranked teams took the byes.'))
+    return {'groups': groups, 'lede': lede, 'ranked': bool(rk), 'src_h': src_h, 'src_s': src_s,
+            'go': (('Open the CFP rankings' if projection else f'Open the {season} CFP rankings') if rk
+                   else f'Open the {season} rankings'),
+            'go_href': f'/rankings?season={season}' + ('&poll=cfp' if rk else '')}
+
+
 @app.route('/bracket')
 @cache.cached(timeout=21600, query_string=True)
 def bracket_page():
@@ -13200,7 +13336,7 @@ def bracket_page():
         if bracket_seasons and season not in bracket_seasons:
             return render_template('bracket.html', unsupported_season=season,
                                    season=season, bracket_seasons=bracket_seasons,
-                                   four_team=False, bracket=None, champion=None)
+                                   four_team=False, bracket=None, champion=None, field=None, projection=[])
 
         four_team = season < FIRST_12_TEAM_SEASON
 
@@ -13261,6 +13397,7 @@ def bracket_page():
             poll = cursor.fetchall()
             seeds = _cfp_seed_teams(poll, fr_games, qf_games)
         team_by_seed = {s: t for t, s in seeds.items()}
+        field = _bracket_field(cursor, season, seeds, four_team, projection, cfp_board)
 
         cursor.execute('''
             SELECT name, logo_dark, logo, color, alt_color, abbreviation, conference
@@ -13341,13 +13478,9 @@ def bracket_page():
                                  seeds.get(championship['winner']), nc_game)
         bracket = {'round1': [], 'quarterfinals': [],
                    'semifinals': semifinals, 'championship': championship}
-        cfp_teams = [dict(teams_map.get(team_by_seed.get(s), {}) or {},
-                          seed=s, name=team_by_seed.get(s))
-                     for s in range(1, 5) if team_by_seed.get(s)]
         return render_template('bracket.html', bracket=bracket,
                                season=season, bracket_seasons=bracket_seasons,
-                               four_team=True, projection=projection, cfp_board=cfp_board,
-                               cfp_teams=cfp_teams, champion=champion)
+                               four_team=True, projection=projection, field=field, champion=champion)
 
     # First round — slot letter, high seed, low seed
     round1 = []
@@ -13399,14 +13532,9 @@ def bracket_page():
         'semifinals': semifinals,
         'championship': championship,
     }
-    cfp_teams = [dict(teams_map.get(team_by_seed.get(s), {}) or {},
-                      seed=s, name=team_by_seed.get(s))
-                 for s in range(1, 13) if team_by_seed.get(s)]
-
     return render_template('bracket.html', bracket=bracket,
                            season=season, bracket_seasons=bracket_seasons,
-                           four_team=False, projection=projection, cfp_board=cfp_board,
-                           cfp_teams=cfp_teams, champion=champion)
+                           four_team=False, projection=projection, field=field, champion=champion)
 
 
 

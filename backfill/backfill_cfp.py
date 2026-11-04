@@ -32,6 +32,11 @@ load_dotenv(os.path.join(ROOT, '.env'), override=True)
 CCG_RE = re.compile(r'(SEC|Big Ten|Big 12|ACC|Pac-12|Pac 12|Mountain West|American|'
                     r'Sun Belt|MAC|Mid-American|Conference USA|C-USA)[^a-z]*Championship', re.I)
 
+# 2020's conference title games came after CFBD's last regular-season committee
+# week, so its selection-day ranking is the one CFBD files as postseason. (Not
+# every postseason entry is the committee's: 2023's is not, so this stays a list.)
+SELECTION_FROM_POSTSEASON = {2020}
+
 conn = psycopg2.connect(os.getenv('DATABASE_URL'))
 cur = conn.cursor()
 cur.execute('''
@@ -93,9 +98,10 @@ def main():
         rk_api = cfbd.RankingsApi(api)
         for y in seasons:
             weeks = rk_api.get_rankings(year=y)
+            part = 'POST' if y in SELECTION_FROM_POSTSEASON else 'REGULAR'
             committee = [(wk.week, poll) for wk in weeks for poll in wk.polls
                          if poll.poll == 'Playoff Committee Rankings'
-                         and 'REGULAR' in str(wk.season_type).upper()]
+                         and part in str(wk.season_type).upper()]
             if not committee:
                 print(f"{y}: no committee poll — skipped")
                 continue
