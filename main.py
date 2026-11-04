@@ -12168,14 +12168,11 @@ def _build_compare_team_rows(cursor, slots):
     return rows
 
 
-# Headshots are immutable per URL — the filename carries a ?v= content hash, so
-# a changed photo is a different URL. That makes them safe to hold in memory,
-# and holding them is the difference between the Stat Explorer costing one
-# upstream fetch per image per view and costing one ever. Bounded, because the
-# whole player base would not fit: ~600 headshots is roughly 20MB.
-@lru_cache(maxsize=600)
-def _img_fetch(url):
-    """(bytes, content-type) for an allowlisted image URL, or None."""
+def _img_get(url):
+    """(bytes, content-type) for an allowlisted image URL, or None. Not memoized:
+    a stored headshot is a ~275KB 600px PNG, and resizing keeps only the small
+    copy (_img_variant, in img_cache). Memoizing the originals too — 600 per
+    worker, ~165MB — is what pushed two workers past the 512MB instance."""
     try:
         r = req.get(url, timeout=6)
         ctype = r.headers.get('Content-Type', 'image/png')
@@ -12184,6 +12181,13 @@ def _img_fetch(url):
         return (r.content, ctype)
     except Exception:
         return None
+
+
+# Full-size passthrough (/img-proxy without ?w=): headshot URLs carry a ?v=
+# content hash, so they are safe to hold, but few callers want the original.
+@lru_cache(maxsize=32)
+def _img_fetch(url):
+    return _img_get(url)
 
 
 # A stored headshot is a ~275KB 600px PNG. The Stat Explorer draws 150 of them
@@ -12234,7 +12238,7 @@ def _img_variant(url, width, webp, circle=False):
     `Vary: Accept` so a shared cache cannot hand one to a client that asked
     for the other. Both formats carry alpha, which the circular mask needs.
     """
-    hit = _img_fetch(url)
+    hit = _img_get(url)
     if hit is None:
         return None
     try:
@@ -14408,9 +14412,6 @@ def _warm_explorer_headshots():
                 done += 1
         except Exception:
             pass
-    # The 600px originals were only needed to make the 3KB variants, which live
-    # on in img_cache; dropping them returns ~150MB to the worker.
-    _img_fetch.cache_clear()
     print(f'headshot warmup: {done} of {len(srcs)} explorer faces ready', flush=True)
 
 
