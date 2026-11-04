@@ -246,6 +246,32 @@
     </section>
     {% endfor %}
   </div>
+
+  {# ── The committee's top 25, team by team, against the field it makes ── #}
+  {% if cfp_board %}
+  <section class="bk-cmt" aria-labelledby="bk-cmt-h">
+    <div class="bk-cmt-top">
+      <h2 class="bk-cmt-h" id="bk-cmt-h">The committee's top 25</h2>
+      <a class="bk-cmt-more" href="/rankings?season={{ season }}&poll=cfp">Full CFP rankings</a>
+    </div>
+    <p class="bk-cmt-n">The selection committee's latest ranking, and where each team lands in the field above. The last four in are the lowest-ranked at-large teams; the first four out are the next ranked teams left out.</p>
+    <ol class="bk-cmt-list" role="list">
+      {% for b in cfp_board %}
+      <li class="bk-cmt-row{{ ' is-out' if not b.seed }}">
+        <span class="bk-cmt-rk">{{ b.rank }}</span>
+        {% if b.logo %}<img src="{{ b.logo }}" alt="" width="22" height="22" loading="lazy" data-px="44">{% else %}<span class="bk-cmt-nologo"></span>{% endif %}
+        <a class="bk-cmt-team" href="{{ team_url(b.team, season) }}">{{ b.team }} <span>{{ b.record }}</span></a>
+        <span class="bk-cmt-st">
+          {%- if b.seed %}<b>Seed {{ b.seed }}</b>{% if b.seed <= 4 %}<span class="bk-cmt-sub"> · bye</span>{% endif %}
+            {%- if b.auto %}<span class="bk-cmt-tag is-auto">Auto bid</span>{% elif b.last_in %}<span class="bk-cmt-tag is-last">Last four in</span>{% endif %}
+          {%- elif b.first_out %}<span class="bk-cmt-tag is-first">First four out</span>
+          {%- else %}<span class="bk-cmt-sub">Out</span>{% endif -%}
+        </span>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
   {% endif %}{# /unsupported_season #}
 
 </div>

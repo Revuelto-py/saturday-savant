@@ -7760,11 +7760,33 @@ def rankings():
     prev_poll, other_rows, river, streak, sched = {}, [], None, 0, []
     sel_week = sel_type = None
     is_post = False
+    ap_cmp = {}
     try:
         cursor = conn.cursor()
         # Every poll this season has, chronological (regular weeks, then final).
         cursor.execute('SELECT DISTINCT week, season_type FROM ap_rankings WHERE season = %s', (season,))
-        polls = sorted(cursor.fetchall(), key=lambda r: (0 if r[1] == 'regular' else 1, r[0]))
+        ap_polls = sorted(cursor.fetchall(), key=lambda r: (0 if r[1] == 'regular' else 1, r[0]))
+        # The selection committee's weekly top 25, from early November. It has
+        # no points or votes, and its week numbers follow the AP's: ranking
+        # week W is the one teams carry into game week W.
+        try:
+            cursor.execute('SELECT DISTINCT week FROM cfp_rankings WHERE season = %s', (season,))
+            cfp_polls = sorted((r[0], 'regular') for r in cursor.fetchall())
+        except Exception:
+            conn.rollback()
+            cfp_polls = []
+        # ?poll=cfp|ap. Unasked, the committee's ranking leads while it is the
+        # live one: from its first release until the AP's final poll after the
+        # bowls. An old ?w= link with no poll is an AP link.
+        poll = request.args.get('poll')
+        if poll not in ('cfp', 'ap') or (poll == 'cfp' and not cfp_polls):
+            poll = ('cfp' if cfp_polls and not request.args.get('w')
+                    and not any(st == 'postseason' for _, st in ap_polls) else 'ap')
+        polls = cfp_polls if poll == 'cfp' else ap_polls
+        # The committee's table, shaped like ap_rankings for the queries below.
+        src = ('''(SELECT season, week, 'regular' AS season_type, team, rank,
+                          NULL::int AS points, NULL::int AS first_place_votes,
+                          NULL::int AS prev_rank FROM cfp_rankings)''' if poll == 'cfp' else 'ap_rankings')
 
         rows = []
         if polls:
@@ -7777,14 +7799,14 @@ def rankings():
             # Win/loss record AS OF this poll: the poll for ranking week W
             # reflects results through week W-1, so count regular games with
             # week < W; the final poll counts the whole season (bowls included).
-            cursor.execute('''
+            cursor.execute(f'''
                 SELECT a.rank, a.team, a.points, a.first_place_votes, a.week,
                        t.logo, t.conference, t.color,
                        sp.rating, sp.ranking as sp_rank,
                        SUM(CASE WHEN (g.home_team=a.team AND g.home_points>g.away_points) OR (g.away_team=a.team AND g.away_points>g.home_points) THEN 1 ELSE 0 END) as wins,
                        SUM(CASE WHEN (g.home_team=a.team AND g.home_points<g.away_points) OR (g.away_team=a.team AND g.away_points<g.home_points) THEN 1 ELSE 0 END) as losses,
                        a.prev_rank, t.logo_dark, t.alt_color
-                FROM ap_rankings a
+                FROM {src} a
                 LEFT JOIN teams t ON a.team = t.name
                 LEFT JOIN sp_ratings sp ON a.team = sp.team AND sp.season = a.season
                 LEFT JOIN games g ON (g.home_team=a.team OR g.away_team=a.team)
@@ -7805,7 +7827,7 @@ def rankings():
             # Rank in every poll up to this one, for the season river, and the
             # poll before this one for "dropped out".
             upto = polls[:polls.index(chosen) + 1]
-            cursor.execute('''SELECT team, week, season_type, rank FROM ap_rankings
+            cursor.execute(f'''SELECT team, week, season_type, rank FROM {src} s
                               WHERE season = %s''', (season,))
             by_poll = {}
             for team, wk, st, rk in cursor.fetchall():
@@ -7849,18 +7871,29 @@ def rankings():
                               ORDER BY start_date''', (season, names, names))
             sched = cursor.fetchall()
 
-            # Others receiving votes (ESPN only; empty until the fetch has run).
-            try:
-                cursor.execute('''
-                    SELECT o.team, o.points, t.logo, t.logo_dark, t.conference, t.color, t.alt_color
-                    FROM ap_others o LEFT JOIN teams t ON o.team = t.name
-                    WHERE o.season = %s AND o.week = %s AND o.season_type = %s
-                    ORDER BY o.points DESC, o.team
-                ''', (season, sel_week, sel_type))
-                other_rows = cursor.fetchall()
-            except Exception:
-                conn.rollback()
-                other_rows = []
+            # The committee's view carries the same week's AP rank beside it, the
+            # comparison readers come to the page for.
+            if poll == 'cfp':
+                cursor.execute('''SELECT team, rank FROM ap_rankings
+                                  WHERE season = %(s)s AND season_type = 'regular' AND week = (
+                                      SELECT MAX(week) FROM ap_rankings WHERE season = %(s)s
+                                         AND season_type = 'regular' AND week <= %(w)s)''',
+                               {'s': season, 'w': sel_week})
+                ap_cmp = dict(cursor.fetchall())
+
+            # Others receiving votes (ESPN only, AP only; empty until the fetch has run).
+            if poll == 'ap':
+                try:
+                    cursor.execute('''
+                        SELECT o.team, o.points, t.logo, t.logo_dark, t.conference, t.color, t.alt_color
+                        FROM ap_others o LEFT JOIN teams t ON o.team = t.name
+                        WHERE o.season = %s AND o.week = %s AND o.season_type = %s
+                        ORDER BY o.points DESC, o.team
+                    ''', (season, sel_week, sel_type))
+                    other_rows = cursor.fetchall()
+                except Exception:
+                    conn.rollback()
+                    other_rows = []
     finally:
         release_db(conn)
 
@@ -7904,6 +7937,9 @@ def rankings():
     for r in rows:
         tc = team_hex(r[7], '#1c9cf0')
         last, nxt, bye = schedule(r[1])
+        # The AP stores each team's previous rank; the committee's table does
+        # not, so its movement is read off the ranking before this one.
+        prev = r[12] if poll == 'ap' else prev_poll.get(r[1])
         teams.append({
             'rank': r[0], 'team': r[1], 'points': r[2], 'fpv': r[3],
             'logo': r[13] or r[5], 'conf': r[6],
@@ -7912,8 +7948,8 @@ def rankings():
             # their own colour rather than a lighter tint.
             'tc': tc, 'dark': _srgb_lum(_to_rgb(tc)) < 0.06,
             'sp_rank': r[9], 'wins': r[10], 'losses': r[11],
-            'move': (r[12] - r[0]) if r[12] is not None else None,
-            'svr': svr.get(r[1]),
+            'move': (prev - r[0]) if prev is not None else None,
+            'svr': svr.get(r[1]), 'ap': ap_cmp.get(r[1]),
             'last': last, 'next': nxt, 'bye': bye,
         })
 
@@ -7945,6 +7981,7 @@ def rankings():
                            poll_options=poll_options, prev_opt=prev_opt, next_opt=next_opt,
                            sel_label=poll_label(sel_week, sel_type) if sel_week else None,
                            sel_is_final=(sel_type == 'postseason'),
+                           poll=poll, has_cfp=bool(cfp_polls), has_ap=bool(ap_polls),
                            season=season, available_seasons=get_ranking_seasons())
 
 
@@ -12972,7 +13009,7 @@ def _project_cfp_field(cursor, season):
     if not ap:
         ap, poll = get_ap_rankings(cursor, season), 'AP'
     if not ap:
-        return {}, []
+        return {}, [], []
 
     standings = _compute_conference_standings(cursor, season)
     # every FBS team's record, independents included (Notre Dame's resume
@@ -13045,7 +13082,24 @@ def _project_cfp_field(cursor, season):
     entries.sort(key=lambda e: (pos[e['team']] > CFP_FIELD_SIZE and e['auto'], pos[e['team']]))
     for i, e in enumerate(entries, start=1):
         e['seed'] = i
-    return {e['team']: e['seed'] for e in entries}, entries
+
+    # The committee's own top 25 beside the field it makes: who is in and at
+    # which seed, the last four at-large teams in, and the first four out.
+    board = []
+    if poll == 'CFP':
+        field = {e['team']: e for e in entries}
+        at_large = sorted((e for e in entries if not e['auto']), key=lambda e: pos[e['team']])
+        last_in = {e['team'] for e in at_large[-4:]}
+        out = [t for t in sorted(ap, key=ap.get) if t not in field]
+        first_out = set(out[:4])
+        for t in sorted(ap, key=ap.get):
+            e, r = field.get(t), rows.get(t, {})
+            board.append({'rank': ap[t], 'team': t, 'record': f"{r.get('wins', 0)}-{r.get('losses', 0)}",
+                          'seed': e['seed'] if e else None,
+                          # an automatic bid that the ranking alone would not have earned
+                          'auto': bool(e and e['auto'] and ap[t] > CFP_FIELD_SIZE),
+                          'last_in': t in last_in, 'first_out': t in first_out})
+    return {e['team']: e['seed'] for e in entries}, entries, board
 
 
 @app.route('/bracket')
@@ -13078,9 +13132,15 @@ def bracket_page():
                 bracket_seasons = sorted(set(bracket_seasons) | {proj_season},
                                          reverse=True)
 
-        projection, proj_seeds = [], {}
+        projection, proj_seeds, cfp_board = [], {}, []
         if season == proj_season:
-            proj_seeds, projection = _project_cfp_field(cursor, season)
+            proj_seeds, projection, cfp_board = _project_cfp_field(cursor, season)
+            if cfp_board:
+                cursor.execute('SELECT name, COALESCE(logo_dark, logo) FROM teams WHERE name = ANY(%s)',
+                               ([b['team'] for b in cfp_board],))
+                logos = dict(cursor.fetchall())
+                for b in cfp_board:
+                    b['logo'] = logos.get(b['team'])
 
         if bracket_seasons and season not in bracket_seasons:
             return render_template('bracket.html', unsupported_season=season,
@@ -13231,7 +13291,7 @@ def bracket_page():
                      for s in range(1, 5) if team_by_seed.get(s)]
         return render_template('bracket.html', bracket=bracket,
                                season=season, bracket_seasons=bracket_seasons,
-                               four_team=True, projection=projection,
+                               four_team=True, projection=projection, cfp_board=cfp_board,
                                cfp_teams=cfp_teams, champion=champion)
 
     # First round — slot letter, high seed, low seed
@@ -13290,7 +13350,7 @@ def bracket_page():
 
     return render_template('bracket.html', bracket=bracket,
                            season=season, bracket_seasons=bracket_seasons,
-                           four_team=False, projection=projection,
+                           four_team=False, projection=projection, cfp_board=cfp_board,
                            cfp_teams=cfp_teams, champion=champion)
 
 

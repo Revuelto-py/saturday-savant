@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}AP Top 25 Rankings · Saturday Savant{% endblock %}
-{% block og_description %}College football rankings: the AP poll week by week alongside Savant Ratings, so you can see where the polls and the numbers disagree.{% endblock %}
+{% block title %}{{ 'CFP Rankings' if poll == 'cfp' else 'AP Top 25 Rankings' }} · Saturday Savant{% endblock %}
+{% block og_description %}College football rankings: the CFP selection committee's top 25 and the AP poll week by week alongside Savant Ratings, so you can see where the rankings and the numbers disagree.{% endblock %}
 
 {% macro ordinal(n) -%}{{ n }}{{ 'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th') }}{%- endmacro %}
 
@@ -18,8 +18,17 @@
 
 <header class="rkp-head">
     <div>
-        <h1 class="rkp-h1">AP Top 25{% if sel_is_final %} <span class="rkp-final">Final</span>{% endif %}</h1>
-        {% if top %}
+        <h1 class="rkp-h1">{{ 'CFP Rankings' if poll == 'cfp' else 'AP Top 25' }}{% if sel_is_final %} <span class="rkp-final">Final</span>{% endif %}</h1>
+        {% if top and poll == 'cfp' %}
+        <p class="rkp-lede">
+            <b>{{ top.team }}</b>
+            {%- if streak > 1 and streak == n_polls %} has been No. 1 in every committee ranking
+            {%- elif streak > 1 %} is No. 1 for the {{ ordinal(streak) }} straight ranking
+            {%- elif not prev_opt %} is No. 1 in the selection committee's first ranking
+            {%- else %} is the committee's new No. 1{% endif %}.
+            The committee's ranking seeds the playoff: <a href="/bracket?season={{ season }}">see the bracket it would make</a>.
+        </p>
+        {% elif top %}
         <p class="rkp-lede">
             <b>{{ top.team }}</b>
             {%- if streak > 1 and streak == n_polls %} has been No. 1 in every poll this season
@@ -34,6 +43,12 @@
     {# Season first, then every poll in one row that scrolls sideways when the
        season has more polls than fit (a full season has 17). #}
     <div class="rkp-ctl">
+        {% if has_cfp and has_ap %}
+        <nav class="rkp-polls" aria-label="Ranking">
+            <a class="rkp-chip" href="?season={{ season }}&poll=cfp" {{ 'aria-current=page' if poll == 'cfp' }}>CFP Rankings</a>
+            <a class="rkp-chip" href="?season={{ season }}&poll=ap" {{ 'aria-current=page' if poll == 'ap' }}>AP Top 25</a>
+        </nav>
+        {% endif %}
         {% if available_seasons and available_seasons|length > 1 %}
         <label class="rkp-sel"><span class="sr-only">Season</span>
             <select onchange="location='?season='+this.value">
@@ -42,9 +57,9 @@
         </label>
         {% endif %}
         {% if poll_options %}
-        <nav class="rkp-weeks" aria-label="Poll">
+        <nav class="rkp-weeks" aria-label="{{ 'Ranking week' if poll == 'cfp' else 'Poll' }}">
             {% for p in poll_options %}
-            <a class="rkp-chip" href="?season={{ season }}&w={{ p.value }}" {{ 'aria-current=page' if p.selected }}>{{ p.label }}</a>
+            <a class="rkp-chip" href="?season={{ season }}&poll={{ poll }}&w={{ p.value }}" {{ 'aria-current=page' if p.selected }}>{{ p.label }}</a>
             {% endfor %}
         </nav>
         {% endif %}
@@ -52,12 +67,12 @@
 </header>
 
 {% if not teams %}
-<div class="rkp-card rkp-empty">No AP poll for {{ season }} yet. The preseason poll arrives in August.</div>
+<div class="rkp-card rkp-empty">{% if poll == 'cfp' %}No committee ranking for {{ season }} yet. The first one comes out in early November.{% else %}No AP poll for {{ season }} yet. The preseason poll arrives in August.{% endif %}</div>
 {% else %}
 
 <section aria-label="The poll">
     <div class="rkp-card rkp-ladder{{ ' no-next' if sel_is_final }}">
-        <div class="rkp-lhead" aria-hidden="true"><span>Rank</span><span></span><span>Team</span><span class="rkp-c-last">Last game</span>{% if not sel_is_final %}<span class="rkp-c-next">This week</span>{% endif %}<span>Poll points</span><span>Savant rank</span></div>
+        <div class="rkp-lhead" aria-hidden="true"><span>Rank</span><span></span><span>Team</span><span class="rkp-c-last">Last game</span>{% if not sel_is_final %}<span class="rkp-c-next">This week</span>{% endif %}<span>{{ 'AP poll' if poll == 'cfp' else 'Poll points' }}</span><span>Savant rank</span></div>
         <ol class="rkp-list" role="list">
             {% for t in teams %}
             {% set gap = (t.svr - t.rank) if t.svr else none %}
@@ -83,20 +98,32 @@
                     {% else %}<span class="rkp-l1 is-dim">–</span>{% endif %}
                 </span>
                 {% endif %}
+                {% if poll == 'cfp' %}
+                {% set apd = (t.rank - t.ap) if t.ap else none %}
+                <span class="rkp-pts is-ap">
+                    <span class="rkp-ptn"><b>{{ 'No. ' ~ t.ap if t.ap else 'Unranked' }}</b></span>
+                    {% if apd %}<span class="rkp-gap">AP has them {{ apd|abs }} {{ 'higher' if apd > 0 else 'lower' }}</span>{% elif apd == 0 %}<span class="rkp-gap">Same as the AP</span>{% endif %}
+                </span>
+                {% else %}
                 <span class="rkp-pts">
                     <span class="rkp-ptn"><b>{{ '{:,}'.format(t.points or 0) }}</b>{% if t.fpv %}<span class="rkp-fpv">{{ t.fpv }} first-place vote{{ 's' if t.fpv != 1 }}</span>{% endif %}</span>
                     <span class="rkp-bar"><i style="width: {{ '%.1f'|format((t.points or 0) / max_pts * 100 if max_pts else 0) }}%; background: {{ t.tc }}{% if t.dark %}; box-shadow: 0 0 8px 1px {{ t.tc }}{% endif %}"></i></span>
                 </span>
+                {% endif %}
                 <span class="rkp-sv{{ gcls }}">
                     <b>{{ ordinal(t.svr) if t.svr else '–' }}</b>
-                    {% if gap is not none %}<span class="rkp-gap">{{ ('Poll ' ~ gap ~ ' higher') if gap >= 5 else (('Poll ' ~ (-gap) ~ ' lower') if gap <= -5 else 'In line') }}</span>{% endif %}
+                    {% if gap is not none %}<span class="rkp-gap">{% set who = 'CFP' if poll == 'cfp' else 'Poll' %}{{ (who ~ ' ' ~ gap ~ ' higher') if gap >= 5 else ((who ~ ' ' ~ (-gap) ~ ' lower') if gap <= -5 else 'In line') }}</span>{% endif %}
                 </span>
             </a>
             </li>
             {% endfor %}
         </ol>
     </div>
+    {% if poll == 'cfp' %}
+    <p class="rkp-foot">{% if not sel_is_final %}Kickoffs in Eastern time. {% endif %}The College Football Playoff selection committee ranks its top 25 weekly from early November; its final ranking on selection day picks and seeds the 12-team field. AP poll is the AP Top 25 covering the same games. Savant rank is the Savant Rating through those games; orange means the committee has a team 5 or more spots higher than the numbers do, blue 5 or more lower.</p>
+    {% else %}
     <p class="rkp-foot">{% if not sel_is_final %}Kickoffs in Eastern time. {% endif %}The bar is each team&#39;s share of the most points possible{% if voters %} ({{ '{:,}'.format(max_pts) }}: all {{ voters }} voters putting them first){% endif %}. Savant rank is the Savant Rating through the games the voters had seen; orange means the poll has a team 5 or more spots higher than the numbers do, blue 5 or more lower.</p>
+    {% endif %}
 </section>
 
 {# ── This week's movers ─────────────────────────────────────────────────── #}
@@ -121,7 +148,7 @@
 {% if river %}
 <section class="rkp-sec" aria-labelledby="rkp-river-h">
     <h2 class="rkp-h2" id="rkp-river-h">The season so far</h2>
-    <p class="rkp-sec-n">Every ranked team, poll by poll. The current top 10 are in team colour; lines that drop to the bottom fell out of the poll.</p>
+    <p class="rkp-sec-n">Every ranked team, {{ 'ranking by ranking' if poll == 'cfp' else 'poll by poll' }}. The current top 10 are in team colour; lines that drop to the bottom fell out of the {{ 'top 25' if poll == 'cfp' else 'poll' }}.</p>
     <div class="rkp-card rkp-river">
         <div class="rkp-rv">
             {{ river.svg|safe }}

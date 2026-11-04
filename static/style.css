@@ -9851,6 +9851,35 @@ a.bkr-panel-name:focus-visible { outline: 2px solid var(--accent); outline-offse
 
 /* phone: the rail becomes a list; each card says where its winner goes */
 .bkr-phone { display: none; }
+
+/* The committee's top 25 under the bracket: rank, team, and where it lands. */
+.bk-cmt { margin: 40px 0 0; }
+.bk-cmt-top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.bk-cmt-h { margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: clamp(1.2rem, 1.05rem + 0.5vw, 1.45rem); font-weight: 750; letter-spacing: -0.01em; color: var(--text-primary); }
+.bk-cmt-more { display: inline-flex; align-items: center; min-height: 44px; color: #4ab1f4; font-size: 14px; font-weight: 600; text-decoration: none; }
+.bk-cmt-more:hover { color: #7cc9fb; text-decoration: underline; }
+.bk-cmt-more:focus-visible, .bk-cmt-team:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.bk-cmt-n { max-width: 70ch; margin: 4px 0 14px; font-size: 14px; line-height: 1.55; color: var(--text-secondary); }
+.bk-cmt-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(13, auto); grid-auto-flow: column; column-gap: 28px; margin: 0; padding: 14px 20px; list-style: none; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.bk-cmt-row { display: grid; grid-template-columns: 26px 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 44px; border-top: 1px solid rgba(255,255,255,.06); }
+.bk-cmt-row:nth-child(1), .bk-cmt-row:nth-child(14) { border-top: 0; }
+.bk-cmt-rk { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 16px; font-weight: 800; text-align: right; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.bk-cmt-row img, .bk-cmt-nologo { width: 22px; height: 22px; object-fit: contain; }
+.bk-cmt-team { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; font-weight: 650; color: var(--text-primary); text-decoration: none; }
+.bk-cmt-team:hover { color: #7cc9fb; }
+.bk-cmt-team span { margin-left: 4px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.bk-cmt-st { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 13.5px; color: var(--text-primary); }
+.bk-cmt-st b { font-weight: 700; }
+.bk-cmt-sub { color: var(--text-secondary); }
+.bk-cmt-row.is-out .bk-cmt-rk, .bk-cmt-row.is-out .bk-cmt-team { color: var(--text-secondary); }
+.bk-cmt-tag { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.bk-cmt-tag.is-auto { background: rgba(28,156,240,.16); color: #7cc9fb; }
+.bk-cmt-tag.is-last { background: rgba(0,184,122,.14); color: #5fd3a3; }
+.bk-cmt-tag.is-first { background: rgba(240,168,104,.14); color: #f0a868; }
+@media (max-width: 767.98px) {
+    .bk-cmt-list { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-flow: row; padding: 8px 14px; }
+    .bk-cmt-row:nth-child(14) { border-top: 1px solid rgba(255,255,255,.06); }
+}
 @media (max-width: 767.98px) {
     .bkr-scroll { display: none; }
     .bkr-phone { display: flex; flex-direction: column; gap: 24px; margin-top: 12px; }
@@ -10582,7 +10611,11 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .rkp-final { display: inline-flex; vertical-align: middle; margin-left: 10px; padding: 4px 12px; border-radius: 999px; background: rgba(28,156,240,.16); color: #7cc9fb; font-family: var(--font-body); font-stretch: 100%; font-size: 15px; font-weight: 700; letter-spacing: 0; }
 .rkp-lede { margin: 14px 0 0; max-width: 56ch; font-size: clamp(16px, 1.3vw, 18px); line-height: 1.55; color: #c4c8cc; }
 .rkp-lede b { color: #fff; }
-.rkp-ctl { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
+.rkp-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
+/* The committee's ranking and the AP poll: two views of one page, a pair of chips. */
+.rkp-polls { display: flex; flex: none; gap: 6px; }
+/* Fingers need the full 44px the desktop chips do without. */
+@media (pointer: coarse) { .rkp-chip { min-height: 44px; } }
 .rkp-weeks {
     position: relative; display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; max-width: 640px;
     padding: 3px; margin: -3px; overflow-x: auto; overscroll-behavior-x: contain;
@@ -10724,6 +10757,8 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
     .rkp-pts { grid-area: pt; }
     .rkp-ptn { justify-content: flex-end; font-size: 13.5px; }
     .rkp-fpv, .rkp-bar, .rkp-gap { display: none; }
+    .rkp-pts.is-ap b { font-size: 13.5px; }
+    .rkp-pts.is-ap b::before { content: "AP "; color: #8f969c; font-weight: 650; }
     .rkp-sv { grid-area: sv; }
     .rkp-sv b { font-size: 12px; font-weight: 650; color: #8f969c; }
     .rkp-sv b::before { content: "Savant "; }
