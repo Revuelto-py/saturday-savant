@@ -7757,10 +7757,10 @@ def rankings():
 
     conn = get_db()
     teams, others, dropped = [], [], []
-    prev_poll, other_rows, river, streak, sched = {}, [], None, 0, []
+    prev_poll, other_rows, river, sched = {}, [], None, []
     sel_week = sel_type = None
     is_post = False
-    ap_cmp = {}
+    ap_cmp, cfp_cmp, strip = {}, {}, None
     try:
         cursor = conn.cursor()
         # Every poll this season has, chronological (regular weeks, then final).
@@ -7833,12 +7833,6 @@ def rankings():
             for team, wk, st, rk in cursor.fetchall():
                 by_poll.setdefault((wk, st), {})[team] = rk
             prev_poll = by_poll.get(upto[-2], {}) if len(upto) > 1 else {}
-            # How many polls in a row this No. 1 has held the spot.
-            if rows:
-                for p in reversed(upto):
-                    if by_poll.get(p, {}).get(rows[0][1]) != 1:
-                        break
-                    streak += 1
             river = landscape.rank_river(
                 upto, by_poll, [poll_label(wk, st) for wk, st in upto],
                 [(r[1], r[0], r[7] if (r[7] or '').startswith('#') else None, r[13] or r[5]) for r in rows])
@@ -7871,29 +7865,67 @@ def rankings():
                               ORDER BY start_date''', (season, names, names))
             sched = cursor.fetchall()
 
-            # The committee's view carries the same week's AP rank beside it, the
-            # comparison readers come to the page for.
-            if poll == 'cfp':
-                cursor.execute('''SELECT team, rank FROM ap_rankings
-                                  WHERE season = %(s)s AND season_type = 'regular' AND week = (
-                                      SELECT MAX(week) FROM ap_rankings WHERE season = %(s)s
-                                         AND season_type = 'regular' AND week <= %(w)s)''',
-                               {'s': season, 'w': sel_week})
-                ap_cmp = dict(cursor.fetchall())
+            # Both views carry the same columns: every row shows its CFP, AP and
+            # Savant rank, so the other ranking for the same week comes along.
+            # The AP poll beside the committee's ranking is the latest at or
+            # before its week; the committee's beside the AP's is the same week
+            # (its last one beside the AP's final poll).
+            ap_wk = (sel_week, sel_type) if poll == 'ap' else next(
+                ((wk, st) for wk, st in reversed(ap_polls) if st == 'regular' and wk <= sel_week), None)
+            if poll == 'cfp' and ap_wk:
+                cursor.execute('''SELECT a.team, a.rank, a.points, a.first_place_votes, COALESCE(t.logo_dark, t.logo)
+                                  FROM ap_rankings a LEFT JOIN teams t ON t.name = a.team
+                                  WHERE a.season = %s AND a.week = %s AND a.season_type = %s''',
+                               (season, *ap_wk))
+                ap_cmp = {r[0]: r[1:] for r in cursor.fetchall()}
+            cfp_wk = max((wk for wk, _ in cfp_polls if is_post or wk <= sel_week), default=None)
+            if poll == 'ap' and cfp_wk:
+                cursor.execute('''SELECT c.team, c.rank, COALESCE(t.logo_dark, t.logo)
+                                  FROM cfp_rankings c LEFT JOIN teams t ON t.name = c.team
+                                  WHERE c.season = %s AND c.week = %s''', (season, cfp_wk))
+                cfp_cmp = {r[0]: r[1:] for r in cursor.fetchall()}
 
-            # Others receiving votes (ESPN only, AP only; empty until the fetch has run).
-            if poll == 'ap':
+            # Others receiving AP votes that week (ESPN only; empty until the fetch has run).
+            if ap_wk:
                 try:
                     cursor.execute('''
                         SELECT o.team, o.points, t.logo, t.logo_dark, t.conference, t.color, t.alt_color
                         FROM ap_others o LEFT JOIN teams t ON o.team = t.name
                         WHERE o.season = %s AND o.week = %s AND o.season_type = %s
                         ORDER BY o.points DESC, o.team
-                    ''', (season, sel_week, sel_type))
+                    ''', (season, *ap_wk))
                     other_rows = cursor.fetchall()
                 except Exception:
                     conn.rollback()
                     other_rows = []
+
+        # The playoff the latest ranking would make, the strip that leads to
+        # the bracket. Only while the field is a projection: a season the
+        # committee has seeded has a real bracket (the same rule as /bracket).
+        if season == CURRENT_SEASON and not is_post:
+            try:
+                cursor.execute('SELECT 1 FROM cfp_seeds WHERE season = %s LIMIT 1', (season,))
+                seeded = cursor.fetchone()
+            except Exception:
+                conn.rollback()
+                seeded = None
+            try:
+                # A strip, not the page: a projection that fails just leaves it out.
+                seeds, entries, _ = _project_cfp_field(cursor, season) if not seeded else ({}, [], [])
+            except Exception:
+                conn.rollback()
+                seeds, entries = {}, []
+            if len(seeds) == CFP_FIELD_SIZE:
+                by_seed = {s: tm for tm, s in seeds.items()}
+                cursor.execute('SELECT name, COALESCE(logo_dark, logo) FROM teams WHERE name = ANY(%s)',
+                               (list(seeds),))
+                lg = dict(cursor.fetchall())
+                tok = lambda s: {'seed': s, 'team': by_seed[s], 'logo': lg.get(by_seed[s])}
+                strip = {'byes': [tok(s) for s in (1, 2, 3, 4)],
+                         'games': [(tok(h), tok(a)) for h, a in ((5, 12), (6, 11), (7, 10), (8, 9))],
+                         'basis': (f"Seeded from the committee's {poll_label(cfp_polls[-1][0], 'regular')} ranking"
+                                   if entries[0]['poll'] == 'CFP'
+                                   else 'Seeded from the AP poll until the committee ranks')}
     finally:
         release_db(conn)
 
@@ -7934,23 +7966,28 @@ def rankings():
                    and nxt[5] > (sel_week if sel_week > 1 else 1))
         return (game(last, team) if last else None, game(nxt, team) if nxt else None, bye)
 
+    votes = {o[0]: o[1] for o in other_rows}
     for r in rows:
-        tc = team_hex(r[7], '#1c9cf0')
         last, nxt, bye = schedule(r[1])
         # The AP stores each team's previous rank; the committee's table does
         # not, so its movement is read off the ranking before this one.
         prev = r[12] if poll == 'ap' else prev_poll.get(r[1])
+        if poll == 'cfp':
+            cmp = ap_cmp.get(r[1])
+            cfp_rk, ap_rk, pts = r[0], cmp and cmp[0], cmp[1] if cmp else votes.get(r[1])
+        else:
+            cfp_rk, ap_rk, pts = (cfp_cmp.get(r[1]) or (None,))[0], r[0], r[2]
         teams.append({
             'rank': r[0], 'team': r[1], 'points': r[2], 'fpv': r[3],
             'logo': r[13] or r[5], 'conf': r[6],
             'c1': r[7] or '#1e3a5f', 'c2': r[14] or '#0f1e3a',
-            # Dark primaries vanish on the black track; they get a glow of
-            # their own colour rather than a lighter tint.
-            'tc': tc, 'dark': _srgb_lum(_to_rgb(tc)) < 0.06,
             'sp_rank': r[9], 'wins': r[10], 'losses': r[11],
             'move': (prev - r[0]) if prev is not None else None,
-            'svr': svr.get(r[1]), 'ap': ap_cmp.get(r[1]),
+            'svr': svr.get(r[1]), 'cfp': cfp_rk, 'ap': ap_rk, 'pts': pts,
             'last': last, 'next': nxt, 'bye': bye,
+            # Each row keeps one name across the CFP and AP views (and across
+            # weeks), so the page change can carry it to its new place.
+            'vt': 'rk-' + re.sub(r'[^a-z0-9]+', '-', r[1].lower()).strip('-'),
         })
 
     # Teams in the previous poll that are not in this one: noted on their
@@ -7964,6 +8001,23 @@ def rankings():
     listed = {o['team'] for o in others}
     dropped = sorted(((t, rk) for t, rk in fell.items() if t not in listed), key=lambda x: x[1])
 
+    # Just outside the top 25, the same list in both views: teams the other
+    # ranking has and this one does not, then the rest of the AP's votes.
+    other_rank, other_name = (ap_cmp, 'AP') if poll == 'cfp' else (cfp_cmp, 'CFP')
+    outside = [{'team': tm, 'logo': v[-1], 'tag': f'{other_name} No. {v[0]}', 'note': ''}
+               for tm, v in sorted(other_rank.items(), key=lambda kv: kv[1][0]) if tm not in current]
+    seen = {o['team']: o for o in outside}
+    for o in others:
+        if o['team'] in current:
+            continue
+        note = f"{o['points']:,} AP vote{'' if o['points'] == 1 else 's'}"
+        if o['was'] and poll == 'ap':
+            note += f", was No. {o['was']}"
+        if o['team'] in seen:
+            seen[o['team']]['note'] = note
+        else:
+            outside.append({'team': o['team'], 'logo': o['logo'], 'tag': '', 'note': note})
+
     poll_options = [{'value': f'{st}-{wk}', 'label': poll_label(wk, st),
                      'selected': (wk == sel_week and st == sel_type)} for wk, st in polls]
     idx = next((i for i, p in enumerate(poll_options) if p['selected']), None)
@@ -7972,12 +8026,13 @@ def rankings():
     # Every voter's ballot gives 25 points to its No. 1, and every ballot has
     # one, so first-place votes count the voters and voters x 25 is the most
     # points a team can get.
-    voters = sum(t['fpv'] or 0 for t in teams)
-    max_pts = voters * 25 or max((t['points'] or 0 for t in teams), default=0)
-    return render_template('rankings.html', teams=teams, river=river, streak=streak,
+    voters = (sum(t['fpv'] or 0 for t in teams) if poll == 'ap'
+              else sum(v[2] or 0 for v in ap_cmp.values()))
+    max_pts = voters * 25
+    return render_template('rankings.html', teams=teams, river=river,
                            voters=voters, max_pts=max_pts,
-                           n_polls=len(poll_options),
-                           others=others, dropped=dropped,
+                           others=others, dropped=dropped, outside=outside, strip=strip,
+                           show_cfp=poll == 'cfp' or bool(cfp_cmp),
                            poll_options=poll_options, prev_opt=prev_opt, next_opt=next_opt,
                            sel_label=poll_label(sel_week, sel_type) if sel_week else None,
                            sel_is_final=(sel_type == 'postseason'),

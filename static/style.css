@@ -10601,21 +10601,35 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
    Then the week's movers, the season river (landscape.rank_river), and the
    others receiving votes.
    ═══════════════════════════════════════════════════════════════════════════ */
-.rkp-page { position: relative; isolation: isolate; padding-bottom: 96px; }
+.rkp-page { position: relative; isolation: isolate; padding-bottom: 96px; --rkp-ease: cubic-bezier(.16, 1, .3, 1); --rkp-rise: 10px; --rkp-pop: .92; }
+@keyframes rkp-rise { from { opacity: 0; transform: translateY(var(--rkp-rise)); } }
+@keyframes rkp-pop { from { opacity: 0; transform: scale(var(--rkp-pop)); } }
 .rkp-page::before {
     content: ''; position: absolute; inset: 0 0 auto; height: 800px; z-index: -1; pointer-events: none;
     background: radial-gradient(1000px 640px at 75% -8%, rgba(28,156,240,.12), transparent 60%);
 }
-.rkp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; padding-block: 40px 26px; }
-.rkp-h1 { margin: 0; font-family: var(--font-display); font-stretch: 75%; font-weight: 850; font-size: clamp(52px, 7vw, 104px); line-height: .9; letter-spacing: -.04em; color: var(--text-primary); }
+/* Title, then the controls: stacked in both views, so switching never moves them. */
+.rkp-head { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; padding-block: 40px 26px; }
+.rkp-h1 { display: flex; flex-wrap: wrap; align-items: center; gap: 0 .2em; margin: 0; font-family: var(--font-display); font-stretch: 75%; font-weight: 850; font-size: clamp(52px, 7vw, 104px); line-height: .9; letter-spacing: -.04em; color: var(--text-primary); }
 .rkp-final { display: inline-flex; vertical-align: middle; margin-left: 10px; padding: 4px 12px; border-radius: 999px; background: rgba(28,156,240,.16); color: #7cc9fb; font-family: var(--font-body); font-stretch: 100%; font-size: 15px; font-weight: 700; letter-spacing: 0; }
-.rkp-lede { margin: 14px 0 0; max-width: 56ch; font-size: clamp(16px, 1.3vw, 18px); line-height: 1.55; color: #c4c8cc; }
-.rkp-lede b { color: #fff; }
+/* The committee's mark beside its ranking's title; the title and the mark
+   carry across the page change to the AP view and back. */
+.rkp-h1-t { view-transition-name: rkp-title; }
+.rkp-mark { width: auto; height: .84em; flex: none; view-transition-name: rkp-mark; animation: rkp-pop .52s var(--rkp-ease) backwards; }
 .rkp-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; max-width: 100%; }
-/* The committee's ranking and the AP poll: two views of one page, a pair of chips. */
-.rkp-polls { display: flex; flex: none; gap: 6px; }
+/* The committee's ranking and the AP poll: two views of one page. The
+   indicator keeps its name across the page change, so it slides to the other half. */
+.rkp-seg { position: relative; flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 3px; border-radius: 14px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.1); }
+.rkp-seg-i { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 11px; background: var(--accent); view-transition-name: rkp-seg; }
+.rkp-seg-i.is-r { transform: translateX(100%); }
+.rkp-seg a { position: relative; display: flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 16px; border-radius: 11px; color: #c4c8cc; font-size: 13.5px; font-weight: 700; white-space: nowrap; text-decoration: none; transition: transform .16s var(--rkp-ease); }
+.rkp-seg a:hover { color: #fff; }
+.rkp-seg a:not([aria-current]):hover { background: rgba(255,255,255,.06); }
+.rkp-seg a[aria-current="page"] { color: #00111f; }
+.rkp-seg a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rkp-seg a:active { transform: scale(.97); }
 /* Fingers need the full 44px the desktop chips do without. */
-@media (pointer: coarse) { .rkp-chip { min-height: 44px; } }
+@media (pointer: coarse) { .rkp-chip, .rkp-seg a { min-height: 44px; } }
 .rkp-weeks {
     position: relative; display: flex; flex-wrap: nowrap; gap: 6px; min-width: 0; max-width: 640px;
     padding: 3px; margin: -3px; overflow-x: auto; overscroll-behavior-x: contain;
@@ -10625,7 +10639,8 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .rkp-weeks.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
 .rkp-weeks.fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 48px); mask-image: linear-gradient(to right, transparent, #000 48px); }
 .rkp-weeks.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent); }
-.rkp-chip { flex: none; display: inline-flex; align-items: center; min-height: 38px; padding: 0 13px; border-radius: 999px; color: #c4c8cc; font-size: 13px; font-weight: 600; text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); transition: background-color .2s ease, color .2s ease; }
+.rkp-chip { flex: none; display: inline-flex; align-items: center; min-height: 38px; padding: 0 13px; border-radius: 999px; color: #c4c8cc; font-size: 13px; font-weight: 600; text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); transition: transform .16s var(--rkp-ease); }
+.rkp-chip:active { transform: scale(.97); }
 .rkp-chip:hover { background: rgba(255,255,255,.05); color: #fff; }
 .rkp-chip:focus-visible, .rkp-sel select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rkp-chip[aria-current="page"] { background: rgba(28,156,240,.16); color: #fff; box-shadow: inset 0 0 0 1.5px var(--accent); }
@@ -10638,18 +10653,46 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .rkp-h2 { margin: 0 0 16px; font-family: var(--font-display); font-stretch: 82%; font-weight: 800; font-size: clamp(26px, 2.6vw, 36px); line-height: 1.05; letter-spacing: -.02em; color: var(--text-primary); }
 .rkp-sec-n { margin: -8px 0 18px; max-width: 64ch; font-size: 15px; line-height: 1.6; color: var(--text-secondary); }
 
-/* The poll: one row per team. Rank, movement, the team, the last result the
-   voters saw, this week's game, poll points (the bar is the share of the most
-   a team can get), and the Savant rank with how far the poll sits from it. */
-.rkp-ladder { padding: 4px 0 6px; overflow: hidden; }
-.rkp-lhead, .rkp-lrow { display: grid; grid-template-columns: 44px 64px minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 124px; column-gap: 18px; align-items: center; padding: 0 22px; }
-.rkp-ladder.no-next .rkp-lhead, .rkp-ladder.no-next .rkp-lrow { grid-template-columns: 44px 64px minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) 124px; }
+/* The playoff the latest ranking would make, and the way into the bracket:
+   the byes, then the first-round games, arriving in that order. */
+.rkp-po { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 28px; margin-bottom: 22px; padding: 18px 20px 18px 24px; }
+.rkp-po-t { flex: 1 1 260px; display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.rkp-po-t > div { flex: 1; min-width: 0; }
+.rkp-po-m { width: 32px; height: 40px; flex: none; }
+.rkp-po-h { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -.01em; color: #fff; }
+.rkp-po-s { margin: 5px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-dim); }
+.rkp-po-g { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.rkp-po-l { font-size: 12px; font-weight: 700; color: var(--text-dim); }
+.rkp-po-row { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rkp-tok { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 10px; border-radius: 11px; background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); animation: rkp-pop .42s var(--rkp-ease) backwards; animation-delay: calc(.2s + var(--i, 0) * 45ms); }
+.rkp-tok img { width: 26px; height: 26px; flex: none; object-fit: contain; }
+.rkp-tok-n { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.rkp-sd { min-width: 13px; font-size: 12.5px; font-weight: 800; color: var(--text-dim); text-align: center; font-variant-numeric: tabular-nums; }
+.rkp-v { font-size: 11.5px; font-weight: 700; color: #8f969c; }
+.rkp-po-go { display: inline-flex; align-items: center; gap: 9px; margin-top: 12px; min-height: 44px; padding: 0 16px; border-radius: 12px; color: #9dd6fc; background: rgba(28,156,240,.1); box-shadow: inset 0 0 0 1px rgba(124,201,251,.32); font-size: 14px; font-weight: 750; text-decoration: none; transition: transform .16s var(--rkp-ease); }
+.rkp-po-go:hover { color: #fff; background: rgba(28,156,240,.2); }
+.rkp-po-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rkp-po-go:active { transform: scale(.97); }
+.rkp-po-go svg { transition: transform .26s var(--rkp-ease); }
+.rkp-po-go:hover svg { transform: translateX(2px); }
+
+/* The ranking: one row per team, the same columns in both views. Rank,
+   movement, the team, the last result the voters saw, this week's game, then
+   CFP, AP and Savant side by side; the ranking on view gets the band. Rows are
+   solid so they cover each other while gliding to a new rank. */
+.rkp-ladder { padding: 4px 0 6px; overflow: hidden; background: #0c0d10; }
+.rkp-lhead, .rkp-lrow { display: grid; grid-template-columns: 44px 56px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto; column-gap: 18px; align-items: center; padding: 0 22px; }
+.rkp-ladder.no-next .rkp-lhead, .rkp-ladder.no-next .rkp-lrow { grid-template-columns: 44px 56px minmax(0, 1.5fr) minmax(0, 1fr) auto; }
 .rkp-lhead { min-height: 46px; font-size: 12.5px; font-weight: 700; color: var(--text-dim); }
-.rkp-lhead span:first-child, .rkp-lhead span:last-child { text-align: right; }
+.rkp-lhead > span:first-child { text-align: right; }
 .rkp-list { list-style: none; margin: 0; padding: 0; }
-.rkp-lrow { min-height: 66px; color: var(--text-primary); text-decoration: none; border-top: 1px solid rgba(255,255,255,.06); transition: background-color .2s ease; }
-.rkp-lrow:hover { background: rgba(255,255,255,.03); color: var(--text-primary); }
-.rkp-lrow:active { background: rgba(255,255,255,.05); }
+.rkp-list > li { animation: rkp-rise .44s var(--rkp-ease) backwards; animation-delay: calc(.14s + min(var(--i, 0), 14) * 14ms); }
+.rkp-lrow { position: relative; z-index: 0; min-height: 66px; color: var(--text-primary); text-decoration: none; border-top: 1px solid rgba(255,255,255,.06); background: #0c0d10; }
+.rkp-lrow::before { content: ''; position: absolute; inset: 0; z-index: -1; background: rgba(255,255,255,.04); opacity: 0; transition: opacity .18s ease-out; }
+.rkp-lrow:hover { color: var(--text-primary); }
+.rkp-lrow:hover::before { opacity: 1; }
+.rkp-lrow:active::before { opacity: 1; background: rgba(255,255,255,.07); }
+.rkp-lrow:hover .rkp-team img { transform: scale(1.07); }
 .rkp-lrow:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 12px; }
 .rkp-rk { font-family: var(--font-display); font-stretch: 78%; font-weight: 850; font-size: 30px; line-height: .92; letter-spacing: -.02em; text-align: right; color: #fff; font-variant-numeric: tabular-nums; }
 .rkp-m { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; height: 28px; padding: 0 9px; border-radius: 8px; font-size: 15px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -10658,7 +10701,7 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .rkp-m.is-same { color: #7b8288; font-size: 17px; }
 .rkp-m.is-new { font-size: 12.5px; color: #00111f; background: #7cc9fb; }
 .rkp-team { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.rkp-team img, .rkp-nologo { width: 36px; height: 36px; flex: none; object-fit: contain; }
+.rkp-team img, .rkp-nologo { width: 36px; height: 36px; flex: none; object-fit: contain; transition: transform .26s var(--rkp-ease); }
 .rkp-name { display: flex; flex-direction: column; min-width: 0; }
 .rkp-name b { font-size: 16px; font-weight: 750; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rkp-name > span { margin-top: 3px; font-size: 13px; color: #a9afb4; font-variant-numeric: tabular-nums; }
@@ -10671,22 +10714,27 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .rkp-res.is-l { color: #fff; background: #d93036; }
 .rkp-ork { margin-right: 3px; font-size: 11.5px; font-weight: 750; color: #8f969c; }
 .rkp-l1 .rkp-ork { color: #a9afb4; }
-.rkp-ptn { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: 15px; font-weight: 750; color: #fff; font-variant-numeric: tabular-nums; }
-.rkp-ptn b { font-weight: inherit; }
-.rkp-fpv { font-size: 14px; font-weight: 700; color: #f0c35a; white-space: nowrap; }
-.rkp-bar { display: block; height: 4px; margin-top: 8px; border-radius: 999px; background: rgba(255,255,255,.07); }
-.rkp-bar i { display: block; height: 100%; border-radius: 999px; }
-.rkp-sv { text-align: right; }
 .rkp-narrow { display: none; }
-.rkp-sv b { display: block; font-size: 15px; font-weight: 750; color: #fff; font-variant-numeric: tabular-nums; }
-.rkp-gap { display: block; margin-top: 3px; font-size: 12.5px; font-weight: 650; color: #8f969c; }
-.rkp-sv.is-over .rkp-gap { color: #f0a868; }
-.rkp-sv.is-under .rkp-gap { color: #7cc9fb; }
-.rkp-foot { margin: 14px 6px 0; max-width: 80ch; font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+.rkp-trio { display: grid; grid-auto-flow: column; grid-auto-columns: 68px; align-self: stretch; }
+.rkp-tri { position: relative; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-width: 0; }
+.rkp-lhead .rkp-tri { border-radius: 10px 10px 0 0; }
+.rkp-lhead .rkp-tri.is-on { color: #fff; }
+.rkp-tri.is-on::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: rgba(28,156,240,.1); }
+.rkp-tl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.rkp-tri b { font-size: 16px; font-weight: 750; color: #c4c8cc; font-variant-numeric: tabular-nums; }
+.rkp-tri.is-on b { color: #fff; }
+.rkp-tri b.is-hi, .rkp-hi { color: #f0a868; }
+.rkp-tri b.is-lo, .rkp-lo { color: #7cc9fb; }
+.rkp-tp { font-size: 11.5px; font-weight: 600; color: #8f969c; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rkp-foot { margin: 14px 6px 0; max-width: 86ch; font-size: 13px; line-height: 1.6; color: var(--text-dim); }
+.rkp-foot .rkp-hi, .rkp-foot .rkp-lo { font-weight: 700; }
+/* Arriving through the page change, the rows glide instead of rising in. */
+html:active-view-transition .rkp-list > li, html:active-view-transition .rkp-tok, html:active-view-transition .rkp-mark { animation: none; }
 
 /* Movers */
 .rkp-mvs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.rkp-mvc { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; border-radius: 16px; background: #0e1013; color: var(--text-primary); text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); transition: background-color .2s ease; }
+.rkp-mvc { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; border-radius: 16px; background: #0e1013; color: var(--text-primary); text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); transition: transform .16s var(--rkp-ease); }
+.rkp-mvc:active, .rkp-other:active { transform: scale(.98); }
 .rkp-mvc:hover { background: var(--bg-subtle); color: #fff; }
 .rkp-mvc:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .rkp-mvc img { width: 36px; height: 36px; object-fit: contain; }
@@ -10707,21 +10755,26 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 .rkp-rv-l img { width: 18px; height: 18px; object-fit: contain; }
 .rkp-rv-l.is-top { color: #fff; font-weight: 650; }
 
-/* Others receiving votes */
+/* Just outside the top 25: the other ranking's teams this one leaves out, then the rest of the AP's votes */
 .rkp-others { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
-.rkp-other { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-radius: 14px; background: #0e1013; color: var(--text-primary); text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: background-color .2s ease; }
+.rkp-other { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border-radius: 14px; background: #0e1013; color: var(--text-primary); text-decoration: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: transform .16s var(--rkp-ease); }
 .rkp-other:hover { background: var(--bg-subtle); color: #fff; }
 .rkp-other:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.rkp-other img { width: 26px; height: 26px; object-fit: contain; }
-.rkp-other-n { flex: 1; min-width: 0; font-weight: 650; font-size: 14px; }
-.rkp-fell { display: block; font-size: 12px; font-weight: 500; color: #f0a868; }
-.rkp-other-p { font-family: var(--font-display); font-stretch: 82%; font-size: 17px; font-weight: 800; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.rkp-other img { width: 26px; height: 26px; flex: none; object-fit: contain; transition: transform .26s var(--rkp-ease); }
+.rkp-other:hover img { transform: scale(1.08); }
+.rkp-other-n { flex: 1; min-width: 0; font-weight: 650; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rkp-other-p { flex: none; font-size: 12.5px; font-weight: 600; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rkp-other-p b { font-weight: 750; color: var(--text-primary); }
 
-@media (prefers-reduced-motion: reduce) { .rkp-lrow, .rkp-chip, .rkp-mvc, .rkp-other { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .rkp-page { --rkp-rise: 0px; --rkp-pop: 1; }
+    .rkp-lrow:hover .rkp-team img, .rkp-other:hover img, .rkp-po-go:hover svg { transform: none; }
+}
 @media (min-width: 768px) and (max-width: 1099.98px) {
     /* The last result gives way first; this week's game stays. */
     .rkp-ladder:not(.no-next) .rkp-c-last { display: none; }
-    .rkp-ladder:not(.no-next) .rkp-lhead, .rkp-ladder:not(.no-next) .rkp-lrow { grid-template-columns: 40px 60px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 112px; column-gap: 14px; padding: 0 16px; }
+    .rkp-ladder:not(.no-next) .rkp-lhead, .rkp-ladder:not(.no-next) .rkp-lrow { grid-template-columns: 40px 52px minmax(0, 1.4fr) minmax(0, 1fr) auto; column-gap: 14px; padding: 0 16px; }
+    .rkp-trio { grid-auto-columns: 60px; }
 }
 @media (max-width: 1000px) {
     .rkp-ctl { width: 100%; }
@@ -10731,11 +10784,18 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 @media (max-width: 767.98px) {
     /* Phone: rank over movement, the logo, the name over this week's game,
        and points over the Savant rank. The last result and the bar drop. */
+    .rkp-seg { flex: 1 1 100%; }
+    .rkp-po { gap: 14px; padding: 16px; }
+    .rkp-po-t, .rkp-po-g { flex: 1 1 100%; }
+    .rkp-po-byes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .rkp-po-r1 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rkp-tok { justify-content: center; }
+    .rkp-po-go { display: flex; justify-content: center; }
     .rkp-lhead { display: none; }
     .rkp-lrow, .rkp-ladder.no-next .rkp-lrow {
-        grid-template-columns: 34px 30px minmax(0, 1fr) auto;
-        grid-template-areas: "rk lg nm pt" "mv lg nx sv";
-        column-gap: 10px; row-gap: 3px; min-height: 62px; padding: 9px 14px;
+        grid-template-columns: 26px 28px minmax(0, 1fr) auto;
+        grid-template-areas: "rk lg nm tri" "mv lg nx tri";
+        column-gap: 8px; row-gap: 3px; min-height: 62px; padding: 9px 10px;
     }
     .rkp-rk { grid-area: rk; font-size: 22px; text-align: center; }
     .rkp-mv { grid-area: mv; display: flex; justify-content: center; }
@@ -10744,7 +10804,7 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
     .rkp-m.is-same { font-size: 13px; }
     .rkp-m.is-new { font-size: 10px; }
     .rkp-team { display: contents; }
-    .rkp-team img, .rkp-nologo { grid-area: lg; width: 30px; height: 30px; }
+    .rkp-team img, .rkp-nologo { grid-area: lg; width: 28px; height: 28px; }
     .rkp-name { grid-area: nm; flex-direction: row; align-items: baseline; gap: 6px; }
     .rkp-name b { font-size: 15px; }
     .rkp-name > span { flex: none; margin: 0; font-size: 12.5px; font-weight: 600; }
@@ -10754,16 +10814,13 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
     .rkp-c-next .rkp-l1, .rkp-c-next .rkp-l2, .rkp-c-last .rkp-l1, .rkp-c-last .rkp-l2 { display: inline; margin: 0; font-size: inherit; font-weight: 500; color: inherit; }
     .rkp-c-next .rkp-l2::before, .rkp-c-last .rkp-l2::before { content: ", "; }
     .rkp-res { width: 16px; height: 16px; margin-right: 5px; font-size: 10px; vertical-align: -3px; }
-    .rkp-pts { grid-area: pt; }
-    .rkp-ptn { justify-content: flex-end; font-size: 13.5px; }
-    .rkp-fpv, .rkp-bar, .rkp-gap { display: none; }
-    .rkp-pts.is-ap b { font-size: 13.5px; }
-    .rkp-pts.is-ap b::before { content: "AP "; color: #8f969c; font-weight: 650; }
-    .rkp-sv { grid-area: sv; }
-    .rkp-sv b { font-size: 12px; font-weight: 650; color: #8f969c; }
-    .rkp-sv b::before { content: "Savant "; }
-    .rkp-sv.is-over b { color: #f0a868; }
-    .rkp-sv.is-under b { color: #7cc9fb; }
+    /* CFP, AP and Savant as three small labelled cells beside the name. */
+    .rkp-trio { grid-area: tri; grid-auto-columns: 38px; gap: 2px; margin: -5px 0; }
+    .rkp-tri { border-radius: 8px; }
+    .rkp-tl { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 11px; font-weight: 650; color: #8f969c; }
+    .rkp-tri.is-on .rkp-tl { color: #9dd6fc; }
+    .rkp-tri b { font-size: 15px; }
+    .rkp-tp { display: none; }
 }
 @media (max-width: 640px) {
     .rkp-head { padding-top: 28px; }
@@ -10772,8 +10829,9 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
 @media (min-width: 1800px) {
     /* The page takes the site's wide wrapper (up to 2040px); the rows grow
        with it instead of spreading 16px type across a 2000px table. */
-    .rkp-lhead, .rkp-lrow { grid-template-columns: 56px 76px minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 160px; column-gap: 28px; padding: 0 32px; }
-    .rkp-ladder.no-next .rkp-lhead, .rkp-ladder.no-next .rkp-lrow { grid-template-columns: 56px 76px minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) 160px; }
+    .rkp-lhead, .rkp-lrow { grid-template-columns: 56px 76px minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) auto; column-gap: 28px; padding: 0 32px; }
+    .rkp-ladder.no-next .rkp-lhead, .rkp-ladder.no-next .rkp-lrow { grid-template-columns: 56px 76px minmax(0, 1.5fr) minmax(0, 1fr) auto; }
+    .rkp-trio { grid-auto-columns: 86px; }
     .rkp-lhead { min-height: 54px; font-size: 14px; }
     .rkp-lrow { min-height: 82px; }
     .rkp-rk { font-size: 40px; }
@@ -10789,11 +10847,8 @@ a.tfr-player:focus-visible { outline: 2px solid var(--accent); outline-offset: 2
     .rkp-l2 { margin-top: 4px; font-size: 15px; }
     .rkp-res { width: 24px; height: 24px; margin-right: 9px; border-radius: 6px; font-size: 13.5px; }
     .rkp-ork { font-size: 13.5px; }
-    .rkp-ptn { gap: 2px 12px; font-size: 19px; }
-    .rkp-fpv { font-size: 16.5px; }
-    .rkp-bar { height: 5px; margin-top: 11px; }
-    .rkp-sv b { font-size: 19px; }
-    .rkp-gap { margin-top: 4px; font-size: 15px; }
+    .rkp-tri b { font-size: 19px; }
+    .rkp-tp { font-size: 13.5px; }
     .rkp-foot { font-size: 14.5px; }
 }
 

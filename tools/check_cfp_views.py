@@ -32,10 +32,26 @@ assert len(last_in) <= 4 and all(b['team'] in at_large for b in last_in), 'last 
 assert all(b['seed'] and b['rank'] > 12 for b in board if b['auto']), 'auto tag only on a bid the ranking missed'
 
 # /rankings: the committee's ranking leads while it is the live one; an old ?w= link stays AP.
+# Both views are one layout: CFP, AP and Savant on every row, the ranking on
+# view banded, the same "just outside" list, and one transition name per team.
+import re  # noqa: E402
 c = main.app.test_client()
 body = c.get(f'/rankings?season={season}&poll=cfp').get_data(as_text=True)
-assert 'CFP Rankings' in body and body.count('rkp-pts is-ap') == len(board), 'committee view, AP beside each team'
-assert 'Others receiving votes' not in body, 'AP-only section stays out'
+ap_now = c.get(f'/rankings?season={season}&poll=ap').get_data(as_text=True)
+for view, html in (('cfp', body), ('ap', ap_now)):
+    rows = html.count('<li style="--i:')
+    assert rows and html.count('class="rkp-trio"') == rows + 1, f'{view}: every row and the header carry the trio'
+    assert html.count('rkp-tri is-on') == rows + 1, f'{view}: one banded column per row'
+    assert html.count('<span class="rkp-tl">CFP</span>') == rows, f'{view}: the CFP column is there in both views'
+    names = re.findall(r'view-transition-name: (rk-[a-z0-9-]+)', html)
+    assert len(names) == rows == len(set(names)), f'{view}: one transition name per team'
+    assert 'Others receiving votes' not in html and 'rkp-lede' not in html, f'{view}: no AP-only section, no lede'
+assert 'CFP Rankings</span>' in body and 'cfp-mark.webp' in body, 'committee view, with its mark'
+assert len(re.findall(r'view-transition-name: rk-', body)) == len(board), 'the committee ranks 25'
 ap = c.get(f'/rankings?season={season}&w=regular-1').get_data(as_text=True)
-assert '<h1 class="rkp-h1">AP Top 25' in ap, 'an old ?w= link is an AP link'
+assert '<span class="rkp-h1-t">AP Top 25' in ap, 'an old ?w= link is an AP link'
+assert '<span class="rkp-tl">CFP</span>' not in ap, 'no CFP column before the committee ranks'
+if season == main.CURRENT_SEASON:
+    assert 'The playoff if it started today' in body and 'The playoff if it started today' in ap_now, 'the strip in both views'
+    assert body.count('class="rkp-tok"') == 8, 'four byes and four first-round games'
 print(f'cfp views: ok ({season}, {len(board)} ranked, {len(first_out)} first out)')
