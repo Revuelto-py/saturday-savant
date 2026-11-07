@@ -8622,7 +8622,12 @@ def _live_window_ids():
 
     Read from the games table alone, never the CFBD board: crawlers request
     thousands of game pages, and an external call behind each would spend the
-    API quota. The score cron marks a game final within minutes of the end."""
+    API quota. The score cron marks a game final within minutes of the end.
+
+    A kickoff without a set time (TBD, or the midnight-ET placeholder a
+    schedule carries until a network picks the slot) could be any time that
+    day, so it stays in the window until the next day ends. The score cron
+    now copies CFBD's real times in; this covers a game it has not reached."""
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -8630,7 +8635,10 @@ def _live_window_ids():
             SELECT id FROM games
              WHERE completed = 0 AND start_date IS NOT NULL AND start_date <> ''
                AND start_date::timestamptz <= now()
-               AND start_date::timestamptz > now() - interval '8 hours'
+               AND (start_date::timestamptz > now() - interval '8 hours'
+                    OR ((COALESCE(start_time_tbd, 0) = 1
+                         OR (start_date::timestamptz AT TIME ZONE 'America/New_York')::time = '00:00')
+                        AND start_date::timestamptz > now() - interval '32 hours'))
         """)
         return frozenset(r[0] for r in cur.fetchall())
     except Exception:
@@ -14245,7 +14253,7 @@ def _persist_finals(board):
               and g['home'] is not None and g['away'] is not None}
     if not scored:
         return 0
-    n = 0
+    finals = scores = 0
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -14257,14 +14265,14 @@ def _persist_finals(board):
             if g['state'] == 'final':
                 cur.execute("""UPDATE games SET home_points = %s, away_points = %s, completed = 1
                                 WHERE id = %s AND completed = 0""", (g['home'], g['away'], gid))
-                n += cur.rowcount
+                finals += cur.rowcount
             elif hp != g['home'] or ap != g['away']:
                 # Score only. `completed` is untouched, which is what marks the
                 # row as in progress for every reader — /games alone stays the
                 # authority on whether a game is actually over.
                 cur.execute("""UPDATE games SET home_points = %s, away_points = %s
                                 WHERE id = %s AND completed = 0""", (g['home'], g['away'], gid))
-                n += cur.rowcount
+                scores += cur.rowcount
         conn.commit()
     except Exception as exc:
         conn.rollback()
@@ -14272,14 +14280,21 @@ def _persist_finals(board):
         return 0
     finally:
         release_db(conn)
-    if n:
+    n = finals + scores
+    if finals or scores:
         # A finished game moves records, standings and its own page's shape, so
-        # this is the full clear rather than the score-scoped one.
-        print(f'{n} game(s) finished — clearing caches', flush=True)
+        # it gets the full clear. A score that merely moved changes only the
+        # pages that print it (home, /games); counting those as finished games,
+        # as this once did, cleared every page on both workers whenever a live
+        # score changed, all Saturday long, and the full clear also dropped
+        # this memoized board, so the next poll came straight back here.
+        scope = None if finals else 'scores'
+        if finals:
+            print(f'{finals} game(s) finished — clearing caches', flush=True)
         try:
-            _purge_local(None)
+            _purge_local(scope)
             global _epoch_seen
-            e = _epoch_bump(None)
+            e = _epoch_bump(scope)
             if e is not None:
                 _epoch_seen = e
         except Exception as exc:
@@ -14484,25 +14499,43 @@ _epoch_checked_at = 0.0   # monotonic clock of the last look
 
 
 def _purge_local(scope=None):
-    """Drop this worker's cached pages. scope='scores' keeps everything a score
-    cannot affect (leaderboards, team precompute, player pages)."""
+    """Drop this worker's cached pages, then rebuild the warm ones in the
+    background. scope='scores' keeps everything a score cannot affect
+    (leaderboards, team precompute, player pages)."""
+    try:
+        _purge_pages(scope)
+    finally:
+        _rewarm()
+
+
+def _purge_pages(scope=None):
     if scope != 'scores':
         cache.clear()
         data_cache.clear()
         return
     try:
-        cache.delete('view/%s' % url_for('home'))
-        cache.delete('view/%s' % url_for('games_hub'))
+        # Home and /games are cached with query_string=True, whose key is the
+        # path plus a hash of the arguments, not 'view/<path>'. Deleting
+        # 'view/<path>' (as this used to) matched nothing, so a score-only clear
+        # left both pages as they were until a game finished. Ask Flask-Caching
+        # for each page's own key instead.
         conn = get_db()
         try:
             cur = conn.cursor()
             cur.execute('SELECT DISTINCT week, season_type FROM games WHERE season = %s',
                         (forward_season(),))
-            for wk, stype in cur.fetchall():
-                st = 'postseason' if 'POSTSEASON' in (stype or '') else 'regular'
-                cache.delete('view/%s' % url_for('home', week=wk, season_type=st))
+            weeks = cur.fetchall()
         finally:
             release_db(conn)
+        with app.test_request_context('/'):
+            paths = [('/', home), ('/games', games_hub)] + [
+                (url_for('home', week=wk, season_type='postseason' if 'POSTSEASON' in (st or '') else 'regular'), home)
+                for wk, st in weeks]
+        keys = []
+        for path, view in paths:
+            with app.test_request_context(path):
+                keys.append(view.make_cache_key())
+        cache.delete_many(*keys)
     except Exception as exc:
         # Never leave a worker serving stale pages because the narrow path
         # failed — fall back to the blunt clear.
@@ -14658,25 +14691,64 @@ def _warm_explorer_headshots():
     print(f'headshot warmup: {done} of {len(srcs)} explorer faces ready', flush=True)
 
 
+# The pages that cost most to build cold, rendered ahead of visitors at boot and
+# again after every cache clear. A page still cached comes straight back, so one
+# list serves a score-scoped clear (home, /games) and a full one alike.
+WARM_PATHS = ['/', '/games', '/leaderboards/passing', '/leaderboards/rushing',
+              '/leaderboards/receiving', '/leaderboards/defense',
+              '/leaderboards/kicking', '/leaderboards/punting',
+              '/leaderboards/teams', '/rankings', '/teams', '/savant-rating', '/bracket',
+              '/draft']
+
+
+def _render_pages(paths):
+    try:
+        with app.test_client() as c:
+            for p in paths:
+                try:
+                    c.get(p, environ_base={'savant.warmup': True})
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f'cache warmup skipped: {e}', flush=True)
+
+
+_rewarm_lock = _threading.Lock()
+_rewarm_again = False
+
+
+def _rewarm():
+    """Rebuild the warm pages a cache clear just dropped, on a background thread.
+
+    On a Saturday the score cron clears every ten minutes, and each clear left
+    the first visitor per worker paying for the render (home 1.6s, /bracket
+    4.4s measured 2026-11-07) and, with renders queued, risked the busy page.
+    One pass at a time per worker; a clear landing mid-pass sends it round once
+    more, so nothing cached is older than the latest clear."""
+    global _rewarm_again
+    if not _rewarm_lock.acquire(blocking=False):
+        _rewarm_again = True
+        return
+
+    def run():
+        global _rewarm_again
+        try:
+            while True:
+                _rewarm_again = False
+                _render_pages(WARM_PATHS)
+                if not _rewarm_again:
+                    break
+        finally:
+            _rewarm_lock.release()
+    _threading.Thread(target=run, daemon=True).start()
+
+
 def _warm_cache():
     import threading, time as _t
     def run():
         _t.sleep(3)   # let the worker finish booting
-        paths = ['/', '/games', '/leaderboards/passing', '/leaderboards/rushing',
-                 '/leaderboards/receiving', '/leaderboards/defense',
-                 '/leaderboards/kicking', '/leaderboards/punting',
-                 '/leaderboards/teams', '/rankings', '/teams', '/savant-rating', '/bracket',
-                 '/draft']
-        try:
-            with app.test_client() as c:
-                for p in paths:
-                    try:
-                        c.get(p, environ_base={'savant.warmup': True})
-                    except Exception:
-                        pass
-            print('cache warmup complete', flush=True)
-        except Exception as e:
-            print(f'cache warmup skipped: {e}', flush=True)
+        _render_pages(WARM_PATHS)
+        print('cache warmup complete', flush=True)
         # Search results rank each player's headline figure against his season;
         # building those pools on the first search would cost that visitor ~0.5s
         # per season involved.

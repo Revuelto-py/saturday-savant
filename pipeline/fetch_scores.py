@@ -148,8 +148,10 @@ def fill_missing_summaries(conn, season, limit=12):
                 ON CONFLICT (game_id) DO UPDATE SET summary_gz = EXCLUDED.summary_gz
                  WHERE length(EXCLUDED.summary_gz) > length(game_summaries.summary_gz)
             """, (gid, blob))
+            # A refetch no bigger than what is stored writes nothing, and must
+            # not count: a stored summary triggers a site-wide cache clear.
+            stored += cur.rowcount
             conn.commit()
-            stored += 1
         except Exception:
             conn.rollback()
     if ids:
@@ -249,7 +251,7 @@ def main():
         print('CFBD_API_KEY not set — cannot fetch scores', flush=True)
         return 1
 
-    changed = live = finals = espn_live = summaries = 0
+    changed = live = finals = espn_live = summaries = retimed = 0
     games, board = [], []
 
     conn = psycopg2.connect(os.getenv('DATABASE_URL'))
@@ -299,6 +301,26 @@ def main():
                 print(f'CFBD returned only {len(games)} games for {SEASON} '
                       f'(expected >= {MIN_GAMES}) — not applying', flush=True)
                 return 1
+
+            # Kickoff times. Networks set most of them a week or two out, after
+            # the schedule was stored with a midnight placeholder, and nothing
+            # else rewrote start_date: a game whose time came late kept showing
+            # "12:00 AM", and the live window (measured from kickoff) shut on it
+            # before it began (UCLA at Minnesota, 2026-11-07, stored 00:00 ET,
+            # kicked off at noon). The /games response above already carries
+            # the current time and TBD flag; finished games are left as stored.
+            times = [(g.id, str(g.start_date), 1 if g.start_time_tbd else 0)
+                     for g in games if g.start_date]
+            if times:
+                retimed = len(execute_values(cur, """
+                    UPDATE games AS g
+                       SET start_date = v.sd, start_time_tbd = v.tbd
+                      FROM (VALUES %s) AS v(id, sd, tbd)
+                     WHERE g.id = v.id AND g.completed = 0
+                       AND (g.start_date IS DISTINCT FROM v.sd
+                         OR COALESCE(g.start_time_tbd, 0) IS DISTINCT FROM v.tbd)
+                  RETURNING 1
+                """, times, template='(%s::bigint, %s, %s::int)', page_size=1000, fetch=True))
 
             # Finals pass, as ONE statement. CFBD answers with every division —
             # 3,679 rows against the 888 this table carries for 2026 — so the
@@ -394,7 +416,7 @@ def main():
                       g['home'], g['away'], done_flag))
                 if cur.rowcount:
                     espn_live += 1
-            changed += espn_live
+            changed += espn_live + retimed
             conn.commit()
 
             cur.execute('SELECT COUNT(*) FROM games WHERE season = %s AND completed = 1',
@@ -407,7 +429,8 @@ def main():
 
             scope = f'week {WEEK}' if WEEK else 'all weeks'
             print(f'{SEASON} {scope}: {len(games)} games checked, {changed} updated '
-                  f'({live} live, {finals} just finished, {espn_live} via ESPN) '
+                  f'({live} live, {finals} just finished, {espn_live} via ESPN, '
+                  f'{retimed} kickoff time(s) moved) '
                   f'({done} completed this season)', flush=True)
     finally:
         conn.close()
