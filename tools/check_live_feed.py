@@ -34,3 +34,21 @@ assert not any(h.startswith(('Timeout', 'End')) for h in by_head), 'timeouts and
 assert [c['when'][:2] for c in cards][0] == 'Q4' and cards[-1]['when'].startswith('Q1'), 'newest first'
 assert all(c['swing'] is None or c['gainer'] in ('home', 'away') for c in cards)
 print(f'live feed: ok ({len(cards)} key plays)')
+
+# The hero's field, replayed as if live after every play of the same game: the
+# ball is always on the field with a side and a label, and the scores land.
+drives = d['drives']['previous']
+seen = {'td': set(), 'fg': set()}
+for di, dr in enumerate(drives):
+    for k in range(1, len(dr.get('plays') or []) + 1):
+        dk = dict(d, drives={'previous': drives[:di], 'current': dict(dr, plays=dr['plays'][:k])})
+        f = live_feed.field(dk, {'away': 'ND', 'home': 'BYU'})
+        if f is None:
+            continue
+        assert f['poss'] in ('away', 'home') and 0 <= f['toGo'] <= 100 and f['label'], f
+        assert f['driveToGo'] is None or 0 <= f['driveToGo'] <= 100, f
+        if f['score'] in seen:
+            seen[f['score']].add((f['poss'], f['toGo']))
+assert ('away', 0) in seen['td'], 'Walton TD puts the ball in the end zone ND attacks'
+assert seen['fg'] and all(t > 0 for _, t in seen['fg']), 'a field goal stays where it was kicked from'
+print(f"live field: ok ({len(seen['td'])} touchdown spots, {len(seen['fg'])} field goals)")

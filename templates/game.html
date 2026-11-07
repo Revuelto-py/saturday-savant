@@ -234,13 +234,14 @@
 <h1 class="sr-only">{{ away_team }} at {{ home_team }}{% if game_date and game_date != 'TBD' %} · {{ game_date }}{% endif %}</h1>
 
 {# ── SCORE HEADER ──────────────────────────────────────────────────────────── #}
-{# One hero for every state, so the page keeps its shape from the morning of
-   the game to the final: each team's colour at its own edge with its logo as a
-   watermark, the two teams and their numbers (Savant's win chance before
-   kickoff, the score after), the state between them (kickoff, live clock,
-   final), and one bar along the bottom (the Savant Forecast, or live win
-   probability). Phones get the same slots at a fixed height, so the page
-   below never jumps between states. #}
+{# One hero for every state. Each team's colour at its own edge with its logo as
+   a watermark; the two teams big, with their numbers (Savant's win chance before
+   kickoff, the score after) and the state between them (kickoff, live clock,
+   final). A live game adds the field under it: the ball, the drive and the line
+   to gain, placed and moved by static/hx-field.js from lib/live_feed.field().
+   Venue, conditions and the lines run along the bottom. Phones stack each team's
+   score over its logo and carry the score by quarter (or the lines before
+   kickoff) inside the hero, so the band under it is for wider screens. #}
 {% set gx_state = 'live' if is_live else ('pre' if is_scheduled else 'final') %}
 {% set gx_pair = hero_pair(away_color, home_color) %}
 {% set gx_week = notes if notes else ('Postseason' if is_post else 'Week ' ~ week_num) %}
@@ -249,76 +250,77 @@
 {% set h_ab = ab.get('home') or home_team %}
 {% set fc_away = ((1 - forecast.home_prob) * 100) | round | int if forecast else none %}
 {% set fc_home = 100 - fc_away if forecast else none %}
+{% set fc_fav = ('home' if fc_home >= fc_away else 'away') if forecast else none %}
+{% set fav_ab = (h_ab if fc_fav == 'home' else a_ab) if forecast else '' %}
 {% set ls = live_state or {} %}
-{% set wp_home = (ls.get('home_wp') * 100) | round | int if ls.get('home_wp') is not none else none %}
+{% set fld = ls.get('field') if is_live else none %}
+{% set poss_side = ((fld.poss if fld and fld.poss else none) or ls.get('poss')) if is_live else none %}
 {% set rec_away = records.away or ((preview.away.wins, preview.away.losses) if preview and preview.away.games else none) %}
 {% set rec_home = records.home or ((preview.home.wins, preview.home.losses) if preview and preview.home.games else none) %}
 {% set venue_line = (venue_name ~ (', ' ~ venue_location.split(',')[0] if venue_location else '')) if venue_name else '' %}
 {% set back_label = 'Postseason games' if is_post else 'Week ' ~ week_num ~ ' games' %}
 {% set ot = '' if [home_q|length, away_q|length]|max <= 4 else ('/OT' if [home_q|length, away_q|length]|max == 5 else '/' ~ ([home_q|length, away_q|length]|max - 4) ~ 'OT') %}
-{# The bar: live win probability once there is one, otherwise the forecast. #}
-{% set now_side = 'home' if (wp_home if wp_home is not none else (fc_home or 50)) >= 50 else 'away' %}
-{% set fc_now = (fc_home if now_side == 'home' else fc_away) if forecast else none %}
-{% if is_live and wp_home is not none %}{% set bar_l, bar_r = 100 - wp_home, wp_home %}
-{% elif forecast %}{% set bar_l, bar_r = fc_away, fc_home %}
-{% else %}{% set bar_l, bar_r = none, none %}{% endif %}
-{% set fav_ab = (h_ab if fc_home >= fc_away else a_ab) if forecast else '' %}
+{# "Q3 6:34" reads "Q3 · 6:34" on wide screens; "Halftime" and "End of Q1" stay as they are. #}
+{% set clock = ls.get('clock') or 'In progress' %}
+{% set clock_wide = clock.replace(' ', ' · ', 1) if ' ' in clock and (clock[:1] == 'Q' or clock.split(' ')[0].endswith('OT')) else clock %}
 {% set fc_margin = ('Toss-up' if forecast.margin|abs < 1.5 else fav_ab ~ ' by ' ~ ('%.0f' % (forecast.margin|abs))) if forecast and forecast.margin is not none else '' %}
 {% set m = market.home_margin if market and market.home_margin is not none else none %}
 {% set vegas = ('Pick’em' if m|abs < 0.5 else (h_ab if m > 0 else a_ab) ~ ' −' ~ ('%g' % (m|abs))) if m is not none else '' %}
+{% set wx = weather.parts | join(', ') if weather and weather.parts else '' %}
+{% set has_qt = (home_q or away_q or is_live) and not is_scheduled %}
+{% set num_p = [home_q|length, away_q|length, 4]|max %}
+{% set ball_path %}<path d="M4.6 19.4c-1-3.6.3-8.1 3.4-11.2s7.6-4.4 11.2-3.4c1 3.6-.3 8.1-3.4 11.2s-7.6 4.4-11.2 3.4z"/><path d="M9.5 14.5l5-5M10.6 11.1l2.3 2.3M12.4 9.3l2.3 2.3M8.8 12.9l2.3 2.3"/>{% endset %}
+{% set trophy %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/></svg>{% endset %}
+{# The display size steps down with the longest word, so "Massachusetts" fits the
+   column "Army" does without breaking mid-word. #}
+{% macro name_fit(team) %}{% set w = team.split() | map('length') | max %}{{ 'n1' if w <= 7 else ('n2' if w <= 9 else ('n3' if w <= 11 else 'n4')) }}{% endmacro %}
 {% macro gh_team(side, team, short, logo, is_fbs, rank, rec) %}
 <div class="hx-team">
-    {% if logo %}<img class="hx-logo" src="{{ logo }}" alt="" data-px="112">{% endif %}
+    {% if logo %}<img class="hx-logo" src="{{ logo }}" alt="" data-px="300">{% endif %}
     {%- set long = team|length > 11 %}
-    {% if is_fbs %}<a class="hx-name" href="{{ team_url(team, game_season) }}">{% else %}<span class="hx-name">{% endif -%}
-    <span{% if long %} class="hx-lg"{% endif %}>{{ team }}</span>{% if long %}<span class="hx-sm">{{ short }}</span>{% endif %}
+    {%- set fit = name_fit(team) | trim %}
+    {% if is_fbs %}<a class="hx-name {{ fit }}" href="{{ team_url(team, game_season) }}">{% else %}<span class="hx-name {{ fit }}">{% endif -%}
+    {% if rank %}<span class="hx-sm hx-rk">{{ rank }}</span>{% endif %}<span{% if long %} class="hx-lg"{% endif %}>{{ team }}</span>{% if long %}<span class="hx-sm">{{ short }}</span>{% endif %}
     {%- if is_fbs %}</a>{% else %}</span>{% endif %}
-    <span class="hx-meta">{% if rank %}No. {{ rank }}<span class="hx-lg"> AP</span>{% endif %}{% if rank and rec %} · {% endif %}{% if rec %}{{ rec[0] }}-{{ rec[1] }}{% endif %}{% if not rank and not rec %}&nbsp;{% endif %}</span>
+    <span class="hx-meta">{% if rank %}<span class="hx-lg">No. {{ rank }} AP{% if rec %} · {% endif %}</span>{% endif %}{% if rec %}{{ rec[0] }}-{{ rec[1] }}{% else %}&nbsp;{% endif %}</span>
 </div>
 {% endmacro %}
 {% macro gh_num(side) %}
 {%- set pts = game[4] if side == 'away' else game[3] %}
-{%- if is_live %}<b class="hx-num" data-live-{{ side }}>{{ pts if pts is not none else 0 }}</b>
+{%- if is_live %}<b class="hx-num" data-live-{{ side }}>{{ pts if pts is not none else 0 }}{% if poss_side == side %}<svg class="hx-ball" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" role="img" aria-label="{{ a_ab if side == 'away' else h_ab }} has the ball">{{ ball_path }}</svg>{% endif %}</b>
 {%- elif is_scheduled %}{% if forecast %}{% set v = fc_away if side == 'away' else fc_home %}<b class="hx-num{{ ' is-dog' if v < 100 - v }}">{{ v }}<small>%</small></b>{% endif %}
 {%- else %}<b class="hx-num">{{ pts }}</b>{% endif %}
 {%- endmacro %}
-<header class="hx hx--{{ gx_state }}"{% if is_live %} data-gid="{{ game[0] }}" data-live-self{% endif %}
-        style="--hx-a:{{ white_knob(away_color) }};--hx-a2:{{ shade(white_knob(away_color), 0.55) }};--hx-h:{{ white_knob(home_color) }};--hx-h2:{{ shade(white_knob(home_color), 0.55) }}">
+{% macro call() %}<a href="/savant-forecast">Savant</a> had {{ fav_ab }} {{ [fc_home, fc_away] | max }}%<span class="hx-chip is-{{ 'hit' if forecast.correct else 'miss' }}">{{ 'Called it' if forecast.correct else ('Upset' if forecast.is_upset else 'Miss') }}</span>{% endmacro %}
+<header class="hx hx--{{ gx_state }} hx-enter"{% if is_live %} data-gid="{{ game[0] }}" data-live-self{% endif %}
+        style="--hx-a:{{ white_knob(away_color) }};--hx-a2:{{ shade(white_knob(away_color), 0.55) }};--hx-h:{{ white_knob(home_color) }};--hx-h2:{{ shade(white_knob(home_color), 0.55) }};--hx-pa:{{ gx_pair[0] }};--hx-ph:{{ gx_pair[1] }}">
     {% if game[10] %}<img class="hx-mark hx-mark--away" src="{{ game[10] }}" alt="" aria-hidden="true" loading="lazy" data-px="500">{% endif %}
     {% if game[9] %}<img class="hx-mark hx-mark--home" src="{{ game[9] }}" alt="" aria-hidden="true" loading="lazy" data-px="500">{% endif %}
     <div class="hx-in">
         <div class="hx-top">
             <a class="hx-back" href="{{ url_for('games_hub', season=game_season, week=week_num, stype='postseason' if is_post else 'regular') }}" aria-label="Back to {{ back_label }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span class="hx-lg">{{ back_label }}</span></a>
-            <span class="hx-sm hx-now">
-                {%- if is_live %}<span class="hx-live"><span class="gx-dot" aria-hidden="true"></span>Live</span> · <b>{{ ls.get('clock') or 'In progress' }}</b>
-                {%- elif is_scheduled %}{{ hero_date }}{% if game_time and game_time != 'TBD' %} · {{ game_time }}{% endif %}
-                {%- else %}<b class="hx-final">Final{{ ot }}</b>{% endif -%}
-            </span>
-            <span class="hx-lg">{{ [venue_line, notes, rivalry_name] | select | join(' · ') }}</span>
-            <span class="hx-sm hx-wk">{{ '' if is_post else 'Wk ' ~ week_num }}</span>
+            <span class="hx-sm hx-label">{{ gx_week }}</span>
         </div>
 
-        <div class="hx-teams">
+        <div class="hx-match{{ ' is-fc' if is_scheduled and forecast }}">
             <div class="hx-side hx-side--away{{ ' is-lost' if home_won_final }}">
                 {{ gh_team('away', away_team, a_ab, game[10], away_is_fbs, away_rank, rec_away) }}
                 {{ gh_num('away') }}
             </div>
             <div class="hx-mid">
-                <div class="hx-lg hx-state">
-                    {% if is_live %}
-                    <span class="hx-live"><span class="gx-dot" aria-hidden="true"></span>Live</span>
-                    <span class="hx-big">{{ ls.get('clock') | replace(' ', ' · ', 1) if ls.get('clock') else 'In progress' }}</span>
-                    {% if ls.get('poss_abbr') %}<span class="hx-small">{{ ls.get('poss_abbr') }} ball</span>{% endif %}
-                    {% elif is_scheduled %}
-                    <span class="hx-big">{{ game_time if game_time and game_time != 'TBD' else 'Time TBD' }}</span>
-                    <span class="hx-small">{{ hero_date }}</span>
-                    {% else %}
-                    <span class="hx-big hx-final">Final{{ ot }}</span>
-                    <span class="hx-small">{{ hero_date }}</span>
-                    {% endif %}
-                </div>
-                {% if not is_live %}<span class="hx-sm hx-at">at</span>{% endif %}
+                {% if is_live %}
+                <span class="hx-live"><span class="gx-dot" aria-hidden="true"></span>Live</span>
+                <span class="hx-big"><span class="hx-lg">{{ clock_wide }}</span><span class="hx-sm">{{ clock }}</span></span>
+                {% elif is_scheduled %}
+                <span class="hx-big">{{ game_time if game_time and game_time != 'TBD' else 'Time TBD' }}</span>
+                <span class="hx-small">{{ hero_date }}</span>
+                {% if rivalry_name %}<span class="hx-lg hx-troph">{{ trophy }}{{ rivalry_name }}</span>{% endif %}
+                {% else %}
+                <span class="hx-big hx-final">Final{{ ot }}</span>
+                <span class="hx-small">{{ hero_date }}</span>
+                {% if forecast %}<span class="hx-lg hx-call">{{ call() }}</span>{% endif %}
+                {% endif %}
             </div>
             <div class="hx-side hx-side--home{{ ' is-lost' if away_won_final }}">
                 {{ gh_num('home') }}
@@ -326,48 +328,78 @@
             </div>
         </div>
 
-        {% if is_live and (ls.get('poss_abbr') or ls.get('down')) %}
-        <p class="hx-sm hx-line">{% if ls.get('poss_abbr') %}{{ ls.get('poss_abbr') }} ball{% endif %}{% if ls.get('poss_abbr') and ls.get('down') %} · {% endif %}{{ ls.get('down') }}</p>
-        {% elif is_scheduled and venue_line %}
-        <p class="hx-sm hx-line">{{ venue_line }}</p>
+        {% if game_final and forecast %}
+        <p class="hx-sm hx-line hx-call">{{ call() }}</p>
+        {% elif is_scheduled and rivalry_name %}
+        <p class="hx-sm hx-line"><span class="hx-troph">{{ trophy }}{{ rivalry_name }}</span></p>
         {% endif %}
 
-        <div class="hx-foot">
-            <div class="hx-lg hx-detail">
-                {% if is_live %}
-                {% if ls.get('down') %}<b>{{ ls.get('down') }}</b>{% endif %}
-                {% if ls.get('drive') %}<span>Drive: {{ ls.get('drive') }}</span>{% endif %}
-                {% elif is_scheduled and fc_margin %}
-                <b>Savant: {{ fc_margin }}</b><span>Win chance from the Savant Forecast</span>
-                {% endif %}
+        {% if fld %}
+        {# The field keeps this element across the live refresh (game.html's script
+           swaps everything around it), so the ball can travel to its new spot. #}
+        <div class="hx-field" data-hx-field data-sit='{{ fld | tojson }}'>
+            <p class="hx-fd-k" data-k>{{ fld.label or '' }}</p>
+            <div class="hx-fd" role="img" aria-label="Field{{ ': ' ~ fld.label if fld.label else '' }}">
+                <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+                    <g class="hx-fd-g" data-g>
+                        <path class="hx-fd-turf" d="M50 0 L950 0 L1000 100 L0 100 Z"/>
+                        <path class="hx-fd-ez hx-fd-ez--a" d="M50.0 0 L125.0 0 L83.3 100 L0.0 100 Z"/>
+                        <path class="hx-fd-ez hx-fd-ez--h" d="M875.0 0 L950.0 0 L1000.0 100 L916.7 100 Z"/>
+                        <path class="hx-fd-fl" data-fl="a" d="M50.0 0 L125.0 0 L83.3 100 L0.0 100 Z" style="opacity:0"/>
+                        <path class="hx-fd-fl" data-fl="h" d="M875.0 0 L950.0 0 L1000.0 100 L916.7 100 Z" style="opacity:0"/>
+                        <path class="hx-fd-yl" d="M200.0 0 L166.7 100 M275.0 0 L250.0 100 M350.0 0 L333.3 100 M425.0 0 L416.7 100 M575.0 0 L583.3 100 M650.0 0 L666.7 100 M725.0 0 L750.0 100 M800.0 0 L833.3 100"/>
+                        <path class="hx-fd-50" d="M500.0 0 L500.0 100"/>
+                        <path class="hx-fd-ltg" data-ltg="0" d="M0 0" style="opacity:0"/>
+                        <path class="hx-fd-ltg" data-ltg="1" d="M0 0" style="opacity:0"/>
+                    </g>
+                </svg>
+                <span class="hx-fd-drv" data-drv="0" style="opacity:0"></span><span class="hx-fd-drv" data-drv="1" style="opacity:0"></span>
+                <span class="hx-fd-bw" data-ball style="opacity:0"><span class="hx-fd-ball"><span class="hx-fd-tint hx-fd-tint--a" data-tint="a"></span><span class="hx-fd-tint hx-fd-tint--h" data-tint="h"></span><svg class="hx-fd-glyph" data-glyph viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">{{ ball_path }}</svg></span></span>
             </div>
-            {% if bar_l is not none %}
-            <div class="hx-bar">
-                <div class="hx-bar-k">
-                    <span>{{ a_ab }} {{ bar_l }}%</span>
-                    <span class="hx-bar-mid"><span class="hx-bar-t">
-                        {%- if is_live and wp_home is not none %}<span class="hx-lg">Win probability</span><span class="hx-sm">Win prob{% if fc_now is not none %} · Savant had {{ h_ab if now_side == 'home' else a_ab }} {{ fc_now }}% pre-game{% endif %}</span>
-                        {%- elif is_live %}Savant Forecast before kickoff
-                        {%- elif is_scheduled %}<a href="/savant-forecast">Savant Forecast</a><span class="hx-lg"> · locks at kickoff</span><span class="hx-sm">{% if vegas %} · Vegas {{ vegas }}{% endif %}</span>
-                        {%- else %}<a href="/savant-forecast">Savant Forecast</a><span class="hx-lg"> before kickoff</span>{% endif -%}
-                        </span>
-                        {%- if not is_live and not is_scheduled %}<span class="hx-chip is-{{ 'hit' if forecast.correct else 'miss' }}">{{ 'Called it' if forecast.correct else ('Upset' if forecast.is_upset else 'Miss') }}</span>{% endif -%}
-                    </span>
-                    <span>{{ h_ab }} {{ bar_r }}%</span>
-                </div>
-                <div class="hx-split" role="img" aria-label="{{ 'Win probability' if is_live and wp_home is not none else 'Savant Forecast' }}: {{ away_team }} {{ bar_l }}%, {{ home_team }} {{ bar_r }}%"><span style="flex:{{ bar_l }};background:{{ gx_pair[0] }}"></span><span style="flex:{{ bar_r }};background:{{ gx_pair[1] }}"></span></div>
-            </div>
-            {% else %}<div></div>{% endif %}
-            <div class="hx-lg hx-detail hx-detail--r">
-                {% if is_live and fc_now is not none %}
-                <b>Savant had {{ h_ab if now_side == 'home' else a_ab }} {{ fc_now }}%</b><span>Forecast before kickoff</span>
-                {% elif is_scheduled and vegas %}
-                <b>Vegas {{ vegas }}</b>{% if market.total %}<span>Over/under {{ '%g' % market.total }}</span>{% endif %}
-                {% endif %}
-            </div>
+            <div class="hx-fd-nums" aria-hidden="true">{% for l, x in [(10, 16.67), (20, 25), (30, 33.33), (40, 41.67), (50, 50), (40, 58.33), (30, 66.67), (20, 75), (10, 83.33)] %}<span style="left:{{ x }}%">{{ l }}</span>{% endfor %}</div>
         </div>
+        {% elif is_live and (ls.get('poss_abbr') or ls.get('down')) %}
+        <p class="hx-line">{% if ls.get('poss_abbr') %}<b>{{ ls.get('poss_abbr') }} ball</b>{% endif %}{% if ls.get('poss_abbr') and ls.get('down') %} · {% endif %}{{ ls.get('down') }}</p>
+        {% endif %}
+
+        {% if has_qt %}
+        <div class="hx-sm hx-qt" role="table" aria-label="Score by quarter" style="--n:{{ num_p }}">
+            <div class="hx-qt-r hx-qt-h" role="row"><span role="columnheader"><span class="sr-only">Team</span></span>{% for i in range(num_p) %}<span role="columnheader"{% if is_live and i + 1 == ls.get('period') %} class="is-now"{% endif %}>{% if i < 4 %}{{ i + 1 }}{% elif i == 4 %}OT{% else %}{{ i - 3 }}OT{% endif %}</span>{% endfor %}<span role="columnheader">T</span></div>
+            {% for side, qs, total, lost in [('away', away_q, game[4], home_won_final), ('home', home_q, game[3], away_won_final)] %}
+            <div class="hx-qt-r hx-qt-t" role="row"><span role="rowheader">{{ a_ab if side == 'away' else h_ab }}</span>{% for i in range(num_p) %}{% if i < qs|length %}<span role="cell">{{ qs[i] | int }}</span>{% else %}<span role="cell" class="is-dim">–</span>{% endif %}{% endfor %}<b role="cell" class="is-tot{{ ' is-lost' if lost }}">{{ total if total is not none else 0 }}</b></div>
+            {% endfor %}
+        </div>
+        {% elif is_scheduled %}
+        {% set cols = (['Savant'] if forecast and forecast.margin is not none else []) + (['Vegas'] if m is not none else []) + (['Total'] if market and market.total else []) %}
+        {% if cols %}
+        <div class="hx-sm hx-qt hx-qt--odds" role="table" aria-label="The lines before kickoff" style="--n:{{ cols|length }}">
+            <div class="hx-qt-r hx-qt-h" role="row"><span role="columnheader"><span class="sr-only">Team</span></span>{% for c in cols %}<span role="columnheader">{{ c }}</span>{% endfor %}</div>
+            {% for side in ['away', 'home'] %}
+            <div class="hx-qt-r hx-qt-t" role="row"><span role="rowheader">{{ a_ab if side == 'away' else h_ab }}</span>
+                {%- if 'Savant' in cols %}{% set mg = forecast.margin | abs %}<span role="cell">{{ 'PK' if mg < 1.5 else (('−' if side == fc_fav else '+') ~ ('%.0f' % mg)) }}</span>{% endif %}
+                {%- if 'Vegas' in cols %}<span role="cell">{{ 'PK' if m|abs < 0.5 else (('−' if (m > 0) == (side == 'home') else '+') ~ ('%g' % (m|abs))) }}</span>{% endif %}
+                {%- if 'Total' in cols %}<span role="cell">{{ ('O ' if side == 'away' else 'U ') ~ ('%g' % market.total) }}</span>{% endif -%}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {% if venue_line or wx or rivalry_name or notes or tv_broadcast or fc_margin or vegas %}
+        {# Phone-hidden items come last so the dots between items never lead a line. #}
+        <div class="hx-foot">
+            {% if venue_line %}<span>{{ venue_line }}</span>{% endif %}
+            {% if wx %}<span>{% if is_scheduled %}<b>Forecast</b>{% endif %}{{ wx }}</span>{% endif %}
+            {% if tv_broadcast and not game_final %}<span>On {{ tv_broadcast }}</span>{% endif %}
+            {% if rivalry_name and not is_scheduled %}<span class="hx-troph">{{ trophy }}{{ rivalry_name }}</span>{% endif %}
+            {% if notes %}<span class="hx-lg">{{ notes }}</span>{% endif %}
+            {% if is_scheduled and fc_margin %}<span class="hx-lg"><b><a href="/savant-forecast">Savant Forecast</a></b>{{ fc_margin }}</span>{% endif %}
+            {% if is_scheduled and vegas %}<span class="hx-lg"><b>Vegas</b>{{ vegas }}{% if market.total %}, O/U {{ '%g' % market.total }}{% endif %}</span>{% endif %}
+        </div>
+        {% endif %}
     </div>
 </header>
+{% if is_live %}<script src="{{ url_for('static', filename='hx-field.js') }}"></script>{% endif %}
 
 {# ── SCORE BY QUARTER ───────────────────────────────────────────────────────── #}
 {# Directly under the hero, once there is a score. Four quarters always, so a
@@ -1740,6 +1772,10 @@ function switchTab(name, keepHash) {
     });
 })();
 
+// The hero's entrance plays once: a live refresh re-inserts its insides every
+// few seconds, and they must not rise in again each time.
+setTimeout(function () { var h = document.querySelector('header.hx'); if (h) h.classList.remove('hx-enter'); }, 1200);
+
 {% if is_live %}
 // Live: ask for this page every 5 seconds while the tab is visible, sending the
 // version it shows. Until ESPN's data changes the answer is an empty 204 carrying
@@ -1752,6 +1788,25 @@ function switchTab(name, keepHash) {
     function openTab() {
         var b = document.querySelector('.tab-btn[aria-selected="true"]');
         return b ? b.id.replace('tab-btn-', '') : null;
+    }
+    // The hero is swapped wholesale except its field, which never leaves the page:
+    // its children are replaced around it and it is handed the new situation, so
+    // the ball travels from where it was instead of being redrawn at the new spot.
+    function patchHero(hero, fresh) {
+        var keep = hero.querySelector(':scope > [data-hx-field]'), next = fresh.querySelector(':scope > [data-hx-field]');
+        if (!keep || !next || !window.HXField) {
+            hero.innerHTML = fresh.innerHTML;
+            if (window.HXField) hero.querySelectorAll('[data-hx-field]').forEach(HXField.mount);
+            return;
+        }
+        var sit = next.getAttribute('data-sit'), before = true;
+        Array.prototype.slice.call(hero.children).forEach(function (c) { if (c !== keep) c.remove(); });
+        Array.prototype.slice.call(fresh.children).forEach(function (c) {
+            if (c === next) { before = false; return; }
+            if (before) keep.before(c); else hero.appendChild(c);
+        });
+        keep.setAttribute('data-sit', sit);
+        HXField.push(keep, HXField.read(keep));
     }
     function refresh() {
         if (busy || document.visibilityState !== 'visible') return;
@@ -1772,7 +1827,7 @@ function switchTab(name, keepHash) {
                 if (!fresh || !old) return;
                 if (!fresh.hasAttribute('data-live-page')) { location.reload(); return; }
                 var hero = document.querySelector('header.hx .hx-in'), freshHero = doc.querySelector('header.hx .hx-in');
-                if (hero && freshHero) hero.innerHTML = freshHero.innerHTML;
+                if (hero && freshHero) patchHero(hero, freshHero);
                 var band = document.querySelector('.gls'), freshBand = doc.querySelector('.gls');
                 if (band && freshBand) band.replaceWith(freshBand);
                 else if (freshBand) document.querySelector('header.hx').after(freshBand);   // first score

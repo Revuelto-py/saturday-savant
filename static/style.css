@@ -8772,57 +8772,114 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 @keyframes gxPulse{0%{box-shadow:0 0 0 0 rgba(255,77,77,.6)}70%{box-shadow:0 0 0 10px rgba(255,77,77,0)}100%{box-shadow:0 0 0 0 rgba(255,77,77,0)}}
 @media (prefers-reduced-motion:reduce){.gx-dot{animation:none}}
 
-/* ── Game hero: one shape for every state ────────────────────────────────
+/* ── Game hero ─────────────────────────────────────────────────────────────
    Each team's colour at its own edge (white_knob: dark enough for white type),
-   falling to near-black in the middle; logos as watermarks. Desktop first;
-   tablets shrink the numbers; phones get a fixed 220px version of the same
-   slots so nothing below moves between states. */
-.hx{position:relative;overflow:hidden;color:#fff;background:linear-gradient(110deg,var(--hx-a) 0%,var(--hx-a2) 46%,var(--hx-h2) 54%,var(--hx-h) 100%)}
-.hx-mark{position:absolute;top:-40px;width:420px;height:420px;object-fit:contain;opacity:.07;pointer-events:none}
-.hx-mark--away{left:-60px}.hx-mark--home{right:-60px}
-.hx-in{position:relative;max-width:1200px;margin:0 auto;padding:20px 24px 26px}
-.hx-sm{display:none}
-.hx-top{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:22px;font-size:13px;color:#c4c8cc}
-.hx-back{display:inline-flex;align-items:center;gap:4px;color:#c4c8cc;text-decoration:none}
-.hx-back svg{width:14px;height:14px;flex:none}
+   near-black in the middle, logos as watermarks. Big logos and scores either
+   side of the state; a live game's field under them (static/hx-field.js moves
+   the ball, the drive bar and the yellow line, transform and opacity only); a
+   row of venue and conditions along the bottom. Desktop sizes scale with the
+   window so the team column never narrows past its name. Phones stack each
+   score over its logo and show the score by quarter inside the hero. */
+.hx{position:relative;overflow:hidden;color:#fff;background:linear-gradient(110deg,var(--hx-a) 0%,var(--hx-a2) 46%,var(--hx-h2) 54%,var(--hx-h) 100%);--hx-ease:cubic-bezier(.16,1,.3,1)}
+.hx::after{content:'';position:absolute;inset:auto 0 0;height:45%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.38));pointer-events:none}
+.hx-mark{position:absolute;top:-50px;width:600px;height:600px;object-fit:contain;opacity:.08;pointer-events:none}
+.hx-mark--away{left:-120px}.hx-mark--home{right:-120px}
+.hx-in{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:20px 24px 28px}
+/* Two levels deep so the swap beats each element's own display. */
+.hx-in .hx-sm{display:none}
+.hx-top{display:flex;align-items:center;min-height:24px;font-size:13.5px}
+.hx-back{display:inline-flex;align-items:center;gap:6px;color:#d0d4d8;text-decoration:none;transition:transform .16s var(--hx-ease)}
+.hx-back svg{width:15px;height:15px;flex:none}
 .hx-back:hover{color:#fff}
-.hx-back:active{opacity:.72}
-.hx-back:focus-visible,.hx-name:focus-visible,.hx-bar-mid a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
-.hx-teams{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:24px;margin-top:8px}
-.hx-side{display:flex;align-items:center;gap:22px;min-width:0}
+.hx-back:active{transform:scale(.96)}
+.hx-back:focus-visible,.hx-name:focus-visible,.hx-call a:focus-visible,.hx-foot a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.hx-match{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:clamp(20px,2.6vw,32px);margin-top:26px}
+.hx-side{display:flex;align-items:center;gap:clamp(20px,2.7vw,34px);min-width:0}
 .hx-side--away{justify-content:flex-end}
-.hx-team{display:flex;flex-direction:column;align-items:flex-start;min-width:0}
-.hx-side--away .hx-team{align-items:flex-end;text-align:right}
-.hx-logo{width:56px;height:56px;object-fit:contain}
-.hx-name{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:26px;font-weight:800;line-height:1.2;color:#fff;text-decoration:none}
+.hx-team{display:flex;flex:0 1 auto;flex-direction:column;align-items:center;gap:6px;min-width:0;text-align:center}
+.hx-logo{width:clamp(112px,12vw,150px);height:clamp(112px,12vw,150px);object-fit:contain;filter:drop-shadow(0 14px 30px rgba(0,0,0,.38))}
+.hx-name{display:inline-flex;align-items:baseline;justify-content:center;gap:8px;margin-top:8px;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:clamp(34px,3.5vw,44px);font-weight:850;line-height:1;letter-spacing:-.02em;color:#fff;text-decoration:none;text-wrap:balance;overflow-wrap:anywhere}
+.hx-name.n2{font-size:clamp(30px,3vw,38px)}.hx-name.n3{font-size:clamp(26px,2.6vw,32px)}.hx-name.n4{font-size:clamp(22px,2.2vw,27px)}
 a.hx-name:hover{color:#cfe8fb}
 a.hx-name:active{opacity:.72}
-.hx-meta{font-size:13px;color:#c4c8cc;font-variant-numeric:tabular-nums;white-space:nowrap}
-.hx-num{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:120px;font-weight:800;line-height:.9;letter-spacing:-.02em}
-.hx-num small{font-size:.43em}
-.hx-num.is-dog,.hx-side.is-lost .hx-num{color:#8a9096}
-.hx-side.is-lost .hx-name{color:#c4c8cc}
+.hx-meta{font-size:15px;color:#d0d4d8;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-num{position:relative;flex:none;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:clamp(128px,14vw,176px);font-weight:850;line-height:.84;letter-spacing:-.035em;font-variant-numeric:tabular-nums}
+.hx-num small{font-size:.4em;letter-spacing:0}
+.is-fc .hx-num{font-size:clamp(92px,9.6vw,120px)}
+.hx-num.is-dog,.hx-side.is-lost .hx-num{color:rgba(255,255,255,.48)}
+.hx-side.is-lost .hx-name{color:#d0d4d8}
 .hx-side.is-lost .hx-logo{opacity:.7}
-.hx-mid{display:flex;flex-direction:column;align-items:center}
-.hx-state{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:150px;text-align:center}
-.hx-live{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:750;color:#ff8a8a;letter-spacing:.05em;text-transform:uppercase}
-.hx-big{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:30px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
-.hx-final{letter-spacing:.04em;text-transform:uppercase}
-.hx-small{font-size:13px;color:#c4c8cc}
-.hx-foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr);gap:24px;align-items:end;min-height:47px;margin-top:22px}
-.hx-detail{display:flex;flex-direction:column;min-width:0}
-.hx-detail b{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:20px;font-weight:800;line-height:1.25}
-.hx-detail span{font-size:13px;color:#c4c8cc}
-.hx-detail--r{align-items:flex-end;text-align:right}
-.hx-bar-k{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
-.hx-bar-mid{display:inline-flex;align-items:center;gap:8px;min-width:0;overflow:hidden;font-weight:500;color:#c4c8cc}
-.hx-bar-t{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.hx-bar-mid a{color:inherit;text-decoration:none}
-.hx-bar-mid a:hover{color:#fff;text-decoration:underline}
-.hx-split{display:flex;gap:3px;height:10px;border-radius:999px;overflow:hidden}
-.hx-chip{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:750;flex:none}
+.hx-ball{position:absolute;top:50%;width:26px;height:26px;margin-top:-13px;opacity:.9}
+.hx-side--away .hx-ball{left:calc(100% + 4px)}
+.hx-side--home .hx-ball{right:calc(100% + 4px)}
+.hx-mid{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:clamp(190px,19vw,240px);text-align:center}
+.hx-live{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:rgba(217,48,54,.92)}
+.hx-live .gx-dot{width:7px;height:7px;background:#fff}
+.hx-big{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:clamp(40px,4.2vw,50px);font-weight:850;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-final{letter-spacing:.02em;text-transform:uppercase}
+.hx-small{font-size:15.5px;line-height:1.4;color:#d0d4d8}
+.hx-troph{display:inline-flex;align-items:center;gap:6px;font-weight:650;color:#f3d38a}
+.hx-troph svg{width:16px;height:16px;flex:none}
+.hx-mid .hx-troph{font-size:14px}
+.hx-call{display:inline-flex;align-items:center;gap:8px;margin-top:2px;font-size:14px;color:#d0d4d8;white-space:nowrap}
+.hx-call a,.hx-foot a{color:inherit;text-decoration:none}
+.hx-call a:hover,.hx-foot a:hover{color:#fff;text-decoration:underline}
+.hx-chip{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:800;flex:none}
 .hx-chip.is-miss{background:rgba(255,107,107,.16);color:#ff9a9a}
-.hx-chip.is-hit{background:rgba(0,184,122,.16);color:#6fdc9a}
+.hx-chip.is-hit{background:rgba(0,184,122,.18);color:#6fdc9a}
+.hx-line{display:flex;justify-content:center;align-items:center;gap:6px;margin:22px 0 0;font-size:15px;color:#d0d4d8;text-align:center}
+.hx-line b{color:#fff}
+.hx-foot{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 0;margin-top:34px;padding-top:18px;border-top:1px solid rgba(255,255,255,.12);font-size:14px;color:#d0d4d8;font-variant-numeric:tabular-nums}
+.hx-foot>span{display:inline-flex;align-items:baseline;gap:6px;padding:0 18px}
+.hx-foot>span+span{box-shadow:inset 1px 0 0 rgba(255,255,255,.2)}
+.hx-foot b{font-weight:700;color:#fff}
+.hx-foot .hx-troph svg{width:14px;height:14px;align-self:center}
+/* The first paint rises in; the live refresh re-inserts these every few seconds,
+   so the class comes off after the entrance and they don't rise again. */
+.hx-enter .hx-team,.hx-enter .hx-mid{animation:hxRise .55s var(--hx-ease) backwards}
+.hx-enter .hx-mid{animation-delay:.08s}
+.hx-enter .hx-num{animation:hxGrow .6s var(--hx-ease) .04s backwards}
+.hx-enter .hx-field,.hx-enter .hx-foot{animation:hxRise .55s var(--hx-ease) .14s backwards}
+@keyframes hxRise{from{opacity:0;transform:translateY(10px)}}
+@keyframes hxGrow{from{opacity:0;transform:scale(.94)}}
+
+/* The field: a trapezoid in perspective, end zones in each team's colour. */
+.hx-field{width:640px;max-width:100%;margin:32px auto 0}
+.hx-fd-k{margin:0 0 10px;text-align:center;font-size:16px;font-weight:700;color:#e7e9ea;font-variant-numeric:tabular-nums}
+.hx-fd{position:relative;height:60px}
+.hx-fd svg{display:block;width:100%;height:100%;overflow:visible}
+.hx-fd-g{transition:opacity .4s ease}
+.hx-fd-turf{fill:rgba(255,255,255,.07);stroke:rgba(255,255,255,.2);stroke-width:1;vector-effect:non-scaling-stroke}
+.hx-fd-ez{opacity:.5}
+.hx-fd-ez--a{fill:var(--hx-pa)}.hx-fd-ez--h{fill:var(--hx-ph)}
+.hx-fd-fl{fill:#fff;transition:opacity .6s ease}
+.hx-fd-yl{fill:none;stroke:rgba(255,255,255,.2);stroke-width:1;vector-effect:non-scaling-stroke}
+.hx-fd-50{fill:none;stroke:rgba(255,255,255,.42);stroke-width:1.25;vector-effect:non-scaling-stroke}
+.hx-fd-ltg{fill:none;stroke:#ffd23f;stroke-width:2.5;vector-effect:non-scaling-stroke;transition:opacity .35s ease}
+.hx-fd-drv{position:absolute;left:0;top:50%;width:100%;height:7px;margin-top:-3.5px;transform-origin:0 50%;transition-property:transform,opacity;transition-timing-function:cubic-bezier(.2,1,.3,1),ease;background-image:linear-gradient(rgba(255,255,255,.35),rgba(255,255,255,0) 60%)}
+.hx-fd-drv--away{background-color:var(--hx-pa)}.hx-fd-drv--home{background-color:var(--hx-ph)}
+.hx-fd-bw{position:absolute;inset:0;pointer-events:none;transition-property:transform,opacity;transition-timing-function:cubic-bezier(.2,1.15,.35,1),ease}
+.hx-fd-ball{position:absolute;left:0;top:50%;display:grid;place-items:center;width:24px;height:24px;margin:-12px 0 0 -12px;overflow:hidden;border-radius:50%;box-shadow:0 0 0 2px #fff,0 6px 14px rgba(0,0,0,.45);color:#fff}
+.hx-fd-tint{position:absolute;inset:0;transition:opacity .45s ease}
+.hx-fd-tint--a{background:var(--hx-a)}.hx-fd-tint--h{background:var(--hx-h)}
+.hx-fd-glyph{position:relative;width:15px;height:15px;transition:transform .45s cubic-bezier(.2,1,.3,1)}
+.hx-fd-nums{position:relative;height:18px;margin-top:7px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px;color:#aeb4ba}
+.hx-fd-nums span{position:absolute;transform:translateX(-50%)}
+@media (prefers-reduced-motion:reduce){
+    .hx-enter .hx-team,.hx-enter .hx-mid,.hx-enter .hx-num,.hx-enter .hx-field,.hx-enter .hx-foot{animation:none}
+    .hx-fd-bw,.hx-fd-drv,.hx-fd-ltg,.hx-fd-tint,.hx-fd-glyph,.hx-fd-fl,.hx-fd-g{transition-duration:0s!important}
+}
+
+/* The score by quarter (or the lines before kickoff), inside the hero on phones. */
+.hx-qt-r{display:grid;grid-template-columns:58px repeat(var(--n),minmax(0,1fr)) minmax(0,1fr);align-items:center;min-height:42px;font-size:16px;font-weight:650;text-align:center;color:#e7e9ea;font-variant-numeric:tabular-nums}
+.hx-qt--odds .hx-qt-r{grid-template-columns:58px repeat(var(--n),minmax(0,1fr))}
+.hx-qt-r>:first-child{overflow:hidden;text-align:left;text-overflow:ellipsis;white-space:nowrap;font-weight:750;color:#fff}
+.hx-qt-h{min-height:28px;font-size:13.5px;font-weight:650;color:#9aa0a6}
+.hx-qt-t+.hx-qt-t{border-top:1px solid rgba(255,255,255,.12)}
+.hx-qt .is-now{color:#fff;font-weight:800}
+.hx-qt .is-dim{color:rgba(255,255,255,.3)}
+.hx-qt .is-tot{font-weight:850;color:#fff}
+.hx-qt .is-lost{color:rgba(255,255,255,.5)}
 
 /* Score by quarter, the band under the hero. */
 .gls{background:#0a0b0d;border-bottom:1px solid var(--border)}
@@ -8840,49 +8897,72 @@ a.hx-name:active{opacity:.72}
 .gls-team.is-lost img{opacity:.7}
 
 @media (min-width:761px) and (max-width:1000px){
-    .hx-num{font-size:84px}
-    .hx-name{font-size:20px}
-    .hx-logo{width:44px;height:44px}
-    .hx-side{gap:14px}
-    .hx-teams{gap:16px}
-    .hx-state{min-width:120px}
-    .hx-big{font-size:24px}
-    .hx-mark{width:300px;height:300px}
+    .hx-in{padding:18px 24px 26px}
+    .hx-mark{width:420px;height:420px}
+    .hx-match{gap:16px;margin-top:22px}
+    .hx-side{gap:16px}
+    .hx-logo{width:clamp(72px,9vw,100px);height:clamp(72px,9vw,100px)}
+    .hx-name{font-size:clamp(22px,2.9vw,28px)}.hx-name.n2{font-size:clamp(20px,2.6vw,26px)}.hx-name.n3{font-size:clamp(18px,2.3vw,23px)}.hx-name.n4{font-size:clamp(16px,2vw,20px)}
+    .hx-meta{font-size:13.5px}
+    .hx-num{font-size:clamp(84px,11vw,112px)}
+    .is-fc .hx-num{font-size:clamp(64px,8vw,82px)}
+    .hx-ball{width:20px;height:20px;margin-top:-10px}
+    .hx-mid{min-width:150px;gap:8px}
+    .hx-big{font-size:clamp(28px,3.6vw,36px)}
+    .hx-small{font-size:14px}
+    .hx-field{width:520px;margin-top:28px}
+    .hx-fd-k{font-size:15px}
+    .hx-fd{height:52px}
+    .hx-fd-ball{width:22px;height:22px;margin:-11px 0 0 -11px}
+    .hx-fd-nums{font-size:12px}
+    .hx-foot{margin-top:28px;padding-top:15px;font-size:13.5px}
+    .hx-foot>span{padding:0 14px}
 }
 @media (max-width:760px){
-    .hx-lg{display:none}
-    .hx-sm{display:revert}
-    .hx{background:linear-gradient(115deg,var(--hx-a) 0%,var(--hx-a2) 45%,var(--hx-h2) 55%,var(--hx-h) 100%)}
-    .hx-mark{top:30px;width:150px;height:150px;opacity:.08}
-    .hx-mark--away{left:-34px}.hx-mark--home{right:-36px}
-    .hx-in{display:flex;flex-direction:column;height:220px;padding:8px 14px 14px}
-    .hx-top{gap:8px;min-height:0}
-    .hx-back{justify-content:center;width:44px;height:44px;margin-left:-12px;flex:none;color:#e7e9ea}
-    .hx-back svg{width:18px;height:18px}
-    .hx-now{display:inline-flex;align-items:center;gap:6px;min-width:0;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:14px;font-weight:750;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
-    .hx-now .hx-live{font-family:var(--font-body,inherit);font-stretch:100%;font-size:11.5px;gap:6px}
-    .hx-now .gx-dot{width:6px;height:6px}
-    .hx-wk{width:44px;flex:none;text-align:right;font-size:12px;color:#c4c8cc}
-    .hx-teams{grid-template-columns:minmax(0,1fr) 44px minmax(0,1fr);gap:0;margin-top:6px}
-    .hx-side,.hx-side--away{justify-content:space-between;gap:8px}
-    .hx-team,.hx-side--away .hx-team{align-items:center;gap:3px;text-align:center}
-    .hx-logo{width:28px;height:28px}
-    .hx-name{font-size:15px;font-weight:750;line-height:1.05;white-space:nowrap}
-    a.hx-name{padding-block:6px;margin-block:-6px}
-    .hx-meta{font-size:12px}
-    .hx-num{font-size:54px}
-    .hx-num small{font-size:.48em}
-    .hx-at{font-size:12px;color:#c4c8cc}
-    .hx-line{margin:12px 0 0;overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:15px;font-weight:800}
-    .hx-foot{display:block;min-height:0;margin-top:auto}
-    .hx-bar-k{align-items:baseline;gap:6px;margin-bottom:4px;font-size:12px}
-    .hx-bar-mid{gap:6px;text-overflow:ellipsis}
-    .hx-split{gap:2px;height:6px}
-    .hx-chip{height:18px;padding:0 7px;font-size:11.5px}
-    .gls-in{padding:10px 16px}
-    .gls-grid{grid-template-columns:minmax(0,1fr) repeat(var(--n),34px) 40px;width:100%;font-size:14px}
-    .gls-full{display:none}
-    .gls-ab{display:inline}
+    .hx-in .hx-lg{display:none}
+    .hx-in .hx-sm{display:revert}
+    .hx::after{height:70%;background:linear-gradient(180deg,transparent,rgba(0,0,0,.55))}
+    .hx-mark{display:none}
+    .hx-in{max-width:560px;padding:0 16px 18px}
+    .hx-top{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;min-height:46px}
+    .hx-back{justify-content:center;width:44px;height:44px;margin-left:-10px;color:#e7e9ea}
+    .hx-back svg{width:20px;height:20px}
+    .hx-label{overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:650;color:#c4c8cc}
+    .hx-match{align-items:start;gap:8px;margin-top:4px}
+    .hx-side,.hx-side--away{flex-direction:column;justify-content:flex-start;gap:12px}
+    .hx-side--away .hx-num{order:-1}
+    .hx-team{gap:2px}
+    .hx-logo{width:50px;height:50px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
+    .hx-name,.hx-name.n2,.hx-name.n3,.hx-name.n4{gap:5px;margin-top:6px;font-size:17px;font-weight:750;line-height:1.1;white-space:nowrap}
+    a.hx-name{padding-block:6px;margin-block:0 -6px}
+    .hx-rk{color:#aeb4ba;font-family:var(--font-body);font-stretch:100%;font-weight:700;letter-spacing:0}
+    .hx-meta{font-size:13.5px;color:#c4c8cc}
+    .hx-num{font-size:clamp(64px,21vw,84px)}
+    .is-fc .hx-num{font-size:clamp(46px,15vw,58px)}
+    .hx-ball{width:18px;height:18px;margin-top:-9px}
+    .hx-mid{min-width:0;gap:5px;padding-top:13px}
+    .hx-live{height:20px;gap:5px;padding:0 8px;font-size:11px}
+    .hx-live .gx-dot{width:6px;height:6px}
+    .hx-big{font-size:22px}
+    .hx-small{font-size:13px}
+    .hx-in p.hx-line{display:flex;margin-top:18px;font-size:14px}
+    .hx-line .hx-troph{font-size:14px}
+    .hx-call{white-space:normal;flex-wrap:wrap}
+    .hx-call a{padding-block:12px;margin-block:-12px}
+    .hx-field{margin-top:20px}
+    .hx-fd-k{margin-bottom:9px;font-size:14.5px;color:#d0d4d8}
+    .hx-fd{height:40px}
+    .hx-fd-ball{width:19px;height:19px;margin:-9.5px 0 0 -9.5px;box-shadow:0 0 0 1.5px #fff,0 4px 10px rgba(0,0,0,.45)}
+    .hx-fd-glyph{width:12px;height:12px}
+    .hx-fd-drv{height:6px;margin-top:-3px}
+    .hx-fd-nums{height:16px;margin-top:6px;font-size:11.5px}
+    .hx-in .hx-qt{display:block;margin-top:20px}
+    .hx-foot{gap:4px 6px;margin-top:16px;padding-top:0;border-top:0;font-size:12.5px;color:#aeb4ba}
+    .hx-foot>span{padding:0}
+    .hx-foot>span+span{box-shadow:none}
+    .hx-foot>span+span::before{content:'·';margin-right:6px}
+    /* The hero carries the score by quarter on a phone. */
+    .gls{display:none}
 }
 
 /* ── Key plays: the phone's live feed ─────────────────────────────────────── */

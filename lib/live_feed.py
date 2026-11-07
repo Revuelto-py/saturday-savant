@@ -59,6 +59,10 @@ def situation(d, abbr):
         if start:
             drive += f' from {start}'
     wp = d.get('winprobability') or []
+    try:
+        spot = field(d, abbr)
+    except Exception:            # the field is one piece of the hero; never the line
+        spot = None
     return {
         'clock': clock,
         'period': period,
@@ -67,6 +71,93 @@ def situation(d, abbr):
         'down': end.get('downDistanceText') or '',
         'drive': drive,
         'home_wp': wp[-1].get('homeWinPercentage') if wp else None,
+        'field': spot,
+    }
+
+
+def _num(x):
+    return x if isinstance(x, (int, float)) and not isinstance(x, bool) else None
+
+
+def field(d, abbr):
+    """The hero field's situation, as static/hx-field.js reads it: who has the
+    ball and how far it is from the end zone they attack (the latest play's
+    end, which is ESPN's spot for the next snap), where the current drive
+    began, the down, distance and goal to go, a score on that play and any
+    stoppage. Distances are ESPN's yardsToEndzone, from the offence, so nothing
+    depends on which goal line ESPN's yardLine counts from. None until ESPN
+    has spotted a play."""
+    comp, side_of = _sides(d)
+    side = lambda t: side_of.get(str((t or {}).get('id')))
+    st = comp.get('status') or {}
+    name = (st.get('type') or {}).get('name', '')
+    brk = ('Halftime' if name == 'STATUS_HALFTIME' else
+           f"End of {_period(st.get('period') or 0)}" if name == 'STATUS_END_PERIOD' else None)
+    plays = [p for _, p in _plays(d)]
+    # The latest real snap: a timeout or end-of-period row carries a spot too,
+    # but not a reliable one, and no down.
+    def spotted(p):
+        e, kind = p.get('end') or {}, ((p.get('type') or {}).get('text') or '').lower()
+        return (_num(e.get('yardsToEndzone')) is not None and side(e.get('team'))
+                and not any(w in kind for w in _NOT_A_SNAP))
+    i = len(plays) - 1
+    while i >= 0 and not spotted(plays[i]):
+        i -= 1
+    if i < 0:
+        return {'brk': brk, 'label': brk} if brk else None
+    p, end = plays[i], plays[i]['end']
+    poss, to_go = side(end['team']), end['yardsToEndzone']
+
+    # A score puts the ball in the end zone the scorer attacks (a safety too: that
+    # is the end zone the tackled offence defends); a field goal stays where it was
+    # kicked from. The scorer is whichever side's score the play raised.
+    score = scorer = None
+    if p.get('scoringPlay') and i:
+        prev = plays[i - 1]
+        for s in ('away', 'home'):
+            a, b = _num(p.get(f'{s}Score')), _num(prev.get(f'{s}Score'))
+            if a is not None and b is not None and a > b:
+                scorer = s
+        kind = f"{(p.get('scoringType') or {}).get('name') or ''} {(p.get('type') or {}).get('text') or ''}".lower()
+        if scorer:
+            score = ('td' if 'touchdown' in kind else 'safety' if 'safety' in kind
+                     else 'fg' if 'field' in kind and 'goal' in kind else None)
+    if score == 'fg':
+        kick = _num((p.get('start') or {}).get('yardsToEndzone'))
+        if kick is not None:
+            poss, to_go = scorer, kick
+    elif score:
+        poss, to_go = scorer, 0
+
+    # The drive bar starts at the current drive's first snap by the team with the
+    # ball (a kickoff opening the drive is the other team's play, so it is passed).
+    cur = (d.get('drives') or {}).get('current') or {}
+    drive_to_go = None
+    if side(cur.get('team')) == poss:
+        for q in cur.get('plays') or []:
+            s0 = q.get('start') or {}
+            if side(s0.get('team')) == poss and _num(s0.get('yardsToEndzone')) is not None:
+                drive_to_go = s0['yardsToEndzone']
+                break
+    if drive_to_go is None and not score:
+        drive_to_go = to_go                    # a new possession starts where the ball is
+
+    text = end.get('downDistanceText') or ''
+    if score:
+        label = {'td': 'Touchdown', 'fg': 'Field goal', 'safety': 'Safety'}[score] + (f', {abbr[scorer]}' if abbr.get(scorer) else '')
+    elif text:
+        label = text.replace(' at ', ' · ', 1)
+    else:
+        label = ((p.get('type') or {}).get('text') or '').strip()
+    if brk and brk != 'Halftime':
+        label = f'{brk} · {label}' if label else brk
+    down, dist = _num(end.get('down')), _num(end.get('distance'))
+    return {
+        'poss': poss, 'toGo': to_go, 'driveToGo': drive_to_go,
+        'down': down if down in (1, 2, 3, 4) else None,
+        'distance': dist if dist and dist > 0 else None,
+        'goal': 'goal' in (end.get('shortDownDistanceText') or text).lower(),
+        'label': label, 'score': score, 'brk': brk, 'id': str(p.get('id') or ''),
     }
 
 
