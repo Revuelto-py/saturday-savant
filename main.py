@@ -366,6 +366,12 @@ _BOT_UA = re.compile(r'bot|crawl|spider|slurp|scrap|fetch|python-requests|httpx|
 
 @app.before_request
 def _shed_bot_variants():
+    # /admin/ authenticates with its key, and the score cron's cache clear is a
+    # python-requests call to /admin/clear-cache?scope=scores: shed here, every
+    # score-scoped clear came back 429 and home kept its old render until a
+    # full clear happened to land (found 2026-11-07).
+    if request.path.startswith('/admin/'):
+        return
     if request.query_string and _BOT_UA.search(request.headers.get('User-Agent') or ''):
         return Response('Query-string URLs are disallowed by robots.txt.\n', status=429,
                         mimetype='text/plain', headers={'Retry-After': '86400'})

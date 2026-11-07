@@ -35,4 +35,12 @@ time.sleep(0.5)
 while main._rewarm_lock.locked():
     time.sleep(1)
 assert main.cache.get(home) is not None, 'a clear rebuilds the warm pages without a visitor'
+# The score cron sends its clear as python-requests with ?scope=scores; the bot
+# guard on query-string URLs must let /admin/ through (it shed it with a 429).
+main._epoch_bump = lambda scope: 1
+r = c.get('/admin/clear-cache?scope=scores', headers={'User-Agent': 'python-requests/2.32.3',
+                                                      'X-Admin-Key': os.getenv('ADMIN_KEY', '')})
+assert r.status_code == 200, f'the score cron reaches the scoped clear ({r.status_code})'
+assert c.get('/games?season=2025', headers={'User-Agent': 'python-requests/2.32.3'}).status_code == 429, \
+    'bots on query-string pages are still shed'
 print('cache scope: ok')
