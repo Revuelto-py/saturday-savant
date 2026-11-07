@@ -52,3 +52,16 @@ for di, dr in enumerate(drives):
 assert ('away', 0) in seen['td'], 'Walton TD puts the ball in the end zone ND attacks'
 assert seen['fg'] and all(t > 0 for _, t in seen['fg']), 'a field goal stays where it was kicked from'
 print(f"live field: ok ({len(seen['td'])} touchdown spots, {len(seen['fg'])} field goals)")
+
+# ESPN has sent yardsToEndzone 32 beside "SC 32" for South Carolina (home) at its
+# own 32; the field reads the printed spot, so the ball lands 68 yards out.
+glitch = {'header': {'competitions': [{'status': {'type': {'name': 'STATUS_IN_PROGRESS'}, 'period': 2},
+          'competitors': [{'homeAway': 'home', 'team': {'id': '2579', 'abbreviation': 'SC'}},
+                          {'homeAway': 'away', 'team': {'id': '245', 'abbreviation': 'TA&M'}}]}]},
+          'drives': {'current': {'team': {'id': '2579'}, 'plays': [
+              {'id': '1', 'type': {'text': 'Rush'}, 'start': {'team': {'id': '2579'}, 'possessionText': 'SC 37', 'yardsToEndzone': 63},
+               'end': {'team': {'id': '2579'}, 'possessionText': 'SC 32', 'yardsToEndzone': 32, 'down': 2, 'distance': 15,
+                       'downDistanceText': '2nd & 15 at SC 32'}}]}}}
+g = live_feed.field(glitch, {'home': 'SC', 'away': 'TA&M'})
+assert g['poss'] == 'home' and g['toGo'] == 68 and g['driveToGo'] == 63 and g['label'] == '2nd & 15 · SC 32', g
+print('live field: ESPN spot glitch ok')

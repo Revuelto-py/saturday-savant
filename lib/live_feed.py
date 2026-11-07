@@ -79,6 +79,27 @@ def _num(x):
     return x if isinstance(x, (int, float)) and not isinstance(x, bool) else None
 
 
+_SPOT = re.compile(r'^(.+?)\s+(\d{1,2})$')
+
+
+def _to_go(spot, side, esp):
+    """Yards from a play's start or end spot to the end zone `side` attacks.
+    Read from the spot ESPN prints ("SC 32"), which is what the label shows;
+    its yardsToEndzone is the fallback, and has been seen wrong (32 beside
+    "SC 32" for South Carolina, put right on the next play). esp = ESPN's own
+    abbreviation per side, which is what possessionText uses."""
+    m = _SPOT.match((spot.get('possessionText') or '').strip())
+    if m:
+        n = int(m.group(2))
+        if n == 50:
+            return 50
+        if m.group(1) == esp.get(side):
+            return 100 - n
+        if m.group(1) == esp.get('home' if side == 'away' else 'away'):
+            return n
+    return _num(spot.get('yardsToEndzone'))
+
+
 def field(d, abbr):
     """The hero field's situation, as static/hx-field.js reads it: who has the
     ball and how far it is from the end zone they attack (the latest play's
@@ -89,6 +110,7 @@ def field(d, abbr):
     has spotted a play."""
     comp, side_of = _sides(d)
     side = lambda t: side_of.get(str((t or {}).get('id')))
+    esp = {c.get('homeAway'): (c.get('team') or {}).get('abbreviation') for c in comp.get('competitors') or []}
     st = comp.get('status') or {}
     name = (st.get('type') or {}).get('name', '')
     brk = ('Halftime' if name == 'STATUS_HALFTIME' else
@@ -98,7 +120,7 @@ def field(d, abbr):
     # but not a reliable one, and no down.
     def spotted(p):
         e, kind = p.get('end') or {}, ((p.get('type') or {}).get('text') or '').lower()
-        return (_num(e.get('yardsToEndzone')) is not None and side(e.get('team'))
+        return (side(e.get('team')) and _to_go(e, side(e.get('team')), esp) is not None
                 and not any(w in kind for w in _NOT_A_SNAP))
     i = len(plays) - 1
     while i >= 0 and not spotted(plays[i]):
@@ -106,7 +128,8 @@ def field(d, abbr):
     if i < 0:
         return {'brk': brk, 'label': brk} if brk else None
     p, end = plays[i], plays[i]['end']
-    poss, to_go = side(end['team']), end['yardsToEndzone']
+    poss = side(end['team'])
+    to_go = _to_go(end, poss, esp)
 
     # A score puts the ball in the end zone the scorer attacks (a safety too: that
     # is the end zone the tackled offence defends); a field goal stays where it was
@@ -123,7 +146,7 @@ def field(d, abbr):
             score = ('td' if 'touchdown' in kind else 'safety' if 'safety' in kind
                      else 'fg' if 'field' in kind and 'goal' in kind else None)
     if score == 'fg':
-        kick = _num((p.get('start') or {}).get('yardsToEndzone'))
+        kick = _to_go(p.get('start') or {}, scorer, esp)
         if kick is not None:
             poss, to_go = scorer, kick
     elif score:
@@ -136,8 +159,8 @@ def field(d, abbr):
     if side(cur.get('team')) == poss:
         for q in cur.get('plays') or []:
             s0 = q.get('start') or {}
-            if side(s0.get('team')) == poss and _num(s0.get('yardsToEndzone')) is not None:
-                drive_to_go = s0['yardsToEndzone']
+            if side(s0.get('team')) == poss and _to_go(s0, poss, esp) is not None:
+                drive_to_go = _to_go(s0, poss, esp)
                 break
     if drive_to_go is None and not score:
         drive_to_go = to_go                    # a new possession starts where the ball is
