@@ -8818,12 +8818,14 @@ a.hx-name:active{opacity:.72}
 .hx-num.is-dog,.hx-side.is-lost .hx-num{color:rgba(255,255,255,.48)}
 .hx-side.is-lost .hx-name{color:#d0d4d8}
 .hx-side.is-lost .hx-logo{opacity:.7}
-/* Possession: the field's ball badge (team colour, white ring) beside the score,
-   facing the way that team attacks. */
-.hx-ball{--b:clamp(32px,3.2vw,40px);position:absolute;top:50%;display:grid;place-items:center;width:var(--b);height:var(--b);margin-top:calc(var(--b) / -2);border-radius:50%;box-shadow:0 0 0 2px #fff,0 8px 18px rgba(0,0,0,.45);color:#fff}
-.hx-ball svg{width:62%;height:62%}
-.hx-side--away .hx-ball{left:calc(100% + 8px);background:var(--hx-a)}
-.hx-side--home .hx-ball{right:calc(100% + 8px);background:var(--hx-h)}
+/* Possession: a solid white football beside the score, laces in the team's
+   colour, pointing the way that team attacks. */
+.hx-ball{--b:clamp(34px,3.4vw,42px);position:absolute;top:50%;width:var(--b);height:var(--b);margin-top:calc(var(--b) / -2);filter:drop-shadow(0 4px 10px rgba(0,0,0,.5))}
+.hx-ball svg{display:block;width:100%;height:100%}
+.hx-ball .b{fill:#fff}
+.hx-ball .l{fill:none;stroke:var(--lace);stroke-width:1.7;stroke-linecap:round}
+.hx-side--away .hx-ball{left:calc(100% + 4px);--lace:var(--hx-a)}
+.hx-side--home .hx-ball{right:calc(100% + 4px);--lace:var(--hx-h)}
 .hx-side--home .hx-ball svg{transform:scaleX(-1)}
 .hx-mid{display:flex;flex-direction:column;align-items:center;gap:10px;min-width:clamp(190px,19vw,240px);text-align:center}
 .hx-live{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:999px;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:rgba(217,48,54,.92)}
@@ -8924,9 +8926,7 @@ a.hx-name:active{opacity:.72}
     .hx-meta{font-size:13.5px}
     .hx-num{font-size:clamp(84px,11vw,112px)}
     .is-fc .hx-num{font-size:clamp(64px,8vw,82px)}
-    .hx-ball{--b:28px}
-    .hx-side--away .hx-ball{left:calc(100% + 6px)}
-    .hx-side--home .hx-ball{right:calc(100% + 6px)}
+    .hx-ball{--b:30px}
     .hx-mid{min-width:150px;gap:8px}
     .hx-big{font-size:clamp(28px,3.6vw,36px)}
     .hx-small{font-size:14px}
@@ -8961,10 +8961,9 @@ a.hx-name:active{opacity:.72}
     .hx-meta{margin-top:2px;font-size:13.5px;color:#c4c8cc}
     .hx-num{font-size:clamp(64px,21vw,84px)}
     .is-fc .hx-num{font-size:clamp(46px,15vw,58px)}
-    /* On a phone the badge sits on the logo's inner corner, clear of the clock. */
-    .hx-ball{--b:26px;top:auto;bottom:calc(100% + 4px);margin:0;box-shadow:0 0 0 2px #fff,0 4px 10px rgba(0,0,0,.45)}
-    .hx-side--away .hx-ball{left:auto;right:2px}
-    .hx-side--home .hx-ball{right:auto;left:2px}
+    .hx-ball{--b:24px}
+    .hx-side--away .hx-ball{left:calc(100% + 1px)}
+    .hx-side--home .hx-ball{right:calc(100% + 1px)}
     .hx-mid{min-width:0;gap:5px;padding-top:84px}
     .hx-live{height:20px;gap:5px;padding:0 8px;font-size:11px}
     .hx-live .gx-dot{width:6px;height:6px}
