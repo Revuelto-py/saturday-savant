@@ -89,8 +89,9 @@ echo "── [10b/23] player classes, every roster season (derive_player_classes
 # history rows it is frozen at the last-seen class. The roster fetch stores it
 # in rosters.feed_class only; this turns it into the displayed class + redshirt
 # (anchor on the latest real feed class, step forward by season, freshman ≤ 4
-# games = redshirt). Right after the roster fetch so a newcomer gets a class in
-# the same run. Non-fatal: the worst case is last week's classes.
+# games = redshirt; ESPN's roster class fills FCS/JUCO arrivals CFBD has no
+# class for). Right after the roster fetch so a newcomer gets a class in the
+# same run. Non-fatal: the worst case is last week's classes.
 $PY pipeline/derive_player_classes.py || note_fail "class derivation failed — keeping last week's classes, continuing"
 echo "── [11/23] EA ratings, starter-model input (fetch_ea_ratings) ──"
 # Internal-only signal for lineup/starter selection, never displayed. EA

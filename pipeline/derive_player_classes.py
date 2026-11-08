@@ -20,7 +20,10 @@ Rules (eligibility class, the "Redshirt Sophomore" convention):
     recorded games (the NCAA redshirt rule) holds and is flagged redshirt.
     Linemen and long snappers have no box score, so they always advance.
   • Senior is the cap; a fifth year is a Redshirt Senior.
-  • No anchor at all: a freshman in his first season on a roster.
+  • No CFBD class at all (a true freshman, or an FCS / JUCO transfer with no
+    FBS history): ESPN's current-season class if ESPN lists him, else a
+    freshman in his first season on a roster. ESPN fills gaps only, because
+    it mixes years-in-school with eligibility class (see pick_anchor).
 The redshirt flag for a season = a non-COVID hold before that season.
 
 Writes rosters.class_year + rosters.redshirt for every season, and players.year
@@ -89,7 +92,32 @@ def derive(presence, anchor, games, box_score=True):
     return result
 
 
+def pick_anchor(feed, trusted, espn_cls, season):
+    """The (season, class) to build the timeline from, and where it came from.
+
+    CFBD's latest real class wins: it is eligibility class, which is what the
+    site shows. ESPN's class fills only a player CFBD gives us nothing for —
+    in practice an FCS / JUCO transfer with no FBS history, who would otherwise
+    default to Freshman. ESPN is not used beyond that because it mixes
+    years-in-school with eligibility (it lists CJ Carr as a junior).
+    """
+    real = [(s, int(f)) for s, f in feed.items()
+            if s in trusted and f and f.isdigit() and 1 <= int(f) <= 5]
+    if real:
+        return max(real), 'cfbd'
+    if espn_cls and season in feed:
+        return (season, espn_cls), 'espn'
+    return None, 'none'
+
+
 def check():
+    # CFBD's real class wins; ESPN only fills a player with none.
+    assert pick_anchor({2025: '2', 2026: '1'}, {2025}, 4, 2026) == ((2025, 2), 'cfbd')
+    assert pick_anchor({2026: '1'}, {2025}, 4, 2026) == ((2026, 4), 'espn')
+    assert pick_anchor({2026: '1'}, {2025}, None, 2026) == (None, 'none')
+    assert pick_anchor({2024: '1'}, {2024}, None, 2026) == ((2024, 1), 'cfbd')
+    # ESPN never anchors a player who isn't on the current roster.
+    assert pick_anchor({2019: None}, set(), 3, 2026) == (None, 'none')
     # CJ Carr: on the 2024 roster with no action, CFBD's 2025 class is 1, then
     # the 2025 starter -> 2026 Redshirt Sophomore (CFBD's 2026 feed says '1').
     r = derive({2024, 2025, 2026}, (2025, 1), {2025: 12, 2026: 9})
@@ -113,6 +141,50 @@ def check():
     # No trusted class anywhere: first roster season is the freshman year.
     assert derive({2026}, None, {}) == {2026: (1, False)}
     print('derive_player_classes: all checks pass')
+
+
+ESPN = 'https://site.api.espn.com/apis/site/v2/sports/football/college-football'
+# The site API's /teams ignores groups=80 and pages through all 763 college
+# teams; the core API lists that season's FBS teams (group 80) exactly.
+ESPN_FBS = ('https://sports.core.api.espn.com/v2/sports/football/leagues/'
+            'college-football/seasons/{season}/types/2/groups/80/teams')
+
+
+def _espn_classes(season):
+    """{athlete id: ESPN class 1-4} from ESPN's current team rosters. ESPN
+    athlete ids are our player ids. A team whose roster is for another season
+    (ESPN lags the rollover) is skipped, and any ESPN failure returns what it
+    has — this is a fill-in, never a reason to fail the run."""
+    import re
+    import requests
+    from concurrent.futures import ThreadPoolExecutor
+    try:
+        d = requests.get(ESPN_FBS.format(season=season), params={'limit': 500}, timeout=20).json()
+        team_ids = [re.search(r'/teams/(\d+)', t['$ref']).group(1) for t in d['items']]
+    except Exception as e:
+        print(f'ESPN team list failed ({type(e).__name__}) — no ESPN classes this run', flush=True)
+        return {}
+
+    def roster(tid):
+        for _ in range(3):
+            try:
+                d = requests.get(f'{ESPN}/teams/{tid}/roster', timeout=20).json()
+            except Exception:
+                continue
+            if (d.get('season') or {}).get('year') != season:
+                return {}
+            return {int(a['id']): a['experience']['years']
+                    for g in d.get('athletes', []) for a in g.get('items', [])
+                    if str(a.get('id', '')).isdigit()
+                    and 1 <= ((a.get('experience') or {}).get('years') or 0) <= 4}
+        return {}
+
+    out = {}
+    with ThreadPoolExecutor(6) as ex:
+        for part in ex.map(roster, team_ids):
+            out.update(part)
+    print(f'ESPN: {len(out):,} {season} classes from {len(team_ids)} team rosters', flush=True)
+    return out
 
 
 def _connect():
@@ -205,12 +277,14 @@ def main(dry_run=False):
                 raise
             print(f'read failed on attempt {attempt} ({str(e).strip()[:60]}), retrying', flush=True)
 
+    cur_season = max(s for seasons in roster.values() for s in seasons)
+    espn = _espn_classes(cur_season)
+
     rows, sources = [], Counter()
     for pid, seasons in roster.items():
-        anchors = [(s, int(f)) for s, (f, _) in seasons.items()
-                   if s in trusted and f and f.isdigit() and 1 <= int(f) <= 5]
-        anchor = max(anchors) if anchors else None
-        sources['anchored' if anchor else 'no trusted class'] += 1
+        anchor, source = pick_anchor({s: f for s, (f, _) in seasons.items()},
+                                     trusted, espn.get(pid), cur_season)
+        sources[source] += 1
         pos = seasons[max(seasons)][1]
         result = derive(presence[pid] | set(seasons), anchor, games[pid],
                         box_score=pos not in NO_BOX_SCORE)
@@ -218,10 +292,9 @@ def main(dry_run=False):
             cls, rs = result[s]
             rows.append((pid, s, str(cls), int(rs)))
 
-    print(f'{len(rows):,} roster rows across {len(roster):,} players '
-          f'({sources["anchored"]:,} anchored, {sources["no trusted class"]:,} without a trusted class)',
+    print(f'{len(rows):,} roster rows across {len(roster):,} players — class anchored on '
+          f'CFBD {sources["cfbd"]:,}, ESPN {sources["espn"]:,}, none {sources["none"]:,}',
           flush=True)
-    cur_season = max(r[1] for r in rows)
     dist = Counter((r[2], r[3]) for r in rows if r[1] == cur_season)
     print(f'{cur_season} class/redshirt distribution:', sorted(dist.items()), flush=True)
     if dry_run:
