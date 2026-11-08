@@ -8185,6 +8185,42 @@ def _game_market(game_id):
 
 
 
+def _wp_minutes(wp_raw, play_lookup):
+    """Game minute (0-60, overtime past 60) for each win-probability sample:
+    ESPN's secondsLeft when it sends one, else the sample's play's quarter and
+    clock. Samples with neither take their neighbours' minute; the result never
+    runs backwards. tools/check_wp_minutes.py checks it."""
+    xs = []
+    for wp in wp_raw:
+        x = None
+        if wp.get('secondsLeft') is not None:
+            x = (3600 - float(wp['secondsLeft'])) / 60
+        else:
+            pl = play_lookup.get(str(wp.get('playId') or ''), {})
+            per = pl.get('period') or 0
+            try:
+                m, sec = (pl.get('clock') or '').split(':')
+                left = min(int(m) + int(sec) / 60, 15)
+            except ValueError:
+                left = None
+            if 1 <= per <= 4 and left is not None:
+                x = (per - 1) * 15 + 15 - left
+            elif per >= 5:
+                x = 'ot'
+        xs.append(x)
+    out, prev, ot = [], 0.0, 60.0
+    for i, x in enumerate(xs):
+        if x == 'ot':
+            ot += 1.5
+            x = ot
+        elif x is None:      # no clock: the next placed sample's minute (or the last one's)
+            x = next((v for v in xs[i + 1:] if isinstance(v, float)), prev)
+        x = max(prev, x)
+        out.append(round(x, 3))
+        prev = x
+    return out
+
+
 def _game_weather(game_id):
     """Conditions for one game from game_weather (CFBD), or None.
 
@@ -9052,23 +9088,20 @@ def game_detail(game_id):
                                            _start.get('downDistanceText', '')),
                         }
 
-            # Win probability
+            # Win probability. ESPN's college series carries only a play id per
+            # sample, no clock, so each sample is placed at its play's game
+            # minute (quarter and clock). Spreading the samples evenly over the
+            # 60 minutes drew a live game as if it were over, and a finished one
+            # by play count instead of time. Overtime is untimed: its plays
+            # follow regulation a minute and a half apart.
             wp_raw = data.get('winprobability') or []
-            total_wp = max(len(wp_raw) - 1, 1)
+            wp_x = _wp_minutes(wp_raw, play_lookup)
             for i, wp in enumerate(wp_raw):
-                home_pct     = float(wp.get('homeWinPercentage', 0.5))
-                secs_left    = wp.get('secondsLeft')
-                secs_elapsed = wp.get('secondsElapsed') or wp.get('seconds')
-                if secs_left is not None:
-                    minutes_x = (3600 - float(secs_left)) / 60
-                elif secs_elapsed is not None:
-                    minutes_x = float(secs_elapsed) / 60
-                else:
-                    minutes_x = i / total_wp * 60
+                home_pct = float(wp.get('homeWinPercentage', 0.5))
                 play_id = str(wp.get('playId', '') or '')
                 matched = play_lookup.get(play_id, {})
                 win_prob.append({
-                    'x':          round(minutes_x, 3),
+                    'x':          wp_x[i],
                     'home':       round(home_pct, 4),
                     'away':       round(1 - home_pct, 4),
                     'play_id':    play_id,

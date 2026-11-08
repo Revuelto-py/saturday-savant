@@ -1055,6 +1055,11 @@ function initWinProb() {
     if (homeSwatch) homeSwatch.style.background = HOME_LINE;
 
     const xVals = WP_DATA.map(p => p.x);
+    // The axis is the whole game, whatever has been played: a live game's line
+    // stops at the current minute and the rest of the field stays empty.
+    const LIVE = {{ 'true' if is_live else 'false' }};
+    const NOW = xVals[xVals.length - 1];
+    const XMAX = Math.max(60, NOW);
     const yAway = WP_DATA.map(p => p.away * 100);
     const yHome = WP_DATA.map(p => p.home * 100);
 
@@ -1062,8 +1067,19 @@ function initWinProb() {
         type: 'line', x0: x, x1: x, y0: 0, y1: 100,
         line: { color: 'rgba(255,255,255,0.08)', width: 1, dash: 'dot' }
     }));
+    if (XMAX > 60) quarterShapes.push({
+        type: 'line', x0: 60, x1: 60, y0: 0, y1: 100,
+        line: { color: 'rgba(255,255,255,0.08)', width: 1, dash: 'dot' }
+    });
+    if (LIVE && NOW < XMAX) quarterShapes.push({
+        type: 'rect', x0: NOW, x1: XMAX, y0: 0, y1: 100, layer: 'below',
+        fillcolor: 'rgba(255,255,255,0.025)', line: { width: 0 }
+    }, {
+        type: 'line', x0: NOW, x1: NOW, y0: 0, y1: 100,
+        line: { color: 'rgba(255,77,77,0.55)', width: 1 }
+    });
     quarterShapes.push({
-        type: 'line', x0: 0, x1: 60, y0: 50, y1: 50,
+        type: 'line', x0: 0, x1: XMAX, y0: 50, y1: 50,
         line: { color: 'rgba(255,255,255,0.15)', width: 1, dash: 'dot' }
     });
 
@@ -1090,9 +1106,10 @@ function initWinProb() {
         height: 280,
         margin: { l: 36, r: 8, t: 4, b: 28 },
         xaxis: {
-            range: [0, 60],
-            tickvals: [15, 30, 45, 60],
-            ticktext: ['1st', '2nd', '3rd', '4th'],
+            range: [0, XMAX],
+            // Each label sits in the middle of its quarter, not on the line that ends it.
+            tickvals: [7.5, 22.5, 37.5, 52.5].concat(XMAX > 60 ? [(60 + XMAX) / 2] : []),
+            ticktext: ['Q1', 'Q2', 'Q3', 'Q4'].concat(XMAX > 60 ? ['OT'] : []),
             gridcolor: 'rgba(255,255,255,0.04)',
             color: 'rgba(255,255,255,0.35)',
             fixedrange: true, zeroline: false,
@@ -1124,9 +1141,9 @@ function initWinProb() {
         const marginLeft = 36, marginRight = 8;
         const plotWidth = rect.width - marginLeft - marginRight;
         const plotX = e.clientX - rect.left - marginLeft;
-        const dataX = (plotX / plotWidth) * 60;
+        const dataX = (plotX / plotWidth) * XMAX;
 
-        if (dataX < 0 || dataX > 60) return;
+        if (dataX < 0 || dataX > XMAX) return;
 
         let closest = null, minDist = Infinity;
         for (const pt of WP_DATA) {
@@ -1141,7 +1158,7 @@ function initWinProb() {
         const detail = document.getElementById('play-detail');
         if (closest.play_text) {
             detail.style.display = 'block';
-            const quarter = ['','1st','2nd','3rd','4th'][closest.period] || '';
+            const quarter = ['','1st','2nd','3rd','4th'][closest.period] || (closest.period > 4 ? 'OT' : '');
             document.getElementById('pd-down-dist').textContent = closest.down_dist || closest.play_type || '';
             document.getElementById('pd-clock').textContent = (closest.clock || '') + (quarter ? ' · ' + quarter : '');
             document.getElementById('pd-score').textContent = closest.away_score + '  –  ' + closest.home_score;
