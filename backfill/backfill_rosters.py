@@ -91,18 +91,22 @@ def backfill_year(teams_api, y):
             continue
         seen.add(pid)
         cy = clean_class_year(getattr(p, 'year', None), y)
-        roster_rows.append((pid, y, p.team, p.position, p.jersey, p.height, p.weight, cy))
+        roster_rows.append((pid, y, p.team, p.position, p.jersey, p.height, p.weight, cy, cy))
         identity_rows.append((pid, p.first_name, p.last_name, p.team, p.position,
                               p.jersey, p.height, p.weight, cy))
 
+    # CFBD's class goes to feed_class; class_year is derived from it by
+    # pipeline/derive_player_classes.py (run it after this). CFBD's historical
+    # class is frozen at the player's last-seen class, so it is wrong for every
+    # earlier season and must never be shown as-is.
     execute_values(cursor, '''
         INSERT INTO rosters (player_id, season, team, position, jersey,
-                             height, weight, class_year)
+                             height, weight, class_year, feed_class)
         VALUES %s
         ON CONFLICT (player_id, season) DO UPDATE SET
             team=EXCLUDED.team, position=EXCLUDED.position,
             jersey=EXCLUDED.jersey, height=EXCLUDED.height,
-            weight=EXCLUDED.weight, class_year=EXCLUDED.class_year
+            weight=EXCLUDED.weight, feed_class=EXCLUDED.feed_class
     ''', roster_rows, page_size=1000)
 
     # Identity rows for players we've never seen — historical attributes,

@@ -84,6 +84,14 @@ echo "── [10/23] team rosters, current season (fetch_2026_roster) ──"
 # rating and a photo in the same run. Non-fatal, and it aborts internally
 # rather than writing a partial roster if CFBD drops teams mid-fetch.
 $PY pipeline/fetch_2026_roster.py || note_fail "roster fetch failed — keeping last week's roster, continuing"
+echo "── [10b/23] player classes, every roster season (derive_player_classes) ──"
+# CFBD's class is not usable as-is: it sent '1' for every 2026 player, and on
+# history rows it is frozen at the last-seen class. The roster fetch stores it
+# in rosters.feed_class only; this turns it into the displayed class + redshirt
+# (anchor on the latest real feed class, step forward by season, freshman ≤ 4
+# games = redshirt). Right after the roster fetch so a newcomer gets a class in
+# the same run. Non-fatal: the worst case is last week's classes.
+$PY pipeline/derive_player_classes.py || note_fail "class derivation failed — keeping last week's classes, continuing"
 echo "── [11/23] EA ratings, starter-model input (fetch_ea_ratings) ──"
 # Internal-only signal for lineup/starter selection, never displayed. EA
 # publishes roster updates through the season, so a stale table quietly means

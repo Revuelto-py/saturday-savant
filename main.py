@@ -2466,7 +2466,7 @@ def _game_starters(team, season):
         cur = conn.cursor()
         cur.execute(
             "SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot, "
-            "       r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0) "
+            "       r.height, r.weight, r.class_year, COALESCE(r.redshirt, p.redshirt, 0) "
             "FROM rosters r JOIN players p ON p.id = r.player_id "
             "WHERE r.team = %s AND r.season = %s",
             (team, season))
@@ -7254,7 +7254,7 @@ def team(team_ref):
         roster_season = season
         cursor.execute('''
             SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot,
-                   r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0)
+                   r.height, r.weight, r.class_year, COALESCE(r.redshirt, p.redshirt, 0)
             FROM rosters r
             JOIN players p ON p.id = r.player_id
             WHERE r.team=%s AND r.season=%s
@@ -7688,7 +7688,7 @@ def team_starters(team_ref):
         # team route uses; see build_lineup / compute_starter_scores).
         cursor.execute('''
             SELECT p.first_name, p.last_name, r.position, r.jersey, p.id, p.headshot,
-                   r.height, r.weight, r.class_year, COALESCE(p.redshirt, 0)
+                   r.height, r.weight, r.class_year, COALESCE(r.redshirt, p.redshirt, 0)
             FROM rosters r
             JOIN players p ON p.id = r.player_id
             WHERE r.team=%s AND r.season=%s
@@ -10257,11 +10257,13 @@ def _player_detail_cached(player_id, season):
         if season != forward_season():
             cursor.execute('''
                 SELECT r.team, r.position, r.jersey, r.height, r.weight, r.class_year,
-                       t.logo_dark, t.color, t.alt_color, t.conference
+                       t.logo_dark, t.color, t.alt_color, t.conference, r.redshirt
                 FROM rosters r LEFT JOIN teams t ON t.name = r.team
                 WHERE r.player_id = %s AND r.season = %s
             ''', (player_id, season))
             season_row = cursor.fetchone()
+            # Redshirt as of THAT season (derive_player_classes), not today's.
+            season_rs = season_row[10] if season_row else None
 
             # The team he actually PLAYED for that year, which outranks the
             # roster row: CFBD's historical roster endpoint hands back a
@@ -10291,6 +10293,7 @@ def _player_detail_cached(player_id, season):
                 if season_row[3] is not None: row[7] = season_row[3]  # height
                 if season_row[4] is not None: row[8] = season_row[4]  # weight
                 if season_row[5]: row[9] = season_row[5]            # class year
+                if season_rs is not None: row[22] = season_rs       # redshirt
                 row[10] = season_row[6]                             # logo_dark
                 row[11] = season_row[7]                             # color
                 row[12] = season_row[8]                             # alt_color
@@ -10307,7 +10310,8 @@ def _player_detail_cached(player_id, season):
             '1': 'Freshman',  '2': 'Sophomore', '3': 'Junior', '4': 'Senior', '5': 'Graduate',
             'Fr': 'Freshman', 'So': 'Sophomore', 'Jr': 'Junior', 'Sr': 'Senior', 'Gr': 'Graduate',
         }
-        # Redshirt is a career trait — prefix the class label when set.
+        # Redshirt = a held year before this season (derive_player_classes) —
+        # prefix the class label when set.
         is_redshirt = bool(row[22])
         _year_base = year_map.get(year_raw, '')
         year_display = f'Redshirt {_year_base}' if (is_redshirt and _year_base) else _year_base

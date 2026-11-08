@@ -119,15 +119,14 @@ with cfbd.ApiClient(configuration) as api_client:
                     position = COALESCE(EXCLUDED.position, players.position),
                     jersey   = COALESCE(EXCLUDED.jersey,   players.jersey),
                     height   = COALESCE(EXCLUDED.height,   players.height),
-                    weight   = COALESCE(EXCLUDED.weight,   players.weight),
-                    year     = COALESCE(EXCLUDED.year,     players.year)
+                    weight   = COALESCE(EXCLUDED.weight,   players.weight)
             ''', (pid, p.first_name, p.last_name, school, p.position,
                   p.jersey, p.height, p.weight,
                   str(p.year) if p.year is not None else None))
             seen.append(pid)
+            feed = str(p.year) if p.year is not None else None
             roster_rows.append((pid, SEASON, school, p.position, p.jersey,
-                                p.height, p.weight,
-                                str(p.year) if p.year is not None else None))
+                                p.height, p.weight, feed, feed))
             updated += 1
         # Everyone not on a 2026 roster goes inactive — done in the same
         # transaction as the marking, so the flag is never briefly empty.
@@ -140,14 +139,19 @@ with cfbd.ApiClient(configuration) as api_client:
         # along with ~4,800 others CFBD had already dropped. This is the same
         # authoritative pull, so it writes both. Scoped to SEASON — 2016-2025
         # history belongs to backfill/backfill_rosters.py and is untouched.
+        # CFBD's class lands in feed_class only. class_year is the DERIVED class
+        # (pipeline/derive_player_classes.py, the next weekly step): CFBD sent
+        # '1' for every 2026 player, and writing it straight into class_year
+        # turned the whole site into freshmen — CJ Carr included. A brand-new
+        # row takes the feed value as a placeholder until the derive runs.
         execute_values(cursor, '''
             INSERT INTO rosters (player_id, season, team, position, jersey,
-                                 height, weight, class_year)
+                                 height, weight, class_year, feed_class)
             VALUES %s
             ON CONFLICT (player_id, season) DO UPDATE SET
                 team=EXCLUDED.team, position=EXCLUDED.position,
                 jersey=EXCLUDED.jersey, height=EXCLUDED.height,
-                weight=EXCLUDED.weight, class_year=EXCLUDED.class_year
+                weight=EXCLUDED.weight, feed_class=EXCLUDED.feed_class
         ''', roster_rows, page_size=1000)
         # Anyone the fetch didn't see is off the roster now. Deleting rather
         # than leaving them keeps "who is on this team" a single answer.
