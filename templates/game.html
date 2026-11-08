@@ -290,7 +290,7 @@
 {% endmacro %}
 {% macro gh_num(side) %}
 {%- set pts = game[4] if side == 'away' else game[3] %}
-{%- if is_live %}<b class="hx-num" data-live-{{ side }}>{{ pts if pts is not none else 0 }}{% if poss_side == side %}<svg class="hx-ball" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" role="img" aria-label="{{ a_ab if side == 'away' else h_ab }} has the ball">{{ ball_path }}</svg>{% endif %}</b>
+{%- if is_live %}<b class="hx-num" data-live-{{ side }}>{{ pts if pts is not none else 0 }}{% if poss_side == side %}<span class="hx-ball" role="img" aria-label="{{ a_ab if side == 'away' else h_ab }} has the ball"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">{{ ball_path }}</svg></span>{% endif %}</b>
 {%- elif is_scheduled %}{% if forecast %}{% set v = fc_away if side == 'away' else fc_home %}<b class="hx-num{{ ' is-dog' if v < 100 - v }}">{{ v }}<small>%</small></b>{% endif %}
 {%- else %}<b class="hx-num">{{ pts }}</b>{% endif %}
 {%- endmacro %}
