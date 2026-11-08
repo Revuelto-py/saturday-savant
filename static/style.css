@@ -8943,18 +8943,20 @@ a.hx-name:active{opacity:.72}
     .hx-back svg{width:20px;height:20px}
     .hx-label{overflow:hidden;text-align:center;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:650;color:#c4c8cc}
     .hx-match{align-items:start;gap:8px;margin-top:4px}
-    .hx-side,.hx-side--away{flex-direction:column;justify-content:flex-start;gap:12px}
-    .hx-side--away .hx-num{order:-1}
-    .hx-team{gap:2px}
-    .hx-logo{width:50px;height:50px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
-    .hx-name,.hx-name.n2,.hx-name.n3,.hx-name.n4{gap:5px;margin-top:6px;font-size:17px;font-weight:750;line-height:1.1;white-space:nowrap}
+    /* Each side reads logo, score, name, record: the team block opens up so its
+       logo can sit above the score and its name below it. */
+    .hx-side,.hx-side--away{flex-direction:column;justify-content:flex-start;gap:0}
+    .hx-team{display:contents}
+    .hx-logo{order:-2;width:62px;height:62px;margin-bottom:10px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
+    .hx-num{order:-1}
+    .hx-name,.hx-name.n2,.hx-name.n3,.hx-name.n4{gap:5px;margin-top:10px;font-size:17px;font-weight:750;line-height:1.1;white-space:nowrap}
     a.hx-name{padding-block:6px;margin-block:0 -6px}
     .hx-rk{color:#aeb4ba;font-family:var(--font-body);font-stretch:100%;font-weight:700;letter-spacing:0}
-    .hx-meta{font-size:13.5px;color:#c4c8cc}
+    .hx-meta{margin-top:2px;font-size:13.5px;color:#c4c8cc}
     .hx-num{font-size:clamp(64px,21vw,84px)}
     .is-fc .hx-num{font-size:clamp(46px,15vw,58px)}
     .hx-ball{width:18px;height:18px;margin-top:-9px}
-    .hx-mid{min-width:0;gap:5px;padding-top:13px}
+    .hx-mid{min-width:0;gap:5px;padding-top:84px}
     .hx-live{height:20px;gap:5px;padding:0 8px;font-size:11px}
     .hx-live .gx-dot{width:6px;height:6px}
     .hx-big{font-size:22px}
@@ -8975,7 +8977,9 @@ a.hx-name:active{opacity:.72}
     .hx-foot{gap:4px 6px;margin-top:16px;padding-top:0;border-top:0;font-size:12.5px;color:#aeb4ba}
     .hx-foot>span{padding:0}
     .hx-foot>span+span{box-shadow:none}
-    .hx-foot>span+span::before{content:'·';margin-right:6px}
+    /* The dot trails each item, so a wrapped line never starts with one. */
+    .hx-foot>span{white-space:nowrap}
+    .hx-foot>span:has(+ span:not(.hx-lg))::after{content:'·'}
     /* The hero carries the score by quarter on a phone. */
     .gls{display:none}
 }
