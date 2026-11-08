@@ -89,6 +89,7 @@ from lib.forecast_explain import describe as describe_contrib
 from lib.season_util import current_cfb_season
 from lib import espn_board
 from lib import live_feed
+from lib import game_leaders
 from collections import OrderedDict, defaultdict
 from itertools import groupby
 
@@ -8839,8 +8840,8 @@ def game_detail(game_id):
             # teams.abbreviation is what the ticker already uses.
             team_abbr=_team_abbrs(away_team, home_team),
             plays=[], team_stats=[], home_stats={}, away_stats={},
-            player_stats=[], leaders={}, drives=[], box_score={'home': {}, 'away': {}},
-            structured_leaders={}, win_prob=[], top_wpa=[])
+            player_stats=[], drives=[], box_score={'home': {}, 'away': {}},
+            gl_rows=[], win_prob=[], top_wpa=[])
         if in_window:
             cache.set(live_key, (None, html), timeout=LIVE_PAGE_TTL)
         return html
@@ -8856,7 +8857,6 @@ def game_detail(game_id):
     plays = []
     team_stats = []
     player_stats = []
-    leaders = {}
     win_prob = []
     drives = []
     box_score = {'home': {}, 'away': {}}
@@ -9452,268 +9452,10 @@ def game_detail(game_id):
                         'labels': cat['labels'],
                         'athletes': cat['athletes'],
                     }
-            def _id_from_ref(obj, pattern):
-                m = re.search(pattern, obj.get('$ref', ''))
-                return m.group(1) if m else str(obj.get('id', ''))
-
-            # Leaders — keyed by ESPN's API name (e.g. 'passingYards')
-            # Resolve $ref athlete/team objects via boxscore lookup
-            for lg in (data.get('leaders') or []):
-                api_key = lg.get('name', '')   # e.g. 'passingYards'
-                if not api_key:
-                    continue   # entire entry is a $ref — skip
-                cat_leaders = []
-                for leader in (lg.get('leaders') or []):
-                    ath = leader.get('athlete') or {}
-                    ath_name = ath.get('displayName', '') or ath.get('shortName', '')
-                    if not ath_name:
-                        aid  = _id_from_ref(ath, r'/athletes/(\d+)')
-                        info = athlete_lookup.get(aid, {})
-                        ath_name = info.get('name', '')
-                        ath_hs   = info.get('headshot', '')
-                    else:
-                        # Same rule as the box score above: our mirror first, so
-                        # the leaders panel and the player's own page show the
-                        # same face. ESPN's URL is the fallback.
-                        aid    = str(ath.get('id') or '') or _id_from_ref(ath, r'/athletes/(\d+)')
-                        hs     = ath.get('headshot')
-                        ath_hs = (mirror_by_aid.get(aid)
-                                  or (hs.get('href', '') if isinstance(hs, dict) else (hs or '')))
-                    team_obj  = leader.get('team') or {}
-                    team_name = team_obj.get('displayName', '')
-                    if not team_name:
-                        tid       = _id_from_ref(team_obj, r'/teams/(\d+)')
-                        team_name = team_id_lookup.get(tid, '')
-                    is_home = team_side_map.get(team_name, '') == 'home'
-                    ath_obj = leader.get('athlete') or {}
-                    cat_leaders.append({
-                        'name':       ath_name,
-                        'headshot':   ath_hs,
-                        'team':       team_name,
-                        'stat':       leader.get('displayValue', ''),
-                        'is_home':    is_home,
-                        'position':   (ath_obj.get('position') or {}).get('abbreviation', ''),
-                        'stat_detail': '',
-                    })
-                leaders[api_key] = cat_leaders
-
-            # Fallback: derive leaders from boxscore.players when ESPN leaders are empty/unusable
-            if not any(p['name'] for plist in leaders.values() for p in plist):
-                leaders.clear()
-                cat_cfg = [
-                    ('passingYards',   'passing',   ['C/ATT','YDS','TD']),
-                    ('rushingYards',   'rushing',   ['CAR','YDS','TD']),
-                    ('receivingYards', 'receiving', ['REC','YDS','TD']),
-                ]
-                for pb in boxscore_players:
-                    # boxscore.players entries carry no homeAway field, so the old
-                    # pb.get('homeAway','home') defaulted EVERY team to home and
-                    # left the away side's leaders blank. Use the reliable
-                    # id/displayName -> side map instead.
-                    t_obj  = pb.get('team') or {}
-                    t_name = t_obj.get('displayName', '')
-                    side   = (team_side_by_id.get(str(t_obj.get('id', '')))
-                              or team_side_map.get(t_name, 'home'))
-                    for cat in (pb.get('statistics') or []):
-                        cn = cat.get('name', '').lower()
-                        for api_key, keyword, want_cols in cat_cfg:
-                            if keyword not in cn:
-                                continue
-                            labels  = cat.get('labels', [])
-                            ul      = [l.upper() for l in labels]
-                            try:
-                                yds_idx = ul.index('YDS')
-                            except ValueError:
-                                continue
-                            best_yds, best_entry = -1, None
-                            for ae in (cat.get('athletes') or []):
-                                stats = ae.get('stats', [])
-                                try:
-                                    yds = int(float(stats[yds_idx])) if yds_idx < len(stats) else 0
-                                except (ValueError, TypeError):
-                                    yds = 0
-                                if yds > best_yds:
-                                    best_yds = yds
-                                    ad = ae.get('athlete', {})
-                                    hs = ad.get('headshot')
-                                    dv_parts = []
-                                    for w in want_cols:
-                                        try:
-                                            dv_parts.append(str(stats[ul.index(w)]))
-                                        except (ValueError, IndexError):
-                                            pass
-                                    best_entry = {
-                                        'name':       ad.get('displayName', ''),
-                                        # Mirror first, ESPN as fallback — the
-                                        # third and last place this page sourced
-                                        # a face straight from the box score.
-                                        'headshot':   (mirror_by_aid.get(str(ad.get('id') or ''))
-                                                       or (hs.get('href', '') if isinstance(hs, dict) else (hs or ''))),
-                                        'team':       t_name,
-                                        'stat':       ' · '.join(dv_parts) or f"{yds} YDS",
-                                        'is_home':    side == 'home',
-                                        'position':   (ad.get('position') or {}).get('abbreviation', ''),
-                                        'stat_detail': '',
-                                    }
-                            if best_entry:
-                                leaders.setdefault(api_key, []).append(best_entry)
-
-            # Defensive leaders — sacks and tackles. Always derived from the box
-            # score rather than ESPN's leaders array, which for college games
-            # carries only $ref placeholders and never covers defence anyway.
-            # Same side resolution and mirror-first headshot rule as above.
-            best_def = {}
-            for pb in boxscore_players:
-                t_obj  = pb.get('team') or {}
-                t_name = t_obj.get('displayName', '')
-                side   = (team_side_by_id.get(str(t_obj.get('id', '')))
-                          or team_side_map.get(t_name, 'home'))
-                for cat in (pb.get('statistics') or []):
-                    if 'defensive' not in (cat.get('name') or '').lower():
-                        continue
-                    ul = [l.upper() for l in cat.get('labels', [])]
-
-                    def _col(stats, name, _ul=ul):
-                        try:
-                            return float(stats[_ul.index(name)])
-                        except (ValueError, IndexError, TypeError):
-                            return 0.0
-
-                    for ae in (cat.get('athletes') or []):
-                        stats = ae.get('stats', [])
-                        ad    = ae.get('athlete', {})
-                        hs    = ad.get('headshot')
-                        solo  = _col(stats, 'SOLO')
-                        # Half-sacks are real: 1.5 must not print as 1.
-                        for key, value, detail in (
-                            ('sacks',   _col(stats, 'SACKS'), ''),
-                            ('tackles', _col(stats, 'TOT'),
-                             f'{int(solo)} SOLO' if solo > 0 else ''),
-                        ):
-                            if value <= 0:
-                                continue
-                            prev = best_def.get((key, side))
-                            if prev and prev['_v'] >= value:
-                                continue
-                            best_def[(key, side)] = {
-                                '_v':       value,
-                                'name':     ad.get('displayName', ''),
-                                'headshot': (mirror_by_aid.get(str(ad.get('id') or ''))
-                                             or (hs.get('href', '') if isinstance(hs, dict) else (hs or ''))),
-                                'team':     t_name,
-                                'is_home':  side == 'home',
-                                'position': (ad.get('position') or {}).get('abbreviation', ''),
-                                'stat':     '',
-                                'figure':   (str(int(value)) if float(value).is_integer()
-                                             else f'{value:g}'),
-                                'unit':     '',
-                                'detail':   detail,
-                            }
-            for (key, _side), entry in best_def.items():
-                entry.pop('_v', None)
-                leaders.setdefault(key, []).append(entry)
 
     except Exception as e:
         print(f"ESPN fetch error: {e}")
         import traceback; traceback.print_exc()
-
-    # A leader line split into the figure the row ranks by and the rest of it.
-    # Two producers reach here: ESPN's own displayValue ("24/29, 382 YDS, 4 TD")
-    # and the box-score fallback above, which dot-joins its columns in a fixed
-    # order ("24/29 · 382 · 4"). Both end up as one ranked figure plus support,
-    # so the panel can lead with the yards it sorted on instead of printing the
-    # whole line under a label that names only part of it.
-    def _split_leader_stat(api_key, raw):
-        raw = (raw or '').strip()
-        if not raw:
-            return '', '', ''
-        first_unit = {'rushingYards': 'CAR', 'receivingYards': 'REC'}.get(api_key, '')
-
-        def _zero_td(tok):
-            return bool(re.match(r'(?i)^0\s*TD$', tok.strip()))
-
-        if ',' in raw:
-            yards, rest = '', []
-            for tok in (t.strip() for t in raw.split(',') if t.strip()):
-                if 'YDS' in tok.upper() or 'YARDS' in tok.upper():
-                    yards = re.sub(r'(?i)\s*(YDS|YARDS)', '', tok).strip()
-                elif not _zero_td(tok):
-                    rest.append(tok)
-            return (yards, '', ', '.join(rest)) if yards else (raw, '', '')
-        parts = [t.strip() for t in raw.split('·') if t.strip()]
-        if len(parts) == 3:
-            # attempts/carries/catches, yards, touchdowns — in that fixed order.
-            bits = [f'{parts[0]} {first_unit}'.strip()]
-            try:
-                if int(float(parts[2])) > 0:
-                    bits.append(f'{int(float(parts[2]))} TD')
-            except (TypeError, ValueError):
-                pass
-            return parts[1], '', ', '.join(b for b in bits if b)
-        return raw, '', ''
-
-    structured_leaders = {}
-    leader_cats = [
-        ('passingYards',   'Passing Yards'),
-        ('rushingYards',   'Rushing Yards'),
-        ('receivingYards', 'Receiving Yards'),
-        ('sacks',          'Sacks'),
-        ('tackles',        'Tackles'),
-    ]
-    for api_key, display_name in leader_cats:
-        if api_key in leaders:
-            home_leader = None
-            away_leader = None
-            for p in leaders[api_key]:
-                # Split by the is_home already resolved upstream from ESPN's
-                # homeAway flag — NOT a fuzzy team-name match, which put a team on
-                # the wrong side whenever the two shared a word ("Penn State" vs
-                # "Boise State" both contain "state"), leaving one side blank.
-                if p.get('is_home'):
-                    home_leader = p
-                else:
-                    away_leader = p
-            for ldr in (home_leader, away_leader):
-                # The defensive entries arrive already split; only the two
-                # offensive producers need their line taken apart.
-                if ldr and not ldr.get('figure'):
-                    fig, unit, detail = _split_leader_stat(api_key, ldr.get('stat'))
-                    ldr['figure'], ldr['unit'], ldr['detail'] = fig, unit, detail
-
-            # Which of the two actually led the category. Marked so the panel
-            # can carry it in weight and brightness rather than leaving the
-            # reader to compare two numbers across the width of the card.
-            def _fig_num(ldr):
-                try:
-                    return float((ldr or {}).get('figure') or '')
-                except (TypeError, ValueError):
-                    return None
-            hv, av = _fig_num(home_leader), _fig_num(away_leader)
-            if hv is not None and av is not None and hv != av:
-                (home_leader if hv > av else away_leader)['leads'] = True
-
-            structured_leaders[api_key] = {
-                'label': display_name,
-                'home':  home_leader,
-                'away':  away_leader,
-            }
-
-    # Enrich game leaders with player IDs for linking
-    for cat_data in structured_leaders.values():
-        for side in ('home', 'away'):
-            ldr = cat_data.get(side)
-            if ldr:
-                _ln = (ldr.get('name') or '').lower()
-                ldr['player_id'] = (game_player_ids.get(_ln)
-                                    or name_to_player_id.get(_ln))
-                if not ldr.get('position'):
-                    ldr['position'] = name_to_position.get(_ln, '')
-                # "Jared Goff" -> "J. Goff". Everything after the first token is
-                # kept, so "Amon-Ra St. Brown" becomes "A. St. Brown" instead of
-                # losing half its surname.
-                _np = (ldr.get('name') or '').split()
-                ldr['short_name'] = (f"{_np[0][0]}. " + ' '.join(_np[1:])
-                                     if len(_np) > 1 else (ldr.get('name') or ''))
 
     # Top plays by win probability added — derived from the same WP series
     # that feeds the chart. Each sample carries the post-play win %, so the
@@ -9832,10 +9574,9 @@ def game_detail(game_id):
         stored_stats=stored_stats,
         market=None, preview=None,
         player_stats=player_stats,
-        leaders=leaders,
         drives=drives,
         box_score=box_score,
-        structured_leaders=structured_leaders,
+        gl_rows=game_leaders.rows(box_score),
         # Only the upcoming-game branch passed these, so a played game fell back
         # to full team names where the layout wants WIS / ALA.
         team_abbr=abbrs,

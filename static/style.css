@@ -2336,73 +2336,81 @@ a.t-label:hover { color: #7cc4ff; }
 .data-table tbody td.t-value { font-weight: 700; font-family: var(--font-display); font-stretch: var(--display-stretch); }
 .data-table tbody td.t-value.t-gold { font-weight: 800; }
 
-/* ── Game Leaders ─────────────────────────────────────────────────────────
-   Open columns: passing, rushing, receiving side by side, a face cut out over
-   a glow in the team colour, the category winner white and bold, the other
-   grey. Defence underneath as a text list. */
-.gl2 { padding: 20px 22px 0; margin-bottom: var(--s4); }
-.gl2-h { margin: 0; display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 18px; font-weight: 700; }
-.gl2-h::before { content: ""; width: 3px; height: 15px; border-radius: 2px; background: var(--accent); }
-.gl2-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 16px; }
-.gl2-col { display: flex; flex-direction: column; min-width: 0; padding: 0 18px; border-left: 1px solid rgba(255,255,255,0.07); }
-.gl2-col:first-child { padding-left: 0; border-left: 0; }
-.gl2-col:last-child { padding-right: 0; }
-.gl2-k { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-dim); }
-.gl2-row { display: flex; align-items: flex-end; gap: 12px; margin-top: 14px; min-width: 0; }
-.gl2-face { position: relative; display: flex; align-items: flex-end; justify-content: center; width: 74px; height: 58px; flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.08);
-    background: radial-gradient(ellipse 60% 70% at 50% 100%, color-mix(in srgb, var(--tint) 45%, transparent) 0%, transparent 70%); }
-.gl2-face img { width: 74px; height: 54px; object-fit: contain; object-position: bottom; }
-.gl2-initial { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: rgba(255,255,255,0.5); padding-bottom: 12px; }
-.gl2-text { display: flex; flex-direction: column; min-width: 0; padding-bottom: 2px; }
-.gl2-v { font-family: var(--font-display); font-size: 34px; line-height: 0.9; font-weight: 600; font-stretch: 80%; color: #7d8288; }
-.gl2-v.is-lead, .gl2-dv.is-lead { font-weight: 800; color: #fff; }
-.gl2-name { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--text-primary); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-a.gl2-name:hover { color: var(--accent); }
-a.gl2-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-.gl2-d { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gl2-def { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.07); }
-.gl2-def-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.gl2-def-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px; font-size: 14px; }
-.gl2-dv { font-family: var(--font-display); font-size: 22px; font-weight: 600; font-stretch: 80%; color: #7d8288; }
-.gl2-dn { min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gl2-dn .gl2-name { margin: 0; font-size: 14px; }
-.gl2-dd { color: var(--text-dim); font-weight: 500; }
-.gl2-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-.gl2 .gl-box { margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.07); border-radius: 0; }
-@media (max-width: 767.98px) {
-    .gl2 { padding: 18px 14px 0; }
-    .gl2-cols { grid-template-columns: 1fr; }
-    .gl2-col { padding: 14px 0 12px; border-left: 0; border-top: 1px solid rgba(255,255,255,0.07); }
-    .gl2-col:first-child { border-top: 0; padding-top: 0; }
-    .gl2-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 10px; }
-    .gl2-col .gl2-k { grid-column: 1 / -1; }
-    .gl2-row { gap: 8px; margin-top: 8px; }
-    .gl2-face { width: 52px; height: 42px; }
-    .gl2-face img { width: 52px; height: 38px; }
-    .gl2-v { font-size: 26px; }
-    .gl2-name { font-size: 12px; }
-    .gl2-d { font-size: 10px; }
-    .gl2-def { grid-template-columns: 1fr; gap: 16px; }
+/* ── Game leaders ─────────────────────────────────────────────────────────
+   One row per category on the hero's axis (away left, home right): faces in
+   a team-colour disc, the two numbers either side of a bar in team colours,
+   the leader's number white. A faint wash of both team colours across the top
+   ties it to the hero. Under 600px of box (phones, and the column between
+   tablet and desktop) each row stacks. */
+.gl { container-type: inline-size; position: relative; overflow: hidden; padding: 22px 26px 6px; margin-bottom: var(--s4); }
+.gl::before { content: ""; position: absolute; inset: 0 0 auto; height: 150px; pointer-events: none;
+    background: linear-gradient(100deg, color-mix(in srgb, var(--gl-a) 34%, transparent) 0%, transparent 42%, transparent 58%, color-mix(in srgb, var(--gl-h) 34%, transparent) 100%);
+    -webkit-mask-image: linear-gradient(180deg, #000, transparent); mask-image: linear-gradient(180deg, #000, transparent); }
+.gl > * { position: relative; }
+.gl-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.gl-h { margin: 0; font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 21px; font-weight: 850; line-height: 1.1; letter-spacing: -0.02em; }
+.gl-key { display: flex; align-items: center; gap: 18px; font-size: 13.5px; font-weight: 750; color: #c4c8cc; }
+.gl-key span { display: inline-flex; align-items: center; gap: 8px; }
+.gl-key img { width: 24px; height: 24px; object-fit: contain; }
+.gl-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 150px 72px minmax(0, 1fr); align-items: center; gap: 0 14px; min-height: 78px; border-top: 1px solid rgba(255,255,255,0.06); }
+.gl-side { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.gl-side--home { flex-direction: row-reverse; text-align: right; }
+.gl-face { position: relative; flex: none; width: 52px; height: 52px; overflow: hidden; border-radius: 50%; background: var(--tint); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); }
+.gl-face img { position: absolute; left: 50%; bottom: -2px; width: 72px; height: auto; transform: translateX(-50%); }
+.gl-face img.is-logo { top: 50%; bottom: auto; width: 30px; height: 30px; object-fit: contain; transform: translate(-50%, -50%); }
+.gl-initial { display: grid; place-items: center; height: 100%; font-family: var(--font-display); font-size: 20px; font-weight: 800; color: rgba(255,255,255,0.75); }
+.gl-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.gl-side--home .gl-who { align-items: flex-end; }
+.gl-name { max-width: 100%; overflow: hidden; font-size: 15.5px; font-weight: 700; color: #fff; text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
+a.gl-name:hover { color: var(--accent); }
+.gl-line { max-width: 100%; font-size: 13px; line-height: 1.35; color: var(--text-secondary); text-wrap: balance; }
+.gl-line b { white-space: nowrap; }
+.gl-line b { font-weight: 700; color: #ff9a9a; }
+.gl-v { font-family: var(--font-display); font-stretch: var(--display-stretch); font-size: 38px; font-weight: 850; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: #7d8288; }
+.gl-v.is-lead { color: #fff; }
+.gl-v--away { text-align: right; }
+.gl-mid { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gl-k { font-size: 13px; font-weight: 700; color: #c4c8cc; white-space: nowrap; }
+.gl-bar { display: flex; gap: 3px; width: 100%; height: 6px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,0.06); }
+.gl-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 4px 0 2px; border-top: 1px solid rgba(255,255,255,0.06); font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.gl-more { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; border: 0; background: none; font: inherit; font-size: 14.5px; font-weight: 700; color: var(--accent); cursor: pointer; transition: transform 0.16s cubic-bezier(.16,1,.3,1); }
+.gl-more:hover { color: #6cc0ff; }
+.gl-more:active { transform: scale(0.97); }
+.gl-more:focus-visible, .gl-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.gl-more svg { width: 15px; height: 15px; }
+@container (max-width: 780px) {
+    .gl-row { grid-template-columns: minmax(0, 1fr) 56px 118px 56px minmax(0, 1fr); gap: 0 10px; }
+    .gl-face { width: 44px; height: 44px; }
+    .gl-face img { width: 62px; }
+    .gl-v { font-size: 32px; }
 }
-@media (hover: none) { .gl-box { min-height: 44px; } }
-
-.gl-box {
-    display: block;
-    width: 100%;
-    padding: var(--s4) 0;
-    background: none;
-    border: 0;
-    font-family: var(--font-body);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--accent);
-    text-align: center;
-    cursor: pointer;
-    border-radius: var(--r-sm);
-    transition: color var(--t-fast);
+@container (max-width: 600px) {
+    .gl-row { grid-template-columns: 40px auto minmax(0, 1fr) minmax(0, 1fr) auto 40px; grid-template-areas: "k k k k k k" "fa va bar bar vh fh" "wa wa wa wh wh wh"; gap: 6px 10px; min-height: 0; padding: 12px 0 14px; }
+    .gl-side, .gl-mid { display: contents; }
+    .gl-face { width: 40px; height: 40px; }
+    .gl-face img { width: 56px; }
+    .gl-face img.is-logo { width: 24px; height: 24px; }
+    .gl-side--away .gl-face { grid-area: fa; }
+    .gl-side--home .gl-face { grid-area: fh; }
+    .gl-side--away .gl-who { grid-area: wa; }
+    .gl-side--home .gl-who { grid-area: wh; align-items: flex-end; text-align: right; }
+    .gl-v { font-size: 30px; }
+    .gl-v--away { grid-area: va; }
+    .gl-v--home { grid-area: vh; }
+    .gl-k { grid-area: k; justify-self: center; font-size: 12.5px; }
+    .gl-bar { grid-area: bar; align-self: center; }
+    .gl-name { font-size: 14.5px; }
+    a.gl-name { padding-block: 10px; margin-block: -10px; }
+    .gl-line { font-size: 12.5px; }
+    .gl-foot { flex-direction: column; align-items: stretch; gap: 0; text-align: center; }
+    .gl-more { justify-content: center; }
 }
-.gl-box:hover { color: #6cc0ff; }
-.gl-box:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 760px) {
+    .gl { padding: 18px 16px 4px; }
+    .gl-h { font-size: 19px; }
+    .gl-key { gap: 12px; font-size: 12.5px; }
+    .gl-key img { width: 20px; height: 20px; }
+}
 
 /* ── Game hero — the score is the focal point; everything scales fluidly
    with the viewport so wide screens get a genuinely bigger hero ───────── */
@@ -9229,10 +9237,6 @@ a.ttx-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px
     .pp-tiles[data-n="5"] .pp-tile { flex: 1 1 0; min-width: 0; padding-inline: 12px; }
 }
 
-/* Game page: phone targets and legibility (critique fixes). */
-@media (max-width: 760px) {
-    .gl2-name { padding-block: 12px; margin-block: -10px; }
-}
 .gpv-sum-a, .gpv-sum-h { font-variant-numeric: proportional-nums; }
 
 /* ═══════════════════════════════════════════════════════════════════════════

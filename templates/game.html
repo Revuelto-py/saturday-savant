@@ -745,76 +745,59 @@
 {% endif %}
 
 {# ── GAME LEADERS ──────────────────────────────────────────────────────────── #}
-{% if structured_leaders %}
-{# Open columns, no boxes: passing, rushing, receiving side by side, each with
-   the two teams' leaders stacked, the category winner in white and the other
-   in grey. Defence reads as a short text list underneath — tackles and sacks
-   are counts, and a row of faces for "1 sack" gave them more weight than the
-   numbers carry. The two defensive rows are derived from the box score in
-   main.py, because ESPN's leaders array never carries defence. #}
+{# One row per category on the hero's axis: the away team's leader on the left,
+   the home team's on the right, their two numbers either side of a bar in team
+   colours, the leader's number in white. Rows come from lib/game_leaders.py,
+   built from this page's box score, so interceptions thrown, fumbles lost and
+   takeaways are in it. Narrow boxes (phones, and the column between tablet
+   and desktop) stack each row: faces and numbers, then the names. #}
+{% if gl_rows %}
 {% set gl_pair = hero_pair(away_color, home_color) %}
-{% set gl_abbr = {'away': (team_abbr or {}).get('away') or away_team, 'home': (team_abbr or {}).get('home') or home_team} %}
-{% macro gl_name(p) -%}
-{%- if p.player_id %}<a class="gl2-name" href="{{ player_url(p.player_id, game_season) }}" title="{{ p.name }}">{{ p.short_name or p.name }}</a>
-{%- else %}<span class="gl2-name" title="{{ p.name }}">{{ p.short_name or p.name }}</span>{% endif -%}
-{%- endmacro %}
-<section class="gl2 dark-card" aria-labelledby="gl2-h">
-    <h2 class="gl2-h" id="gl2-h">Game leaders</h2>
-    <div class="gl2-cols">
-        {% for key, label in [('passingYards', 'Passing yds'), ('rushingYards', 'Rushing yds'), ('receivingYards', 'Receiving yds')] %}
-        {% set cat = structured_leaders.get(key) %}
-        {% if cat and (cat.away or cat.home) %}
-        <div class="gl2-col">
-            <span class="gl2-k">{{ label }}</span>
-            {% for side in ['away', 'home'] %}{% set p = cat[side] %}{% if p %}
-            <div class="gl2-row">
-                <span class="gl2-face" style="--tint:{{ gl_pair[0 if side == 'away' else 1] }}">
-                    {% if p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" width="74" height="54">{% else %}<span class="gl2-initial" aria-hidden="true">{{ p.name[0] if p.name else '?' }}</span>{% endif %}
-                </span>
-                <div class="gl2-text">
-                    <b class="gl2-v{{ ' is-lead' if p.leads }}">{{ p.figure or p.stat }}</b>
-                    {{ gl_name(p) }}
-                    <span class="gl2-d">{{ gl_abbr[side] }}{% if p.detail %} · {{ p.detail }}{% endif %}</span>
-                </div>
-            </div>
-            {% endif %}{% endfor %}
-        </div>
-        {% endif %}
-        {% endfor %}
+{% set gl_take = gl_rows | selectattr('k', 'equalto', 'Takeaways') | first %}
+{% macro gl_side(p, side) %}
+<div class="gl-side gl-side--{{ side }}">
+    <span class="gl-face" style="--tint:{{ white_knob(away_color if side == 'away' else home_color) }}">
+        {%- set logo = game[10] if side == 'away' else game[9] %}
+        {%- if p.team %}{% if logo %}<img class="is-logo" src="{{ logo }}" alt="" data-px="64">{% endif %}
+        {%- elif p.headshot %}<img src="{{ p.headshot }}" alt="" loading="lazy" width="72" height="52">
+        {%- else %}<span class="gl-initial" aria-hidden="true">{{ (p.full or p.name)[:1] }}</span>{% endif -%}
+    </span>
+    <div class="gl-who">
+        {% if p.player_id %}<a class="gl-name" href="{{ player_url(p.player_id, game_season) }}" title="{{ p.full }}">{{ p.name }}</a>{% else %}<span class="gl-name">{{ p.name }}</span>{% endif %}
+        {% if p.line or p.warn %}<span class="gl-line">{{ p.line }}{% if p.line and p.warn %} · {% endif %}{% if p.warn %}<b>{{ p.warn }}</b>{% endif %}</span>{% endif %}
     </div>
-
-    {% set defs = [] %}
-    {% for key, label in [('tackles', 'Tackles'), ('sacks', 'Sacks')] %}{% set cat = structured_leaders.get(key) %}{% if cat and (cat.away or cat.home) %}{% set _ = defs.append((label, cat)) %}{% endif %}{% endfor %}
-    {% if defs %}
-    <div class="gl2-def">
-        {% for label, cat in defs %}
-        <div class="gl2-def-col">
-            <span class="gl2-k">{{ label }}</span>
-            {% for side in ['away', 'home'] %}{% set p = cat[side] %}
-            <div class="gl2-def-row">
-                {% if p %}
-                <b class="gl2-dv{{ ' is-lead' if p.leads or not cat['home' if side == 'away' else 'away'] }}">{{ p.figure or p.stat }}</b>
-                <span class="gl2-dn">{{ gl_name(p) }}{% if p.detail or p.position %} <span class="gl2-dd">· {{ p.detail or p.position }}</span>{% endif %}</span>
-                {% else %}
-                <b class="gl2-dv">0</b><span class="gl2-dn gl2-dd">None</span>
-                {% endif %}
-                <span class="gl2-tag" style="color:{{ gl_pair[0 if side == 'away' else 1] }}">{{ gl_abbr[side] }}</span>
-            </div>
-            {% endfor %}
+</div>
+{% endmacro %}
+<section class="gl dark-card" aria-labelledby="gl-h" style="--gl-a:{{ white_knob(away_color) }};--gl-h:{{ white_knob(home_color) }}">
+    <div class="gl-head">
+        <h2 class="gl-h" id="gl-h">Game leaders</h2>
+        <div class="gl-key">
+            <span>{% if game[10] %}<img src="{{ game[10] }}" alt="" data-px="48">{% endif %}{{ a_ab }}</span>
+            <span>{{ h_ab }}{% if game[9] %}<img src="{{ game[9] }}" alt="" data-px="48">{% endif %}</span>
         </div>
-        {% endfor %}
     </div>
-    {% endif %}
-
-    <button type="button" class="gl-box"
-            onclick="switchTab('boxscore'); document.getElementById('tab-btn-boxscore').scrollIntoView({behavior:'smooth', block:'start'});">
-        Full Box Score
-    </button>
+    {% for r in gl_rows %}
+    <div class="gl-row">
+        {{ gl_side(r.away, 'away') }}
+        <b class="gl-v gl-v--away{{ ' is-lead' if r.away.lead }}">{{ r.away.fig }}</b>
+        <div class="gl-mid">
+            <span class="gl-k">{{ r.k }}</span>
+            <span class="gl-bar" role="img" aria-label="{{ r.k }}: {{ a_ab }} {{ r.away.fig }}, {{ h_ab }} {{ r.home.fig }}"><span style="flex:{{ r.share_away }} 1 0;background:{{ gl_pair[0] }}"></span><span style="flex:{{ r.share_home }} 1 0;background:{{ gl_pair[1] }}"></span></span>
+        </div>
+        <b class="gl-v gl-v--home{{ ' is-lead' if r.home.lead }}">{{ r.home.fig }}</b>
+        {{ gl_side(r.home, 'home') }}
+    </div>
+    {% endfor %}
+    <div class="gl-foot">
+        <span>{% if gl_take %}Turnovers · {{ a_ab }} {{ gl_take.home.fig }}, {{ h_ab }} {{ gl_take.away.fig }}{% endif %}</span>
+        <button type="button" class="gl-more"
+                onclick="switchTab('boxscore'); document.getElementById('tab-btn-boxscore').scrollIntoView({behavior:'smooth', block:'start'});">Full box score<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
 </section>
 {% endif %}
 
 {# ── PLAY BY PLAY ──────────────────────────────────────────────────────────── #}
-<div class="sp-wrap{{ ' has-kp' if live_cards }}" style="margin-top:{% if structured_leaders %}28px{% else %}0{% endif %}">
+<div class="sp-wrap{{ ' has-kp' if live_cards }}" style="margin-top:{% if gl_rows %}28px{% else %}0{% endif %}">
 
     <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:20px">
         <span class="section-header" style="margin-bottom:0;white-space:nowrap">Scoring Plays</span>
