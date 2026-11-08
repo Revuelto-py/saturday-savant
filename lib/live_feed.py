@@ -166,6 +166,16 @@ def field(d, abbr):
         drive_to_go = to_go                    # a new possession starts where the ball is
 
     text = end.get('downDistanceText') or ''
+    down, dist = _num(end.get('down')), _num(end.get('distance'))
+    goal = 'goal' in (end.get('shortDownDistanceText') or text).lower()
+    # A punt, kickoff or turnover hands the other team a first down, but ESPN can
+    # carry the kicking team's down across ("4th & Goal at ND 6" after Miami's
+    # punt to Notre Dame), so a change of possession is labelled by the rule.
+    if not score and side((p.get('start') or {}).get('team')) not in (None, poss):
+        goal = to_go <= 10
+        down, dist = 1, min(10, to_go)
+        spot = end.get('possessionText') or ''
+        text = f"1st & {'Goal' if goal else 10}" + (f' at {spot}' if spot else '')
     if score:
         label = {'td': 'Touchdown', 'fg': 'Field goal', 'safety': 'Safety'}[score] + (f', {abbr[scorer]}' if abbr.get(scorer) else '')
     elif text:
@@ -174,12 +184,11 @@ def field(d, abbr):
         label = ((p.get('type') or {}).get('text') or '').strip()
     if brk and brk != 'Halftime':
         label = f'{brk} · {label}' if label else brk
-    down, dist = _num(end.get('down')), _num(end.get('distance'))
     return {
         'poss': poss, 'toGo': to_go, 'driveToGo': drive_to_go,
         'down': down if down in (1, 2, 3, 4) else None,
         'distance': dist if dist and dist > 0 else None,
-        'goal': 'goal' in (end.get('shortDownDistanceText') or text).lower(),
+        'goal': goal,
         'label': label, 'score': score, 'brk': brk, 'id': str(p.get('id') or ''),
     }
 

@@ -416,7 +416,7 @@
             <span class="gls-h">T</span>
             {% for side, team, logo, qs, total, lost in [('away', away_team, game[10], away_q, game[4], home_won_final), ('home', home_team, game[9], home_q, game[3], away_won_final)] %}
             <span class="gls-team{{ ' is-lost' if lost }}">{% if logo %}<img src="{{ logo }}" alt="" data-px="44">{% endif %}<span class="gls-full">{{ team }}</span><span class="gls-ab">{{ ab.get(side) or team }}</span></span>
-            {% for i in range(num_periods) %}<span{% if lost %} class="is-lost"{% endif %}>{{ qs[i] | int if i < qs | length else '' }}</span>{% endfor %}
+            {% for i in range(num_periods) %}{% if i < qs | length %}<span{% if lost %} class="is-lost"{% endif %}>{{ qs[i] | int }}</span>{% else %}<span class="is-dim">{{ '–' if is_live else '' }}</span>{% endif %}{% endfor %}
             <b class="gls-t{{ ' is-lost' if lost }}">{{ total if total is not none else '' }}</b>
             {% endfor %}
         </div>

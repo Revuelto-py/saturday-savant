@@ -65,3 +65,17 @@ glitch = {'header': {'competitions': [{'status': {'type': {'name': 'STATUS_IN_PR
 g = live_feed.field(glitch, {'home': 'SC', 'away': 'TA&M'})
 assert g['poss'] == 'home' and g['toGo'] == 68 and g['driveToGo'] == 63 and g['label'] == '2nd & 15 · SC 32', g
 print('live field: ESPN spot glitch ok')
+
+# A punt hands Notre Dame the ball, but ESPN kept Miami's down: "4th & Goal at ND 6".
+# A change of possession is a first down by rule.
+punt = {'header': {'competitions': [{'status': {'type': {'name': 'STATUS_IN_PROGRESS'}, 'period': 1},
+        'competitors': [{'homeAway': 'home', 'team': {'id': '87', 'abbreviation': 'ND'}},
+                        {'homeAway': 'away', 'team': {'id': '2390', 'abbreviation': 'MIA'}}]}]},
+        'drives': {'current': {'team': {'id': '2390'}, 'plays': [
+            {'id': '9', 'type': {'text': 'Punt Return'}, 'start': {'team': {'id': '2390'}, 'possessionText': 'MIA 44'},
+             'end': {'team': {'id': '87'}, 'possessionText': 'ND 6', 'yardsToEndzone': 94, 'down': 4, 'distance': 6,
+                     'downDistanceText': '4th & Goal at ND 6', 'shortDownDistanceText': '4th & Goal'}}]}}}
+g = live_feed.field(punt, {'home': 'ND', 'away': 'MIA'})
+assert g['poss'] == 'home' and g['toGo'] == 94 and g['down'] == 1 and g['distance'] == 10 and not g['goal'], g
+assert g['label'] == '1st & 10 · ND 6' and g['driveToGo'] == 94, g
+print('live field: change of possession ok')

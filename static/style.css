@@ -8887,14 +8887,17 @@ a.hx-name:active{opacity:.72}
 /* Score by quarter, the band under the hero. */
 .gls{background:#0a0b0d;border-bottom:1px solid var(--border)}
 .gls-in{max-width:1200px;margin:0 auto;padding:14px 24px;overflow-x:auto}
-.gls-grid{display:grid;grid-template-columns:160px repeat(var(--n),52px) 60px;row-gap:8px;align-items:center;width:max-content;font-size:15px;font-variant-numeric:tabular-nums;color:#e7e9ea}
+/* Centred under the matchup and as wide as it reads well: the team column takes
+   two shares, each quarter and the total one, so overtimes fit without scrolling. */
+.gls-grid{display:grid;grid-template-columns:minmax(150px,2fr) repeat(var(--n),minmax(40px,1fr)) minmax(48px,1fr);row-gap:10px;align-items:center;width:100%;max-width:960px;margin:0 auto;font-size:16px;font-variant-numeric:tabular-nums;color:#e7e9ea}
 .gls-grid>*{text-align:center}
 .gls-h{font-size:13px;color:#9aa0a6}
 .gls-h.is-now{color:#e7e9ea;font-weight:700}
 .gls-team{display:flex;align-items:center;gap:10px;min-width:0;text-align:left!important;font-family:var(--font-display);font-stretch:var(--display-stretch);font-weight:750}
 .gls-team img{width:22px;height:22px;object-fit:contain}
 .gls-ab{display:none}
-.gls-t{font-weight:700}
+.gls-t{font-weight:800;color:#fff}
+.gls-grid .is-dim{color:rgba(255,255,255,.3)}
 .gls-grid .is-lost{color:#c4c8cc}
 .gls-t.is-lost{color:#9aa0a6}
 .gls-team.is-lost img{opacity:.7}
