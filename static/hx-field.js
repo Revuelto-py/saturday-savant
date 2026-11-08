@@ -5,7 +5,7 @@
      toGo       yards from the ball to the end zone they attack (ESPN yardsToEndzone)
      driveToGo  the same at the current drive's first snap
      down, distance, goal   the line to gain; goal = goal to go
-     label      the line above the field ("3rd & 1 · MINN 11")
+     label      down and distance or the play ("3rd & 1 · MINN 11"), for the field's aria-label
      score      'td' | 'fg' | 'safety' on the latest play; brk 'Halftime' | 'End of Q1'…
      id         that play's id, so a score flashes once, not on every refresh
    Any of it may be missing or wrong; step() keeps everything on the field.
@@ -115,7 +115,6 @@
     function paint(root, v) {
         var o = view(v), q = function (sel) { return root.querySelector(sel); };
         var set = function (sel, css) { var el = q(sel); if (el) el.style.cssText = css; };
-        var k = q('[data-k]'); if (k) k.textContent = o.label;
         var fd = q('.hx-fd'); if (fd) fd.setAttribute('aria-label', o.aria);
         set('[data-g]', o.field); set('[data-ball]', o.ball); set('[data-glyph]', o.glyph);
         set('[data-tint="a"]', o.tintA); set('[data-tint="h"]', o.tintH);

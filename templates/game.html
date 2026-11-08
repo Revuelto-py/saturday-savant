@@ -237,9 +237,11 @@
 {# One hero for every state. Each team's colour at its own edge with its logo as
    a watermark; the two teams big, with their numbers (Savant's win chance before
    kickoff, the score after) and the state between them (kickoff, live clock,
-   final). A live game adds the field under it: the ball, the drive and the line
-   to gain, placed and moved by static/hx-field.js from lib/live_feed.field().
-   Venue, conditions and the lines run along the bottom. Phones stack each team's
+   final). The band along the bottom says where the game stands: venue,
+   conditions and the lines, or for a live game the field (the ball, the drive
+   and the line to gain, placed and moved by static/hx-field.js from
+   lib/live_feed.field()), with down and distance under the clock and the venue
+   moved up into the top bar so every state keeps the same height. Phones stack each team's
    score over its logo and carry the score by quarter (or the lines before
    kickoff) inside the hero, so the band under it is for wider screens. #}
 {% set gx_state = 'live' if is_live else ('pre' if is_scheduled else 'final') %}
@@ -263,6 +265,7 @@
 {# "Q3 6:34" reads "Q3 · 6:34" on wide screens; "Halftime" and "End of Q1" stay as they are. #}
 {% set clock = ls.get('clock') or 'In progress' %}
 {% set clock_wide = clock.replace(' ', ' · ', 1) if ' ' in clock and (clock[:1] == 'Q' or clock.split(' ')[0].endswith('OT')) else clock %}
+{% set dd = ((fld.label if fld and fld.label else (ls.get('down') or '').replace(' at ', ' · ', 1)) if is_live else '') %}
 {% set fc_margin = ('Toss-up' if forecast.margin|abs < 1.5 else fav_ab ~ ' by ' ~ ('%.0f' % (forecast.margin|abs))) if forecast and forecast.margin is not none else '' %}
 {% set m = market.home_margin if market and market.home_margin is not none else none %}
 {% set vegas = ('Pick’em' if m|abs < 0.5 else (h_ab if m > 0 else a_ab) ~ ' −' ~ ('%g' % (m|abs))) if m is not none else '' %}
@@ -301,6 +304,7 @@
             <a class="hx-back" href="{{ url_for('games_hub', season=game_season, week=week_num, stype='postseason' if is_post else 'regular') }}" aria-label="Back to {{ back_label }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span class="hx-lg">{{ back_label }}</span></a>
             <span class="hx-sm hx-label">{{ gx_week }}</span>
+            {% if is_live %}<span class="hx-lg hx-where">{{ [notes, venue_line, wx, ('On ' ~ tv_broadcast) if tv_broadcast else ''] | select | join(' · ') }}</span>{% endif %}
         </div>
 
         <div class="hx-match{{ ' is-fc' if is_scheduled and forecast }}">
@@ -312,6 +316,7 @@
                 {% if is_live %}
                 <span class="hx-live"><span class="gx-dot" aria-hidden="true"></span>Live</span>
                 <span class="hx-big"><span class="hx-lg">{{ clock_wide }}</span><span class="hx-sm">{{ clock }}</span></span>
+                {% if dd %}<span class="hx-dd">{% for part in dd.split(' · ') %}<span>{{ part }}</span>{% endfor %}</span>{% endif %}
                 {% elif is_scheduled %}
                 <span class="hx-big">{{ game_time if game_time and game_time != 'TBD' else 'Time TBD' }}</span>
                 <span class="hx-small">{{ hero_date }}</span>
@@ -338,7 +343,6 @@
         {# The field keeps this element across the live refresh (game.html's script
            swaps everything around it), so the ball can travel to its new spot. #}
         <div class="hx-field" data-hx-field data-sit='{{ fld | tojson }}'>
-            <p class="hx-fd-k" data-k>{{ fld.label or '' }}</p>
             <div class="hx-fd" role="img" aria-label="Field{{ ': ' ~ fld.label if fld.label else '' }}">
                 <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
                     <g class="hx-fd-g" data-g>
@@ -358,8 +362,6 @@
             </div>
             <div class="hx-fd-nums" aria-hidden="true">{% for l, x in [(10, 16.67), (20, 25), (30, 33.33), (40, 41.67), (50, 50), (40, 58.33), (30, 66.67), (20, 75), (10, 83.33)] %}<span style="left:{{ x }}%">{{ l }}</span>{% endfor %}</div>
         </div>
-        {% elif is_live and (ls.get('poss_abbr') or ls.get('down')) %}
-        <p class="hx-line">{% if ls.get('poss_abbr') %}<b>{{ ls.get('poss_abbr') }} ball</b>{% endif %}{% if ls.get('poss_abbr') and ls.get('down') %} · {% endif %}{{ ls.get('down') }}</p>
         {% endif %}
 
         {% if has_qt %}
@@ -385,7 +387,7 @@
         {% endif %}
         {% endif %}
 
-        {% if venue_line or wx or rivalry_name or notes or tv_broadcast or fc_margin or vegas %}
+        {% if not is_live and (venue_line or wx or rivalry_name or notes or tv_broadcast or fc_margin or vegas) %}
         {# Phone-hidden items come last so the dots between items never lead a line. #}
         <div class="hx-foot">
             {% if venue_line %}<span>{{ venue_line }}</span>{% endif %}

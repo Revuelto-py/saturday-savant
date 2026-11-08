@@ -8787,7 +8787,8 @@ a.pp-log-row:focus-visible, a.pp-career-row:focus-visible { outline: 2px solid v
 .hx-in{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:20px 24px 28px}
 /* Two levels deep so the swap beats each element's own display. */
 .hx-in .hx-sm{display:none}
-.hx-top{display:flex;align-items:center;min-height:24px;font-size:13.5px}
+.hx-top{display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:24px;font-size:13.5px}
+.hx-where{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d0d4d8}
 .hx-back{display:inline-flex;align-items:center;gap:6px;color:#d0d4d8;text-decoration:none;transition:transform .16s var(--hx-ease)}
 .hx-back svg{width:15px;height:15px;flex:none}
 .hx-back:hover{color:#fff}
@@ -8818,6 +8819,9 @@ a.hx-name:active{opacity:.72}
 .hx-big{font-family:var(--font-display);font-stretch:var(--display-stretch);font-size:clamp(40px,4.2vw,50px);font-weight:850;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
 .hx-final{letter-spacing:.02em;text-transform:uppercase}
 .hx-small{font-size:15.5px;line-height:1.4;color:#d0d4d8}
+.hx-dd{display:flex;flex-wrap:wrap;justify-content:center;font-size:15.5px;line-height:1.4;color:#d0d4d8;font-variant-numeric:tabular-nums}
+.hx-dd span:first-child{font-weight:700;color:#fff}
+.hx-dd span+span::before{content:'·';margin:0 6px}
 .hx-troph{display:inline-flex;align-items:center;gap:6px;font-weight:650;color:#f3d38a}
 .hx-troph svg{width:16px;height:16px;flex:none}
 .hx-mid .hx-troph{font-size:14px}
@@ -8844,9 +8848,8 @@ a.hx-name:active{opacity:.72}
 @keyframes hxGrow{from{opacity:0;transform:scale(.94)}}
 
 /* The field: a trapezoid in perspective, end zones in each team's colour. */
-.hx-field{width:640px;max-width:100%;margin:32px auto 0}
-.hx-fd-k{margin:0 0 10px;text-align:center;font-size:16px;font-weight:700;color:#e7e9ea;font-variant-numeric:tabular-nums}
-.hx-fd{position:relative;height:60px}
+.hx-field{width:640px;max-width:100%;margin:26px auto -8px}
+.hx-fd{position:relative;height:44px}
 .hx-fd svg{display:block;width:100%;height:100%;overflow:visible}
 .hx-fd-g{transition:opacity .4s ease}
 .hx-fd-turf{fill:rgba(255,255,255,.07);stroke:rgba(255,255,255,.2);stroke-width:1;vector-effect:non-scaling-stroke}
@@ -8863,7 +8866,7 @@ a.hx-name:active{opacity:.72}
 .hx-fd-tint{position:absolute;inset:0;transition:opacity .45s ease}
 .hx-fd-tint--a{background:var(--hx-a)}.hx-fd-tint--h{background:var(--hx-h)}
 .hx-fd-glyph{position:relative;width:15px;height:15px;transition:transform .45s cubic-bezier(.2,1,.3,1)}
-.hx-fd-nums{position:relative;height:18px;margin-top:7px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px;color:#aeb4ba}
+.hx-fd-nums{position:relative;height:16px;margin-top:5px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:13px;color:#aeb4ba}
 .hx-fd-nums span{position:absolute;transform:translateX(-50%)}
 @media (prefers-reduced-motion:reduce){
     .hx-enter .hx-team,.hx-enter .hx-mid,.hx-enter .hx-num,.hx-enter .hx-field,.hx-enter .hx-foot{animation:none}
@@ -8910,9 +8913,9 @@ a.hx-name:active{opacity:.72}
     .hx-mid{min-width:150px;gap:8px}
     .hx-big{font-size:clamp(28px,3.6vw,36px)}
     .hx-small{font-size:14px}
-    .hx-field{width:520px;margin-top:28px}
-    .hx-fd-k{font-size:15px}
-    .hx-fd{height:52px}
+    .hx-field{width:520px;margin-top:22px}
+    .hx-fd{height:40px}
+    .hx-dd{font-size:14px}
     .hx-fd-ball{width:22px;height:22px;margin:-11px 0 0 -11px}
     .hx-fd-nums{font-size:12px}
     .hx-foot{margin-top:28px;padding-top:15px;font-size:13.5px}
@@ -8949,13 +8952,14 @@ a.hx-name:active{opacity:.72}
     .hx-line .hx-troph{font-size:14px}
     .hx-call{white-space:normal;flex-wrap:wrap}
     .hx-call a{padding-block:12px;margin-block:-12px}
-    .hx-field{margin-top:20px}
-    .hx-fd-k{margin-bottom:9px;font-size:14.5px;color:#d0d4d8}
-    .hx-fd{height:40px}
-    .hx-fd-ball{width:19px;height:19px;margin:-9.5px 0 0 -9.5px;box-shadow:0 0 0 1.5px #fff,0 4px 10px rgba(0,0,0,.45)}
+    .hx-dd{flex-direction:column;font-size:13px;line-height:1.3}
+    .hx-dd span+span::before{content:none}
+    .hx-field{margin:14px auto 0}
+    .hx-fd{height:32px}
+    .hx-fd-ball{width:18px;height:18px;margin:-9px 0 0 -9px;box-shadow:0 0 0 1.5px #fff,0 4px 10px rgba(0,0,0,.45)}
     .hx-fd-glyph{width:12px;height:12px}
     .hx-fd-drv{height:6px;margin-top:-3px}
-    .hx-fd-nums{height:16px;margin-top:6px;font-size:11.5px}
+    .hx-fd-nums{height:15px;margin-top:4px;font-size:11px}
     .hx-in .hx-qt{display:block;margin-top:20px}
     .hx-foot{gap:4px 6px;margin-top:16px;padding-top:0;border-top:0;font-size:12.5px;color:#aeb4ba}
     .hx-foot>span{padding:0}
