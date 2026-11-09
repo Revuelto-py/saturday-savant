@@ -193,6 +193,43 @@ def field(d, abbr):
     }
 
 
+def board_situation(event):
+    """The field's situation from one event on ESPN's scoreboard, for the home
+    page's game of the week: the shape field() builds from a full summary, read
+    from the scoreboard's situation block (the spot, down and distance, and the
+    last play's drive). No scores are flashed here: the block has moved on to the
+    next snap by the time a touchdown shows. None before the first snap."""
+    comp = (event.get('competitions') or [{}])[0]
+    s = comp.get('situation') or {}
+    st = event.get('status') or {}
+    name = (st.get('type') or {}).get('name', '')
+    brk = ('Halftime' if name == 'STATUS_HALFTIME' else
+           f"End of {_period(st.get('period') or 0)}" if name == 'STATUS_END_PERIOD' else None)
+    teams = comp.get('competitors') or []
+    side_of = {str((c.get('team') or {}).get('id')): c.get('homeAway') for c in teams}
+    esp = {c.get('homeAway'): (c.get('team') or {}).get('abbreviation') for c in teams}
+    poss = side_of.get(str(s.get('possession') or ''))
+    to_go = _to_go(s, poss, esp) if poss else None
+    if to_go is None:
+        return {'brk': brk, 'label': brk} if brk else None
+    lp = s.get('lastPlay') or {}
+    start = (lp.get('drive') or {}).get('start') or {}
+    drive = (_to_go({'possessionText': start.get('text')}, poss, esp)
+             if start.get('text') and side_of.get(str((lp.get('team') or {}).get('id'))) == poss else None)
+    text = s.get('downDistanceText') or ''
+    label = text.replace(' at ', ' · ', 1) if text else (s.get('possessionText') or '')
+    if brk and brk != 'Halftime':
+        label = f'{brk} · {label}' if label else brk
+    down, dist = _num(s.get('down')), _num(s.get('distance'))
+    return {
+        'poss': poss, 'toGo': to_go, 'driveToGo': to_go if drive is None else drive,
+        'down': down if down in (1, 2, 3, 4) else None,
+        'distance': dist if dist and dist > 0 else None,
+        'goal': 'goal' in (s.get('shortDownDistanceText') or text).lower(),
+        'label': label, 'score': None, 'brk': brk, 'id': str(lp.get('id') or ''),
+    }
+
+
 def _athletes(d, side_of, mirror):
     """aid -> {name, short, side, shot, cats}; (side, jersey) -> [aid]."""
     ath, by_jersey = {}, {}

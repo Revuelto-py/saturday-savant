@@ -4044,6 +4044,65 @@ def top_games(games, forecasts, limit=TOP_GAMES_N, season=None):
     scored.sort(key=lambda x: (-x[0], x[1].get('day_key') or '', x[1]['id']))
     return [g for _, g in scored[:limit]]
 
+def _stored_quarters(cursor, game_id):
+    """{'away': [...], 'home': [...]} points by period from a finished game's
+    stored ESPN summary, or None."""
+    cursor.execute('SELECT summary_gz FROM game_summaries WHERE game_id = %s', (game_id,))
+    row = cursor.fetchone()
+    if not row or not row[0]:
+        return None
+    comp = (json.loads(gzip.decompress(bytes(row[0]))).get('header') or {}).get('competitions') or [{}]
+    out = {}
+    for c in comp[0].get('competitors') or []:
+        pts = []
+        for ls in c.get('linescores') or []:
+            try:
+                pts.append(int(float(ls.get('displayValue', ls.get('value')))))
+            except (TypeError, ValueError):
+                pts.append(0)
+        out[c.get('homeAway')] = pts
+    return out if out.get('away') and out.get('home') else None
+
+
+def _gotw_detail(cursor, season, g):
+    """What the game of the week card shows beyond a game card: each side's
+    colour as the game page hero paints it (white_knob, hero_pair), records,
+    the forecast's margin and, once played, whether it called the winner and the
+    score by quarter. A game in progress takes the live board's score, clock and
+    field situation (memoized, the same one /api/live serves)."""
+    ah, hh = team_hex(g.get('away_color'), '#5a2b2b'), team_hex(g.get('home_color'), '#2b3a55')
+    ka, kh = white_knob(ah), white_knob(hh)
+    pa, ph = hero_pair(ah, hh)
+    out = {'ka': ka, 'ka2': shade(ka, 0.55), 'kh': kh, 'kh2': shade(kh, 0.55), 'pa': pa, 'ph': ph}
+    cursor.execute("""
+        SELECT t, SUM(w), SUM(l) FROM (
+            SELECT home_team AS t, (home_points > away_points)::int AS w, (home_points < away_points)::int AS l
+              FROM games WHERE season = %(s)s AND completed = 1 AND home_team IN (%(a)s, %(h)s)
+            UNION ALL
+            SELECT away_team, (away_points > home_points)::int, (away_points < home_points)::int
+              FROM games WHERE season = %(s)s AND completed = 1 AND away_team IN (%(a)s, %(h)s)
+        ) x GROUP BY t""", {'s': season, 'a': g['away'], 'h': g['home']})
+    rec = {t: f'{w or 0}-{l or 0}' for t, w, l in cursor.fetchall()}
+    out['away_rec'], out['home_rec'] = rec.get(g['away'], ''), rec.get(g['home'], '')
+    cursor.execute('SELECT predicted_margin FROM game_predictions WHERE game_id = %s', (g['id'],))
+    row = cursor.fetchone()
+    m = row[0] if row else None
+    fav = g['home'] if g['home_p'] >= 0.5 else g['away']
+    out['fc_line'] = '' if m is None else ('Toss-up' if abs(m) < 1.5 else f'{fav} by {abs(m):.0f}')
+    if g['completed'] and g.get('home_pts') is not None and g.get('away_pts') is not None:
+        out['called'] = (g['home_p'] >= 0.5) == (g['home_pts'] > g['away_pts'])
+        out['quarters'] = _stored_quarters(cursor, g['id'])
+    elif not g['completed']:
+        b = (_live_board() or {}).get(str(g['id'])) or {}
+        if b.get('state') == 'live' or g.get('live'):
+            out['live'] = True
+            out['clock'] = b.get('status') or 'Live'
+            out['sit'] = b.get('sit')
+            if b.get('home') is not None and b.get('away') is not None:
+                out['home_pts'], out['away_pts'] = b['home'], b['away']
+    return out
+
+
 def _home_briefing(cursor, season, games, forecasts, top, pregame):
     """The home page's "week in one screen" panels. Every panel is optional:
     each is None/empty until its data exists (no ratings before week 1, no
@@ -4077,6 +4136,11 @@ def _home_briefing(cursor, season, games, forecasts, top, pregame):
                              team_hex(gotw.get('home_color'), '#2b3a55'))
         hp = probs[gotw['id']]
         gotw = dict(gotw, a_col=a, h_col=h, home_p=hp, away_p=1 - hp)
+        try:
+            gotw.update(_gotw_detail(cursor, season, gotw))
+        except Exception:
+            cursor.connection.rollback()
+            app.logger.exception('game of the week detail')
 
     # Upset watch: the best chance to beat a team ranked above you, by the AP
     # poll (ranked beats unranked) or, against a Savant top-25 team, by Savant
@@ -14132,6 +14196,8 @@ def _live_board():
     for gid, g in (espn_board.fetch(timeout=4) or {}).items():
         if g['state'] in ('live', 'final') and out.get(gid, {}).get('state', 'pre') == 'pre':
             out[gid] = g
+        elif g.get('sit') and out.get(gid, {}).get('state') == 'live':
+            out[gid]['sit'] = g['sit']      # CFBD has no field position; ESPN's rides along
 
     # Inside the memoized call on purpose: this reconciles at most once per
     # LIVE_TTL per worker, instead of once per request.

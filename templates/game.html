@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% import "_passing_chart.html" as pc %}
+{% from "_hx_field.html" import hx_field %}
 {% block title %}{{ away_team }} vs {{ home_team }} · Saturday Savant{% endblock %}
 {% block og_title %}{{ away_team }} {{ game[4] if game[4] is not none else '' }} – {{ game[3] if game[3] is not none else '' }} {{ home_team }}{% if game[3] is not none and not is_live %} (Final){% endif %} · Saturday Savant{% endblock %}
 {% block og_description %}{{ away_team }} at {{ home_team }}{% if notes %} · {{ notes }}{% endif %}{% if game_date %} · {{ game_date }}{% endif %}. Box score, win probability, drives, and play-by-play on Saturday Savant.{% endblock %}
@@ -342,26 +343,7 @@
         {% if fld %}
         {# The field keeps this element across the live refresh (game.html's script
            swaps everything around it), so the ball can travel to its new spot. #}
-        <div class="hx-field" data-hx-field data-sit='{{ fld | tojson }}'>
-            <div class="hx-fd" role="img" aria-label="Field{{ ': ' ~ fld.label if fld.label else '' }}">
-                <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
-                    <g class="hx-fd-g" data-g>
-                        <path class="hx-fd-turf" d="M50 0 L950 0 L1000 100 L0 100 Z"/>
-                        <path class="hx-fd-ez hx-fd-ez--a" d="M50.0 0 L125.0 0 L83.3 100 L0.0 100 Z"/>
-                        <path class="hx-fd-ez hx-fd-ez--h" d="M875.0 0 L950.0 0 L1000.0 100 L916.7 100 Z"/>
-                        <path class="hx-fd-fl" data-fl="a" d="M50.0 0 L125.0 0 L83.3 100 L0.0 100 Z" style="opacity:0"/>
-                        <path class="hx-fd-fl" data-fl="h" d="M875.0 0 L950.0 0 L1000.0 100 L916.7 100 Z" style="opacity:0"/>
-                        <path class="hx-fd-yl" d="M200.0 0 L166.7 100 M275.0 0 L250.0 100 M350.0 0 L333.3 100 M425.0 0 L416.7 100 M575.0 0 L583.3 100 M650.0 0 L666.7 100 M725.0 0 L750.0 100 M800.0 0 L833.3 100"/>
-                        <path class="hx-fd-50" d="M500.0 0 L500.0 100"/>
-                        <path class="hx-fd-ltg" data-ltg="0" d="M0 0" style="opacity:0"/>
-                        <path class="hx-fd-ltg" data-ltg="1" d="M0 0" style="opacity:0"/>
-                    </g>
-                </svg>
-                <span class="hx-fd-drv" data-drv="0" style="opacity:0"></span><span class="hx-fd-drv" data-drv="1" style="opacity:0"></span>
-                <span class="hx-fd-bw" data-ball style="opacity:0"><span class="hx-fd-ball"><span class="hx-fd-tint hx-fd-tint--a" data-tint="a"></span><span class="hx-fd-tint hx-fd-tint--h" data-tint="h"></span><svg class="hx-fd-glyph" data-glyph viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">{{ ball_path }}</svg></span></span>
-            </div>
-            <div class="hx-fd-nums" aria-hidden="true">{% for l, x in [(10, 16.67), (20, 25), (30, 33.33), (40, 41.67), (50, 50), (40, 58.33), (30, 66.67), (20, 75), (10, 83.33)] %}<span style="left:{{ x }}%">{{ l }}</span>{% endfor %}</div>
-        </div>
+        {{ hx_field(fld) }}
         {% endif %}
 
         {% if has_qt %}

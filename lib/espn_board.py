@@ -20,6 +20,8 @@ import json
 import urllib.request
 from zoneinfo import ZoneInfo
 
+from lib import live_feed
+
 SCOREBOARD = ('https://site.api.espn.com/apis/site/v2/sports/football/'
               'college-football/scoreboard')
 
@@ -35,7 +37,8 @@ def _slate_date():
 
 
 def fetch(dates=None, timeout=6):
-    """{game_id: {'state', 'home', 'away', 'status'}} for one day's games.
+    """{game_id: {'state', 'home', 'away', 'status'[, 'sit']}} for one day's
+    games; 'sit' (live games) is live_feed.board_situation's field situation.
 
     Returns {} on any failure — every caller treats this as an optional extra
     opinion, so a timeout or a shape change must never take a page down with it.
@@ -72,4 +75,11 @@ def fetch(dates=None, timeout=6):
             # which is what a reader checking a second source would see.
             'status': 'Final' if state == 'final' else (stype.get('shortDetail') or 'Live'),
         }
+        # Where the ball is, for the home page's game of the week (its field and
+        # possession mark ride the same 45-second poll as the scores).
+        if state == 'live':
+            try:
+                out[gid]['sit'] = live_feed.board_situation(event)
+            except Exception:
+                pass
     return out
