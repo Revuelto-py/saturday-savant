@@ -122,18 +122,25 @@ html {
 
 /* Tablet band (768–991px): the desktop navbar is in force here but the rule
    above, which lets the search box flex, is not — so the box sat at a rigid
-   220px with flex-shrink:0. At exactly 768px the brand (83px), the links at
-   their nowrap content width (428px) and that box plus gaps need 767px inside
-   a 711px row, and since the box was the only child able to give and refused
-   to, it pushed 16px past the viewport. Every page scrolled sideways at that
-   one width. Letting it shrink to a usable floor absorbs the difference. */
+   220px with flex-shrink:0 and pushed the row past the viewport. A first fix
+   gave it a 148px floor, sized for 428px of links; once Compare and More
+   joined, the links measured 525px and the floor itself overflowed (search
+   ended at 809px on a 768px screen). Any fixed floor goes stale the next time
+   a link is added, so there is none: the search takes whatever the brand and
+   links leave, and the links tighten here so that remainder stays typeable.
+   The tightening is fluid (8px at 768 → ~13px at 991 → desktop's 14px) so the
+   links don't jump at 992. Focus still grows the box toward 300px where the
+   row has room; the shrink clamps it where it doesn't. */
 @media (min-width: 768px) and (max-width: 991.98px) {
+    .nav-links a, .nav-more-trigger { padding-left: clamp(8px, 2.2vw - 9px, 14px); padding-right: clamp(8px, 2.2vw - 9px, 14px); }
     .search-wrapper {
         flex-shrink: 1;
-        min-width: 148px;
+        min-width: 0;
     }
-    /* Without this the focus expansion re-inflates it past the row again */
-    .search-wrapper:focus-within { width: 220px; }
+    .nav-search-input { text-overflow: ellipsis; }
+    /* The box can be narrow here, so results get their own width, anchored to
+       its right edge (the row's end) so they open leftward and stay on screen. */
+    .search-dropdown { left: auto; width: 320px; }
 }
 @media (min-width: 1200px) {
     /* Fluid ceiling. 82vw keeps a proportional margin at every size; the cap
