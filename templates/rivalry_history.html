@@ -1,164 +1,202 @@
 {% extends "base.html" %}
 {% block title %}{{ rivalry_name }} · {{ team_a }} vs {{ team_b }} · Saturday Savant{% endblock %}
-{% block og_description %}{{ rivalry_name }} — {{ team_a }} vs {{ team_b }} head to head since {{ window_start }}: series record, every meeting, and how the games have gone.{% endblock %}
+{% block og_description %}{{ rivalry_name }}: {{ team_a }} vs {{ team_b }} head to head since {{ window_start }}, with the series record, every meeting{% if nxt %}, the next one{% endif %} and how the games have gone.{% endblock %}
 
 {% block content %}
-{% set c1 = ta_color or '#1c9cf0' %}
-{% set c2 = tb_color or '#8a8f98' %}
+{# One series in full (canvas A, "Ledger"). The hero borrows the game hero:
+   each side's colour as a quiet glow from its own edge and a hairline across
+   the top, the record big in the middle, and a strip of who won each year
+   along the bottom. Team colours arrive as --a / --b (primaries, for bars) and
+   --al / --bl (lifted to read on black, for glows and hairlines). #}
+{% macro tname(t) %}<span class="rvs-tn-l">{{ t }}</span><span class="rvs-tn-s">{{ abbr[t] }}</span>{% endmacro %}
+{% macro chev() %}<svg class="rvs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>{% endmacro %}
+<div class="page-wrapper rvs" style="--a: {{ ta_color }}; --b: {{ tb_color }}; --al: {{ ta_lift }}; --bl: {{ tb_lift }}">
+    <a class="rvs-back" href="/rivalries">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+        All rivalries
+    </a>
 
-{# ── HERO ──────────────────────────────────────────────────────────────────
-   Same recipe as the game hero: each programme's colour blooming in from its
-   own side at near-full strength, with a shaped scrim that is darkest through
-   the middle where the record sits. A rivalry page IS a matchup page, so it
-   should read like one. #}
-<div class="rvh-hero" style="--rv-a: {{ c1 }}; --rv-b: {{ c2 }}">
-    <div class="rvh-hero-wash" aria-hidden="true"></div>
-    <div class="page-wrapper rvh-hero-inner">
-
-        <a class="rvh-back" href="/rivalries">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 12H6M11 18l-6-6 6-6"></path>
-            </svg>
-            All rivalries
-        </a>
-
-        <h1 class="rvh-title">{{ rivalry_name }}</h1>
-
-        <div class="rvh-ledger">
-            <a class="rvh-team" href="/team/{{ team_a|team_slug }}">
-                {% if ta_logo %}<img src="{{ ta_logo }}" alt="" width="64" height="64">{% endif %}
-                <span class="rvh-team-name">{{ team_a }}</span>
-            </a>
-
-            <div class="rvh-score">
-                <div class="rvh-nums">
-                    <span class="rvh-num {{ 'is-lead' if series.leader == team_a }}">{{ series.a_wins }}</span>
-                    <span class="rvh-dash">–</span>
-                    <span class="rvh-num {{ 'is-lead' if series.leader == team_b }}">{{ series.b_wins }}</span>
-                </div>
-                <span class="rvh-bar" role="img"
-                      aria-label="{{ team_a }} {{ series.a_wins }}, {{ team_b }} {{ series.b_wins }} since {{ window_start }}">
-                    <span class="rvh-bar-a" style="width: {{ series.a_share }}%"></span>
-                </span>
-                <div class="rvh-verdict">
-                    {% if not series.meetings %}
-                        No meetings since {{ window_start }}
-                    {% elif series.leader %}
-                        {{ series.leader }} leads since {{ window_start }}
-                    {% else %}
-                        Even since {{ window_start }}
-                    {% endif %}
-                </div>
+    <section class="rvs-hero" aria-label="{{ team_a }} {{ series.a_wins }}, {{ team_b }} {{ series.b_wins }} since {{ window_start }}">
+        <div class="rvs-top">
+            <div><span class="rvs-eyebrow">{{ conf_label }}</span><h1 class="rvs-title">{{ rivalry_name }}</h1></div>
+            <div class="rvs-meta">
+                {% if series.meetings %}<b>{{ series.meetings }} meeting{{ '' if series.meetings == 1 else 's' }}</b> since {{ window_start }}{% else %}No meetings since {{ window_start }}{% endif %}
+                {% if nxt %}<br>Next: <b>{{ nxt.date }}</b> {{ 'at a neutral site' if nxt.neutral else 'at ' ~ nxt.home_team }}{% endif %}
             </div>
-
-            <a class="rvh-team rvh-team-end" href="/team/{{ team_b|team_slug }}">
-                {% if tb_logo %}<img src="{{ tb_logo }}" alt="" width="64" height="64">{% endif %}
-                <span class="rvh-team-name">{{ team_b }}</span>
+        </div>
+        <div class="rvs-mid">
+            <a class="rvs-side" href="/team/{{ slug_a }}">
+                {% if ta_logo %}<img src="{{ ta_logo }}" alt="" width="96" height="96">{% endif %}
+                <b>{{ team_a }}</b><span>{{ sub_a[0] }}<span class="rvs-lead-l">{{ sub_a[1] }}</span></span>
+            </a>
+            <div class="rvs-ctr">
+                <div class="rvs-big"><span class="{{ 'is-dim' if series.meetings and series.a_wins < series.b_wins }}">{{ series.a_wins }}</span><i>–</i><span class="{{ 'is-dim' if series.meetings and series.b_wins < series.a_wins }}">{{ series.b_wins }}</span></div>
+                <span class="rvs-lead">{% if series.leader %}<b>{{ series.leader }}</b> leads<span class="rvs-lead-l"> the series since {{ window_start }}</span>{% elif series.meetings %}Even since {{ window_start }}{% else %}No meetings since {{ window_start }}{% endif %}</span>
+                {% if series.meetings %}
+                <span class="rvs-sb" aria-hidden="true">{% if series.a_wins %}<i style="flex-grow: {{ series.a_share }}; background: var(--a)"></i>{% endif %}{% if series.b_wins %}<i style="flex-grow: {{ 100 - series.a_share }}; background: var(--b)"></i>{% endif %}</span>
+                {% endif %}
+            </div>
+            <a class="rvs-side" href="/team/{{ slug_b }}">
+                {% if tb_logo %}<img src="{{ tb_logo }}" alt="" width="96" height="96">{% endif %}
+                <b>{{ team_b }}</b><span>{{ sub_b[0] }}<span class="rvs-lead-l">{{ sub_b[1] }}</span></span>
             </a>
         </div>
-
-        {% if series.streak_team %}
-        <div class="rvh-streak">{{ series.streak_team }} has won the last {{ series.streak }}</div>
-        {% endif %}
-    </div>
-</div>
-
-<div class="page-wrapper rvh-body">
-
-    {# The honest caveat, directly under the number it qualifies rather than in
-       a footnote. This page used to print the same record under the words
-       "All-time series record". #}
-    <p class="rvh-window">
-        <span class="rv-window">{{ window_start }}–{{ window_end }}</span>
-        This series record counts only the meetings Saturday Savant holds data for.
-        {{ team_a }} and {{ team_b }} have almost certainly played many more times than the
-        {{ series.meetings }} below — those results are not in this database, and are not
-        counted here.
-    </p>
-
-    {% if series.meetings %}
-    <div class="rvh-stats">
-        <div class="rvh-stat">
-            <span class="rvh-stat-val">{{ series.meetings }}</span>
-            <span class="rvh-stat-key">Meetings</span>
-        </div>
-        {% if avg_margin is not none %}
-        <div class="rvh-stat">
-            <span class="rvh-stat-val">{{ avg_margin }}</span>
-            <span class="rvh-stat-key">Avg margin</span>
+        {% if cols %}
+        <div class="rvs-form">
+            <span class="rvs-form-l">Who won each year</span>
+            <ol class="rvs-chips" style="--n: {{ cols|length }}">
+                {% for c in cols %}
+                {% if c.kind == 'game' and c.side %}
+                <li class="rvs-ch" title="{{ c.season }}: {{ c.g.winner }} {{ c.score }}"><img src="{{ ta_logo if c.side == 'a' else tb_logo }}" alt="{{ c.g.winner }}" width="26" height="26"><span><span class="rvs-yl">{{ c.season }}</span><span class="rvs-ys">'{{ (c.season|string)[2:] }}</span></span></li>
+                {% elif c.kind == 'game' %}
+                <li class="rvs-ch is-none" title="{{ c.season }}: tied {{ c.score }}"><em>Tie</em><span><span class="rvs-yl">{{ c.season }}</span><span class="rvs-ys">'{{ (c.season|string)[2:] }}</span></span></li>
+                {% elif c.kind == 'none' %}
+                <li class="rvs-ch is-none" title="{{ c.season }}: not played"><em><span class="rvs-yl">No game</span><span class="rvs-ys">—</span></em><span><span class="rvs-yl">{{ c.season }}</span><span class="rvs-ys">'{{ (c.season|string)[2:] }}</span></span></li>
+                {% else %}
+                <li class="rvs-ch is-next" title="{{ c.g.date }}: next meeting"><em><span class="rvs-yl">{{ c.g.short }}</span><span class="rvs-ys">Next</span></em><span><span class="rvs-yl">{{ c.season }}</span><span class="rvs-ys">'{{ (c.season|string)[2:] }}</span></span></li>
+                {% endif %}
+                {% endfor %}
+            </ol>
         </div>
         {% endif %}
-        {% if avg_total is not none %}
-        <div class="rvh-stat">
-            <span class="rvh-stat-val">{{ avg_total }}</span>
-            <span class="rvh-stat-key">Avg total points</span>
-        </div>
+    </section>
+
+    {% if nxt %}
+    <a class="rvs-nx" href="/game/{{ nxt.id }}" aria-label="Next meeting: {{ nxt.away_team }} {{ 'vs' if nxt.neutral else 'at' }} {{ nxt.home_team }}, {{ nxt.date }}{% if nxt.time != 'TBD' %} {{ nxt.time }}{% endif %}.{% if nxt.fav %} Savant Forecast {{ nxt.fav }} {{ nxt.fav_pct }} percent.{% endif %} Open the game preview.">
+        <span class="rvs-nx-w">
+            <span class="rvs-k">Next meeting</span>
+            <b>{{ nxt.date }}{% if nxt.time != 'TBD' %} · {{ nxt.time }}{% endif %}</b>
+            <span>{{ nxt.away_team }} {{ 'vs' if nxt.neutral else 'at' }} {{ nxt.home_team }} · {{ nxt.label }}</span>
+        </span>
+        {% if nxt.a_pct is not none %}
+        <span class="rvs-fc">
+            <span class="rvs-fc-l"><span class="{{ 'is-fav' if nxt.a_pct > 50 }}"><b>{{ nxt.a_pct }}%</b>{{ team_a }}</span><span class="{{ 'is-fav' if nxt.a_pct < 50 }}"><b>{{ 100 - nxt.a_pct }}%</b>{{ team_b }}</span></span>
+            <span class="rvs-fb" aria-hidden="true"><i class="{{ 'is-fav' if nxt.a_pct > 50 }}" style="flex-grow: {{ nxt.a_pct }}"></i><i class="{{ 'is-fav' if nxt.a_pct < 50 }}" style="flex-grow: {{ 100 - nxt.a_pct }}"></i></span>
+            <span class="rvs-fc-s">Savant Forecast{% if nxt.margin is not none %} · {{ nxt.fav }} by {{ '%.0f'|format(nxt.margin) }}{% endif %}</span>
+        </span>
+        {% else %}
+        <span class="rvs-fc rvs-fc-none">No Savant Forecast for this game yet.</span>
         {% endif %}
-        {% if closest %}
-        <div class="rvh-stat">
-            <span class="rvh-stat-val">{{ closest.margin }}</span>
-            <span class="rvh-stat-key">Closest · {{ closest.season }}</span>
-        </div>
-        {% endif %}
-        {% if biggest %}
-        <div class="rvh-stat">
-            <span class="rvh-stat-val">{{ biggest.margin }}</span>
-            <span class="rvh-stat-key">Biggest · {{ biggest.season }}</span>
-        </div>
-        {% endif %}
-    </div>
-
-    <h2 class="section-label rvh-list-label">Every meeting since {{ window_start }}</h2>
-
-    <ol class="rvh-list">
-        {% for g in games %}
-        <li class="rvh-row {{ 'is-a' if g.winner == team_a }}{{ 'is-b' if g.winner == team_b }}"
-            style="--rv-a: {{ c1 }}; --rv-b: {{ c2 }}">
-            <a class="rvh-row-link" href="/game/{{ g.id }}">
-                <span class="rvh-row-season">{{ g.season }}</span>
-
-                <span class="rvh-row-teams">
-                    <span class="rvh-row-side {{ 'is-win' if g.winner == team_a }}">
-                        <span class="rvh-row-team">{{ team_a }}</span>
-                        <span class="rvh-row-pts">{{ g.a_pts if g.a_pts is not none else '—' }}</span>
-                    </span>
-                    <span class="rvh-row-sep">{{ 'vs' if g.a_home else 'at' }}</span>
-                    <span class="rvh-row-side rvh-row-side-end {{ 'is-win' if g.winner == team_b }}">
-                        <span class="rvh-row-pts">{{ g.b_pts if g.b_pts is not none else '—' }}</span>
-                        <span class="rvh-row-team">{{ team_b }}</span>
-                    </span>
-                </span>
-
-                <span class="rvh-row-note">
-                    {%- if g.notes and g.notes not in ['None', ''] -%}{{ g.notes }}
-                    {%- elif g.season_type and 'REGULAR' not in (g.season_type|upper) -%}Postseason
-                    {%- elif g.week -%}Week {{ g.week }}
-                    {%- endif -%}
-                </span>
-
-                <svg class="rvh-row-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M5 12h13M13 6l6 6-6 6"></path>
-                </svg>
-            </a>
-        </li>
-        {% endfor %}
-    </ol>
-
-    {% else %}
-    <div class="rvh-none">
-        <p class="rvh-none-title">These two haven't met since {{ window_start }}.</p>
-        <p class="rvh-none-sub">
-            The rivalry is real — it just falls outside the window this site has data for.
-            When they next play, the game will appear here.
-        </p>
-        <div class="rvh-none-links">
-            <a href="/team/{{ team_a|team_slug }}">{{ team_a }}</a>
-            <a href="/team/{{ team_b|team_slug }}">{{ team_b }}</a>
-        </div>
-    </div>
+        <span class="rvs-go">Game preview{{ chev() }}</span>
+    </a>
     {% endif %}
 
+    {% if series.meetings %}
+    <div class="rvs-tiles">
+        <div class="rvs-tile"><span>Meetings</span><b>{{ series.meetings }}</b><small>{{ det.meetings_note }}</small></div>
+        {% if avg_margin is not none %}<div class="rvs-tile"><span>Average margin</span><b>{{ avg_margin }}</b><small>points a game</small></div>{% endif %}
+        {% if avg_total is not none %}<div class="rvs-tile"><span>Average total</span><b>{{ avg_total }}</b><small>points a game</small></div>{% endif %}
+        {% if closest %}<div class="rvs-tile"><span>Closest</span><b>{{ closest.margin }}</b><small>{{ det.closest_note }}</small></div>{% endif %}
+        {% if biggest %}<div class="rvs-tile"><span>Biggest</span><b>{{ biggest.margin }}</b><small>{{ det.biggest_note }}</small></div>{% endif %}
+    </div>
+    {% endif %}
+    <p class="rvs-note"><span class="rvs-chip">Since {{ window_start }}</span>Counts the meetings since {{ window_start }}, the first season Saturday Savant has play data for. Earlier meetings aren't counted.</p>
+
+    {% if series.meetings %}
+    <div class="rvs-cols">
+        <div class="rvs-main">
+            <section class="rvs-card" aria-labelledby="rvs-mc-h">
+                <div class="rvs-card-h">
+                    <h2 id="rvs-mc-h">Margin by meeting</h2>
+                    <div class="rvs-key"><span><i style="background: var(--b)"></i>{{ team_b }} won</span><span><i style="background: var(--a)"></i>{{ team_a }} won</span>{% if nxt and nxt.fav %}<span><i class="is-ghost"></i>Forecast</span>{% endif %}</div>
+                </div>
+                <div class="rvs-mc" style="--n: {{ cols|length }}" role="img" aria-label="Winning margin of each meeting since {{ window_start }}; the list below has every score.">
+                    {% for c in cols %}
+                    <div class="rvs-mcol">
+                        <div class="rvs-up">{% if c.side == 'b' %}<span class="rvs-ml{{ ' is-acc' if c.kind == 'next' }}">{% if c.kind == 'game' %}<span class="rvs-yl">{{ c.score }}</span><span class="rvs-ys">+{{ c.g.margin }}</span>{% else %}<span class="rvs-yl">{{ nxt.fav_abbr }} {{ nxt.fav_pct }}%</span><span class="rvs-ys">{{ nxt.fav_pct }}%</span>{% endif %}</span><span class="rvs-bar{{ ' is-ghost' if c.kind == 'next' }}" style="height: max(5px, calc((100% - 20px) * {{ c.frac }})){% if c.kind == 'game' %}; background-color: var(--b){% endif %}"></span>{% endif %}</div>
+                        <span class="rvs-yr"><span class="rvs-yl">{{ c.season }}</span><span class="rvs-ys">'{{ (c.season|string)[2:] }}</span></span>
+                        <div class="rvs-dn">{% if c.side == 'a' %}<span class="rvs-bar{{ ' is-ghost' if c.kind == 'next' }}" style="height: max(5px, calc((100% - 20px) * {{ c.frac }})){% if c.kind == 'game' %}; background-color: var(--a){% endif %}"></span><span class="rvs-ml{{ ' is-acc' if c.kind == 'next' }}">{% if c.kind == 'game' %}<span class="rvs-yl">{{ c.score }}</span><span class="rvs-ys">+{{ c.g.margin }}</span>{% else %}<span class="rvs-yl">{{ nxt.fav_abbr }} {{ nxt.fav_pct }}%</span><span class="rvs-ys">{{ nxt.fav_pct }}%</span>{% endif %}</span>{% elif c.kind == 'none' %}<span class="rvs-nog">No game</span>{% endif %}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="rvs-card" aria-labelledby="rvs-em-h">
+                <div class="rvs-card-h"><h2 id="rvs-em-h">Every meeting</h2><span>Newest first</span></div>
+                <ol class="rvs-rows">
+                    {% if nxt %}
+                    <li><a class="rvs-row is-next" href="/game/{{ nxt.id }}">
+                        <span class="rvs-yc"><b>{{ nxt.season }}</b><span>{{ nxt.label }}</span></span>
+                        <span class="rvs-mu">
+                            <span class="rvs-tm">{% if ta_logo %}<img src="{{ ta_logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}<span class="rvs-tn">{{ tname(team_a) }}</span></span>
+                            <span class="rvs-dash">vs</span>
+                            <span class="rvs-tm is-r"><span class="rvs-tn">{{ tname(team_b) }}</span>{% if tb_logo %}<img src="{{ tb_logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}</span>
+                        </span>
+                        <span class="rvs-site">{{ nxt.date }}</span>
+                        <span class="rvs-sv">{% if nxt.fav %}Forecast {{ nxt.fav_abbr }} {{ nxt.fav_pct }}%{% endif %}</span>
+                        {{ chev() }}
+                    </a></li>
+                    {% endif %}
+                    {% for c in cols|reverse %}
+                    {% if c.kind == 'game' %}
+                    {% set g = c.g %}
+                    <li><a class="rvs-row" href="/game/{{ g.id }}" aria-label="{{ g.season }}: {{ team_a }} {{ g.a_pts }}, {{ team_b }} {{ g.b_pts }}, {{ g.where }}. Open the box score.">
+                        <span class="rvs-yc"><b>{{ g.season }}</b><span>{{ g.label }}</span></span>
+                        <span class="rvs-mu">
+                            <span class="rvs-tm{{ ' is-w' if g.winner == team_a }}">{% if ta_logo %}<img src="{{ ta_logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}<span class="rvs-tn">{{ tname(team_a) }}</span><b>{{ g.a_pts }}</b></span>
+                            <span class="rvs-dash">–</span>
+                            <span class="rvs-tm is-r{{ ' is-w' if g.winner == team_b }}"><b>{{ g.b_pts }}</b><span class="rvs-tn">{{ tname(team_b) }}</span>{% if tb_logo %}<img src="{{ tb_logo }}" alt="" width="24" height="24" loading="lazy">{% endif %}</span>
+                        </span>
+                        <span class="rvs-site">{{ g.where }}</span>
+                        <span class="rvs-sv{{ ' is-miss' if g.pick and g.pick.ok is sameas false }}">{% if g.pick %}{{ g.pick.text }}{% if g.pick.ok %} ✓{% elif g.pick.ok is sameas false %} ✗{% endif %}{% endif %}</span>
+                        {{ chev() }}
+                    </a></li>
+                    {% elif c.kind == 'none' %}
+                    <li class="rvs-row is-np"><span class="rvs-yc"><b>{{ c.season }}</b></span><span class="rvs-np">Not played</span></li>
+                    {% endif %}
+                    {% endfor %}
+                </ol>
+            </section>
+        </div>
+
+        <div class="rvs-aside">
+            {% if season_rows %}
+            <section class="rvs-card" aria-labelledby="rvs-ss-h">
+                <div class="rvs-card-h"><h2 id="rvs-ss-h">This season</h2><span>{{ season }}</span></div>
+                <div class="rvs-ss rvs-ss-h"><span>Savant and the polls</span>{% if ta_logo %}<img src="{{ ta_logo }}" alt="{{ team_a }}" width="24" height="24">{% else %}<b>{{ abbr[team_a] }}</b>{% endif %}{% if tb_logo %}<img src="{{ tb_logo }}" alt="{{ team_b }}" width="24" height="24">{% else %}<b>{{ abbr[team_b] }}</b>{% endif %}</div>
+                {% for k, a, b, w in season_rows %}
+                <div class="rvs-ss"><span>{{ k }}</span><b class="{{ 'is-on' if w == 'a' }}">{{ a }}</b><b class="{{ 'is-on' if w == 'b' }}">{{ b }}</b></div>
+                {% endfor %}
+                <a class="rvs-lnk" href="/compare/{{ slug_a }}-vs-{{ slug_b }}">Compare {{ team_a }} and {{ team_b }}{{ chev() }}</a>
+            </section>
+            {% endif %}
+            {% if det.venues or det.streaks %}
+            <section class="rvs-card rvs-splits" aria-label="Series splits">
+                {% if det.venues %}
+                <div class="rvs-sp">
+                    <h3>Where they played</h3>
+                    {% for v in det.venues %}<div class="rvs-spr"><span>{{ v.label }}</span><span><small>{{ v.lead }}</small> <b>{{ v.rec }}</b></span></div>{% endfor %}
+                    {% if det.road_line %}<p class="rvs-foot">{{ det.road_line }}</p>{% endif %}
+                </div>
+                {% endif %}
+                {% if det.streaks %}
+                <div class="rvs-sp">
+                    <h3>Longest streaks</h3>
+                    {% for s in det.streaks %}<div class="rvs-spr"><span>{{ s.team }} · {{ s.span }}</span><b>{{ s.n }} {{ 'straight' if s.n > 1 else 'win' }}</b></div>{% endfor %}
+                    {% set last = games|selectattr('winner')|first %}
+                    {% if series.streak_team %}<p class="rvs-foot">{{ series.streak_team }} has won the last {{ series.streak }}.</p>
+                    {% elif last %}<p class="rvs-foot">{{ last.winner }} won the last one, in {{ last.season }}.</p>{% endif %}
+                </div>
+                {% endif %}
+                {% if det.ppg %}
+                {% set top = [det.ppg[0], det.ppg[1], 1]|max %}
+                <div class="rvs-sp">
+                    <h3>Points per meeting</h3>
+                    <div class="rvs-pts"><span>{{ team_a }}</span><i style="width: {{ (100 * det.ppg[0] / top)|round(1) }}%; background: var(--a)"></i><b class="{{ 'is-on' if det.ppg[0] >= det.ppg[1] }}">{{ det.ppg[0] }}</b></div>
+                    <div class="rvs-pts"><span>{{ team_b }}</span><i style="width: {{ (100 * det.ppg[1] / top)|round(1) }}%; background: var(--b)"></i><b class="{{ 'is-on' if det.ppg[1] >= det.ppg[0] }}">{{ det.ppg[1] }}</b></div>
+                </div>
+                {% endif %}
+            </section>
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+    <div class="rvs-none">
+        <p class="rvs-none-t">These two haven't met since {{ window_start }}.</p>
+        <p class="rvs-none-s">The rivalry is real; it just falls outside the seasons this site has data for. {% if nxt %}Their next meeting is above.{% else %}When they next play, the game will appear here.{% endif %}</p>
+        <div class="rvs-none-l"><a href="/team/{{ slug_a }}">{{ team_a }}</a><a href="/team/{{ slug_b }}">{{ team_b }}</a></div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

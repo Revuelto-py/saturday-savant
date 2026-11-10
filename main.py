@@ -90,6 +90,7 @@ from lib.season_util import current_cfb_season
 from lib import espn_board
 from lib import live_feed
 from lib import game_leaders
+from lib import rivalry
 from collections import OrderedDict, defaultdict
 from itertools import groupby
 
@@ -4064,6 +4065,19 @@ def _stored_quarters(cursor, game_id):
     return out if out.get('away') and out.get('home') else None
 
 
+def _season_records(cursor, season, teams):
+    """{team: 'W-L'} from a season's completed games, for the teams asked."""
+    cursor.execute("""
+        SELECT t, SUM(w), SUM(l) FROM (
+            SELECT home_team AS t, (home_points > away_points)::int AS w, (home_points < away_points)::int AS l
+              FROM games WHERE season = %(s)s AND completed = 1 AND home_team = ANY(%(t)s)
+            UNION ALL
+            SELECT away_team, (away_points > home_points)::int, (away_points < home_points)::int
+              FROM games WHERE season = %(s)s AND completed = 1 AND away_team = ANY(%(t)s)
+        ) x GROUP BY t""", {'s': season, 't': list(teams)})
+    return {t: f'{w or 0}-{l or 0}' for t, w, l in cursor.fetchall()}
+
+
 def _gotw_detail(cursor, season, g):
     """What the game of the week card shows beyond a game card: each side's
     colour as the game page hero paints it (white_knob, hero_pair), records,
@@ -4074,15 +4088,7 @@ def _gotw_detail(cursor, season, g):
     ka, kh = white_knob(ah), white_knob(hh)
     pa, ph = hero_pair(ah, hh)
     out = {'ka': ka, 'ka2': shade(ka, 0.55), 'kh': kh, 'kh2': shade(kh, 0.55), 'pa': pa, 'ph': ph}
-    cursor.execute("""
-        SELECT t, SUM(w), SUM(l) FROM (
-            SELECT home_team AS t, (home_points > away_points)::int AS w, (home_points < away_points)::int AS l
-              FROM games WHERE season = %(s)s AND completed = 1 AND home_team IN (%(a)s, %(h)s)
-            UNION ALL
-            SELECT away_team, (away_points > home_points)::int, (away_points < home_points)::int
-              FROM games WHERE season = %(s)s AND completed = 1 AND away_team IN (%(a)s, %(h)s)
-        ) x GROUP BY t""", {'s': season, 'a': g['away'], 'h': g['home']})
-    rec = {t: f'{w or 0}-{l or 0}' for t, w, l in cursor.fetchall()}
+    rec = _season_records(cursor, season, (g['away'], g['home']))
     out['away_rec'], out['home_rec'] = rec.get(g['away'], ''), rec.get(g['home'], '')
     cursor.execute('SELECT predicted_margin FROM game_predictions WHERE game_id = %s', (g['id'],))
     row = cursor.fetchone()
@@ -11505,7 +11511,7 @@ def _rivalry_series(games, ta, tb):
 
 
 @app.route('/rivalries')
-@cache.cached(timeout=86400)  # 24 hours — the pairings are static, the games move weekly
+@cache.cached(timeout=3600)  # the pairings are static; this week's games and forecasts are not
 def rivalries_page():
     conn = get_db()
     try:
@@ -11562,13 +11568,16 @@ def rivalries_page():
             ta, tb = r[0], r[1]
             games = by_pair.get((ta, tb), [])
             series = _rivalry_series(games, ta, tb)
+            ca, cb = team_hex(r[5], '#1c9cf0'), team_hex(r[6], '#8a8f98')
+            la, lb = hero_pair(ca, cb)
             rivalry_data.append({
                 'ta': ta, 'tb': tb, 'name': r[2],
                 'logo_a': r[3], 'logo_b': r[4],
-                'color_a': r[5], 'color_b': r[6],
+                'color_a': ca, 'color_b': cb, 'lift_a': la, 'lift_b': lb,
                 'conf_a': r[7], 'conf_b': r[8],
                 'series': series,
                 'last_game': games[0] if games else None,
+                'next': None, 'next_ts': None,
             })
 
         # Conferences present, for the filter. Both sides count: a cross-league
@@ -11576,15 +11585,82 @@ def rivalries_page():
         # either program's conference rather than only the alphabetically-first.
         confs = sorted({c for r in rivalry_data for c in (r['conf_a'], r['conf_b'])
                         if c and c not in FCS_CONFS})
+
+        # This season's rivalry games still to play, plus all of the current
+        # slate week, finished ones included, so a Tuesday game stays on the
+        # strip after it ends. A game left uncompleted days after its kickoff
+        # (cancelled, never scored) is not "still to play".
+        season = forward_season()
+        week, stype = current_slate_week(cursor, season)
+        sched = []
+        if pairs:
+            cursor.execute('''
+                SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points, g.completed,
+                       g.week, g.season_type, g.start_date, g.start_time_tbd, g.neutral_site, p.home_prob
+                FROM games g LEFT JOIN game_predictions p ON p.game_id = g.id
+                WHERE g.season = %s
+                  AND (LEAST(g.home_team, g.away_team), GREATEST(g.home_team, g.away_team)) IN %s
+                  AND ((g.completed = 0 AND g.start_date >= to_char(now() - interval '2 days', 'YYYY-MM-DD'))
+                       OR (g.week = %s AND g.season_type = %s))
+                ORDER BY g.start_date NULLS LAST
+            ''', (season, pairs, week, stype))
+            sched = cursor.fetchall()
+        teams = list({t for row in sched for t in (row[1], row[2])})
+        rec, abbr = {}, {}
+        if teams:
+            rec = _season_records(cursor, season, teams)
+            cursor.execute('SELECT name, abbreviation FROM teams WHERE name = ANY(%s)', (teams,))
+            abbr = dict(cursor.fetchall())
+        is_post = 'POST' in str(stype).upper()
+        ap = ap_asof(get_ap_week_map(cursor, season), week, is_post)
     finally:
         release_db(conn)
 
     seasons = get_available_seasons()
+    window_start = min(seasons)
+    info = {(r['ta'], r['tb']): r for r in rivalry_data}
+    upcoming, this_week = 0, []
+    for gid, home, away, hp, apts, done, wk, st, sd, tbd, neutral, prob in sched:
+        r = info.get((min(home, away), max(home, away)))
+        if not r:
+            continue
+        if not done:
+            upcoming += 1
+            if not r['next']:
+                et = kickoff_et(sd)
+                r['next'], r['next_ts'] = format_kickoff(sd, tbd)[0], int(et.timestamp()) if et else 0
+        if wk == week and st == stype:
+            date_str, time_str = format_kickoff(sd, tbd)
+            state = 'final' if done else 'live' if hp is not None and apts is not None else 'pre'
+            pct = round(prob * 100) if prob is not None and state == 'pre' else None
+            side = {r['ta']: 'a', r['tb']: 'b'}
+            sides = []
+            for t, pts, p in ((away, apts, None if pct is None else 100 - pct), (home, hp, pct)):
+                other = hp if t == away else apts
+                val = (f'{p}%' if p is not None else '') if state == 'pre' else pts
+                dim = (p is not None and p < 50) if state == 'pre' else (pts is not None and other is not None and pts < other)
+                sides.append({'team': t, 'logo': r['logo_' + side[t]], 'rank': ap.get(t), 'rec': rec.get(t, ''),
+                              'val': val, 'dim': dim, 'pct': p})
+            when = f"{date_str} · {time_str.replace(' ET', '')}"
+            this_week.append({
+                'id': gid, 'name': r['name'], 'sides': sides, 'state': state, 'when': when,
+                'away_color': r['lift_' + side[away]], 'home_color': r['lift_' + side[home]],
+                'where': 'Neutral site' if neutral else f"at {abbr.get(home) or home}",
+                'series': rivalry.series_line(r['series'], r['ta'], r['tb'], window_start),
+                'aria': f"{r['name']}: {away} at {home}, " + (
+                    f'{when} ET.' + (f" Savant Forecast {away if pct < 50 else home} {max(pct, 100 - pct)} percent."
+                                     if pct is not None else '') if state == 'pre'
+                    else f"{'final' if done else 'live'}, {away} {apts}, {home} {hp}."),
+            })
+
     return render_template('rivalries.html', rivalries=rivalry_data, conferences=confs,
-                           window_start=min(seasons), window_end=max(seasons))
+                           this_week=this_week, upcoming=upcoming, season=season,
+                           week_label='Postseason' if is_post else f'Week {week}',
+                           window_start=window_start, window_end=max(seasons))
 
 
 @app.route('/rivalry/<team_a>/<team_b>')
+@cache.cached(timeout=3600)
 def rivalry_history(team_a, team_b):
     conn = get_db()
     try:
@@ -11613,11 +11689,9 @@ def rivalry_history(team_a, team_b):
 
         cursor.execute('''
             SELECT g.id, g.home_team, g.away_team, g.home_points, g.away_points,
-                   g.week, g.season, g.season_type, g.notes, g.start_date,
-                   t1.logo_dark, t2.logo_dark
-            FROM games g
-            LEFT JOIN teams t1 ON t1.name = g.home_team
-            LEFT JOIN teams t2 ON t2.name = g.away_team
+                   g.week, g.season, g.season_type, g.notes, g.start_date, g.neutral_site,
+                   p.home_prob, p.correct
+            FROM games g LEFT JOIN game_predictions p ON p.game_id = g.id
             WHERE ((g.home_team=%s AND g.away_team=%s) OR (g.home_team=%s AND g.away_team=%s))
               AND g.completed=1
             ORDER BY g.start_date DESC NULLS LAST
@@ -11626,48 +11700,139 @@ def rivalry_history(team_a, team_b):
             'id': r[0], 'home_team': r[1], 'away_team': r[2],
             'home_pts': r[3], 'away_pts': r[4], 'week': r[5], 'season': r[6],
             'season_type': r[7], 'notes': r[8], 'date': r[9][:10] if r[9] else '',
-            'home_logo': r[10], 'away_logo': r[11],
+            'neutral': bool(r[10]), 'home_prob': r[11], 'correct': r[12],
         } for r in cursor.fetchall()]
 
-        cursor.execute('SELECT logo_dark, color FROM teams WHERE name=%s', (team_a,))
-        ta_info = cursor.fetchone()
-        cursor.execute('SELECT logo_dark, color FROM teams WHERE name=%s', (team_b,))
-        tb_info = cursor.fetchone()
+        cursor.execute('SELECT name, logo_dark, color, conference, abbreviation FROM teams '
+                       'WHERE name IN (%s, %s)', (team_a, team_b))
+        tinfo = {r[0]: r[1:] for r in cursor.fetchall()}
+
+        # The next meeting, if this season still has one, with its forecast.
+        season = forward_season()
+        cursor.execute('''
+            SELECT g.id, g.home_team, g.away_team, g.week, g.season_type, g.notes, g.start_date,
+                   g.start_time_tbd, g.neutral_site, p.home_prob, p.predicted_margin
+            FROM games g LEFT JOIN game_predictions p ON p.game_id = g.id
+            WHERE g.season = %s AND g.completed = 0
+              AND g.start_date >= to_char(now() - interval '2 days', 'YYYY-MM-DD')
+              AND ((g.home_team=%s AND g.away_team=%s) OR (g.home_team=%s AND g.away_team=%s))
+            ORDER BY g.start_date LIMIT 1
+        ''', (season, team_a, team_b, team_b, team_a))
+        nrow = cursor.fetchone()
+
+        # This season, side by side: record, polls, Savant.
+        rec = _season_records(cursor, season, (team_a, team_b))
+        cursor.execute('SELECT team, net_rating, net_ranking, off_ranking, def_ranking FROM savant_ratings '
+                       'WHERE season = %s AND team IN (%s, %s)', (season, team_a, team_b))
+        sav = {r[0]: r[1:] for r in cursor.fetchall()}
+        regular, final = get_ap_week_map(cursor, season)
+        ap = final or (regular[max(regular)] if regular else {})
+        cursor.execute('SELECT team, rank FROM cfp_rankings WHERE season = %s AND team IN (%s, %s) '
+                       'AND week = (SELECT MAX(week) FROM cfp_rankings WHERE season = %s)',
+                       (season, team_a, team_b, season))
+        cfp = dict(cursor.fetchall())
     finally:
         release_db(conn)
 
     series = _rivalry_series(games, team_a, team_b)
+    seasons = get_available_seasons()
+    window_start = min(seasons)
+    ta_info, tb_info = tinfo.get(team_a) or (None,) * 4, tinfo.get(team_b) or (None,) * 4
+    abbr = {team_a: ta_info[3] or team_a, team_b: tb_info[3] or team_b}
 
-    # Per-meeting detail the template renders directly. The route always loaded
-    # these rows; the page just never showed them, and said "coming soon"
-    # underneath a record built from the very games it was hiding.
     for g in games:
-        hp, ap = g['home_pts'], g['away_pts']
-        g['winner'] = (g['home_team'] if hp > ap else g['away_team']) if (
-            hp is not None and ap is not None and hp != ap) else None
-        g['margin'] = abs(hp - ap) if hp is not None and ap is not None else None
-        g['a_pts'] = hp if g['home_team'] == team_a else ap
-        g['b_pts'] = ap if g['home_team'] == team_a else hp
-        g['a_home'] = g['home_team'] == team_a
+        hp, ap_pts = g['home_pts'], g['away_pts']
+        g['winner'] = (g['home_team'] if hp > ap_pts else g['away_team']) if (
+            hp is not None and ap_pts is not None and hp != ap_pts) else None
+        g['margin'] = abs(hp - ap_pts) if hp is not None and ap_pts is not None else None
+        g['a_pts'] = hp if g['home_team'] == team_a else ap_pts
+        g['b_pts'] = ap_pts if g['home_team'] == team_a else hp
+        g['where'] = 'Neutral site' if g['neutral'] else f"at {g['home_team']}"
+        g['label'] = (event_name(g['notes'])
+                      or ('Postseason' if 'POST' in str(g['season_type']).upper() else f"Week {g['week']}"))
+        # The pre-kickoff Savant pick, where one was frozen for this game.
+        g['pick'] = None
+        if g['home_prob'] is not None:
+            fav = g['home_team'] if g['home_prob'] >= 0.5 else g['away_team']
+            g['pick'] = {'text': f"Savant had {abbr[fav]} {round(max(g['home_prob'], 1 - g['home_prob']) * 100)}%",
+                         'ok': None if g['correct'] is None else bool(g['correct'])}
 
+    nxt = None
+    if nrow:
+        gid, h, aw, wk, st, notes, sd, tbd, neu, p, m = nrow
+        date_str, time_str = format_kickoff(sd, tbd)
+        pa = None if p is None else (p if h == team_a else 1 - p)
+        nxt = {'id': gid, 'season': season, 'home_team': h, 'away_team': aw, 'neutral': bool(neu),
+               'date': date_str, 'time': time_str, 'short': date_str.split(', ')[-1],
+               'label': event_name(notes) or ('Postseason' if 'POST' in str(st).upper() else f'Week {wk}'),
+               'a_pct': None if pa is None else round(pa * 100),
+               'fav': None if pa is None else (team_a if pa >= 0.5 else team_b),
+               'margin': None if m is None else abs(m)}
+        if nxt['fav']:
+            nxt['fav_abbr'] = abbr[nxt['fav']]
+            nxt['fav_pct'] = max(nxt['a_pct'], 100 - nxt['a_pct'])
+
+    cols = rivalry.columns(games, team_a, team_b, nxt)
+    det = rivalry.detail(games, team_a, team_b, window_start, cols)
     decided = [g for g in games if g['margin'] is not None]
-    biggest = max(decided, key=lambda g: g['margin']) if decided else None
-    closest = min(decided, key=lambda g: g['margin']) if decided else None
     avg_margin = round(sum(g['margin'] for g in decided) / len(decided), 1) if decided else None
     avg_total = round(sum((g['home_pts'] + g['away_pts']) for g in decided) / len(decided), 1) if decided else None
+    biggest = max(decided, key=lambda g: g['margin']) if decided else None
+    closest = min(decided, key=lambda g: g['margin']) if decided else None
 
-    seasons = get_available_seasons()
+    # "This season" rows; the better side of each is lit. Rank-like rows are
+    # better low, and a missing rank loses to any rank.
+    def better(a, b, low=False):
+        if a is None and b is None or a == b:
+            return None
+        if a is None or b is None:
+            return 'b' if a is None else 'a'
+        return ('a' if a < b else 'b') if low else ('a' if a > b else 'b')
+
+    def wl(r):
+        w, _, l = (r or '').partition('-')
+        return int(w) / (int(w) + int(l)) if w.isdigit() and l.isdigit() and int(w) + int(l) else None
+
+    season_rows = []
+    sa, sb = sav.get(team_a), sav.get(team_b)
+    if wl(rec.get(team_a)) is not None or wl(rec.get(team_b)) is not None or sa or sb:
+        season_rows.append(('Record', rec.get(team_a) or '—', rec.get(team_b) or '—',
+                            better(wl(rec.get(team_a)), wl(rec.get(team_b)))))
+        for k, poll in (('AP poll', ap), ('CFP ranking', cfp)):
+            if poll.get(team_a) or poll.get(team_b):
+                season_rows.append((k, f'No. {poll[team_a]}' if poll.get(team_a) else '—',
+                                    f'No. {poll[team_b]}' if poll.get(team_b) else '—',
+                                    better(poll.get(team_a), poll.get(team_b), low=True)))
+        if sa or sb:
+            sa, sb = sa or (None,) * 4, sb or (None,) * 4
+            season_rows.append(('Savant Rating', f'{sa[0]:+.1f}' if sa[0] is not None else '—',
+                                f'{sb[0]:+.1f}' if sb[0] is not None else '—', better(sa[0], sb[0])))
+            for k, i in (('Savant rank', 1), ('Offense', 2), ('Defense', 3)):
+                season_rows.append((k, landscape.ordinal(sa[i]) if sa[i] else '—',
+                                    landscape.ordinal(sb[i]) if sb[i] else '—', better(sa[i], sb[i], low=True)))
+
+    def side_sub(t):
+        # (text, tail): the tail drops on phones, where "5-4 this season"
+        # would wrap under one team and not the other.
+        r = rec.get(t)
+        if ap.get(t):
+            return (f'No. {ap[t]} AP · {r}' if r else f'No. {ap[t]} AP', '')
+        return (r, ' this season') if r else ((tinfo.get(t) or (None, None, ''))[2] or '', '')
+
+    ca, cb = team_hex(ta_info[1], '#1c9cf0'), team_hex(tb_info[1], '#8a8f98')
+    la, lb = hero_pair(ca, cb)
+    conf_a, conf_b = ta_info[2], tb_info[2]
     return render_template('rivalry_history.html',
-        team_a=team_a, team_b=team_b,
-        rivalry_name=rivalry_name,
-        games=games, series=series,
-        biggest=biggest, closest=closest,
-        avg_margin=avg_margin, avg_total=avg_total,
-        ta_logo=ta_info[0] if ta_info else None,
-        tb_logo=tb_info[0] if tb_info else None,
-        ta_color=ta_info[1] if ta_info else '#1c9cf0',
-        tb_color=tb_info[1] if tb_info else '#17181c',
-        window_start=min(seasons), window_end=max(seasons),
+        team_a=team_a, team_b=team_b, slug_a=slug_a, slug_b=slug_b,
+        rivalry_name=rivalry_name, games=games, series=series,
+        series_line=rivalry.series_line(series, team_a, team_b, window_start),
+        biggest=biggest, closest=closest, avg_margin=avg_margin, avg_total=avg_total,
+        cols=cols, det=det, nxt=nxt, abbr=abbr, season=season, season_rows=season_rows,
+        conf_label=f'{conf_a} rivalry' if conf_a and conf_a == conf_b else 'Non-conference rivalry',
+        sub_a=side_sub(team_a), sub_b=side_sub(team_b),
+        ta_logo=ta_info[0], tb_logo=tb_info[0],
+        ta_color=ca, tb_color=cb, ta_lift=la, tb_lift=lb,
+        window_start=window_start, window_end=max(seasons),
     )
 
 

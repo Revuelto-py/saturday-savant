@@ -1,146 +1,146 @@
 {% extends "base.html" %}
 {% block title %}Rivalries · Saturday Savant{% endblock %}
-{% block og_description %}Every named rivalry in college football, with the head-to-head series record since {{ window_start }} and the most recent meeting.{% endblock %}
+{% block og_description %}Every named rivalry in college football, with the head-to-head series record since {{ window_start }}, the most recent meeting and the next one.{% endblock %}
 
 {% block content %}
-
-{# ── HEAD + CONTROLS ───────────────────────────────────────────────────────
-   No hero band: the grid is the page, and a full-height band pushed the first
-   row of cards under the fold. The h1 and the data window stay in one compact
-   line — every record below starts in {{ window_start }}, and without that the
-   numbers read as all-time.
-
-   130 cards is past the point where scanning works, so the page opens with a
-   way to narrow them. Filtering is client-side: the whole set is already in the
-   DOM and cached for a day, so a round trip per keystroke would buy nothing. #}
-<div class="page-wrapper rv-wrapper">
-    <header class="rv-head">
-        <h1 class="rv-title">Rivalries</h1>
-        <p class="rv-meta">
-            <span class="rv-window">{{ window_start }}–{{ window_end }}</span>
-            {{ rivalries|length }} named rivalries, each with the series record and the last time
-            they played. Records count every meeting Saturday Savant holds play data for, which
-            starts in {{ window_start }} — most of these series are far older.
-        </p>
+{# Rivalries index (canvas A, "Ledger"). This week's rivalry games open the
+   page, then every rivalry as a calm card: the series as two scoreboard rows,
+   team colour only in the hairline, the bar and a hover glow. Filtering and
+   sorting are client-side: the whole set is in the DOM and the page is cached,
+   so a round trip per keystroke would buy nothing. #}
+<div class="page-wrapper rva">
+    <header class="rva-hd">
+        <div>
+            <h1 class="rva-title">Rivalries</h1>
+            <p class="rva-deck">Every named rivalry in college football, with each series record, the last time they met and the next.</p>
+            <p class="rva-win"><span class="rva-chip">Since {{ window_start }}</span>Records count the meetings Saturday Savant has play data for. Most of these series are far older.</p>
+        </div>
+        <div class="rva-kpis">
+            <div class="rva-kpi"><b>{{ rivalries|length }}</b><span>named rivalries</span></div>
+            {% if upcoming %}<div class="rva-kpi"><b>{{ upcoming }}</b><span>still to play in {{ season }}</span></div>{% endif %}
+        </div>
     </header>
 
-    <div class="rv-controls" role="search">
-        <div class="rv-search">
-            <svg class="rv-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
-            </svg>
-            <input type="search" id="rv-q" class="rv-input" autocomplete="off"
-                   placeholder="Search a team or a rivalry" aria-label="Search rivalries by team or name">
-        </div>
-
-        <label class="rv-field">
-            <span class="rv-field-label">Conference</span>
-            <select id="rv-conf" class="rv-select">
-                <option value="">All</option>
-                {% for c in conferences %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-            </select>
-        </label>
-
-        <label class="rv-field">
-            <span class="rv-field-label">Sort</span>
-            <select id="rv-sort" class="rv-select">
-                <option value="name">Rivalry A–Z</option>
-                <option value="meetings">Most played</option>
-                <option value="closest">Closest series</option>
-                <option value="streak">Longest streak</option>
-            </select>
-        </label>
-
-        <div class="rv-count" id="rv-count" aria-live="polite"></div>
-    </div>
-
-    <div class="rv-grid" id="rv-grid">
-    {% for r in rivalries %}
-    {% set s = r.series %}
-    {% set c1 = r.color_a or '#1c9cf0' %}
-    {% set c2 = r.color_b or '#8a8f98' %}
-    {% set g = r.last_game %}
-    <article class="rv-card" style="--rv-a: {{ c1 }}; --rv-b: {{ c2 }}"
-             data-name="{{ r.name|lower }}"
-             data-teams="{{ (r.ta ~ ' ' ~ r.tb)|lower }}"
-             data-confs="{{ r.conf_a or '' }}|{{ r.conf_b or '' }}"
-             data-meetings="{{ s.meetings }}"
-             data-balance="{{ (s.a_share - 50)|abs|round(1) }}"
-             data-streak="{{ s.streak }}">
-        <div class="rv-card-wash" aria-hidden="true"></div>
-        <div class="rv-card-body">
-
-            <div class="rv-card-head">
-                <h2 class="rv-name">
-                    {# Stretched link: the whole card is the target, but only this
-                       one anchor is in the tab order and it carries the label a
-                       screen reader announces. #}
-                    <a class="rv-stretch" href="/rivalry/{{ r.ta|team_slug }}/{{ r.tb|team_slug }}">
-                        {{ r.name }}
-                    </a>
-                </h2>
-                {% if s.streak_team %}
-                <span class="rv-streak" title="{{ s.streak_team }} has won the last {{ s.streak }}">
-                    {{ s.streak_team }} W{{ s.streak }}
-                </span>
+    {% if this_week %}
+    <section class="rva-wk" aria-labelledby="rva-wk-h">
+        <div class="rva-sec-h">
+            <h2 id="rva-wk-h">This week<span>{{ this_week|length }} rivalry game{{ '' if this_week|length == 1 else 's' }} · {{ week_label }}</span></h2>
+            <div class="rva-sec-r">
+                <button class="rva-arr" type="button" data-dir="-1" aria-label="Earlier games" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+                </button>
+                <button class="rva-arr" type="button" data-dir="1" aria-label="Later games" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+                </button>
+                {% if upcoming %}
+                <a class="rva-more" href="#rva-all" data-sort="next">All {{ upcoming }}<span class="rva-more-l"> still to play</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></a>
                 {% endif %}
             </div>
-
-            <div class="rv-matchup">
-                <div class="rv-side">
-                    {% if r.logo_a %}<img class="rv-logo" src="{{ r.logo_a }}" alt="" loading="lazy" width="34" height="34">{% endif %}
-                    <span class="rv-team">{{ r.ta }}</span>
-                </div>
-                <div class="rv-side rv-side-end">
-                    <span class="rv-team">{{ r.tb }}</span>
-                    {% if r.logo_b %}<img class="rv-logo" src="{{ r.logo_b }}" alt="" loading="lazy" width="34" height="34">{% endif %}
-                </div>
-            </div>
-
-            {% if s.meetings %}
-            <div class="rv-ledger">
-                <span class="rv-wins {{ 'is-lead' if s.leader == r.ta }}">{{ s.a_wins }}</span>
-                {# The bar IS the record, so it carries the text alternative and
-                   the numbers either side are decorative to a screen reader. #}
-                <span class="rv-bar" role="img"
-                      aria-label="{{ r.ta }} {{ s.a_wins }}, {{ r.tb }} {{ s.b_wins }} since {{ window_start }}">
-                    <span class="rv-bar-a" style="width: {{ s.a_share }}%"></span>
-                </span>
-                <span class="rv-wins {{ 'is-lead' if s.leader == r.tb }}">{{ s.b_wins }}</span>
-            </div>
-            <div class="rv-meta">
-                {{ s.meetings }} meeting{{ '' if s.meetings == 1 else 's' }} since {{ window_start }}{% if s.ties %} · {{ s.ties }} tied{% endif %}
-            </div>
-            {% else %}
-            <div class="rv-ledger rv-ledger-empty">
-                <span class="rv-bar" role="img" aria-label="No meetings since {{ window_start }}"><span class="rv-bar-none"></span></span>
-            </div>
-            <div class="rv-meta rv-meta-none">Not played since {{ window_start }}</div>
-            {% endif %}
-
-            {% if g %}
-            {% set gw = g.home_team if (g.home_pts or 0) > (g.away_pts or 0) else g.away_team %}
-            <a class="rv-last" href="/game/{{ g.id }}">
-                <span class="rv-last-year">{{ g.season }}</span>
-                <span class="rv-last-score">{{ gw }} {{ [g.home_pts, g.away_pts]|max }}–{{ [g.home_pts, g.away_pts]|min }}</span>
-                <svg class="rv-last-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M5 12h13M13 6l6 6-6 6"></path>
-                </svg>
-            </a>
-            {% endif %}
-
         </div>
-    </article>
-    {% endfor %}
-    </div>
+        <div class="rva-strip" id="rva-strip">
+            {% for w in this_week %}
+            <a class="rva-wc" href="/game/{{ w.id }}" style="--a: {{ w.away_color }}; --b: {{ w.home_color }}" aria-label="{{ w.aria }}">
+                <span class="rva-wc-k">
+                    <span>{% if w.state == 'live' %}<i class="rva-live">Live</i>{% elif w.state == 'final' %}Final{% else %}{{ w.when }}{% endif %}</span>
+                    <b>{{ w.name }}</b>
+                </span>
+                <span class="rva-wc-t">
+                    {% for s in w.sides %}
+                    <span class="rva-tr{{ ' is-dim' if s.dim }}">
+                        {% if s.logo %}<img src="{{ s.logo }}" alt="" width="26" height="26" loading="lazy">{% else %}<i></i>{% endif %}
+                        <span class="rva-n">{% if s.rank %}<small class="rva-rk">{{ s.rank }}</small>{% endif %}{{ s.team }}<small>{{ s.rec }}</small></span>
+                        <b class="rva-v">{{ s.val }}</b>
+                    </span>
+                    {% endfor %}
+                </span>
+                {% if w.state == 'pre' and w.sides[1].pct is not none %}
+                <span class="rva-fb" aria-hidden="true"><i class="{{ 'is-fav' if w.sides[0].pct > 50 }}" style="flex-grow: {{ w.sides[0].pct }}"></i><i class="{{ 'is-fav' if w.sides[1].pct >= 50 }}" style="flex-grow: {{ w.sides[1].pct }}"></i></span>
+                {% endif %}
+                <span class="rva-wc-f"><b>{{ w.series }}</b><span>{{ w.where }}</span></span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 
-    <div class="rv-empty" id="rv-empty" hidden>
-        <p class="rv-empty-title">Nothing matches that.</p>
-        <p class="rv-empty-sub">Try a team name — “Auburn”, “Navy” — or clear the filters.</p>
-        <button type="button" class="rv-clear" id="rv-clear">Clear filters</button>
-    </div>
+    <section class="rva-all" id="rva-all" aria-labelledby="rva-all-h">
+        <div class="rva-sec-h"><h2 id="rva-all-h">All rivalries<span id="rv-count" aria-live="polite">{{ rivalries|length }}</span></h2></div>
+        <div class="rva-tb" role="search">
+            <label class="rva-srch">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+                <input type="search" id="rv-q" autocomplete="off" placeholder="Search a team or a rivalry" aria-label="Search rivalries by team or name">
+            </label>
+            <label class="rva-pill">
+                <span>Conference</span>
+                <select id="rv-conf">
+                    <option value="">All</option>
+                    {% for c in conferences %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+                </select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+            </label>
+            <label class="rva-pill">
+                <span>Sort</span>
+                <select id="rv-sort">
+                    <option value="name">A–Z</option>
+                    {% if upcoming %}<option value="next">Up next</option>{% endif %}
+                    <option value="meetings">Most played</option>
+                    <option value="closest">Closest series</option>
+                    <option value="streak">Longest streak</option>
+                </select>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+            </label>
+        </div>
+
+        <div class="rva-grid" id="rv-grid">
+        {% for r in rivalries %}
+        {% set s = r.series %}
+        {% set g = r.last_game %}
+        <a class="rva-rc" href="/rivalry/{{ r.ta|team_slug }}/{{ r.tb|team_slug }}"
+           style="--a: {{ r.lift_a }}; --b: {{ r.lift_b }}"
+           aria-label="{{ r.name }}: {{ r.ta }} {{ s.a_wins }}, {{ r.tb }} {{ s.b_wins }} since {{ window_start }}{% if r.next %}. Next meeting {{ r.next }}{% endif %}"
+           data-name="{{ r.name|lower }}"
+           data-teams="{{ (r.ta ~ ' ' ~ r.tb)|lower }}"
+           data-confs="{{ r.conf_a or '' }}|{{ r.conf_b or '' }}"
+           data-meetings="{{ s.meetings }}"
+           data-balance="{{ (s.a_share - 50)|abs|round(1) }}"
+           data-streak="{{ s.streak }}"
+           data-next="{{ r.next_ts or '' }}">
+            <span class="rva-rc-h"><b>{{ r.name }}</b>{% if r.next %}<span class="rva-tag">{{ r.next }}</span>{% endif %}</span>
+            <span class="rva-rows">
+                <span class="rva-rt{{ ' is-dim' if s.meetings and s.a_wins < s.b_wins }}">
+                    {% if r.logo_a %}<img src="{{ r.logo_a }}" alt="" width="30" height="30" loading="lazy">{% else %}<i></i>{% endif %}
+                    <span class="rva-n">{{ r.ta }}</span><b class="rva-w">{{ s.a_wins if s.meetings else '–' }}</b>
+                </span>
+                <span class="rva-rt{{ ' is-dim' if s.meetings and s.b_wins < s.a_wins }}">
+                    {% if r.logo_b %}<img src="{{ r.logo_b }}" alt="" width="30" height="30" loading="lazy">{% else %}<i></i>{% endif %}
+                    <span class="rva-n">{{ r.tb }}</span><b class="rva-w">{{ s.b_wins if s.meetings else '–' }}</b>
+                </span>
+            </span>
+            <span class="rva-sb{{ '' if s.meetings else ' is-none' }}" aria-hidden="true">
+                {%- if s.meetings -%}
+                {% if s.a_wins %}<i style="flex-grow: {{ s.a_share }}; background: {{ r.color_a }}"></i>{% endif %}
+                {% if s.b_wins %}<i style="flex-grow: {{ 100 - s.a_share }}; background: {{ r.color_b }}"></i>{% endif %}
+                {%- else -%}<i></i>{%- endif -%}
+            </span>
+            <span class="rva-rc-f">
+                {% if g %}
+                {% set gw = g.home_team if (g.home_pts or 0) > (g.away_pts or 0) else g.away_team %}
+                <span>Last · {{ g.season }} · {{ gw }} {{ [g.home_pts, g.away_pts]|max }}–{{ [g.home_pts, g.away_pts]|min }}</span>
+                {% else %}
+                <span>No meeting since {{ window_start }}</span>
+                {% endif %}
+                <span class="rva-st">{% if s.streak_team %}{{ s.streak_team }} · {{ s.streak }} straight{% elif s.meetings %}{{ s.meetings }} meeting{{ '' if s.meetings == 1 else 's' }}{% endif %}</span>
+            </span>
+        </a>
+        {% endfor %}
+        </div>
+
+        <div class="rva-empty" id="rv-empty" hidden>
+            <p class="rva-empty-t">Nothing matches that.</p>
+            <p class="rva-empty-s">Try a team name, like “Auburn” or “Navy”, or clear the filters.</p>
+            <button type="button" class="rva-clear" id="rv-clear">Clear filters</button>
+        </div>
+    </section>
 </div>
 
 <script>
@@ -154,63 +154,75 @@
     var empty = document.getElementById('rv-empty');
     var total = cards.length;
 
-    // Sort keys are read once. Each is written so that DESCENDING is always the
+    // Sort keys are read once, each written so that DESCENDING is the
     // interesting end, which keeps the comparator to a single branch.
     cards.forEach(function (c) {
         c._name     = c.dataset.name;
         c._meetings = +c.dataset.meetings;
         c._streak   = +c.dataset.streak;
-        // "Closest" wants the SMALLEST imbalance, so it is negated to fit the
-        // descending comparator. A pair that has not met is not a close series,
-        // so it sorts to the bottom rather than to a perfect 50/50 top.
+        // "Closest" wants the smallest imbalance, so it is negated; a pair that
+        // has not met is not a close series and sorts to the bottom.
         c._closest  = c._meetings ? -Math.abs(+c.dataset.balance) : -Infinity;
+        // "Up next" wants the soonest kickoff; no game scheduled sorts last.
+        c._next     = c.dataset.next ? -(+c.dataset.next) : -Infinity;
     });
 
     function apply() {
         var term = q.value.trim().toLowerCase();
         var cf   = conf.value;
         var shown = 0;
-
         cards.forEach(function (c) {
             var hit = (!term || c._name.indexOf(term) > -1 || c.dataset.teams.indexOf(term) > -1)
-                   && (!cf   || c.dataset.confs.indexOf(cf) > -1);
+                   && (!cf || c.dataset.confs.indexOf(cf) > -1);
             c.hidden = !hit;
             if (hit) shown++;
         });
-
         var key = sort.value;
-        if (key !== 'name') {
-            cards.slice().sort(function (a, b) {
-                return b['_' + key] - a['_' + key] || a._name.localeCompare(b._name);
-            }).forEach(function (c) { grid.appendChild(c); });
-        } else {
-            cards.slice().sort(function (a, b) { return a._name.localeCompare(b._name); })
-                 .forEach(function (c) { grid.appendChild(c); });
-        }
-
-        count.textContent = shown === total
-            ? total + ' rivalries'
-            : shown + ' of ' + total;
+        cards.slice().sort(key === 'name'
+            ? function (a, b) { return a._name.localeCompare(b._name); }
+            : function (a, b) { return b['_' + key] - a['_' + key] || a._name.localeCompare(b._name); }
+        ).forEach(function (c) { grid.appendChild(c); });
+        count.textContent = shown === total ? total : shown + ' of ' + total;
         empty.hidden = shown > 0;
         grid.hidden  = shown === 0;
     }
 
-    // Filtering on every keystroke is fine at this size — the work is a hidden
-    // flag on ~130 nodes, well inside a frame — but the sort reflows the grid,
-    // so it waits for the next frame rather than fighting the input.
+    // Filtering every keystroke is cheap (a hidden flag on ~130 nodes), but the
+    // sort reflows the grid, so it waits for the next frame.
     var frame;
-    function schedule() {
-        cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(apply);
-    }
-
+    function schedule() { cancelAnimationFrame(frame); frame = requestAnimationFrame(apply); }
     q.addEventListener('input', schedule);
     conf.addEventListener('change', apply);
     sort.addEventListener('change', apply);
     document.getElementById('rv-clear').addEventListener('click', function () {
         q.value = ''; conf.value = ''; apply(); q.focus();
     });
+    var more = document.querySelector('.rva-more[data-sort]');
+    if (more) more.addEventListener('click', function () { sort.value = 'next'; q.value = ''; conf.value = ''; apply(); });
     apply();
+
+    // This week's strip scrolls inside itself; the arrows only appear when
+    // there is more than fits, and each end disables its own arrow.
+    var strip = document.getElementById('rva-strip');
+    if (strip) {
+        var arrows = Array.prototype.slice.call(document.querySelectorAll('.rva-arr'));
+        var sync = function () {
+            var over = strip.scrollWidth > strip.clientWidth + 2;
+            arrows.forEach(function (b) {
+                b.hidden = !over;
+                b.disabled = +b.dataset.dir < 0 ? strip.scrollLeft < 4
+                                                : strip.scrollLeft + strip.clientWidth > strip.scrollWidth - 4;
+            });
+        };
+        arrows.forEach(function (b) {
+            b.addEventListener('click', function () {
+                strip.scrollBy({ left: +b.dataset.dir * strip.clientWidth * 0.8, behavior: 'smooth' });
+            });
+        });
+        strip.addEventListener('scroll', sync, { passive: true });
+        window.addEventListener('resize', sync);
+        sync();
+    }
 })();
 </script>
 {% endblock %}
